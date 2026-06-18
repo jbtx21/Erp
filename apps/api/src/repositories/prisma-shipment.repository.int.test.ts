@@ -39,7 +39,7 @@ if (!dbConfigured) {
 
     beforeAll(async () => {
       await cleanup();
-      await prisma.priceGroup.create({ data: { id: PG, kind: "STANDARD", name: "Standard" } });
+      await prisma.priceGroup.create({ data: { id: PG, kind: "AGENTUR", name: "Agentur" } });
       await prisma.company.create({ data: { id: CO, name: "ACME GmbH", priceGroupId: PG } });
       await prisma.shopConnector.create({
         data: { id: SC, name: "ACME Shop", baseUrl: "https://acme.example", companyId: CO },
