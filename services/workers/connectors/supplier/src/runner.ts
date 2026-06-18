@@ -25,12 +25,15 @@ export interface SupplierRunSummary {
 }
 
 // Endpunkt-/Auth-Profil je Connector-Art (vor Go-Live gegen die jeweilige API-Doku
-// bestätigen). Nur Phase-1-Lieferanten mit Katalog-Inbound.
+// bestätigen). Lieferanten mit Katalog-Inbound (Phase 1 + 2). Bei FHB/nexmart wird
+// hier NUR der Katalog gepollt; die Bestell-Übermittlung (EDI) bleibt späteren Blöcken.
 const CATALOG_PROFILES: Partial<
   Record<SupplierKind, { path: string; scheme: SupplierAuth["scheme"] }>
 > = {
   ID_IDENTITY: { path: "/api/v1/catalog", scheme: "basic" },
   STANLEY_STELLA: { path: "/webservice/v2/products", scheme: "bearer" },
+  HAKRO: { path: "/rest/catalog", scheme: "basic" },
+  FHB_NEXMART: { path: "/api/nexmart/v2/catalog", scheme: "bearer" },
 };
 
 const CATALOG_KINDS = Object.keys(CATALOG_PROFILES) as SupplierKind[];

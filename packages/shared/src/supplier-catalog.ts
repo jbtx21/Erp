@@ -12,7 +12,7 @@
 import { z } from "zod";
 import { eurToCents } from "./money.js";
 
-/** Connector-Arten mit Inbound-Katalog-Support (Phase 1: ID Identity, Stanley/Stella). */
+/** Connector-Arten mit Inbound-Katalog-Support (ID Identity, Stanley/Stella, HAKRO, FHB/nexmart). */
 export type SupplierKind =
   | "ID_IDENTITY"
   | "STANLEY_STELLA"
@@ -80,10 +80,51 @@ export function mapStanleyStellaCatalog(raw: unknown): SupplierCatalogItem {
   };
 }
 
+// ── HAKRO ─────────────────────────────────────────────────────────────────────
+// Katalog mit deutschen Feldnamen; EK als Euro-String mit Dezimalkomma, Bestand.
+const HakroSchema = z.object({
+  artikelNummer: z.string().min(1), // HAKRO-Artikelnummer → supplierSku
+  herstellerSku: z.string().min(1), // Hersteller-SKU = interne Variant.sku
+  einkaufspreis: PriceLike, // EK in Euro (Komma erlaubt)
+  bestand: QtyLike,
+});
+
+export function mapHakroCatalog(raw: unknown): SupplierCatalogItem {
+  const r = parse(HakroSchema, raw, "HAKRO");
+  return {
+    supplierSku: r.artikelNummer,
+    sku: r.herstellerSku,
+    ekCents: eurToCents(r.einkaufspreis),
+    availableQty: r.bestand ?? null,
+  };
+}
+
+// ── FHB / nexmart ─────────────────────────────────────────────────────────────
+// Inbound-Katalog über die nexmart-Produktdaten (BMEcat-nah: SUPPLIER_AID/BUYER_AID).
+// Nur Katalog/Lager/EK; die Bestell-Übermittlung (EDI) bleibt späteren Blöcken.
+const FhbNexmartSchema = z.object({
+  supplierAID: z.string().min(1), // Lieferanten-Artikel-ID → supplierSku
+  buyerAID: z.string().min(1), // Artikelnummer des Käufers = interne Variant.sku
+  priceAmount: PriceLike, // EK in Euro
+  stock: z.object({ quantity: QtyLike }).nullish(),
+});
+
+export function mapFhbNexmartCatalog(raw: unknown): SupplierCatalogItem {
+  const r = parse(FhbNexmartSchema, raw, "FHB/nexmart");
+  return {
+    supplierSku: r.supplierAID,
+    sku: r.buyerAID,
+    ekCents: eurToCents(r.priceAmount),
+    availableQty: r.stock?.quantity ?? null,
+  };
+}
+
 /** Mapper-Dispatch nach Connector-Art. */
 const MAPPERS: Partial<Record<SupplierKind, (raw: unknown) => SupplierCatalogItem>> = {
   ID_IDENTITY: mapIdIdentityCatalog,
   STANLEY_STELLA: mapStanleyStellaCatalog,
+  HAKRO: mapHakroCatalog,
+  FHB_NEXMART: mapFhbNexmartCatalog,
 };
 
 /** Mappt ein einzelnes Roh-Item gemäß Connector-Art auf das kanonische Format. */

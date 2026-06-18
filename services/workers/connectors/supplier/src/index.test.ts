@@ -29,4 +29,28 @@ describe("SupplierConnector (Kap. 6/32, C3)", () => {
     expect(items[0]).toEqual({ supplierSku: "IDI-1", sku: "0020-RED-L", ekCents: 590, availableQty: 120 });
     expect(items[1]).toMatchObject({ sku: "0021-BLK-M", ekCents: 745, availableQty: 0 });
   });
+
+  it("routet das Mapping über die Connector-Art (Phase 2: FHB/nexmart)", async () => {
+    const client: SupplierCatalogClient = {
+      fetchCatalogSince: vi.fn().mockResolvedValue({
+        items: [{ supplierAID: "FHB-1", buyerAID: "TS-RED-L", priceAmount: "12.50", stock: { quantity: 75 } }],
+        nextCursor: "2026-06-18T11:00:00Z",
+      }),
+    };
+    const ingestCatalog = vi.fn().mockResolvedValue({ upserted: 1, skipped: 0 });
+
+    const res = await new SupplierConnector(client, { ingestCatalog }).run({
+      supplierId: "sup_fhb",
+      kind: "FHB_NEXMART",
+      cursor: null,
+    });
+
+    expect(res).toEqual({ upserted: 1, skipped: 0, nextCursor: "2026-06-18T11:00:00Z" });
+    expect(ingestCatalog.mock.calls[0]![1][0]).toEqual({
+      supplierSku: "FHB-1",
+      sku: "TS-RED-L",
+      ekCents: 1250,
+      availableQty: 75,
+    });
+  });
 });
