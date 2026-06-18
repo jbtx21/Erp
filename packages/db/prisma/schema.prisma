@@ -168,6 +168,9 @@ model Variant {
   prices     PriceGroupPrice[]
   supplierItems SupplierItem[]
   bomItems   BomItem[]
+  purchaseOrderLines PurchaseOrderLine[]
+  goodsReceiptLines  GoodsReceiptLine[]
+  stockLevel StockLevel? // Lager/Bestand (T-12)
   createdAt  DateTime @default(now())
 
   @@index([articleId])
@@ -207,6 +210,8 @@ model Supplier {
   supplierItems   SupplierItem[]
   subProductions  SubProductionOrder[]
   stickereiKunden Company[] @relation("StickereiPartner")
+  purchaseOrders  PurchaseOrder[]
+  incomingInvoices IncomingInvoice[]
   createdAt       DateTime @default(now())
 }
 
@@ -317,6 +322,8 @@ model Order {
   lines       OrderLine[]
   production  ProductionOrder?
   invoice     Invoice?
+  deliveryNotes DeliveryNote[]
+  complaints  Complaint[]
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
@@ -426,6 +433,7 @@ model Invoice {
   issuedAt    DateTime @default(now())
   eInvoiceXml String? // XRechnung/ZUGFeRD (Kap. 19)
   openItem    OpenItem?
+  creditNotes CreditNote[] // Gutschriften (Kap. 20)
   // GoBD: finalisierte Rechnung unveränderbar; Korrektur nur via Storno/Gutschrift
   finalized   Boolean  @default(false)
 
@@ -481,4 +489,171 @@ model AuditLog {
 
   @@index([entity, entityId])
   @@index([createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Beschaffung — Bestellung / Wareneingang — Kap. 6, 5.6. Testfälle T-05, T-12.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum PurchaseOrderStatus {
+  ENTWURF
+  BESTELLT
+  TEILWEISE_ERHALTEN
+  ERHALTEN
+}
+
+model PurchaseOrder {
+  id          String   @id @default(cuid())
+  number      String   @unique
+  supplierId  String
+  supplier    Supplier @relation(fields: [supplierId], references: [id])
+  status      PurchaseOrderStatus @default(ENTWURF)
+  lines       PurchaseOrderLine[]
+  goodsReceipts GoodsReceipt[]
+  createdAt   DateTime @default(now())
+
+  @@index([supplierId])
+}
+
+model PurchaseOrderLine {
+  id              String  @id @default(cuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  variantId       String
+  variant         Variant @relation(fields: [variantId], references: [id])
+  qty             Int
+  ekCents         Int
+
+  @@index([purchaseOrderId])
+}
+
+model GoodsReceipt {
+  id              String  @id @default(cuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  receivedAt      DateTime @default(now())
+  lines           GoodsReceiptLine[]
+
+  @@index([purchaseOrderId])
+}
+
+model GoodsReceiptLine {
+  id             String  @id @default(cuid())
+  goodsReceiptId String
+  goodsReceipt   GoodsReceipt @relation(fields: [goodsReceiptId], references: [id])
+  variantId      String
+  variant        Variant @relation(fields: [variantId], references: [id])
+  receivedQty    Int
+
+  @@index([goodsReceiptId])
+}
+
+// Lagerbestand je Variante; Mindestbestand-Reorder Transferdrucke (Kap. 6.3 / T-12)
+model StockLevel {
+  id        String  @id @default(cuid())
+  variantId String  @unique
+  variant   Variant @relation(fields: [variantId], references: [id])
+  qty       Int     @default(0)
+  minStock  Int     @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Eingangsrechnung + 3-Way-Match — Kap. 9.6
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum IncomingInvoiceStatus {
+  ERFASST
+  GEPRUEFT // 3-Way-Match ok
+  GESPERRT // Abweichung
+  BEZAHLT
+}
+
+model IncomingInvoice {
+  id          String   @id @default(cuid())
+  number      String
+  supplierId  String
+  supplier    Supplier @relation(fields: [supplierId], references: [id])
+  netCents    Int
+  taxCents    Int
+  grossCents  Int
+  status      IncomingInvoiceStatus @default(ERFASST)
+  receivedAt  DateTime @default(now())
+
+  @@unique([supplierId, number])
+  @@index([status])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Lieferschein / Gutschrift — Kap. 20 + xentral-alignment Lücken
+// ─────────────────────────────────────────────────────────────────────────────
+
+model DeliveryNote {
+  id        String   @id @default(cuid())
+  number    String   @unique
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+}
+
+model CreditNote {
+  id        String   @id @default(cuid())
+  number    String   @unique // eigener Nummernkreis, ERP = Master (Kap. 19)
+  invoiceId String
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id])
+  amountCents Int
+  reason    String
+  createdAt DateTime @default(now())
+
+  @@index([invoiceId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reklamation / Workflow C — Kap. 20
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum ComplaintCause {
+  LIEFERANT
+  INTERN
+  EXTERN_VEREDLER
+}
+
+enum FollowUpType {
+  NACHPRODUKTION
+  EXPRESS_NACHPRODUKTION
+  GUTSCHRIFT
+  KEINE
+}
+
+model Complaint {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id])
+  orderLineId String
+  cause       ComplaintCause
+  followUp    FollowUpType @default(KEINE)
+  costCents   Int      @default(0)
+  costBearer  String // LIEFERANT | VEREDLER | TEXMA (abgeleitet aus cause)
+  createdAt   DateTime @default(now())
+
+  @@index([orderId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Wiedervorlage / Termin — Kap. 35.1
+// ─────────────────────────────────────────────────────────────────────────────
+
+model DueItem {
+  id        String   @id @default(cuid())
+  entity    String // Quote | Order | SubProductionOrder | ...
+  entityId  String
+  dueDate   DateTime
+  note      String?
+  done      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([dueDate, done])
+  @@index([entity, entityId])
 }
