@@ -6,7 +6,9 @@ import type { OrderImportService } from "../modules/shop-import/order-import.ser
 import type { SupplierImportService } from "../modules/supplier-import/supplier-import.service.js";
 import type { IncomingInvoiceService } from "../modules/incoming-invoice/incoming-invoice.service.js";
 import type { ShipmentService } from "../modules/shipment/shipment.service.js";
+import type { BankingImportService } from "../modules/banking/banking-import.service.js";
 import type {
+  BankingQueryRepository,
   IncomingInvoiceQueryRepository,
   OrderQueryRepository,
   SupplierQueryRepository,
@@ -21,6 +23,8 @@ export interface Context {
   incomingInvoiceImport: IncomingInvoiceService;
   incomingInvoices: IncomingInvoiceQueryRepository;
   shipments: ShipmentService;
+  bankingImport: BankingImportService;
+  banking: BankingQueryRepository;
   auth: AuthService;
   user: AuthUser | null;
   /** Roh-Token aus dem Cookie (für den 2FA-Zwischenschritt/Logout, wenn user noch null ist). */

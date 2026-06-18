@@ -502,6 +502,7 @@ model OpenItem {
 
 model Payment {
   id           String   @id @default(cuid())
+  externalRef  String?  @unique // Bank-Transaktionsreferenz (CAMT AcctSvcrRef) — idempotenter Import (T-13)
   amountCents  Int
   bookedAt     DateTime @default(now())
   reference    String? // Verwendungszweck (Banking-Abgleich Kap. 9.4/T-13)

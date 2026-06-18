@@ -9,10 +9,12 @@ import { OrderImportService } from "../modules/shop-import/order-import.service.
 import { SupplierImportService } from "../modules/supplier-import/supplier-import.service.js";
 import { IncomingInvoiceService } from "../modules/incoming-invoice/incoming-invoice.service.js";
 import { ShipmentService } from "../modules/shipment/shipment.service.js";
+import { BankingImportService } from "../modules/banking/banking-import.service.js";
 import { InMemoryOrderRepository } from "../repositories/in-memory-order.repository.js";
 import { InMemorySupplierRepository } from "../repositories/in-memory-supplier.repository.js";
 import { InMemoryIncomingInvoiceRepository } from "../repositories/in-memory-incoming-invoice.repository.js";
 import { InMemoryShipmentRepository } from "../repositories/in-memory-shipment.repository.js";
+import { InMemoryBankingRepository } from "../repositories/in-memory-banking.repository.js";
 import { appRouter } from "./router.js";
 import { createCallerFactory } from "./trpc.js";
 import type { Context } from "./trpc.js";
@@ -41,6 +43,10 @@ function setup(user: AuthUser | null = BUERO) {
     },
   ]);
   const shipments = new ShipmentService(shipmentRepo, new MemoryAuditSink());
+  const bankingRepo = new InMemoryBankingRepository([
+    { id: "oi_1", invoiceNumber: "R-2026-001", openCents: 11900 },
+  ]);
+  const bankingImport = new BankingImportService(bankingRepo, new MemoryAuditSink());
   const ctx: Context = {
     orderImport,
     orders: repo,
@@ -49,6 +55,8 @@ function setup(user: AuthUser | null = BUERO) {
     incomingInvoiceImport,
     incomingInvoices: invoiceRepo,
     shipments,
+    bankingImport,
+    banking: bankingRepo,
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -56,7 +64,7 @@ function setup(user: AuthUser | null = BUERO) {
     clearSessionCookie: vi.fn(),
   };
   const caller = createCallerFactory(appRouter)(ctx);
-  return { caller, repo, supplierRepo, invoiceRepo, shipmentRepo };
+  return { caller, repo, supplierRepo, invoiceRepo, shipmentRepo, bankingRepo };
 }
 
 const woo = (number: string, first: string) => ({
@@ -115,6 +123,8 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       incomingInvoiceImport: {} as Context["incomingInvoiceImport"],
       incomingInvoices: buero.invoiceRepo,
       shipments: {} as Context["shipments"],
+      bankingImport: {} as Context["bankingImport"],
+      banking: buero.bankingRepo,
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",
@@ -223,6 +233,41 @@ describe("tRPC shipments — Versand bestätigen + RBAC (C4, T-06)", () => {
     const { caller } = setup(PRODUKTION);
     await expect(
       caller.shipments.confirmShipped({ orderId: "order_ship", trackingNumber: "X" })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+describe("tRPC banking — CAMT-Abgleich + RBAC (T-13, Kap. 9.4/12)", () => {
+  const camt = (ref: string, ustrd: string, amount: string) => `<Document><BkToCstmrStmt><Stmt>
+    <Ntry><Amt Ccy="EUR">${amount}</Amt><CdtDbtInd>CRDT</CdtDbtInd><ValDt><Dt>2026-06-15</Dt></ValDt>
+      <NtryDtls><TxDtls><Refs><AcctSvcrRef>${ref}</AcctSvcrRef></Refs><RmtInf><Ustrd>${ustrd}</Ustrd></RmtInf></TxDtls></NtryDtls>
+    </Ntry></Stmt></BkToCstmrStmt></Document>`;
+
+  it("BUCHHALTUNG importiert einen Auszug: Treffer wird zugeordnet, Unbekanntes in Klärung", async () => {
+    const { caller } = setup(BUCHHALTUNG);
+    const res = await caller.banking.importStatement({
+      xml: camt("REF-1", "Zahlung R-2026-001", "119.00").replace("</Stmt>", "") +
+        `<Ntry><Amt Ccy="EUR">42.00</Amt><CdtDbtInd>CRDT</CdtDbtInd><ValDt><Dt>2026-06-15</Dt></ValDt>
+         <NtryDtls><TxDtls><Refs><AcctSvcrRef>REF-2</AcctSvcrRef></Refs><RmtInf><Ustrd>ohne Bezug</Ustrd></RmtInf></TxDtls></NtryDtls></Ntry></Stmt></BkToCstmrStmt></Document>`,
+    });
+    expect(res).toMatchObject({ imported: 2, matched: 1, clarified: 1 });
+
+    const klaerung = await caller.banking.listClarifications();
+    expect(klaerung).toHaveLength(1);
+    expect(klaerung[0]).toMatchObject({ externalRef: "REF-2", amountCents: 4200 });
+  });
+
+  it("ist idempotent: erneuter Import derselben Referenz wird übersprungen", async () => {
+    const { caller } = setup(BUCHHALTUNG);
+    await caller.banking.importStatement({ xml: camt("REF-1", "R-2026-001", "119.00") });
+    const again = await caller.banking.importStatement({ xml: camt("REF-1", "R-2026-001", "119.00") });
+    expect(again).toMatchObject({ imported: 0, skipped: 1 });
+  });
+
+  it("PRODUKTION darf keinen Kontoauszug importieren (FORBIDDEN)", async () => {
+    const { caller } = setup(PRODUKTION);
+    await expect(
+      caller.banking.importStatement({ xml: camt("REF-1", "R-2026-001", "119.00") })
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });

@@ -144,6 +144,18 @@ export const appRouter = router({
       .input(z.object({ orderId: z.string().min(1), trackingNumber: z.string().min(1) }))
       .mutation(async ({ input, ctx }) => ctx.shipments.confirmShipped(input)),
   }),
+
+  banking: router({
+    /** Importiert einen CAMT.053-Kontoauszug und gleicht Zahlungen gegen OPs ab (T-13). */
+    importStatement: roleProcedure(...supplierRoles)
+      .input(z.object({ xml: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => ctx.bankingImport.importStatement(input.xml)),
+
+    /** Klärungsliste: nicht (voll) zugeordnete Zahlungseingänge (Kap. 9.4). */
+    listClarifications: roleProcedure(...supplierRoles)
+      .input(z.object({ limit: z.number().int().positive().max(200) }).optional())
+      .query(async ({ input, ctx }) => ctx.banking.listClarifications(input?.limit ?? 50)),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

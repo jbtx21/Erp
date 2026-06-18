@@ -46,3 +46,17 @@ export interface IncomingInvoiceListItem {
 export interface IncomingInvoiceQueryRepository {
   listRecent(limit: number): Promise<IncomingInvoiceListItem[]>;
 }
+
+// Banking-Klärungsliste (T-13): nicht (voll) zugeordnete Zahlungseingänge. Finanzdaten
+// → rollengeschützt (kein PRODUKTION).
+export interface BankingClarificationItem {
+  id: string;
+  externalRef: string | null;
+  amountCents: number;
+  reference: string | null;
+  bookedAt: Date;
+}
+
+export interface BankingQueryRepository {
+  listClarifications(limit: number): Promise<BankingClarificationItem[]>;
+}

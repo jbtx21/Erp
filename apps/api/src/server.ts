@@ -15,11 +15,13 @@ import { OrderImportService } from "./modules/shop-import/order-import.service.j
 import { SupplierImportService } from "./modules/supplier-import/supplier-import.service.js";
 import { IncomingInvoiceService } from "./modules/incoming-invoice/incoming-invoice.service.js";
 import { ShipmentService } from "./modules/shipment/shipment.service.js";
+import { BankingImportService } from "./modules/banking/banking-import.service.js";
 import { PrismaSessionRepository, PrismaUserRepository } from "./repositories/prisma-auth.repository.js";
 import { PrismaOrderRepository } from "./repositories/prisma-order.repository.js";
 import { PrismaSupplierRepository } from "./repositories/prisma-supplier.repository.js";
 import { PrismaIncomingInvoiceRepository } from "./repositories/prisma-incoming-invoice.repository.js";
 import { PrismaShipmentRepository } from "./repositories/prisma-shipment.repository.js";
+import { PrismaBankingRepository } from "./repositories/prisma-banking.repository.js";
 import { appRouter } from "./trpc/router.js";
 import type { Context } from "./trpc/trpc.js";
 
@@ -37,6 +39,8 @@ export function buildServer(): FastifyInstance {
   const incomingInvoiceRepo = new PrismaIncomingInvoiceRepository();
   const incomingInvoiceImport = new IncomingInvoiceService(incomingInvoiceRepo, new PrismaAuditSink());
   const shipments = new ShipmentService(new PrismaShipmentRepository(), new PrismaAuditSink());
+  const bankingRepo = new PrismaBankingRepository();
+  const bankingImport = new BankingImportService(bankingRepo, new PrismaAuditSink());
   const auth = new AuthService(
     new PrismaUserRepository(),
     new PrismaSessionRepository(),
@@ -62,6 +66,8 @@ export function buildServer(): FastifyInstance {
           incomingInvoiceImport,
           incomingInvoices: incomingInvoiceRepo,
           shipments,
+          bankingImport,
+          banking: bankingRepo,
           auth,
           user,
           sessionToken,
