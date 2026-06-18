@@ -1,4 +1,4 @@
-# Lastenheft ERP-Migration TEXMA Textilveredelung (v2.6)
+# Lastenheft ERP-Migration TEXMA Textilveredelung (v3.0)
 
 TEXMA Textilveredelung — Lastenheft ERP-Migration
 
@@ -12,7 +12,7 @@ TEXMA Textilveredelung
 |---|---|
 | **Unternehmen** | TEXMA Textilveredelung GmbH, Herrenberg |
 | **Dokument** | Lastenheft für ERP-Beratung und -Umsetzung (Make-or-Buy) |
-| **Version** | 2.6 — Festlegungen zum Kundenportal eingearbeitet: alle Kunden, Nachbestellung als Anfrage, Priorität Could (Umsetzung als Add-on) (ohne Budget) |
+| **Version** | 3.0 — Buy-Kandidaten reybex und orgaMAX neben Xentral aufgenommen: Hinweis in Bewertungsmatrix (Kap. 30) und Kandidatenvergleich (Kap. 31.1) (ohne Budget) |
 | **Funktionaler Maßstab** | Xentral (State of the Art / Benchmark) — Zielsystem offen, Make-or-Buy zu prüfen |
 | **Altsystem** | CDH Office (lokal) |
 | **Status** | Zur Angebotsanfrage freigegeben |
@@ -797,6 +797,8 @@ Kapitel 24 benennt die Optionen (Buy / Make / Hybrid / Teil-Make) und die Bewert
 
 > Das Betriebsrisiko (15 %) bildet bei einem 6-Personen-Betrieb das in Kapitel 24.2 beschriebene Klumpenrisiko ab: Ein selbst betriebenes oder stark angepasstes System darf nicht an einer einzelnen Person hängen. Bei Make- und Hybrid-Optionen ist dieses Kriterium besonders kritisch zu prüfen.
 
+Konkret stehen derzeit drei Buy-Kandidaten zur Bewertung: Xentral, reybex und orgaMAX. Die Punktevergabe je Kriterium erfolgt erst nach Live-Demo und Angebot, nicht auf Basis von Hersteller-Websites. Maßgeblich ist, wie jeder Kandidat die TEXMA-differenzierenden Prozesse (Kapitel 31) an einem echten Auftrag abbildet — nicht der Funktionsumfang auf dem Papier. Ein Kandidatenvergleich findet sich in Kapitel 31.1.
+
 # 31. Funktionsabdeckungs-Matrix (Maßstab Xentral)
 
 Diese Matrix übersetzt die Kriterien aus Kapitel 30 in eine konkrete Prüfung gegen den funktionalen Maßstab Xentral (Recherchestand Juni 2026, Quelle: Xentral Help Center). Sie zeigt je Anforderung, ob die Funktion im Standard enthalten ist (nativ), eine erweiterte/angepasste Schnittstelle erfordert (Extended), kundenindividuell zu entwickeln ist (Custom) oder über ein Fremdsystem abzudecken ist. Sie ist das Raster, an dem jeder Anbieter zu messen ist — keine Vorfestlegung auf Xentral.
@@ -819,6 +821,24 @@ Diese Matrix übersetzt die Kriterien aus Kapitel 30 in eine konkrete Prüfung g
 | Revisionssichere GoBD-Langzeitarchivierung | Fremdsystem / Zusatzkomponente (Kapitel 10) |
 
 > **Kernaussage für die Entscheidung:** Der generische Standard-Block (obere Zeilen) ist abgedeckt und in keinem Szenario wirtschaftlich selbst zu bauen — hier ist „Buy“ überlegen. Die TEXMA-differenzierenden Prozesse (untere Zeilen) sind in jedem Szenario Custom. Das spricht für eine starke Standard-Basis mit gezieltem Custom an den Veredelungs-Stellen („Teil-Make“, Kapitel 24.1). Jeder Anbieter sollte diese Matrix für sein eigenes System ausfüllen.
+
+## 31.1 Kandidatenvergleich (Buy-Optionen)
+
+Die folgende Übersicht stellt die drei aktuellen Buy-Kandidaten gegenüber. Wichtig zur Einordnung: Die Spalte Xentral beruht auf der Recherche im Xentral Help Center und einem realen Branchen-Beleg (Mr.Tex, Kapitel 16/K-04). Die Spalten reybex (EDIT Systems GmbH, Essen) und orgaMAX (deltra Business Software, Detmold) beruhen ausschließlich auf öffentlichen Hersteller-Angaben (Website-Recherche Juni 2026) und sind daher als Ersteinschätzung zu lesen. Alle mit „Demo“ markierten Felder sind vor einer Entscheidung am echten TEXMA-Fall zu verifizieren (PoC: T-01, T-04, T-05).
+
+| **Dimension** | **Xentral** | **reybex** | **orgaMAX** |
+|---|---|---|---|
+| WooCommerce-Multishop | nativ | nativ | E-Commerce-Modul; WooCommerce: Demo |
+| Make-to-Order / Stücklisten | nativ | nativ (alle Fertigungsarten) | schwach: Demo |
+| Mehrstufige Lohnveredelung (Beistellung→Rücklauf) | Custom (kein dediziertes Modul) | „verlängerte Werkbank“ vorhanden; Tiefe: Demo | nicht erkennbar: Demo |
+| Varianten (Farbe × Größe) | nativ | nativ | Demo |
+| FiBu / E-Rechnung / DATEV / Banking / Mahnwesen | nativ | nativ | nativ |
+| Offene API / Headless (Anfrageshop-Anbindung) | API vorhanden | API-First / Headless (Stärke) | begrenzt: Demo |
+| Cloud / Hosting in DE | Cloud (EU) | Cloud, IONOS DE | Cloud oder lokal (Windows) |
+| Branchen-Beleg Textilveredelung | ja (Mr.Tex, K-04) | keiner bekannt: Demo | keiner bekannt: Demo |
+| TEXMA-Custom (T-01-Mapping, Stickerei-Partnerlogik) | Custom | Custom: Demo | Custom: Demo |
+
+> Das Bild aus Kapitel 31 bestätigt sich: Den kaufmännischen Standard-Block decken alle drei ab. Den Unterschied macht die Tiefe bei der mehrstufigen Veredelung — dort hat nur Xentral bislang einen realen Branchen-Beleg, reybex eine plausible, aber zu prüfende Funktionsbasis (Stärke: API-First/Headless für die Anfrageshop-Anbindung), und orgaMAX die schwächste Abdeckung. Entscheidend ist die Demo am echten Auftrag, nicht der Funktionsumfang auf der Website.
 
 # 32. Integrationsarchitektur
 
