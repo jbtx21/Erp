@@ -60,3 +60,17 @@ export interface BankingClarificationItem {
 export interface BankingQueryRepository {
   listClarifications(limit: number): Promise<BankingClarificationItem[]>;
 }
+
+// Mahnwesen-Übersicht (T-14): offene Posten mit Mahnstufe + Sperre.
+export interface DunningOverviewItem {
+  id: string;
+  invoiceNumber: string;
+  openCents: number;
+  dueDate: Date;
+  dunningLevel: number;
+  mahnsperre: boolean;
+}
+
+export interface DunningQueryRepository {
+  listDunning(limit: number): Promise<DunningOverviewItem[]>;
+}

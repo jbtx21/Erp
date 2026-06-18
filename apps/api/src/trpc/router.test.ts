@@ -10,11 +10,13 @@ import { SupplierImportService } from "../modules/supplier-import/supplier-impor
 import { IncomingInvoiceService } from "../modules/incoming-invoice/incoming-invoice.service.js";
 import { ShipmentService } from "../modules/shipment/shipment.service.js";
 import { BankingImportService } from "../modules/banking/banking-import.service.js";
+import { DunningService } from "../modules/dunning/dunning.service.js";
 import { InMemoryOrderRepository } from "../repositories/in-memory-order.repository.js";
 import { InMemorySupplierRepository } from "../repositories/in-memory-supplier.repository.js";
 import { InMemoryIncomingInvoiceRepository } from "../repositories/in-memory-incoming-invoice.repository.js";
 import { InMemoryShipmentRepository } from "../repositories/in-memory-shipment.repository.js";
 import { InMemoryBankingRepository } from "../repositories/in-memory-banking.repository.js";
+import { InMemoryDunningRepository } from "../repositories/in-memory-dunning.repository.js";
 import { appRouter } from "./router.js";
 import { createCallerFactory } from "./trpc.js";
 import type { Context } from "./trpc.js";
@@ -47,6 +49,17 @@ function setup(user: AuthUser | null = BUERO) {
     { id: "oi_1", invoiceNumber: "R-2026-001", openCents: 11900 },
   ]);
   const bankingImport = new BankingImportService(bankingRepo, new MemoryAuditSink());
+  const dunningRepo = new InMemoryDunningRepository([
+    {
+      id: "oi_due",
+      invoiceNumber: "R-2026-009",
+      openCents: 5000,
+      dueDate: new Date(Date.UTC(2026, 4, 1)),
+      dunningLevel: 0,
+      mahnsperre: false,
+    },
+  ]);
+  const dunning = new DunningService(dunningRepo, new MemoryAuditSink());
   const ctx: Context = {
     orderImport,
     orders: repo,
@@ -57,6 +70,8 @@ function setup(user: AuthUser | null = BUERO) {
     shipments,
     bankingImport,
     banking: bankingRepo,
+    dunning,
+    dunningQuery: dunningRepo,
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -64,7 +79,7 @@ function setup(user: AuthUser | null = BUERO) {
     clearSessionCookie: vi.fn(),
   };
   const caller = createCallerFactory(appRouter)(ctx);
-  return { caller, repo, supplierRepo, invoiceRepo, shipmentRepo, bankingRepo };
+  return { caller, repo, supplierRepo, invoiceRepo, shipmentRepo, bankingRepo, dunningRepo };
 }
 
 const woo = (number: string, first: string) => ({
@@ -125,6 +140,8 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       shipments: {} as Context["shipments"],
       bankingImport: {} as Context["bankingImport"],
       banking: buero.bankingRepo,
+      dunning: {} as Context["dunning"],
+      dunningQuery: buero.dunningRepo,
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",
@@ -269,5 +286,22 @@ describe("tRPC banking — CAMT-Abgleich + RBAC (T-13, Kap. 9.4/12)", () => {
     await expect(
       caller.banking.importStatement({ xml: camt("REF-1", "R-2026-001", "119.00") })
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+describe("tRPC dunning — Mahnlauf + RBAC (T-14, Kap. 9.5/12)", () => {
+  it("BUCHHALTUNG startet den Mahnlauf: überfälliger Posten → Stufe 1", async () => {
+    const { caller } = setup(BUCHHALTUNG);
+    const run = await caller.dunning.run({ today: "2026-06-15T00:00:00.000Z" });
+    expect(run.proposals).toEqual([
+      expect.objectContaining({ itemId: "oi_due", fromLevel: 0, toLevel: 1 }),
+    ]);
+    const list = await caller.dunning.list();
+    expect(list[0]).toMatchObject({ id: "oi_due", dunningLevel: 1 });
+  });
+
+  it("PRODUKTION darf keinen Mahnlauf starten (FORBIDDEN)", async () => {
+    const { caller } = setup(PRODUKTION);
+    await expect(caller.dunning.run()).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });

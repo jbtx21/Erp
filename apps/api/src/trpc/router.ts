@@ -156,6 +156,20 @@ export const appRouter = router({
       .input(z.object({ limit: z.number().int().positive().max(200) }).optional())
       .query(async ({ input, ctx }) => ctx.banking.listClarifications(input?.limit ?? 50)),
   }),
+
+  dunning: router({
+    /** Startet den Mahnlauf: überfällige, nicht gesperrte Posten +1 Stufe (T-14). */
+    run: roleProcedure(...supplierRoles)
+      .input(z.object({ today: z.string().datetime().optional() }).optional())
+      .mutation(async ({ input, ctx }) =>
+        ctx.dunning.runDunning(input?.today ? new Date(input.today) : new Date())
+      ),
+
+    /** Mahnübersicht: offene Posten mit Mahnstufe + Sperre (Kap. 9.5). */
+    list: roleProcedure(...supplierRoles)
+      .input(z.object({ limit: z.number().int().positive().max(200) }).optional())
+      .query(async ({ input, ctx }) => ctx.dunningQuery.listDunning(input?.limit ?? 50)),
+  }),
 });
 
 export type AppRouter = typeof appRouter;
