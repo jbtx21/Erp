@@ -17,3 +17,6 @@ export * from "./stickerei.js";
 export * from "./ampel.js";
 export * from "./reklamation.js";
 export * from "./shipping.js";
+export * from "./finishing.js";
+export * from "./approval.js";
+export * from "./einvoice-inbound.js";

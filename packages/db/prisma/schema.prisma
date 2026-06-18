@@ -239,6 +239,13 @@ enum ShopKind {
   SAMMELBESTELLUNG // Kap. 18.2
 }
 
+// Lieferadress-Regelung je Shop (K-08, Kap. 8.2)
+enum DeliveryAddressPolicy {
+  FEST // feste Firmen-Lieferadresse
+  FREIE_EINGABE // Mitarbeiter gibt Adresse im Shop ein
+  AUSWAHL // Büro wählt aus hinterlegten Firmen-Lieferadressen
+}
+
 // Ein Shop = eine Firma. companyId zeigt IMMER auf die Firma, nie auf Mitarbeiter (T-01).
 model ShopConnector {
   id        String   @id @default(cuid())
@@ -250,6 +257,7 @@ model ShopConnector {
   bomTemplateId String? // variable Stücklisten je Shop (Kap. 5.2/T-03, Extended Kap. 31)
   bomTemplate   BomTemplate? @relation(fields: [bomTemplateId], references: [id])
   active    Boolean  @default(true)
+  deliveryAddressPolicy DeliveryAddressPolicy @default(FEST) // K-08
   syncCursor String? // Delta-Sync (Kap. 13)
   orders    Order[]
   createdAt DateTime @default(now())
@@ -656,4 +664,32 @@ model DueItem {
 
   @@index([dueDate, done])
   @@index([entity, entityId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Konfiguration — Sollzeiten (K-09) + Freigabeschwellen (K-10)
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum FinishingKind {
+  TRANSFER
+  SIEBDRUCK_EINRICHTUNG
+  SIEBDRUCK_DRUCK
+  STICK
+}
+
+// Sollzeit je Veredelungsart; grobe Startwerte per Seed, im Betrieb pflegbar (K-09)
+model FinishingTargetTime {
+  id            String        @id @default(cuid())
+  kind          FinishingKind @unique
+  targetMinutes Float
+  basis         String // STUECK | EINRICHTUNG | PRO_1000_STICHE
+  updatedAt     DateTime      @updatedAt
+}
+
+// Einzeiler-Settings; Schwellen erst im GL-Workshop gesetzt → nullable (K-10)
+model ApprovalThreshold {
+  id                 String   @id @default(cuid())
+  maxDiscountPct     Float? // null = nicht definiert
+  maxOrderValueCents Int? // null = nicht definiert
+  updatedAt          DateTime @updatedAt
 }

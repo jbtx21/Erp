@@ -59,3 +59,53 @@ describe("mapWooOrder — T-01 Firmenkunde-Mapping", () => {
     expect(() => mapWooOrder({ foo: "bar" }, config)).toThrow();
   });
 });
+
+describe("Lieferadress-Policy je Shop (K-08, Kap. 8.2)", () => {
+  const shipping = {
+    first_name: "Max",
+    last_name: "Mustermann",
+    company: "ACME Werk Süd",
+    address_1: "Industriestr. 5",
+    postcode: "70565",
+    city: "Stuttgart",
+    country: "DE",
+  };
+
+  it("FEST (Default) übernimmt KEINE Shop-Adresse", () => {
+    const mapped = mapWooOrder({ ...wooOrder, shipping }, config);
+    expect(mapped.delivery).toEqual({ policy: "FEST" });
+  });
+
+  it("FREIE_EINGABE übernimmt die im Shop erfasste Lieferadresse", () => {
+    const mapped = mapWooOrder(
+      { ...wooOrder, shipping },
+      { ...config, deliveryAddressPolicy: "FREIE_EINGABE" }
+    );
+    expect(mapped.delivery).toEqual({
+      policy: "FREIE_EINGABE",
+      address: {
+        name: "ACME Werk Süd",
+        street: "Industriestr. 5",
+        zip: "70565",
+        city: "Stuttgart",
+        country: "DE",
+      },
+    });
+  });
+
+  it("FREIE_EINGABE ohne brauchbare Adresse fällt auf Firmenadresse zurück", () => {
+    const mapped = mapWooOrder(
+      { ...wooOrder, shipping: { ...shipping, address_1: "", company: "" } },
+      { ...config, deliveryAddressPolicy: "FREIE_EINGABE" }
+    );
+    expect(mapped.delivery.address).toBeUndefined();
+  });
+
+  it("AUSWAHL übernimmt keine Shop-Adresse (Büro wählt)", () => {
+    const mapped = mapWooOrder(
+      { ...wooOrder, shipping },
+      { ...config, deliveryAddressPolicy: "AUSWAHL" }
+    );
+    expect(mapped.delivery).toEqual({ policy: "AUSWAHL" });
+  });
+});
