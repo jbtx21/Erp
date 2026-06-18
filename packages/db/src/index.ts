@@ -8,9 +8,20 @@ declare global {
   var __texmaPrisma: PrismaClient | undefined;
 }
 
-export const prisma: PrismaClient =
-  globalThis.__texmaPrisma ?? new PrismaClient();
-
-if (process.env.NODE_ENV !== "production") {
-  globalThis.__texmaPrisma = prisma;
+// Lazy-Singleton: der Client wird erst beim ERSTEN Zugriff erzeugt (nicht beim
+// Import). So wirft ein bloßer Import ohne DATABASE_URL nicht — wichtig, damit
+// DB-unabhängige Module/Tests den Client referenzieren können, ohne ihn zu nutzen.
+function getClient(): PrismaClient {
+  if (!globalThis.__texmaPrisma) {
+    globalThis.__texmaPrisma = new PrismaClient();
+  }
+  return globalThis.__texmaPrisma;
 }
+
+export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
+  get(_target, prop) {
+    const client = getClient();
+    const value = Reflect.get(client as object, prop);
+    return typeof value === "function" ? value.bind(client) : value;
+  },
+});

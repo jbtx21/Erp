@@ -8,6 +8,22 @@ on:
 jobs:
   build-test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: texma
+          POSTGRES_PASSWORD: texma
+          POSTGRES_DB: texma
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://texma:texma@localhost:5432/texma?schema=public
     steps:
       - uses: actions/checkout@v4
 
@@ -28,8 +44,6 @@ jobs:
 
       - name: Prisma validate (Schema/GoBD-Datenmodell)
         working-directory: packages/db
-        env:
-          DATABASE_URL: postgresql://texma:texma@localhost:5432/texma?schema=public
         run: pnpm exec prisma validate
 
       - name: Build (turbo, Abhängigkeitsreihenfolge)
@@ -38,5 +52,14 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Test (inkl. Abnahme T-01)
+      - name: Test (Unit, inkl. Abnahme T-01)
         run: pnpm test
+
+      - name: Migration auf Postgres anwenden
+        working-directory: packages/db
+        run: pnpm exec prisma migrate deploy
+
+      - name: Integrationstests (T-01 gegen echtes Postgres)
+        env:
+          RUN_DB_TESTS: "1"
+        run: pnpm --filter @texma/api test
