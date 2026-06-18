@@ -74,7 +74,7 @@ export function buildEInvoiceXml(m: EInvoiceModel): string {
     .join("\n");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100" xmlns:ram="urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100">
+<rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100" xmlns:ram="urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100" xmlns:udt="urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100">
   <rsm:ExchangedDocument>
     <ram:ID>${esc(m.invoiceNumber)}</ram:ID>
     <ram:TypeCode>380</ram:TypeCode>
