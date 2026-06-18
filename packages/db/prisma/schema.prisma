@@ -233,6 +233,7 @@ enum SupplierKind {
 model Supplier {
   id              String   @id @default(cuid())
   name            String
+  vatId           String? // USt-IdNr. — Auflösung eingehender E-Rechnungen (Kap. 19/C4)
   // Inbound-Connector (C3): Katalog/Lager/EK eingehend synchronisieren.
   kind            SupplierKind @default(MANUAL)
   baseUrl         String? // REST-Basis-URL des Lieferantensystems

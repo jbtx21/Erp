@@ -30,3 +30,19 @@ export interface SupplierItemListItem {
 export interface SupplierQueryRepository {
   listItems(supplierId: string, limit: number): Promise<SupplierItemListItem[]>;
 }
+
+// Eingangsrechnungen (C4). Finanzdaten → Endpunkt rollengeschützt (kein PRODUKTION).
+export interface IncomingInvoiceListItem {
+  id: string;
+  supplierId: string;
+  number: string;
+  netCents: number;
+  taxCents: number;
+  grossCents: number;
+  status: string;
+  receivedAt: Date;
+}
+
+export interface IncomingInvoiceQueryRepository {
+  listRecent(limit: number): Promise<IncomingInvoiceListItem[]>;
+}

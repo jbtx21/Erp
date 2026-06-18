@@ -120,6 +120,30 @@ export const appRouter = router({
       .input(z.object({ supplierId: z.string().min(1), limit: z.number().int().positive().max(500).optional() }))
       .query(async ({ input, ctx }) => ctx.suppliers.listItems(input.supplierId, input.limit ?? 100)),
   }),
+
+  incomingInvoices: router({
+    /** Empfängt eine eingehende E-Rechnung (CII-XML), validiert + erfasst sie (Kap. 19/K-13). */
+    receive: roleProcedure(...supplierRoles)
+      .input(z.object({ xml: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => ctx.incomingInvoiceImport.receive(input.xml)),
+
+    /** Liste der erfassten Eingangsrechnungen (Finanzdaten, kein PRODUKTION-Zugriff). */
+    list: roleProcedure(...supplierRoles)
+      .input(z.object({ limit: z.number().int().positive().max(200) }).optional())
+      .query(async ({ input, ctx }) => ctx.incomingInvoices.listRecent(input?.limit ?? 50)),
+  }),
+
+  shipments: router({
+    /** Versandbereite Aufträge (mit Lieferadresse) für den DPD-Label-Worker (T-06). */
+    listShippable: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ limit: z.number().int().positive().max(200) }).optional())
+      .query(async ({ input, ctx }) => ctx.shipments.listShippable(input?.limit ?? 50)),
+
+    /** Bestätigt den Versand: Auftrag → VERSENDET, Tracking gespeichert, Shop-Push eingereiht. */
+    confirmShipped: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ orderId: z.string().min(1), trackingNumber: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => ctx.shipments.confirmShipped(input)),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

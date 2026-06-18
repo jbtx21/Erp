@@ -2,29 +2,53 @@
 // (Produktion ohne Preise) und die Auth-Guards. In-Memory, keine DB.
 
 import { describe, expect, it, vi } from "vitest";
+import { buildEInvoiceXml } from "@texma/shared";
 import type { AuthUser } from "../modules/auth/auth.service.js";
 import { MemoryAuditSink } from "../audit/memory-audit-sink.js";
 import { OrderImportService } from "../modules/shop-import/order-import.service.js";
 import { SupplierImportService } from "../modules/supplier-import/supplier-import.service.js";
+import { IncomingInvoiceService } from "../modules/incoming-invoice/incoming-invoice.service.js";
+import { ShipmentService } from "../modules/shipment/shipment.service.js";
 import { InMemoryOrderRepository } from "../repositories/in-memory-order.repository.js";
 import { InMemorySupplierRepository } from "../repositories/in-memory-supplier.repository.js";
+import { InMemoryIncomingInvoiceRepository } from "../repositories/in-memory-incoming-invoice.repository.js";
+import { InMemoryShipmentRepository } from "../repositories/in-memory-shipment.repository.js";
 import { appRouter } from "./router.js";
 import { createCallerFactory } from "./trpc.js";
 import type { Context } from "./trpc.js";
 
 const BUERO: AuthUser = { id: "u1", email: "b@texma.de", name: "Büro", role: "BUERO", totpEnabled: false };
 const PRODUKTION: AuthUser = { id: "u2", email: "p@texma.de", name: "Prod", role: "PRODUKTION", totpEnabled: false };
+const BUCHHALTUNG: AuthUser = { id: "u3", email: "f@texma.de", name: "Fibu", role: "BUCHHALTUNG", totpEnabled: false };
 
 function setup(user: AuthUser | null = BUERO) {
   const repo = new InMemoryOrderRepository(new Set(["company_acme"]));
   const orderImport = new OrderImportService(repo, new MemoryAuditSink());
   const supplierRepo = new InMemorySupplierRepository(new Map([["0020-RED-L", "var_1"]]));
   const supplierImport = new SupplierImportService(supplierRepo, new MemoryAuditSink());
+  const invoiceRepo = new InMemoryIncomingInvoiceRepository([
+    { id: "sup_acme", name: "ACME GmbH", vatId: "DE123456789" },
+  ]);
+  const incomingInvoiceImport = new IncomingInvoiceService(invoiceRepo, new MemoryAuditSink());
+  const shipmentRepo = new InMemoryShipmentRepository([
+    {
+      id: "order_ship",
+      number: "WC-500",
+      externalNumber: "500",
+      shopConnectorId: "shop_acme",
+      recipient: { name: "ACME GmbH", street: "Hauptstr. 1", zip: "71083", city: "Herrenberg", country: "DE" },
+      weightGrams: 1000,
+    },
+  ]);
+  const shipments = new ShipmentService(shipmentRepo, new MemoryAuditSink());
   const ctx: Context = {
     orderImport,
     orders: repo,
     supplierImport,
     suppliers: supplierRepo,
+    incomingInvoiceImport,
+    incomingInvoices: invoiceRepo,
+    shipments,
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -32,7 +56,7 @@ function setup(user: AuthUser | null = BUERO) {
     clearSessionCookie: vi.fn(),
   };
   const caller = createCallerFactory(appRouter)(ctx);
-  return { caller, repo, supplierRepo };
+  return { caller, repo, supplierRepo, invoiceRepo, shipmentRepo };
 }
 
 const woo = (number: string, first: string) => ({
@@ -88,6 +112,9 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       orders: buero.repo,
       supplierImport: {} as Context["supplierImport"],
       suppliers: buero.supplierRepo,
+      incomingInvoiceImport: {} as Context["incomingInvoiceImport"],
+      incomingInvoices: buero.invoiceRepo,
+      shipments: {} as Context["shipments"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",
@@ -146,5 +173,56 @@ describe("tRPC suppliers — Katalog-Import + RBAC (C3, Kap. 6/12)", () => {
     await expect(caller.suppliers.list({ supplierId: "sup_1" })).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
+  });
+});
+
+describe("tRPC incomingInvoices — E-Rechnung-Empfang + RBAC (C4, Kap. 19/12)", () => {
+  const xml = buildEInvoiceXml({
+    invoiceNumber: "ER-2026-0001",
+    issueDate: new Date(Date.UTC(2026, 5, 10)),
+    currency: "EUR",
+    seller: { name: "ACME GmbH", vatId: "DE123456789", country: "DE" },
+    buyer: { name: "TEXMA GmbH", country: "DE" },
+    lines: [{ id: "1", name: "Textil", qty: 10, unitNetCents: 1000, lineNetCents: 10000, vatRatePercent: 19 }],
+    netCents: 10000,
+    taxCents: 1900,
+    grossCents: 11900,
+  });
+
+  it("BUCHHALTUNG empfängt eine E-Rechnung und sieht sie in der Liste", async () => {
+    const { caller } = setup(BUCHHALTUNG);
+    const res = await caller.incomingInvoices.receive({ xml });
+    expect(res).toMatchObject({ status: "ERFASST", supplierId: "sup_acme" });
+
+    const list = await caller.incomingInvoices.list();
+    expect(list[0]).toMatchObject({ number: "ER-2026-0001", grossCents: 11900 });
+  });
+
+  it("PRODUKTION darf keine E-Rechnungen empfangen (FORBIDDEN)", async () => {
+    const { caller } = setup(PRODUKTION);
+    await expect(caller.incomingInvoices.receive({ xml })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+describe("tRPC shipments — Versand bestätigen + RBAC (C4, T-06)", () => {
+  it("BUERO listet versandbereite Aufträge und bestätigt den Versand", async () => {
+    const { caller, shipmentRepo } = setup(BUERO);
+    const shippable = await caller.shipments.listShippable();
+    expect(shippable[0]).toMatchObject({ id: "order_ship", recipient: { city: "Herrenberg" } });
+
+    const res = await caller.shipments.confirmShipped({ orderId: "order_ship", trackingNumber: "DPD123" });
+    expect(res).toMatchObject({ orderId: "order_ship", externalNumber: "500", trackingNumber: "DPD123" });
+    // Outbox-Event für den Shop-Push wurde eingereiht (VERSENDET + Tracking).
+    expect(shipmentRepo.outbox[0]).toMatchObject({
+      type: "order.status.update",
+      payload: { status: "VERSENDET", trackingNumber: "DPD123", externalNumber: "500" },
+    });
+  });
+
+  it("PRODUKTION darf den Versand nicht bestätigen (FORBIDDEN)", async () => {
+    const { caller } = setup(PRODUKTION);
+    await expect(
+      caller.shipments.confirmShipped({ orderId: "order_ship", trackingNumber: "X" })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });

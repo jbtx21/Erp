@@ -3,6 +3,7 @@
 // Robuste Orchestrierung (Retry/Backoff/Rate-Limit, Outbox) ist bewusst Block C2 —
 // hier ein schlanker, paginierender „seit Cursor"-Poll.
 
+import type { WooStatus } from "@texma/shared";
 import type { WooClient } from "./index.js";
 
 export interface WooRestClientOptions {
@@ -72,6 +73,39 @@ export class WooRestClient implements WooClient {
     } while (page <= totalPages);
 
     return { orders, nextCursor: this.computeNextCursor(orders, cursor) };
+  }
+
+  /**
+   * Schreibt Status (+ optional Trackingnummer) an eine Shop-Bestellung zurück
+   * (T-06/T-09). PUT /wp-json/wc/v3/orders/{id}; die Trackingnummer wird als
+   * Order-Meta (`_dpd_tracking`) gesetzt. `externalNumber` = Shop-Bestell-Id.
+   */
+  async updateOrderStatus(
+    externalNumber: string,
+    status: WooStatus,
+    trackingNumber?: string
+  ): Promise<void> {
+    const url = `${this.base}/wp-json/wc/v3/orders/${encodeURIComponent(externalNumber)}`;
+    const body: Record<string, unknown> = { status };
+    if (trackingNumber) {
+      body.meta_data = [{ key: "_dpd_tracking", value: trackingNumber }];
+    }
+    const res = await this.fetchImpl(url, {
+      method: "PUT",
+      headers: {
+        Authorization: this.authHeader,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(this.timeoutMs),
+    });
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(`WooCommerce-Authentifizierung fehlgeschlagen (HTTP ${res.status}) für ${this.base}.`);
+    }
+    if (!res.ok) {
+      throw new Error(`WooCommerce-Status-Update fehlgeschlagen (HTTP ${res.status}) für Order ${externalNumber}.`);
+    }
   }
 
   /** Höchstes date_modified_gmt der geholten Orders (ISO), sonst alter Cursor / Epoch. */

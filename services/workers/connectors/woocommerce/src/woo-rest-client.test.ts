@@ -58,3 +58,27 @@ describe("WooRestClient.fetchOrdersSince", () => {
     await expect(client.fetchOrdersSince(null)).rejects.toThrow(/Authentifizierung fehlgeschlagen/);
   });
 });
+
+describe("WooRestClient.updateOrderStatus (T-06/T-09)", () => {
+  it("PUTtet Status + Tracking-Meta an die Bestellung", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    const client = new WooRestClient(opts(fetchImpl as unknown as typeof fetch));
+
+    await client.updateOrderStatus("500", "completed", "DPD123");
+
+    const [url, init] = fetchImpl.mock.calls[0]!;
+    expect(url).toContain("/wp-json/wc/v3/orders/500");
+    expect((init as RequestInit).method).toBe("PUT");
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.status).toBe("completed");
+    expect(body.meta_data).toEqual([{ key: "_dpd_tracking", value: "DPD123" }]);
+  });
+
+  it("lässt das Tracking-Meta weg, wenn keine Trackingnummer vorliegt", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    const client = new WooRestClient(opts(fetchImpl as unknown as typeof fetch));
+    await client.updateOrderStatus("500", "on-hold");
+    const body = JSON.parse((fetchImpl.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.meta_data).toBeUndefined();
+  });
+});
