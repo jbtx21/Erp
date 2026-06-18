@@ -426,6 +426,7 @@ model ProductionOrder {
   bomItems    BomItem[]
   subOrders   SubProductionOrder[]
   timeEntries TimeEntry[]
+  purchaseOrders PurchaseOrder[] // Beschaffung je PA (Multi-Lieferant, T-05)
   createdAt   DateTime @default(now())
 }
 
@@ -556,12 +557,16 @@ model PurchaseOrder {
   number      String   @unique
   supplierId  String
   supplier    Supplier @relation(fields: [supplierId], references: [id])
+  // Beschaffung für einen Produktionsauftrag (Multi-Lieferant-Gate, Kap. 5.6/T-05)
+  productionId String?
+  production   ProductionOrder? @relation(fields: [productionId], references: [id])
   status      PurchaseOrderStatus @default(ENTWURF)
   lines       PurchaseOrderLine[]
   goodsReceipts GoodsReceipt[]
   createdAt   DateTime @default(now())
 
   @@index([supplierId])
+  @@index([productionId])
 }
 
 model PurchaseOrderLine {

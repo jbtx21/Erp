@@ -170,6 +170,13 @@ export const appRouter = router({
       .input(z.object({ limit: z.number().int().positive().max(200) }).optional())
       .query(async ({ input, ctx }) => ctx.dunningQuery.listDunning(input?.limit ?? 50)),
   }),
+
+  procurement: router({
+    /** Produktionsstart-Gate (T-05): Komponentenstatus + canStart (operativ, keine Preise). */
+    productionStartStatus: protectedProcedure
+      .input(z.object({ productionId: z.string().min(1) }))
+      .query(async ({ input, ctx }) => ctx.procurement.productionStartStatus(input.productionId)),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

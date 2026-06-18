@@ -11,12 +11,14 @@ import { IncomingInvoiceService } from "../modules/incoming-invoice/incoming-inv
 import { ShipmentService } from "../modules/shipment/shipment.service.js";
 import { BankingImportService } from "../modules/banking/banking-import.service.js";
 import { DunningService } from "../modules/dunning/dunning.service.js";
+import { ProcurementService } from "../modules/procurement/procurement.service.js";
 import { InMemoryOrderRepository } from "../repositories/in-memory-order.repository.js";
 import { InMemorySupplierRepository } from "../repositories/in-memory-supplier.repository.js";
 import { InMemoryIncomingInvoiceRepository } from "../repositories/in-memory-incoming-invoice.repository.js";
 import { InMemoryShipmentRepository } from "../repositories/in-memory-shipment.repository.js";
 import { InMemoryBankingRepository } from "../repositories/in-memory-banking.repository.js";
 import { InMemoryDunningRepository } from "../repositories/in-memory-dunning.repository.js";
+import { InMemoryProcurementRepository } from "../repositories/in-memory-procurement.repository.js";
 import { appRouter } from "./router.js";
 import { createCallerFactory } from "./trpc.js";
 import type { Context } from "./trpc.js";
@@ -60,6 +62,17 @@ function setup(user: AuthUser | null = BUERO) {
     },
   ]);
   const dunning = new DunningService(dunningRepo, new MemoryAuditSink());
+  // T-05: PA braucht Textil von zwei Lieferanten; nur FHB ist eingegangen.
+  const procurementRepo = new InMemoryProcurementRepository(
+    {
+      pa_1: [
+        { variantId: "v_fhb", supplierId: "sup_fhb", qty: 10 },
+        { variantId: "v_ss", supplierId: "sup_ss", qty: 5 },
+      ],
+    },
+    { pa_1: [{ variantId: "v_fhb", supplierId: "sup_fhb", receivedQty: 10 }] }
+  );
+  const procurement = new ProcurementService(procurementRepo);
   const ctx: Context = {
     orderImport,
     orders: repo,
@@ -72,6 +85,7 @@ function setup(user: AuthUser | null = BUERO) {
     banking: bankingRepo,
     dunning,
     dunningQuery: dunningRepo,
+    procurement,
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -142,6 +156,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       banking: buero.bankingRepo,
       dunning: {} as Context["dunning"],
       dunningQuery: buero.dunningRepo,
+      procurement: {} as Context["procurement"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",
@@ -303,5 +318,22 @@ describe("tRPC dunning — Mahnlauf + RBAC (T-14, Kap. 9.5/12)", () => {
   it("PRODUKTION darf keinen Mahnlauf starten (FORBIDDEN)", async () => {
     const { caller } = setup(PRODUKTION);
     await expect(caller.dunning.run()).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+describe("tRPC procurement — Multi-Lieferant-Start-Gate (T-05)", () => {
+  it("Start gesperrt, solange nicht alle Lieferanten vollständig eingegangen sind", async () => {
+    const { caller } = setup(BUCHHALTUNG);
+    const status = await caller.procurement.productionStartStatus({ productionId: "pa_1" });
+    expect(status.canStart).toBe(false);
+    const ss = status.components.find((c) => c.supplierId === "sup_ss");
+    expect(ss).toMatchObject({ requiredQty: 5, receivedQty: 0, complete: false });
+  });
+
+  it("ist operativ auch für PRODUKTION sichtbar (keine Preise)", async () => {
+    const { caller } = setup(PRODUKTION);
+    const status = await caller.procurement.productionStartStatus({ productionId: "pa_1" });
+    expect(status.productionId).toBe("pa_1");
+    expect(status.canStart).toBe(false);
   });
 });

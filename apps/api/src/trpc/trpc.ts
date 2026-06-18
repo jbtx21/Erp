@@ -8,6 +8,7 @@ import type { IncomingInvoiceService } from "../modules/incoming-invoice/incomin
 import type { ShipmentService } from "../modules/shipment/shipment.service.js";
 import type { BankingImportService } from "../modules/banking/banking-import.service.js";
 import type { DunningService } from "../modules/dunning/dunning.service.js";
+import type { ProcurementService } from "../modules/procurement/procurement.service.js";
 import type {
   BankingQueryRepository,
   DunningQueryRepository,
@@ -29,6 +30,7 @@ export interface Context {
   banking: BankingQueryRepository;
   dunning: DunningService;
   dunningQuery: DunningQueryRepository;
+  procurement: ProcurementService;
   auth: AuthService;
   user: AuthUser | null;
   /** Roh-Token aus dem Cookie (für den 2FA-Zwischenschritt/Logout, wenn user noch null ist). */
