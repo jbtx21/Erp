@@ -224,6 +224,24 @@ export const appRouter = router({
       )
       .mutation(async ({ input, ctx }) => ctx.threeWayMatch.verify(input)),
   }),
+
+  postcalc: router({
+    /** Nachkalkulation Soll-Ist je PA (T-10): Plan-DB vs. Ist-DB (Material + Lohn). */
+    compute: roleProcedure(...supplierRoles)
+      .input(
+        z.object({
+          productionId: z.string().min(1),
+          plan: z.object({
+            revenueCents: z.number().int(),
+            materialCents: z.number().int().nonnegative(),
+            laborMinutes: z.number().int().nonnegative(),
+            laborRateCentsPerMinute: z.number().int().nonnegative(),
+          }),
+          istLaborRateCentsPerMinute: z.number().int().nonnegative(),
+        })
+      )
+      .query(async ({ input, ctx }) => ctx.postcalc.compute(input)),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

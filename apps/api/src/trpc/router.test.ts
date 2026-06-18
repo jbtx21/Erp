@@ -14,6 +14,7 @@ import { DunningService } from "../modules/dunning/dunning.service.js";
 import { ProcurementService } from "../modules/procurement/procurement.service.js";
 import { SubProductionService } from "../modules/subproduction/subproduction.service.js";
 import { ThreeWayMatchService } from "../modules/three-way-match/three-way-match.service.js";
+import { PostCalcService } from "../modules/postcalc/postcalc.service.js";
 import { InMemoryOrderRepository } from "../repositories/in-memory-order.repository.js";
 import { InMemorySupplierRepository } from "../repositories/in-memory-supplier.repository.js";
 import { InMemoryIncomingInvoiceRepository } from "../repositories/in-memory-incoming-invoice.repository.js";
@@ -23,6 +24,7 @@ import { InMemoryDunningRepository } from "../repositories/in-memory-dunning.rep
 import { InMemoryProcurementRepository } from "../repositories/in-memory-procurement.repository.js";
 import { InMemorySubProductionRepository } from "../repositories/in-memory-subproduction.repository.js";
 import { InMemoryThreeWayMatchRepository } from "../repositories/in-memory-three-way-match.repository.js";
+import { InMemoryPostCalcRepository } from "../repositories/in-memory-postcalc.repository.js";
 import { appRouter } from "./router.js";
 import { createCallerFactory } from "./trpc.js";
 import type { Context } from "./trpc.js";
@@ -90,6 +92,11 @@ function setup(user: AuthUser | null = BUERO) {
     iinv_nopo: { po: null },
   });
   const threeWayMatch = new ThreeWayMatchService(twmRepo, new MemoryAuditSink());
+  // T-10: Ist-Material/-Lohn höher als geplant → schlechterer DB.
+  const postcalcRepo = new InMemoryPostCalcRepository({
+    pa_1: { revenueCents: 100000, materialCents: 40000, laborMinutes: 600 },
+  });
+  const postcalc = new PostCalcService(postcalcRepo);
   const ctx: Context = {
     orderImport,
     orders: repo,
@@ -105,6 +112,7 @@ function setup(user: AuthUser | null = BUERO) {
     procurement,
     subproduction,
     threeWayMatch,
+    postcalc,
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -178,6 +186,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       procurement: {} as Context["procurement"],
       subproduction: {} as Context["subproduction"],
       threeWayMatch: {} as Context["threeWayMatch"],
+      postcalc: {} as Context["postcalc"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",
@@ -418,6 +427,27 @@ describe("tRPC threeWayMatch — Eingangsrechnungsprüfung + RBAC (Kap. 9.6)", (
     const { caller } = setup(PRODUKTION);
     await expect(
       caller.threeWayMatch.verify({ incomingInvoiceId: "iinv_ok", invoicedQty: 10, invoicedUnitCents: 500 })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+describe("tRPC postcalc — Nachkalkulation Soll-Ist + RBAC (T-10, Kap. 12)", () => {
+  // Plan: Umsatz 1000 €, Material 350 €, 500 min × 0,80 € = 400 € → DB 250 €.
+  const plan = { revenueCents: 100000, materialCents: 35000, laborMinutes: 500, laborRateCentsPerMinute: 80 };
+
+  it("zeigt die DB-Abweichung Ist vs. Plan", async () => {
+    const { caller } = setup(BUCHHALTUNG);
+    // Ist: Material 400 €, 600 min × 0,80 € = 480 € → DB 120 € → Abweichung −130 €.
+    const res = await caller.postcalc.compute({ productionId: "pa_1", plan, istLaborRateCentsPerMinute: 80 });
+    expect(res.plan.dbCents).toBe(25000);
+    expect(res.ist.dbCents).toBe(12000);
+    expect(res.dbVarianceCents).toBe(-13000);
+  });
+
+  it("PRODUKTION darf keine Nachkalkulation sehen (FORBIDDEN)", async () => {
+    const { caller } = setup(PRODUKTION);
+    await expect(
+      caller.postcalc.compute({ productionId: "pa_1", plan, istLaborRateCentsPerMinute: 80 })
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });
