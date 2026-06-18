@@ -15,6 +15,9 @@ import { ProcurementService } from "../modules/procurement/procurement.service.j
 import { SubProductionService } from "../modules/subproduction/subproduction.service.js";
 import { ThreeWayMatchService } from "../modules/three-way-match/three-way-match.service.js";
 import { PostCalcService } from "../modules/postcalc/postcalc.service.js";
+import { ReklamationService } from "../modules/reklamation/reklamation.service.js";
+import { AmpelService } from "../modules/ampel/ampel.service.js";
+import { StickereiService } from "../modules/stickerei/stickerei.service.js";
 import { InMemoryOrderRepository } from "../repositories/in-memory-order.repository.js";
 import { InMemorySupplierRepository } from "../repositories/in-memory-supplier.repository.js";
 import { InMemoryIncomingInvoiceRepository } from "../repositories/in-memory-incoming-invoice.repository.js";
@@ -25,6 +28,9 @@ import { InMemoryProcurementRepository } from "../repositories/in-memory-procure
 import { InMemorySubProductionRepository } from "../repositories/in-memory-subproduction.repository.js";
 import { InMemoryThreeWayMatchRepository } from "../repositories/in-memory-three-way-match.repository.js";
 import { InMemoryPostCalcRepository } from "../repositories/in-memory-postcalc.repository.js";
+import { InMemoryReklamationRepository } from "../repositories/in-memory-reklamation.repository.js";
+import { InMemoryAmpelRepository } from "../repositories/in-memory-ampel.repository.js";
+import { InMemoryStickereiRepository } from "../repositories/in-memory-stickerei.repository.js";
 import { appRouter } from "./router.js";
 import { createCallerFactory } from "./trpc.js";
 import type { Context } from "./trpc.js";
@@ -97,6 +103,20 @@ function setup(user: AuthUser | null = BUERO) {
     pa_1: { revenueCents: 100000, materialCents: 40000, laborMinutes: 600 },
   });
   const postcalc = new PostCalcService(postcalcRepo);
+  const reklamationRepo = new InMemoryReklamationRepository();
+  const reklamation = new ReklamationService(reklamationRepo, new MemoryAuditSink());
+  const ampel = new AmpelService(
+    new InMemoryAmpelRepository([
+      { id: "p_late", level: "PRODUKTION", label: "PA-1", dueDate: new Date(Date.UTC(2026, 4, 1)), done: false },
+      { id: "p_ok", level: "AUFTRAG", label: "AB-1", dueDate: new Date(Date.UTC(2026, 11, 1)), done: false },
+    ])
+  );
+  const stickerei = new StickereiService(
+    new InMemoryStickereiRepository({
+      c_direkt: { stickereiPartnerId: "sup_stick", hatStickdatei: true },
+      c_neu: { stickereiPartnerId: null, hatStickdatei: false },
+    })
+  );
   const ctx: Context = {
     orderImport,
     orders: repo,
@@ -113,6 +133,9 @@ function setup(user: AuthUser | null = BUERO) {
     subproduction,
     threeWayMatch,
     postcalc,
+    reklamation,
+    ampel,
+    stickerei,
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -187,6 +210,9 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       subproduction: {} as Context["subproduction"],
       threeWayMatch: {} as Context["threeWayMatch"],
       postcalc: {} as Context["postcalc"],
+      reklamation: {} as Context["reklamation"],
+      ampel: {} as Context["ampel"],
+      stickerei: {} as Context["stickerei"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",
@@ -449,5 +475,52 @@ describe("tRPC postcalc — Nachkalkulation Soll-Ist + RBAC (T-10, Kap. 12)", ()
     await expect(
       caller.postcalc.compute({ productionId: "pa_1", plan, istLaborRateCentsPerMinute: 80 })
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+describe("tRPC reklamation — Workflow C (Kap. 20)", () => {
+  it("legt eine Reklamation an und leitet den Kostenträger aus der Ursache ab", async () => {
+    const { caller } = setup(BUERO);
+    const res = await caller.reklamation.create({
+      orderId: "o1",
+      orderLineId: "l1",
+      cause: "EXTERN_VEREDLER",
+      followUp: "NACHPRODUKTION",
+      costCents: 5000,
+    });
+    expect(res.costBearer).toBe("VEREDLER");
+    const list = await caller.reklamation.listByOrder({ orderId: "o1" });
+    expect(list[0]).toMatchObject({ cause: "EXTERN_VEREDLER", costBearer: "VEREDLER" });
+  });
+
+  it("weist unplausible Kombinationen ab (BAD_REQUEST)", async () => {
+    const { caller } = setup(BUERO);
+    await expect(
+      caller.reklamation.create({ orderId: "o1", orderLineId: "l1", cause: "INTERN", followUp: "NACHPRODUKTION", costCents: 0 })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+});
+
+describe("tRPC ampel — Terminübersicht (Kap. 35.4)", () => {
+  it("sortiert überfällige Vorgänge (ROT) nach oben", async () => {
+    const { caller } = setup(PRODUKTION); // operativ auch für Produktion
+    const rows = await caller.ampel.overview({ today: "2026-06-15T00:00:00.000Z" });
+    expect(rows[0]).toMatchObject({ id: "p_late", ampel: "ROT" });
+    expect(rows[1]).toMatchObject({ id: "p_ok", ampel: "GRUEN" });
+  });
+});
+
+describe("tRPC stickerei — Partnerwahl (Kap. 5.4)", () => {
+  it("DIREKT bei hinterlegtem Partner + Stickdatei, sonst AUSSCHREIBUNG", async () => {
+    const { caller } = setup(BUERO);
+    expect((await caller.stickerei.routeForCompany({ companyId: "c_direkt" })).route).toBe("DIREKT");
+    expect((await caller.stickerei.routeForCompany({ companyId: "c_neu" })).route).toBe("AUSSCHREIBUNG");
+  });
+
+  it("PRODUKTION darf die Partnerwahl nicht abfragen (FORBIDDEN)", async () => {
+    const { caller } = setup(PRODUKTION);
+    await expect(caller.stickerei.routeForCompany({ companyId: "c_direkt" })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
   });
 });

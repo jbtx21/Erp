@@ -12,6 +12,9 @@ import type { ProcurementService } from "../modules/procurement/procurement.serv
 import type { SubProductionService } from "../modules/subproduction/subproduction.service.js";
 import type { ThreeWayMatchService } from "../modules/three-way-match/three-way-match.service.js";
 import type { PostCalcService } from "../modules/postcalc/postcalc.service.js";
+import type { ReklamationService } from "../modules/reklamation/reklamation.service.js";
+import type { AmpelService } from "../modules/ampel/ampel.service.js";
+import type { StickereiService } from "../modules/stickerei/stickerei.service.js";
 import type {
   BankingQueryRepository,
   DunningQueryRepository,
@@ -37,6 +40,9 @@ export interface Context {
   subproduction: SubProductionService;
   threeWayMatch: ThreeWayMatchService;
   postcalc: PostCalcService;
+  reklamation: ReklamationService;
+  ampel: AmpelService;
+  stickerei: StickereiService;
   auth: AuthService;
   user: AuthUser | null;
   /** Roh-Token aus dem Cookie (für den 2FA-Zwischenschritt/Logout, wenn user noch null ist). */

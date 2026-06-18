@@ -1,6 +1,7 @@
 // tRPC-AppRouter: Auth (Login/2FA/RBAC) + Shop-Order-Ingest/Liste.
 import { TRPCError } from "@trpc/server";
 import { redactOrderForRole, SubProductionTransitionError } from "@texma/shared";
+import { ReklamationValidationError } from "../modules/reklamation/reklamation.service.js";
 import { z } from "zod";
 import { AuthError, SESSION_TTL_SECONDS } from "../modules/auth/auth.service.js";
 import { protectedProcedure, publicProcedure, roleProcedure, router } from "./trpc.js";
@@ -241,6 +242,51 @@ export const appRouter = router({
         })
       )
       .query(async ({ input, ctx }) => ctx.postcalc.compute(input)),
+  }),
+
+  reklamation: router({
+    /** Legt eine Kundenreklamation an (Workflow C, Kap. 20); Ursache → Kostenträger. */
+    create: roleProcedure(...supplierRoles)
+      .input(
+        z.object({
+          orderId: z.string().min(1),
+          orderLineId: z.string().min(1),
+          cause: z.enum(["LIEFERANT", "INTERN", "EXTERN_VEREDLER"]),
+          followUp: z.enum(["NACHPRODUKTION", "EXPRESS_NACHPRODUKTION", "GUTSCHRIFT", "KEINE"]),
+          costCents: z.number().int().nonnegative(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await ctx.reklamation.create(input);
+        } catch (err) {
+          if (err instanceof ReklamationValidationError) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: err.message });
+          }
+          throw err;
+        }
+      }),
+
+    /** Reklamationshistorie je Auftrag (Kap. 20/29). */
+    listByOrder: roleProcedure(...supplierRoles)
+      .input(z.object({ orderId: z.string().min(1), limit: z.number().int().positive().max(200).optional() }))
+      .query(async ({ input, ctx }) => ctx.reklamation.listByOrder(input.orderId, input.limit ?? 50)),
+  }),
+
+  ampel: router({
+    /** Ebenenübergreifende Terminübersicht (Kap. 35.4): ROT zuerst (operativ). */
+    overview: protectedProcedure
+      .input(z.object({ today: z.string().datetime().optional() }).optional())
+      .query(async ({ input, ctx }) =>
+        ctx.ampel.overview(input?.today ? new Date(input.today) : new Date())
+      ),
+  }),
+
+  stickerei: router({
+    /** Stickerei-Weg einer Firma (Kap. 5.4): DIREKT vs. AUSSCHREIBUNG. */
+    routeForCompany: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ companyId: z.string().min(1) }))
+      .query(async ({ input, ctx }) => ctx.stickerei.routeForCompany(input.companyId)),
   }),
 });
 

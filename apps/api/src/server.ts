@@ -21,6 +21,9 @@ import { ProcurementService } from "./modules/procurement/procurement.service.js
 import { SubProductionService } from "./modules/subproduction/subproduction.service.js";
 import { ThreeWayMatchService } from "./modules/three-way-match/three-way-match.service.js";
 import { PostCalcService } from "./modules/postcalc/postcalc.service.js";
+import { ReklamationService } from "./modules/reklamation/reklamation.service.js";
+import { AmpelService } from "./modules/ampel/ampel.service.js";
+import { StickereiService } from "./modules/stickerei/stickerei.service.js";
 import { PrismaSessionRepository, PrismaUserRepository } from "./repositories/prisma-auth.repository.js";
 import { PrismaOrderRepository } from "./repositories/prisma-order.repository.js";
 import { PrismaSupplierRepository } from "./repositories/prisma-supplier.repository.js";
@@ -32,6 +35,9 @@ import { PrismaProcurementRepository } from "./repositories/prisma-procurement.r
 import { PrismaSubProductionRepository } from "./repositories/prisma-subproduction.repository.js";
 import { PrismaThreeWayMatchRepository } from "./repositories/prisma-three-way-match.repository.js";
 import { PrismaPostCalcRepository } from "./repositories/prisma-postcalc.repository.js";
+import { PrismaReklamationRepository } from "./repositories/prisma-reklamation.repository.js";
+import { PrismaAmpelRepository } from "./repositories/prisma-ampel.repository.js";
+import { PrismaStickereiRepository } from "./repositories/prisma-stickerei.repository.js";
 import { appRouter } from "./trpc/router.js";
 import type { Context } from "./trpc/trpc.js";
 
@@ -57,6 +63,9 @@ export function buildServer(): FastifyInstance {
   const subproduction = new SubProductionService(new PrismaSubProductionRepository(), new PrismaAuditSink());
   const threeWayMatch = new ThreeWayMatchService(new PrismaThreeWayMatchRepository(), new PrismaAuditSink());
   const postcalc = new PostCalcService(new PrismaPostCalcRepository());
+  const reklamation = new ReklamationService(new PrismaReklamationRepository(), new PrismaAuditSink());
+  const ampel = new AmpelService(new PrismaAmpelRepository());
+  const stickerei = new StickereiService(new PrismaStickereiRepository());
   const auth = new AuthService(
     new PrismaUserRepository(),
     new PrismaSessionRepository(),
@@ -90,6 +99,9 @@ export function buildServer(): FastifyInstance {
           subproduction,
           threeWayMatch,
           postcalc,
+          reklamation,
+          ampel,
+          stickerei,
           auth,
           user,
           sessionToken,
