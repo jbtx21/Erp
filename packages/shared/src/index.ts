@@ -23,3 +23,4 @@ export * from "./einvoice-inbound.js";
 export * from "./crypto.js";
 export * from "./rbac.js";
 export * from "./retry.js";
+export * from "./supplier-catalog.js";

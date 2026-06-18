@@ -12,8 +12,10 @@ import { AuthService } from "./modules/auth/auth.service.js";
 import { Argon2Hasher } from "./modules/auth/password.js";
 import { OtpauthTotpService } from "./modules/auth/totp.js";
 import { OrderImportService } from "./modules/shop-import/order-import.service.js";
+import { SupplierImportService } from "./modules/supplier-import/supplier-import.service.js";
 import { PrismaSessionRepository, PrismaUserRepository } from "./repositories/prisma-auth.repository.js";
 import { PrismaOrderRepository } from "./repositories/prisma-order.repository.js";
+import { PrismaSupplierRepository } from "./repositories/prisma-supplier.repository.js";
 import { appRouter } from "./trpc/router.js";
 import type { Context } from "./trpc/trpc.js";
 
@@ -26,6 +28,8 @@ export function buildServer(): FastifyInstance {
 
   const repo = new PrismaOrderRepository();
   const orderImport = new OrderImportService(repo, new PrismaAuditSink());
+  const supplierRepo = new PrismaSupplierRepository();
+  const supplierImport = new SupplierImportService(supplierRepo, new PrismaAuditSink());
   const auth = new AuthService(
     new PrismaUserRepository(),
     new PrismaSessionRepository(),
@@ -46,6 +50,8 @@ export function buildServer(): FastifyInstance {
         return {
           orderImport,
           orders: repo,
+          supplierImport,
+          suppliers: supplierRepo,
           auth,
           user,
           sessionToken,

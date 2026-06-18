@@ -25,6 +25,13 @@ export function gross(netCents: Cents, rate: number): Cents {
   return netCents + taxOnNet(netCents, rate);
 }
 
+/** Euro-Betrag (Dezimal-String oder Zahl) → ganze Cent. Wirft bei ungültigem Wert. */
+export function eurToCents(price: string | number): Cents {
+  const v = typeof price === "string" ? Number.parseFloat(price.replace(",", ".")) : price;
+  if (Number.isNaN(v)) throw new Error(`invalid price: ${String(price)}`);
+  return roundCents(v * 100);
+}
+
 export function formatEur(cents: Cents): string {
   return (cents / 100).toLocaleString("de-DE", {
     style: "currency",

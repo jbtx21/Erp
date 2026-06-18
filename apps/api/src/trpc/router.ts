@@ -3,7 +3,17 @@ import { TRPCError } from "@trpc/server";
 import { redactOrderForRole } from "@texma/shared";
 import { z } from "zod";
 import { AuthError, SESSION_TTL_SECONDS } from "../modules/auth/auth.service.js";
-import { protectedProcedure, publicProcedure, router } from "./trpc.js";
+import { protectedProcedure, publicProcedure, roleProcedure, router } from "./trpc.js";
+
+// EK-Preise sind finanziell sensibel → kein PRODUKTION-Zugriff (Kap. 12, C3).
+const supplierRoles = ["ADMIN", "BUERO", "BUCHHALTUNG"] as const;
+
+const supplierCatalogItem = z.object({
+  supplierSku: z.string().min(1),
+  sku: z.string().min(1),
+  ekCents: z.number().int(),
+  availableQty: z.number().int().nonnegative().nullable(),
+});
 
 function toTrpcError(err: unknown): never {
   if (err instanceof AuthError) {
@@ -90,6 +100,25 @@ export const appRouter = router({
         const items = await ctx.orders.listRecent(input?.limit ?? 50);
         return items.map((item) => redactOrderForRole(item, ctx.user.role));
       }),
+  }),
+
+  suppliers: router({
+    /** Importiert einen Lieferanten-Katalog (Kap. 6 / C3): EK-Preise, Bestand, Lieferanten-SKU. */
+    ingestCatalog: roleProcedure(...supplierRoles)
+      .input(
+        z.object({
+          supplierId: z.string().min(1),
+          items: z.array(supplierCatalogItem),
+        })
+      )
+      .mutation(async ({ input, ctx }) =>
+        ctx.supplierImport.ingestCatalog(input.supplierId, input.items)
+      ),
+
+    /** Lieferanten-Artikel mit EK-Preisen (rollen­geschützt, kein PRODUKTION-Zugriff). */
+    list: roleProcedure(...supplierRoles)
+      .input(z.object({ supplierId: z.string().min(1), limit: z.number().int().positive().max(500).optional() }))
+      .query(async ({ input, ctx }) => ctx.suppliers.listItems(input.supplierId, input.limit ?? 100)),
   }),
 });
 

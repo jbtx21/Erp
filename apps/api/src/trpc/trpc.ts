@@ -3,12 +3,15 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import type { Role } from "@texma/shared";
 import type { AuthService, AuthUser } from "../modules/auth/auth.service.js";
 import type { OrderImportService } from "../modules/shop-import/order-import.service.js";
-import type { OrderQueryRepository } from "../repositories/read.js";
+import type { SupplierImportService } from "../modules/supplier-import/supplier-import.service.js";
+import type { OrderQueryRepository, SupplierQueryRepository } from "../repositories/read.js";
 
 /** Pro Request injizierte Abhängigkeiten — in Tests durch In-Memory-Varianten ersetzbar. */
 export interface Context {
   orderImport: OrderImportService;
   orders: OrderQueryRepository;
+  supplierImport: SupplierImportService;
+  suppliers: SupplierQueryRepository;
   auth: AuthService;
   user: AuthUser | null;
   /** Roh-Token aus dem Cookie (für den 2FA-Zwischenschritt/Logout, wenn user noch null ist). */

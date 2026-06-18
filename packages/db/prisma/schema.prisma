@@ -221,10 +221,25 @@ model PriceGroupPrice {
 // Beschaffung / Lieferanten — Kap. 6, 13, 5.6 (Multi-Lieferant)
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Lieferanten-Connector-Art (C3). Generischer Inbound-Connector je kind (Kap. 6/32).
+enum SupplierKind {
+  ID_IDENTITY
+  STANLEY_STELLA
+  HAKRO
+  FHB_NEXMART
+  MANUAL // kein Connector, manuelle Pflege
+}
+
 model Supplier {
   id              String   @id @default(cuid())
   name            String
-  connectorKind   String? // id-identity | stanley-stella | hakro | fhb-nexmart | manual
+  // Inbound-Connector (C3): Katalog/Lager/EK eingehend synchronisieren.
+  kind            SupplierKind @default(MANUAL)
+  baseUrl         String? // REST-Basis-URL des Lieferantensystems
+  consumerKey     String? // Identifier (Klartext)
+  consumerSecretEnc String? // Secret, AES-256-GCM verschlüsselt (DSGVO/Kap. 28)
+  syncCursor      String? // Delta-Sync-Cursor (Kap. 13)
+  active          Boolean  @default(true)
   supplierItems   SupplierItem[]
   subProductions  SubProductionOrder[]
   stickereiKunden Company[] @relation("StickereiPartner")
@@ -234,14 +249,16 @@ model Supplier {
 }
 
 model SupplierItem {
-  id         String   @id @default(cuid())
-  supplierId String
-  supplier   Supplier @relation(fields: [supplierId], references: [id])
-  variantId  String
-  variant    Variant  @relation(fields: [variantId], references: [id])
-  ekCents    Int // Einkaufspreis in Cent
-  priority   Int      @default(1) // 1 = Hauptlieferant, 2 = Alt-Lieferant (Kap. 6)
-  minStock   Int? // Mindestbestand-Reorder (Kap. 6.3 / T-12)
+  id          String   @id @default(cuid())
+  supplierId  String
+  supplier    Supplier @relation(fields: [supplierId], references: [id])
+  variantId   String
+  variant     Variant  @relation(fields: [variantId], references: [id])
+  supplierSku String? // Lieferanten-Artikelnummer (Nachvollziehbarkeit, C3)
+  ekCents     Int // Einkaufspreis in Cent
+  availableQty Int? // Lieferanten-Verfügbarkeit (Lagerbestand, C3)
+  priority    Int      @default(1) // 1 = Hauptlieferant, 2 = Alt-Lieferant (Kap. 6)
+  minStock    Int? // Mindestbestand-Reorder (Kap. 6.3 / T-12)
 
   @@unique([supplierId, variantId])
   @@index([variantId, priority])

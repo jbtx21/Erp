@@ -143,6 +143,34 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@22.19.21)
 
+  services/workers/connectors/supplier:
+    dependencies:
+      '@texma/api':
+        specifier: workspace:*
+        version: link:../../../../apps/api
+      '@texma/db':
+        specifier: workspace:*
+        version: link:../../../../packages/db
+      '@texma/orchestration':
+        specifier: workspace:*
+        version: link:../../../../packages/orchestration
+      '@texma/shared':
+        specifier: workspace:*
+        version: link:../../../../packages/shared
+      '@texma/worker-orchestration':
+        specifier: workspace:*
+        version: link:../../orchestration
+      '@trpc/client':
+        specifier: ^11.18.0
+        version: 11.18.0(@trpc/server@11.18.0(typescript@5.9.3))(typescript@5.9.3)
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.19.21)
+
   services/workers/connectors/woocommerce:
     dependencies:
       '@texma/api':

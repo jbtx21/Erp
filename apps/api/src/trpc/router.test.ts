@@ -5,7 +5,9 @@ import { describe, expect, it, vi } from "vitest";
 import type { AuthUser } from "../modules/auth/auth.service.js";
 import { MemoryAuditSink } from "../audit/memory-audit-sink.js";
 import { OrderImportService } from "../modules/shop-import/order-import.service.js";
+import { SupplierImportService } from "../modules/supplier-import/supplier-import.service.js";
 import { InMemoryOrderRepository } from "../repositories/in-memory-order.repository.js";
+import { InMemorySupplierRepository } from "../repositories/in-memory-supplier.repository.js";
 import { appRouter } from "./router.js";
 import { createCallerFactory } from "./trpc.js";
 import type { Context } from "./trpc.js";
@@ -16,9 +18,13 @@ const PRODUKTION: AuthUser = { id: "u2", email: "p@texma.de", name: "Prod", role
 function setup(user: AuthUser | null = BUERO) {
   const repo = new InMemoryOrderRepository(new Set(["company_acme"]));
   const orderImport = new OrderImportService(repo, new MemoryAuditSink());
+  const supplierRepo = new InMemorySupplierRepository(new Map([["0020-RED-L", "var_1"]]));
+  const supplierImport = new SupplierImportService(supplierRepo, new MemoryAuditSink());
   const ctx: Context = {
     orderImport,
     orders: repo,
+    supplierImport,
+    suppliers: supplierRepo,
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -26,7 +32,7 @@ function setup(user: AuthUser | null = BUERO) {
     clearSessionCookie: vi.fn(),
   };
   const caller = createCallerFactory(appRouter)(ctx);
-  return { caller, repo };
+  return { caller, repo, supplierRepo };
 }
 
 const woo = (number: string, first: string) => ({
@@ -80,6 +86,8 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
     const prod = createCallerFactory(appRouter)({
       orderImport: {} as Context["orderImport"],
       orders: buero.repo,
+      supplierImport: {} as Context["supplierImport"],
+      suppliers: buero.supplierRepo,
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",
@@ -102,5 +110,41 @@ describe("tRPC Auth-Guards", () => {
   it("me liefert den eingeloggten Nutzer", async () => {
     const { caller } = setup(BUERO);
     expect(await caller.auth.me()).toMatchObject({ role: "BUERO", email: "b@texma.de" });
+  });
+});
+
+describe("tRPC suppliers — Katalog-Import + RBAC (C3, Kap. 6/12)", () => {
+  const catalogItem = {
+    supplierSku: "IDI-0020",
+    sku: "0020-RED-L",
+    ekCents: 590,
+    availableQty: 120,
+  };
+
+  it("BUERO importiert den Katalog und liest die Lieferanten-Artikel", async () => {
+    const { caller } = setup(BUERO);
+    const res = await caller.suppliers.ingestCatalog({
+      supplierId: "sup_1",
+      items: [catalogItem, { ...catalogItem, sku: "S-UNKNOWN", supplierSku: "IDI-X" }],
+    });
+    expect(res).toMatchObject({ upserted: 1, skipped: 1 });
+
+    const items = await caller.suppliers.list({ supplierId: "sup_1" });
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ ekCents: 590, supplierSku: "IDI-0020" });
+  });
+
+  it("PRODUKTION darf EK-Preise nicht importieren (FORBIDDEN)", async () => {
+    const { caller } = setup(PRODUKTION);
+    await expect(
+      caller.suppliers.ingestCatalog({ supplierId: "sup_1", items: [catalogItem] })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("PRODUKTION darf die Lieferanten-Artikel nicht lesen (FORBIDDEN)", async () => {
+    const { caller } = setup(PRODUKTION);
+    await expect(caller.suppliers.list({ supplierId: "sup_1" })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
   });
 });

@@ -14,3 +14,19 @@ export interface OrderListItem {
 export interface OrderQueryRepository {
   listRecent(limit: number): Promise<OrderListItem[]>;
 }
+
+// Lieferanten-Artikel (C3). EK-Preise sind finanziell sensibel → Endpunkt rollen-
+// geschützt (kein PRODUKTION-Zugriff, Kap. 12).
+export interface SupplierItemListItem {
+  id: string;
+  supplierId: string;
+  variantId: string;
+  supplierSku: string | null;
+  ekCents: number;
+  availableQty: number | null;
+  priority: number;
+}
+
+export interface SupplierQueryRepository {
+  listItems(supplierId: string, limit: number): Promise<SupplierItemListItem[]>;
+}
