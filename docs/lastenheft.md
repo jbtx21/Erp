@@ -1,4 +1,4 @@
-# Lastenheft ERP-Migration TEXMA Textilveredelung (v2.4)
+# Lastenheft ERP-Migration TEXMA Textilveredelung (v2.6)
 
 TEXMA Textilveredelung — Lastenheft ERP-Migration
 
@@ -12,7 +12,7 @@ TEXMA Textilveredelung
 |---|---|
 | **Unternehmen** | TEXMA Textilveredelung GmbH, Herrenberg |
 | **Dokument** | Lastenheft für ERP-Beratung und -Umsetzung (Make-or-Buy) |
-| **Version** | 2.4 — zusätzlich Terminmanagement und Statusverwaltung über Angebots-, Auftrags- und Produktionsebene (ohne Budget) |
+| **Version** | 2.6 — Festlegungen zum Kundenportal eingearbeitet: alle Kunden, Nachbestellung als Anfrage, Priorität Could (Umsetzung als Add-on) (ohne Budget) |
 | **Funktionaler Maßstab** | Xentral (State of the Art / Benchmark) — Zielsystem offen, Make-or-Buy zu prüfen |
 | **Altsystem** | CDH Office (lokal) |
 | **Status** | Zur Angebotsanfrage freigegeben |
@@ -56,7 +56,8 @@ TEXMA Textilveredelung
 33. [Produktionssteuerung — Vertiefung](#33-produktionssteuerung--vertiefung)
 34. [Projektorganisation und kritische Risiken](#34-projektorganisation-und-kritische-risiken)
 35. [Terminmanagement und Statusverwaltung](#35-terminmanagement-und-statusverwaltung)
-36. [Neue Klärungspunkte (Ergänzung zu Kapitel 16 und 23)](#36-neue-klärungspunkte-ergänzung-zu-kapitel-16-und-23)
+36. [Kundenportal (Self-Service-Kundenkonto)](#36-kundenportal-self-service-kundenkonto)
+37. [Neue Klärungspunkte (Ergänzung zu Kapitel 16 und 23)](#37-neue-klärungspunkte-ergänzung-zu-kapitel-16-und-23)
 
 ---
 
@@ -927,7 +928,37 @@ Auf dieser Ebene ist der Kern bereits beschrieben (Kapitel 5) und wird hier nur 
 
 > **Make-or-Buy-Bezug:** Auftrags- und Produktionsstatus samt Belegkette und Liefertermin-Ampel sind Standardfunktion (nativ, vgl. Kapitel 31). Die Angebots-Nachverfolgung mit Wiedervorlage ist CRM-nahe Funktionalität, im Standard meist begrenzt (ggf. über Aufgaben/Wiedervorlagen oder Custom). Die zentrale ebenenübergreifende Terminübersicht ist teils Reporting, teils Custom. Diese drei Punkte sind in der Funktionsabdeckungs-Matrix (Kapitel 31) je Anbieter zu bewerten.
 
-# 36. Neue Klärungspunkte (Ergänzung zu Kapitel 16 und 23)
+# 36. Kundenportal (Self-Service-Kundenkonto)
+
+Zusätzlich zu den drei bestehenden Shop-Welten (Mitarbeitershops Kapitel 3, Anfrageshop und Sammelbestell-Shop Kapitel 18) soll es ein Self-Service-Kundenkonto geben — bewusst kein weiterer Verkaufs-Shop mit eigenem Sortiment, sondern ein geschützter Bereich, in dem ein Kunde direkt auf seine eigenen Daten im System zugreift. Ziel ist die Entlastung des Innendienstes: Routineanfragen (Adressänderung, „schickt mir nochmal die Rechnung“, „bitte das Gleiche wie letztes Mal“) erledigt der Kunde selbst. Das unterstützt die zentrale Wirtschaftlichkeitsannahme — Skalierung ohne proportionalen Personalaufbau (Kapitel 21).
+
+> **Festlegung:** Das Portal richtet sich an alle Kunden — mit und ohne eigenen Mitarbeitershop.
+
+## 36.1 Funktionsumfang
+
+- **Stammdaten-Self-Service:** Rechnungsanschrift ändern, Lieferadressen anlegen, ändern und auswählen.
+- **Beleg- und Historieneinsicht:** alte Angebote und Aufträge einsehen, dazu Rechnungen, Lieferscheine sowie Auftrags- und Lieferstatus mit Trackingnummer.
+- **Nachbestellung:** keine direkte Nachbestellung, sondern aus einem früheren Auftrag oder einer Rechnung heraus eine neue Anfrage auslösen, die der Innendienst bearbeitet (gleiches Textil, gleiche Veredelung bzw. gleiches Logo).
+
+## 36.2 Anforderungen ans System
+
+- Login je Kundenkontakt; ein Rechtekonzept regelt, welche Kontakte einer Firma was sehen und ändern dürfen.
+- Alle Daten kommen live aus dem zentralen System (eine Quelle der Wahrheit) — keine Doppelpflege.
+- Self-Service-Änderungen (Adressen) werden ins System zurückgeschrieben; geänderte Rechnungsadressen mit Validierung bzw. optionaler Freigabe durch den Innendienst (steuerliche Relevanz).
+- Nachbestellung erzeugt einen Vorgang im System mit Bezug auf den Ursprungsauftrag inklusive Veredelung/Logo.
+- Datenschutz: jeder Kunde sieht ausschließlich seine eigenen Daten; Änderungen werden protokolliert (verzahnt mit Kapitel 28).
+
+## 36.3 Kritischer Designpunkt — Nachbestellung
+
+> **Festlegung:** Wegen der kundenindividuellen Veredelungspreise gibt es keine verbindliche Nachbestellung mit Bezahlung. Stattdessen löst der Kunde aus einem früheren Auftrag oder einer Rechnung eine neue Anfrage aus; der Innendienst bestätigt sie mit aktuellem Preis und Termin und wandelt sie in einen Auftrag. So bleibt die Preishoheit beim Innendienst.
+
+## 36.4 Einordnung (Maßstab Xentral)
+
+Ein Self-Service-Kundenportal ist keine native Xentral-Funktion. Es wird über ein angebundenes Drittanbieter-Portal (per Schnittstelle, am Markt verfügbar — teils etabliert, teils noch in Erprobung) oder als kundenindividuelle Entwicklung realisiert; perspektivisch kann es Baustein der geplanten späteren Commerce-Schicht sein. Der anspruchsvollste Teil ist die Self-Service-Stammdatenpflege (Kunde ändert eigene Adressen), die am wenigsten standardisiert ist.
+
+> In der Logik der Funktionsabdeckungs-Matrix (Kapitel 31) ist das Kundenportal als „Fremdsystem/Add-on oder Custom“ einzuordnen — nicht als Standard. **Festlegung:** Priorität Could (Kapitel 25), nicht Go-Live-relevant. Die Umsetzung erfolgt bewusst als Add-on, nachdem das Kernsystem steht. Es blockiert den Kernbetrieb nicht, ist aber ein starker Entlastungshebel für den Innendienst.
+
+# 37. Neue Klärungspunkte (Ergänzung zu Kapitel 16 und 23)
 
 - **K-21:** MoSCoW-Priorisierung (Kapitel 25) bestätigen — insbesondere, was zwingend zum Go-Live gehört.
 - **K-22:** Messbare Abnahmekriterien / Service-Level (Kapitel 26) festlegen und in den Vertrag aufnehmen.
