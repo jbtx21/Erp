@@ -32,10 +32,28 @@ model User {
   totpSecret   String? // TOTP-2FA Pflicht für alle (Kap. 14)
   totpEnabled  Boolean   @default(false)
   active       Boolean   @default(true)
+  failedLoginCount Int   @default(0) // Lockout-Zähler (Kap. 14)
+  lockedUntil  DateTime? // gesperrt bis (nach zu vielen Fehlversuchen)
+  lastLoginAt  DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+  sessions     Session[]
   auditEntries AuditLog[]
   accessLogs   AccessLog[]
+}
+
+// Server-seitige Session (Kap. 14). tokenHash = SHA-256 des Cookie-Tokens — der
+// Klartext-Token liegt nur im httpOnly-Cookie, nie in der DB.
+model Session {
+  id          String   @id @default(cuid())
+  tokenHash   String   @unique
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  expiresAt   DateTime
+  pendingTotp Boolean  @default(false) // Passwort ok, 2FA noch ausstehend
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
 }
 
 // Zugriffs-Logging auf personenbezogene Daten (Kap. 28)

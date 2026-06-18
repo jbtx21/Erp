@@ -16,6 +16,7 @@ interface StoredOrder {
   shopConnectorId: string;
   externalNumber: string;
   employeeNote: string;
+  totalNetCents: number;
   createdAt: Date;
 }
 
@@ -48,6 +49,7 @@ export class InMemoryOrderRepository
       shopConnectorId: mapped.shopConnectorId,
       externalNumber: mapped.externalNumber,
       employeeNote: mapped.employeeNote,
+      totalNetCents: mapped.lines.reduce((sum, l) => sum + l.qty * l.unitNetCents, 0),
       createdAt: new Date(),
     });
     return { id, number, companyId: mapped.companyId };
@@ -67,6 +69,7 @@ export class InMemoryOrderRepository
         companyId: o.companyId,
         externalNumber: o.externalNumber,
         employeeNote: o.employeeNote,
+        totalNetCents: o.totalNetCents,
         createdAt: o.createdAt,
       }));
   }

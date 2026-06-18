@@ -6,7 +6,8 @@ export interface OrderListItem {
   number: string;
   companyId: string;
   externalNumber: string | null;
-  employeeNote: string | null;
+  employeeNote: string | null; // Kundendaten — für PRODUKTION redigiert (RBAC)
+  totalNetCents: number | null; // Auftragswert — für PRODUKTION redigiert (RBAC)
   createdAt: Date;
 }
 

@@ -1,17 +1,31 @@
-// Vertikaler Slice durch die tRPC-Schicht: der Shop-Ingest hält die T-01-Invariante
-// (keine Phantom-Kunden) und ist idempotent. Nutzt In-Memory-Repository/Audit (keine DB).
+// Vertikaler Slice durch die tRPC-Schicht: T-01 (Shop-Ingest), RBAC-Redaktion
+// (Produktion ohne Preise) und die Auth-Guards. In-Memory, keine DB.
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { AuthUser } from "../modules/auth/auth.service.js";
 import { MemoryAuditSink } from "../audit/memory-audit-sink.js";
 import { OrderImportService } from "../modules/shop-import/order-import.service.js";
 import { InMemoryOrderRepository } from "../repositories/in-memory-order.repository.js";
 import { appRouter } from "./router.js";
 import { createCallerFactory } from "./trpc.js";
+import type { Context } from "./trpc.js";
 
-function setup() {
+const BUERO: AuthUser = { id: "u1", email: "b@texma.de", name: "Büro", role: "BUERO", totpEnabled: false };
+const PRODUKTION: AuthUser = { id: "u2", email: "p@texma.de", name: "Prod", role: "PRODUKTION", totpEnabled: false };
+
+function setup(user: AuthUser | null = BUERO) {
   const repo = new InMemoryOrderRepository(new Set(["company_acme"]));
   const orderImport = new OrderImportService(repo, new MemoryAuditSink());
-  const caller = createCallerFactory(appRouter)({ orderImport, orders: repo });
+  const ctx: Context = {
+    orderImport,
+    orders: repo,
+    auth: {} as Context["auth"],
+    user,
+    sessionToken: user ? "tok" : null,
+    setSessionCookie: vi.fn(),
+    clearSessionCookie: vi.fn(),
+  };
+  const caller = createCallerFactory(appRouter)(ctx);
   return { caller, repo };
 }
 
@@ -48,12 +62,45 @@ describe("tRPC shopOrders — T-01 durch die Service-/Router-Schicht", () => {
     expect(b.created).toBe(false);
     expect(b.order.id).toBe(a.order.id);
   });
+});
 
-  it("list liefert die importierten Aufträge", async () => {
-    const { caller } = setup();
+describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
+  it("BUERO sieht Preis und Kundenvermerk", async () => {
+    const { caller } = setup(BUERO);
     await caller.shopOrders.ingest({ raw: woo("WC-1", "max"), ...cfg });
-    const list = await caller.shopOrders.list({ limit: 50 });
-    expect(list).toHaveLength(1);
-    expect(list[0]?.externalNumber).toBe("WC-1");
+    const list = await caller.shopOrders.list();
+    expect(list[0]?.totalNetCents).toBe(3 * 1990);
+    expect(list[0]?.employeeNote).toContain("max");
+  });
+
+  it("PRODUKTION erhält redigierte Preis-/Kundenfelder (null)", async () => {
+    // Auftrag von BUERO anlegen, dann als PRODUKTION lesen.
+    const buero = setup(BUERO);
+    await buero.caller.shopOrders.ingest({ raw: woo("WC-1", "max"), ...cfg });
+    const prod = createCallerFactory(appRouter)({
+      orderImport: {} as Context["orderImport"],
+      orders: buero.repo,
+      auth: {} as Context["auth"],
+      user: PRODUKTION,
+      sessionToken: "tok",
+      setSessionCookie: vi.fn(),
+      clearSessionCookie: vi.fn(),
+    });
+    const list = await prod.shopOrders.list();
+    expect(list[0]?.number).toBe("WC-WC-1"); // nicht-sensibles Feld bleibt
+    expect(list[0]?.totalNetCents).toBeNull();
+    expect(list[0]?.employeeNote).toBeNull();
+  });
+});
+
+describe("tRPC Auth-Guards", () => {
+  it("ohne Session wird die Auftragsliste mit UNAUTHORIZED abgewiesen", async () => {
+    const { caller } = setup(null);
+    await expect(caller.shopOrders.list()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+  });
+
+  it("me liefert den eingeloggten Nutzer", async () => {
+    const { caller } = setup(BUERO);
+    expect(await caller.auth.me()).toMatchObject({ role: "BUERO", email: "b@texma.de" });
   });
 });

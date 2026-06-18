@@ -21,3 +21,4 @@ export * from "./finishing.js";
 export * from "./approval.js";
 export * from "./einvoice-inbound.js";
 export * from "./crypto.js";
+export * from "./rbac.js";

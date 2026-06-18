@@ -72,7 +72,7 @@ export class PrismaOrderRepository
   }
 
   async listRecent(limit: number): Promise<OrderListItem[]> {
-    return prisma.order.findMany({
+    const rows = await prisma.order.findMany({
       orderBy: { createdAt: "desc" },
       take: limit,
       select: {
@@ -82,7 +82,17 @@ export class PrismaOrderRepository
         externalNumber: true,
         employeeNote: true,
         createdAt: true,
+        lines: { select: { qty: true, unitNetCents: true } },
       },
     });
+    return rows.map((r) => ({
+      id: r.id,
+      number: r.number,
+      companyId: r.companyId,
+      externalNumber: r.externalNumber,
+      employeeNote: r.employeeNote,
+      totalNetCents: r.lines.reduce((sum, l) => sum + l.qty * l.unitNetCents, 0),
+      createdAt: r.createdAt,
+    }));
   }
 }

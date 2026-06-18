@@ -1,19 +1,78 @@
-// tRPC-AppRouter — erster vertikaler Slice: Shop-Order-Ingest (T-01) + Liste.
+// tRPC-AppRouter: Auth (Login/2FA/RBAC) + Shop-Order-Ingest/Liste.
+import { TRPCError } from "@trpc/server";
+import { redactOrderForRole } from "@texma/shared";
 import { z } from "zod";
-import { publicProcedure, router } from "./trpc.js";
+import { AuthError, SESSION_TTL_SECONDS } from "../modules/auth/auth.service.js";
+import { protectedProcedure, publicProcedure, router } from "./trpc.js";
+
+function toTrpcError(err: unknown): never {
+  if (err instanceof AuthError) {
+    const code = err.code === "LOCKED" ? "TOO_MANY_REQUESTS" : "UNAUTHORIZED";
+    throw new TRPCError({ code, message: err.message });
+  }
+  throw err;
+}
 
 export const appRouter = router({
+  auth: router({
+    /** Schritt 1: Passwort. Setzt das Session-Cookie (auch bei offener 2FA). */
+    login: publicProcedure
+      .input(z.object({ email: z.string().email(), password: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try {
+          const res = await ctx.auth.loginWithPassword(input.email, input.password);
+          ctx.setSessionCookie(res.token, SESSION_TTL_SECONDS);
+          return { needsTotp: res.needsTotp };
+        } catch (err) {
+          toTrpcError(err);
+        }
+      }),
+
+    /** Schritt 2: TOTP-Code (nutzt die Cookie-Session). */
+    verifyTotp: publicProcedure
+      .input(z.object({ code: z.string().min(6).max(8) }))
+      .mutation(async ({ input, ctx }) => {
+        if (!ctx.sessionToken) throw new TRPCError({ code: "UNAUTHORIZED", message: "Keine Sitzung." });
+        try {
+          await ctx.auth.verifyTotp(ctx.sessionToken, input.code);
+          return { ok: true };
+        } catch (err) {
+          toTrpcError(err);
+        }
+      }),
+
+    me: protectedProcedure.query(({ ctx }) => ctx.user),
+
+    logout: protectedProcedure.mutation(async ({ ctx }) => {
+      if (ctx.sessionToken) await ctx.auth.logout(ctx.sessionToken);
+      ctx.clearSessionCookie();
+      return { ok: true };
+    }),
+
+    /** 2FA-Enrollment: liefert Secret + otpauth-URI (für QR im Authenticator). */
+    setupTotp: protectedProcedure.mutation(async ({ ctx }) => ctx.auth.setupTotp(ctx.user.id)),
+
+    enableTotp: protectedProcedure
+      .input(z.object({ code: z.string().min(6).max(8) }))
+      .mutation(async ({ input, ctx }) => {
+        try {
+          await ctx.auth.enableTotp(ctx.user.id, input.code);
+          return { ok: true };
+        } catch (err) {
+          toTrpcError(err);
+        }
+      }),
+  }),
+
   shopOrders: router({
     /** Importiert eine rohe WooCommerce-Bestellung (T-01: Bindung an die Firma). */
-    ingest: publicProcedure
+    ingest: protectedProcedure
       .input(
         z.object({
           raw: z.unknown(),
           shopConnectorId: z.string().min(1),
           companyId: z.string().min(1),
-          deliveryAddressPolicy: z
-            .enum(["FEST", "FREIE_EINGABE", "AUSWAHL"])
-            .optional(),
+          deliveryAddressPolicy: z.enum(["FEST", "FREIE_EINGABE", "AUSWAHL"]).optional(),
         })
       )
       .mutation(async ({ input, ctx }) =>
@@ -24,10 +83,13 @@ export const appRouter = router({
         })
       ),
 
-    /** Liefert die zuletzt importierten Aufträge (für die Auftragsliste in apps/web). */
-    list: publicProcedure
+    /** Auftragsliste — Preis-/Kundenfelder werden für PRODUKTION redigiert (RBAC, Kap. 12). */
+    list: protectedProcedure
       .input(z.object({ limit: z.number().int().positive().max(200) }).optional())
-      .query(async ({ input, ctx }) => ctx.orders.listRecent(input?.limit ?? 50)),
+      .query(async ({ input, ctx }) => {
+        const items = await ctx.orders.listRecent(input?.limit ?? 50);
+        return items.map((item) => redactOrderForRole(item, ctx.user.role));
+      }),
   }),
 });
 
