@@ -326,6 +326,7 @@ model Order {
   freigegeben Boolean     @default(false) // kein Produktionsstart ohne Freigabe (Kap. 5.2/7.2)
   // T-01: Mitarbeiter-Info des Shop-Kontos wird hier vermerkt, erzeugt KEINEN Kunden
   employeeNote String?
+  externalNumber String? // Shop-Bestellnummer (Idempotenz beim Import, T-01)
   trackingNumber String? // DPD (Kap. 4.2/T-06)
   lines       OrderLine[]
   production  ProductionOrder?
@@ -335,6 +336,7 @@ model Order {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
+  @@unique([shopConnectorId, externalNumber])
   @@index([companyId])
   @@index([status])
 }
