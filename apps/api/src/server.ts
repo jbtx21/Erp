@@ -18,6 +18,7 @@ import { ShipmentService } from "./modules/shipment/shipment.service.js";
 import { BankingImportService } from "./modules/banking/banking-import.service.js";
 import { DunningService } from "./modules/dunning/dunning.service.js";
 import { ProcurementService } from "./modules/procurement/procurement.service.js";
+import { SubProductionService } from "./modules/subproduction/subproduction.service.js";
 import { PrismaSessionRepository, PrismaUserRepository } from "./repositories/prisma-auth.repository.js";
 import { PrismaOrderRepository } from "./repositories/prisma-order.repository.js";
 import { PrismaSupplierRepository } from "./repositories/prisma-supplier.repository.js";
@@ -26,6 +27,7 @@ import { PrismaShipmentRepository } from "./repositories/prisma-shipment.reposit
 import { PrismaBankingRepository } from "./repositories/prisma-banking.repository.js";
 import { PrismaDunningRepository } from "./repositories/prisma-dunning.repository.js";
 import { PrismaProcurementRepository } from "./repositories/prisma-procurement.repository.js";
+import { PrismaSubProductionRepository } from "./repositories/prisma-subproduction.repository.js";
 import { appRouter } from "./trpc/router.js";
 import type { Context } from "./trpc/trpc.js";
 
@@ -48,6 +50,7 @@ export function buildServer(): FastifyInstance {
   const dunningRepo = new PrismaDunningRepository();
   const dunning = new DunningService(dunningRepo, new PrismaAuditSink());
   const procurement = new ProcurementService(new PrismaProcurementRepository());
+  const subproduction = new SubProductionService(new PrismaSubProductionRepository(), new PrismaAuditSink());
   const auth = new AuthService(
     new PrismaUserRepository(),
     new PrismaSessionRepository(),
@@ -78,6 +81,7 @@ export function buildServer(): FastifyInstance {
           dunning,
           dunningQuery: dunningRepo,
           procurement,
+          subproduction,
           auth,
           user,
           sessionToken,

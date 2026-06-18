@@ -12,6 +12,7 @@ import { ShipmentService } from "../modules/shipment/shipment.service.js";
 import { BankingImportService } from "../modules/banking/banking-import.service.js";
 import { DunningService } from "../modules/dunning/dunning.service.js";
 import { ProcurementService } from "../modules/procurement/procurement.service.js";
+import { SubProductionService } from "../modules/subproduction/subproduction.service.js";
 import { InMemoryOrderRepository } from "../repositories/in-memory-order.repository.js";
 import { InMemorySupplierRepository } from "../repositories/in-memory-supplier.repository.js";
 import { InMemoryIncomingInvoiceRepository } from "../repositories/in-memory-incoming-invoice.repository.js";
@@ -19,6 +20,7 @@ import { InMemoryShipmentRepository } from "../repositories/in-memory-shipment.r
 import { InMemoryBankingRepository } from "../repositories/in-memory-banking.repository.js";
 import { InMemoryDunningRepository } from "../repositories/in-memory-dunning.repository.js";
 import { InMemoryProcurementRepository } from "../repositories/in-memory-procurement.repository.js";
+import { InMemorySubProductionRepository } from "../repositories/in-memory-subproduction.repository.js";
 import { appRouter } from "./router.js";
 import { createCallerFactory } from "./trpc.js";
 import type { Context } from "./trpc.js";
@@ -73,6 +75,12 @@ function setup(user: AuthUser | null = BUERO) {
     { pa_1: [{ variantId: "v_fhb", supplierId: "sup_fhb", receivedQty: 10 }] }
   );
   const procurement = new ProcurementService(procurementRepo);
+  // T-04: Stufe 1 (Siebdruck) offen, Stufe 2 (Stick) wartet.
+  const subRepo = new InMemorySubProductionRepository([
+    { id: "sub_1", productionId: "pa_1", sequence: 1, supplierId: "sup_sieb", status: "OFFEN", beistellungVersandtAm: null, ruecklaufErhaltenAm: null },
+    { id: "sub_2", productionId: "pa_1", sequence: 2, supplierId: "sup_stick", status: "OFFEN", beistellungVersandtAm: null, ruecklaufErhaltenAm: null },
+  ]);
+  const subproduction = new SubProductionService(subRepo, new MemoryAuditSink());
   const ctx: Context = {
     orderImport,
     orders: repo,
@@ -86,6 +94,7 @@ function setup(user: AuthUser | null = BUERO) {
     dunning,
     dunningQuery: dunningRepo,
     procurement,
+    subproduction,
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -93,7 +102,7 @@ function setup(user: AuthUser | null = BUERO) {
     clearSessionCookie: vi.fn(),
   };
   const caller = createCallerFactory(appRouter)(ctx);
-  return { caller, repo, supplierRepo, invoiceRepo, shipmentRepo, bankingRepo, dunningRepo };
+  return { caller, repo, supplierRepo, invoiceRepo, shipmentRepo, bankingRepo, dunningRepo, subRepo };
 }
 
 const woo = (number: string, first: string) => ({
@@ -157,6 +166,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       dunning: {} as Context["dunning"],
       dunningQuery: buero.dunningRepo,
       procurement: {} as Context["procurement"],
+      subproduction: {} as Context["subproduction"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",
@@ -335,5 +345,38 @@ describe("tRPC procurement — Multi-Lieferant-Start-Gate (T-05)", () => {
     const status = await caller.procurement.productionStartStatus({ productionId: "pa_1" });
     expect(status.productionId).toBe("pa_1");
     expect(status.canStart).toBe(false);
+  });
+});
+
+describe("tRPC subproduction — mehrstufige Fremdvergabe (T-04)", () => {
+  it("Stufe 2 darf erst starten, wenn Stufe 1 zurück ist", async () => {
+    const { caller } = setup(BUERO);
+    // Stufe 2 sofort beistellen → blockiert (Stufe 1 noch nicht zurück).
+    await expect(
+      caller.subproduction.advance({ subProductionId: "sub_2", to: "BEISTELLUNG_VERSANDT" })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+
+    // Stufe 1 durchlaufen: Beistellung → Rücklauf.
+    await caller.subproduction.advance({ subProductionId: "sub_1", to: "BEISTELLUNG_VERSANDT" });
+    await caller.subproduction.advance({ subProductionId: "sub_1", to: "RUECKLAUF_ERHALTEN" });
+
+    // Jetzt darf Stufe 2 starten.
+    const s2 = await caller.subproduction.advance({ subProductionId: "sub_2", to: "BEISTELLUNG_VERSANDT" });
+    expect(s2.status).toBe("BEISTELLUNG_VERSANDT");
+  });
+
+  it("weist unerlaubte Statusübergänge ab (CONFLICT)", async () => {
+    const { caller } = setup(BUERO);
+    // OFFEN → RUECKLAUF_ERHALTEN (ohne Beistellung) ist unzulässig.
+    await expect(
+      caller.subproduction.advance({ subProductionId: "sub_1", to: "RUECKLAUF_ERHALTEN" })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
+  it("PRODUKTION darf keine Stufe weiterschalten (FORBIDDEN)", async () => {
+    const { caller } = setup(PRODUKTION);
+    await expect(
+      caller.subproduction.advance({ subProductionId: "sub_1", to: "BEISTELLUNG_VERSANDT" })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });

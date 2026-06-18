@@ -1,6 +1,6 @@
 // tRPC-AppRouter: Auth (Login/2FA/RBAC) + Shop-Order-Ingest/Liste.
 import { TRPCError } from "@trpc/server";
-import { redactOrderForRole } from "@texma/shared";
+import { redactOrderForRole, SubProductionTransitionError } from "@texma/shared";
 import { z } from "zod";
 import { AuthError, SESSION_TTL_SECONDS } from "../modules/auth/auth.service.js";
 import { protectedProcedure, publicProcedure, roleProcedure, router } from "./trpc.js";
@@ -176,6 +176,37 @@ export const appRouter = router({
     productionStartStatus: protectedProcedure
       .input(z.object({ productionId: z.string().min(1) }))
       .query(async ({ input, ctx }) => ctx.procurement.productionStartStatus(input.productionId)),
+  }),
+
+  subproduction: router({
+    /** Schaltet eine Fremdvergabe-Stufe weiter (Beistellung/Rücklauf/Abschluss, T-04). */
+    advance: roleProcedure("ADMIN", "BUERO")
+      .input(
+        z.object({
+          subProductionId: z.string().min(1),
+          to: z.enum(["BEISTELLUNG_VERSANDT", "RUECKLAUF_ERHALTEN", "ABGESCHLOSSEN"]),
+          at: z.string().datetime().optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await ctx.subproduction.advanceStage(
+            input.subProductionId,
+            input.to,
+            input.at ? new Date(input.at) : new Date()
+          );
+        } catch (err) {
+          if (err instanceof SubProductionTransitionError) {
+            throw new TRPCError({ code: "CONFLICT", message: err.message });
+          }
+          throw err;
+        }
+      }),
+
+    /** Fremdvergabe-Übersicht je PA: Stufen + allReturned (operativ). */
+    list: protectedProcedure
+      .input(z.object({ productionId: z.string().min(1) }))
+      .query(async ({ input, ctx }) => ctx.subproduction.productionSubStatus(input.productionId)),
   }),
 });
 
