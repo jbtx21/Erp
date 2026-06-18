@@ -1,6 +1,9 @@
 // Einstiegspunkt des API-Prozesses.
 import { buildServer } from "./server.js";
 
+// Typ-Export für den typisierten tRPC-Client in apps/web (rein type-only).
+export type { AppRouter } from "./trpc/router.js";
+
 const port = Number(process.env.PORT ?? 3000);
 
 buildServer()
