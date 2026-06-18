@@ -24,3 +24,45 @@ export function dbMarge(vkCents: Cents, ekCents: Cents): number {
   if (vkCents <= 0) return 0;
   return deckungsbeitrag(vkCents, ekCents) / vkCents;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Preisgruppen-Auflösung — Kap. 8.2. ERP = Preis-Master (Kap. 3.2 / T-08).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Preisgruppen (Kap. 2.1/8.2). Muss zu PriceGroupKind im Datenmodell passen. */
+export type PriceGroupKind =
+  | "STANDARD"
+  | "TOP"
+  | "PREMIUM"
+  | "WIEDERVERKAEUFER"
+  | "AGENTUR";
+
+export interface VariantPrice {
+  priceGroup: PriceGroupKind;
+  netCents: Cents;
+}
+
+export class PriceResolutionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PriceResolutionError";
+  }
+}
+
+/**
+ * Ermittelt den Netto-VK einer Variante für die Preisgruppe einer Firma (Kap. 8.2).
+ * Fällt NICHT stillschweigend auf einen anderen Preis zurück — fehlt der Preis der
+ * Gruppe, ist das ein Pflegefehler und wird sichtbar gemacht (Kap. 3.2 / T-08).
+ */
+export function resolvePrice(
+  prices: ReadonlyArray<VariantPrice>,
+  group: PriceGroupKind
+): Cents {
+  const hit = prices.find((p) => p.priceGroup === group);
+  if (!hit) {
+    throw new PriceResolutionError(
+      `Kein VK für Preisgruppe ${group} hinterlegt (Kap. 8.2 / T-08).`
+    );
+  }
+  return hit.netCents;
+}
