@@ -715,3 +715,57 @@ model ApprovalThreshold {
   maxOrderValueCents Int? // null = nicht definiert
   updatedAt          DateTime @updatedAt
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Worker-Orchestrierung — Transaktionaler Outbox + Integrations-Log — Kap. 13/32
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum OutboxStatus {
+  PENDING // wartet auf Versand
+  SENT // erfolgreich zugestellt
+  FAILED // Zwischenfehler, wird erneut versucht
+  DEAD // max. Versuche erschöpft (Klärung)
+}
+
+enum IntegrationDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum IntegrationStatus {
+  SUCCESS
+  FAILURE
+}
+
+// Transaktionaler Outbox: Seiteneffekte (Shop-Push, Label, …) durabel + idempotent retrybar.
+model OutboxEvent {
+  id            String       @id @default(cuid())
+  type          String // z. B. "shop.price.push" (Kap. 32)
+  aggregateType String?
+  aggregateId   String?
+  payload       Json
+  status        OutboxStatus @default(PENDING)
+  attempts      Int          @default(0)
+  nextAttemptAt DateTime     @default(now())
+  lastError     String?
+  createdAt     DateTime     @default(now())
+  sentAt        DateTime?
+
+  @@index([status, nextAttemptAt])
+}
+
+// Lückenloses Protokoll jeder externen Integration (Connector-Pull/-Push, Outbox-Dispatch).
+model IntegrationLog {
+  id              String               @id @default(cuid())
+  connector       String // "woocommerce" | "outbox" | …
+  direction       IntegrationDirection
+  operation       String
+  status          IntegrationStatus
+  attempt         Int                  @default(1)
+  shopConnectorId String?
+  error           String?
+  durationMs      Int?
+  createdAt       DateTime             @default(now())
+
+  @@index([connector, createdAt])
+}
