@@ -259,6 +259,8 @@ model ShopConnector {
   active    Boolean  @default(true)
   deliveryAddressPolicy DeliveryAddressPolicy @default(FEST) // K-08
   syncCursor String? // Delta-Sync (Kap. 13)
+  consumerKey      String? // WooCommerce REST consumer key (Identifier)
+  consumerSecretEnc String? // consumer secret, AES-256-GCM verschlüsselt (DSGVO/Kap. 28)
   orders    Order[]
   createdAt DateTime @default(now())
 

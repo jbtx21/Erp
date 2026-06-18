@@ -48,6 +48,7 @@ export class WooCommerceConnector
       await this.intake.importWooOrder(raw, {
         shopConnectorId: config.shopConnectorId,
         companyId: config.companyId,
+        deliveryAddressPolicy: config.deliveryAddressPolicy,
       });
       importedCount++;
     }
@@ -59,3 +60,7 @@ export class WooCommerceConnector
 export function mapOrder(raw: unknown, config: ShopConnectorConfig): MappedOrder {
   return mapWooOrder(raw, config);
 }
+
+export { WooRestClient, type WooRestClientOptions } from "./woo-rest-client.js";
+export { TrpcOrderIntake } from "./trpc-intake.js";
+export { runWooSync, type RunnerEnv, type ShopRunSummary } from "./runner.js";
