@@ -1,0 +1,484 @@
+// TEXMA ERP — Kerndatenmodell (modularer Monolith)
+// Quelle: docs/lastenheft.md. Kapitelbezüge als // (Kap. x) annotiert.
+// Make-or-break: echte Varianten (Kap. 2.1/T-02), ShopConnector→Company (Kap. 3.2/T-01).
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Identity & Access — Kap. 12 (Rollen), Kap. 14 (2FA), Kap. 28 (Zugriffs-Logging)
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  BUERO // Vertrieb/Auftrag/Faktura
+  PRODUKTION // kein Preis-/Kundenzugriff (Kap. 12)
+  BUCHHALTUNG
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String
+  role         Role
+  totpSecret   String? // TOTP-2FA Pflicht für alle (Kap. 14)
+  totpEnabled  Boolean   @default(false)
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  auditEntries AuditLog[]
+  accessLogs   AccessLog[]
+}
+
+// Zugriffs-Logging auf personenbezogene Daten (Kap. 28)
+model AccessLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  entity    String
+  entityId  String
+  action    String // VIEW | EXPORT
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Stammdaten — Kunden/CRM — Kap. 8 (Firma 1:n Kontakte/Lieferadressen), 7.2, 5.4
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum PriceGroupKind {
+  STANDARD
+  TOP
+  PREMIUM
+  WIEDERVERKAEUFER
+  AGENTUR
+}
+
+model PriceGroup {
+  id        String          @id @default(cuid())
+  kind      PriceGroupKind  @unique
+  name      String
+  companies Company[]
+  prices    PriceGroupPrice[]
+}
+
+// Firma = Kunde. KEIN 1:1-Import Firma↔Kontakt (Kap. 8.3).
+model Company {
+  id           String        @id @default(cuid())
+  name         String
+  branche      String?
+  zahlungszielTage Int        @default(14)
+  mahnsperre   Boolean       @default(false) // Kap. 9.5
+  priceGroupId String
+  priceGroup   PriceGroup    @relation(fields: [priceGroupId], references: [id])
+  // Stickerei-Partnerlogik (Kap. 5.4 / Custom): Partner + Stickdatei steuern Direkt- vs. Angebotsprozess
+  stickereiPartnerId String?
+  stickereiPartner   Supplier? @relation("StickereiPartner", fields: [stickereiPartnerId], references: [id])
+  hatStickdatei      Boolean   @default(false)
+
+  contacts        Contact[]
+  deliveryAddresses DeliveryAddress[]
+  logoVersions    LogoVersion[]
+  quotes          Quote[]
+  orders          Order[]
+  invoices        Invoice[]
+  shopConnectors  ShopConnector[] // T-01: Shops mappen auf die Firma, nicht auf Mitarbeiter
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([name])
+}
+
+model Contact {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+  firstName String
+  lastName  String
+  email     String?
+  phone     String?
+  role      String? // Funktion im Unternehmen
+  createdAt DateTime @default(now())
+
+  @@index([companyId])
+}
+
+model DeliveryAddress {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+  label     String
+  street    String
+  zip       String
+  city      String
+  country   String  @default("DE")
+  orders    Order[]
+
+  @@index([companyId])
+}
+
+// Logo-Versionen versioniert; genau eine aktiv (Kap. 7.2)
+model LogoVersion {
+  id         String   @id @default(cuid())
+  companyId  String
+  company    Company  @relation(fields: [companyId], references: [id])
+  version    Int
+  fileRef    String // Verweis auf externen Speicher (Kap. 7.1)
+  active     Boolean  @default(false)
+  replacedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  @@unique([companyId, version])
+  @@index([companyId, active])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Stammdaten — Artikel & echte Varianten — Kap. 2.1, 8, 11, 27 (15k Artikel)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Article {
+  id          String    @id @default(cuid())
+  sku         String    @unique
+  name        String
+  description String?
+  isVeredelung Boolean  @default(false) // Transfer/Siebdruck/Stick (Kap. 11)
+  variants    Variant[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([name])
+}
+
+model Variant {
+  id         String  @id @default(cuid())
+  articleId  String
+  article    Article @relation(fields: [articleId], references: [id])
+  sku        String  @unique
+  // Echte Variantenstruktur: Attributnamen exakt "Farbe"/"Größe" (Kap. 3.2 / T-02)
+  attributes VariantAttribute[]
+  prices     PriceGroupPrice[]
+  supplierItems SupplierItem[]
+  bomItems   BomItem[]
+  createdAt  DateTime @default(now())
+
+  @@index([articleId])
+}
+
+model VariantAttribute {
+  id        String  @id @default(cuid())
+  variantId String
+  variant   Variant @relation(fields: [variantId], references: [id])
+  name      String // "Farbe" | "Größe"
+  value     String
+
+  @@unique([variantId, name])
+  @@index([name, value])
+}
+
+// VK je Preisgruppe (Kap. 4.4/8.2). ERP = Preis-Master (Kap. 3.2 / T-08).
+model PriceGroupPrice {
+  id           String     @id @default(cuid())
+  variantId    String
+  variant      Variant    @relation(fields: [variantId], references: [id])
+  priceGroupId String
+  priceGroup   PriceGroup @relation(fields: [priceGroupId], references: [id])
+  netCents     Int // Geldbeträge in Cent, niemals Float
+
+  @@unique([variantId, priceGroupId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Beschaffung / Lieferanten — Kap. 6, 13, 5.6 (Multi-Lieferant)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Supplier {
+  id              String   @id @default(cuid())
+  name            String
+  connectorKind   String? // id-identity | stanley-stella | hakro | fhb-nexmart | manual
+  supplierItems   SupplierItem[]
+  subProductions  SubProductionOrder[]
+  stickereiKunden Company[] @relation("StickereiPartner")
+  createdAt       DateTime @default(now())
+}
+
+model SupplierItem {
+  id         String   @id @default(cuid())
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id])
+  variantId  String
+  variant    Variant  @relation(fields: [variantId], references: [id])
+  ekCents    Int // Einkaufspreis in Cent
+  priority   Int      @default(1) // 1 = Hauptlieferant, 2 = Alt-Lieferant (Kap. 6)
+  minStock   Int? // Mindestbestand-Reorder (Kap. 6.3 / T-12)
+
+  @@unique([supplierId, variantId])
+  @@index([variantId, priority])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Integration — ShopConnector — Kap. 3, 18, 32. T-01 Firmenkunde-Mapping.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum ShopKind {
+  WOOCOMMERCE
+  ANFRAGESHOP // Kap. 18.1
+  SAMMELBESTELLUNG // Kap. 18.2
+}
+
+// Ein Shop = eine Firma. companyId zeigt IMMER auf die Firma, nie auf Mitarbeiter (T-01).
+model ShopConnector {
+  id        String   @id @default(cuid())
+  name      String
+  kind      ShopKind @default(WOOCOMMERCE)
+  baseUrl   String
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  bomTemplateId String? // variable Stücklisten je Shop (Kap. 5.2/T-03, Extended Kap. 31)
+  bomTemplate   BomTemplate? @relation(fields: [bomTemplateId], references: [id])
+  active    Boolean  @default(true)
+  syncCursor String? // Delta-Sync (Kap. 13)
+  orders    Order[]
+  createdAt DateTime @default(now())
+
+  @@index([companyId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sales — Angebot → Auftrag — Kap. 4, 35.1/35.2
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum QuoteStatus {
+  ENTWURF
+  VERSENDET
+  NACHFASSEN // Wiedervorlage (Kap. 35.1)
+  ANGENOMMEN
+  ABGELEHNT
+}
+
+model Quote {
+  id        String      @id @default(cuid())
+  number    String      @unique
+  companyId String
+  company   Company     @relation(fields: [companyId], references: [id])
+  status    QuoteStatus @default(ENTWURF)
+  wiedervorlageAm DateTime? // Nachfass-Termin (Kap. 35.1)
+  lines     QuoteLine[]
+  order     Order?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+}
+
+model QuoteLine {
+  id          String  @id @default(cuid())
+  quoteId     String
+  quote       Quote   @relation(fields: [quoteId], references: [id])
+  position    Int
+  description String
+  qty         Int
+  unitNetCents Int // jede Veredelung als eigene Position, kein Pauschalpreis (Kap. 4.4)
+  dbCents     Int? // Deckungsbeitrag bereits im Angebot sichtbar (Kap. 4.4)
+}
+
+enum OrderStatus {
+  ANGELEGT
+  IN_BEARBEITUNG // ab hier Änderung nur via Storno+Neuanlage (Kap. 4.4/12.1)
+  IN_PRODUKTION
+  VERSANDBEREIT
+  VERSENDET
+  STORNIERT
+}
+
+model Order {
+  id          String      @id @default(cuid())
+  number      String      @unique
+  companyId   String
+  company     Company     @relation(fields: [companyId], references: [id])
+  deliveryAddressId String?
+  deliveryAddress   DeliveryAddress? @relation(fields: [deliveryAddressId], references: [id])
+  shopConnectorId String? // Herkunft Shop (null = manuell)
+  shopConnector   ShopConnector? @relation(fields: [shopConnectorId], references: [id])
+  status      OrderStatus @default(ANGELEGT)
+  quoteId     String?     @unique
+  quote       Quote?      @relation(fields: [quoteId], references: [id])
+  fileLink    String? // Druckdaten-Verweis, Pflicht vor Produktion (Kap. 7.1)
+  freigegeben Boolean     @default(false) // kein Produktionsstart ohne Freigabe (Kap. 5.2/7.2)
+  // T-01: Mitarbeiter-Info des Shop-Kontos wird hier vermerkt, erzeugt KEINEN Kunden
+  employeeNote String?
+  trackingNumber String? // DPD (Kap. 4.2/T-06)
+  lines       OrderLine[]
+  production  ProductionOrder?
+  invoice     Invoice?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([companyId])
+  @@index([status])
+}
+
+model OrderLine {
+  id          String  @id @default(cuid())
+  orderId     String
+  order       Order   @relation(fields: [orderId], references: [id])
+  position    Int
+  description String
+  qty         Int
+  unitNetCents Int
+  rawPayload  Json? // Roh-Shopzeile für Replay/Traceability (Kap. 3)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Produktion — Kap. 5, 33. 1 Auftrag = 1 PA (Kap. 5.2).
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum AmpelStatus {
+  GRUEN
+  GELB
+  ROT
+}
+
+model BomTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  items     BomTemplateItem[]
+  shops     ShopConnector[]
+  createdAt DateTime @default(now())
+}
+
+model BomTemplateItem {
+  id            String      @id @default(cuid())
+  templateId    String
+  template      BomTemplate @relation(fields: [templateId], references: [id])
+  description   String
+  defaultQty    Int         @default(1)
+}
+
+model ProductionOrder {
+  id          String   @id @default(cuid())
+  number      String   @unique // PA-xxxx
+  orderId     String   @unique
+  order       Order    @relation(fields: [orderId], references: [id])
+  ampel       AmpelStatus @default(GRUEN) // ersetzt Excel-Terminliste (Kap. 5.2/35.4)
+  dueDate     DateTime?
+  bomItems    BomItem[]
+  subOrders   SubProductionOrder[]
+  timeEntries TimeEntry[]
+  createdAt   DateTime @default(now())
+}
+
+model BomItem {
+  id            String  @id @default(cuid())
+  productionId  String
+  production    ProductionOrder @relation(fields: [productionId], references: [id])
+  variantId     String?
+  variant       Variant? @relation(fields: [variantId], references: [id])
+  description   String
+  qty           Int
+}
+
+// Mehrstufige Fremdvergabe mit Beistellung + Rücklauf (Kap. 5.3 / T-04, Custom Kap. 31)
+model SubProductionOrder {
+  id            String   @id @default(cuid())
+  number        String   @unique // PA-xxxx-a / -b
+  productionId  String
+  production    ProductionOrder @relation(fields: [productionId], references: [id])
+  supplierId    String // Veredler
+  supplier      Supplier @relation(fields: [supplierId], references: [id])
+  beistellungVersandtAm DateTime? // Material an Veredler geschickt
+  ruecklaufErhaltenAm   DateTime? // Rücklauf gebucht
+  status        String   @default("OFFEN")
+
+  @@index([productionId])
+}
+
+model TimeEntry {
+  id           String   @id @default(cuid())
+  productionId String
+  production   ProductionOrder @relation(fields: [productionId], references: [id])
+  userId       String
+  minutes      Int // Stechuhr (Kap. 5.2) — Basis Soll-Ist/Nachkalkulation (T-10)
+  note         String?
+  createdAt    DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Finanzen / Fibu — Kap. 9, 19
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Invoice {
+  id          String   @id @default(cuid())
+  number      String   @unique // ERP = Rechnungsnummern-Master (Kap. 19)
+  orderId     String   @unique
+  order       Order    @relation(fields: [orderId], references: [id])
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id])
+  netCents    Int
+  taxCents    Int
+  grossCents  Int
+  issuedAt    DateTime @default(now())
+  eInvoiceXml String? // XRechnung/ZUGFeRD (Kap. 19)
+  openItem    OpenItem?
+  // GoBD: finalisierte Rechnung unveränderbar; Korrektur nur via Storno/Gutschrift
+  finalized   Boolean  @default(false)
+
+  @@index([companyId])
+}
+
+model OpenItem {
+  id          String   @id @default(cuid())
+  invoiceId   String   @unique
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id])
+  openCents   Int
+  dueDate     DateTime
+  dunningLevel Int     @default(0) // 0..3 (Kap. 9.5)
+  payments    PaymentAllocation[]
+
+  @@index([dueDate])
+}
+
+model Payment {
+  id           String   @id @default(cuid())
+  amountCents  Int
+  bookedAt     DateTime @default(now())
+  reference    String? // Verwendungszweck (Banking-Abgleich Kap. 9.4/T-13)
+  matched      Boolean  @default(false)
+  allocations  PaymentAllocation[]
+}
+
+model PaymentAllocation {
+  id         String   @id @default(cuid())
+  paymentId  String
+  payment    Payment  @relation(fields: [paymentId], references: [id])
+  openItemId String
+  openItem   OpenItem @relation(fields: [openItemId], references: [id])
+  amountCents Int // Teilzahlung/Überzahlung (Kap. 9.4)
+
+  @@unique([paymentId, openItemId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Archiv / GoBD — Kap. 10. Append-only Audit-Trail.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  entity    String
+  entityId  String
+  action    String // CREATE | UPDATE | FINALIZE | STORNO
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+}

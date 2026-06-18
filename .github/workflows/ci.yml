@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Prisma generate
+        run: pnpm --filter @texma/db generate
+
+      - name: Prisma validate (Schema/GoBD-Datenmodell)
+        working-directory: packages/db
+        env:
+          DATABASE_URL: postgresql://texma:texma@localhost:5432/texma?schema=public
+        run: pnpm exec prisma validate
+
+      - name: Build (turbo, Abhängigkeitsreihenfolge)
+        run: pnpm build
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test (inkl. Abnahme T-01)
+        run: pnpm test
