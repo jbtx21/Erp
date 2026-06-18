@@ -10,6 +10,7 @@ import type { BankingImportService } from "../modules/banking/banking-import.ser
 import type { DunningService } from "../modules/dunning/dunning.service.js";
 import type { ProcurementService } from "../modules/procurement/procurement.service.js";
 import type { SubProductionService } from "../modules/subproduction/subproduction.service.js";
+import type { ThreeWayMatchService } from "../modules/three-way-match/three-way-match.service.js";
 import type {
   BankingQueryRepository,
   DunningQueryRepository,
@@ -33,6 +34,7 @@ export interface Context {
   dunningQuery: DunningQueryRepository;
   procurement: ProcurementService;
   subproduction: SubProductionService;
+  threeWayMatch: ThreeWayMatchService;
   auth: AuthService;
   user: AuthUser | null;
   /** Roh-Token aus dem Cookie (für den 2FA-Zwischenschritt/Logout, wenn user noch null ist). */

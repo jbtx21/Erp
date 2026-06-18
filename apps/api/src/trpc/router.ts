@@ -208,6 +208,22 @@ export const appRouter = router({
       .input(z.object({ productionId: z.string().min(1) }))
       .query(async ({ input, ctx }) => ctx.subproduction.productionSubStatus(input.productionId)),
   }),
+
+  threeWayMatch: router({
+    /** Prüft eine Eingangsrechnung gegen Bestellung + Wareneingang (Kap. 9.6). */
+    verify: roleProcedure(...supplierRoles)
+      .input(
+        z.object({
+          incomingInvoiceId: z.string().min(1),
+          invoicedQty: z.number().int().positive(),
+          invoicedUnitCents: z.number().int().nonnegative(),
+          tolerance: z
+            .object({ qtyTolerance: z.number().int().nonnegative(), priceToleranceCents: z.number().int().nonnegative() })
+            .optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => ctx.threeWayMatch.verify(input)),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

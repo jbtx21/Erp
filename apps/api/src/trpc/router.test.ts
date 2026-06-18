@@ -13,6 +13,7 @@ import { BankingImportService } from "../modules/banking/banking-import.service.
 import { DunningService } from "../modules/dunning/dunning.service.js";
 import { ProcurementService } from "../modules/procurement/procurement.service.js";
 import { SubProductionService } from "../modules/subproduction/subproduction.service.js";
+import { ThreeWayMatchService } from "../modules/three-way-match/three-way-match.service.js";
 import { InMemoryOrderRepository } from "../repositories/in-memory-order.repository.js";
 import { InMemorySupplierRepository } from "../repositories/in-memory-supplier.repository.js";
 import { InMemoryIncomingInvoiceRepository } from "../repositories/in-memory-incoming-invoice.repository.js";
@@ -21,6 +22,7 @@ import { InMemoryBankingRepository } from "../repositories/in-memory-banking.rep
 import { InMemoryDunningRepository } from "../repositories/in-memory-dunning.repository.js";
 import { InMemoryProcurementRepository } from "../repositories/in-memory-procurement.repository.js";
 import { InMemorySubProductionRepository } from "../repositories/in-memory-subproduction.repository.js";
+import { InMemoryThreeWayMatchRepository } from "../repositories/in-memory-three-way-match.repository.js";
 import { appRouter } from "./router.js";
 import { createCallerFactory } from "./trpc.js";
 import type { Context } from "./trpc.js";
@@ -81,6 +83,13 @@ function setup(user: AuthUser | null = BUERO) {
     { id: "sub_2", productionId: "pa_1", sequence: 2, supplierId: "sup_stick", status: "OFFEN", beistellungVersandtAm: null, ruecklaufErhaltenAm: null },
   ]);
   const subproduction = new SubProductionService(subRepo, new MemoryAuditSink());
+  // 9.6: Rechnung iinv_ok hat passende PO (10×500, alles geliefert); iinv_bad teurer.
+  const twmRepo = new InMemoryThreeWayMatchRepository({
+    iinv_ok: { po: { poQty: 10, poUnitCents: 500, receivedQty: 10 } },
+    iinv_bad: { po: { poQty: 10, poUnitCents: 500, receivedQty: 10 } },
+    iinv_nopo: { po: null },
+  });
+  const threeWayMatch = new ThreeWayMatchService(twmRepo, new MemoryAuditSink());
   const ctx: Context = {
     orderImport,
     orders: repo,
@@ -95,6 +104,7 @@ function setup(user: AuthUser | null = BUERO) {
     dunningQuery: dunningRepo,
     procurement,
     subproduction,
+    threeWayMatch,
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -102,7 +112,7 @@ function setup(user: AuthUser | null = BUERO) {
     clearSessionCookie: vi.fn(),
   };
   const caller = createCallerFactory(appRouter)(ctx);
-  return { caller, repo, supplierRepo, invoiceRepo, shipmentRepo, bankingRepo, dunningRepo, subRepo };
+  return { caller, repo, supplierRepo, invoiceRepo, shipmentRepo, bankingRepo, dunningRepo, subRepo, twmRepo };
 }
 
 const woo = (number: string, first: string) => ({
@@ -167,6 +177,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       dunningQuery: buero.dunningRepo,
       procurement: {} as Context["procurement"],
       subproduction: {} as Context["subproduction"],
+      threeWayMatch: {} as Context["threeWayMatch"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",
@@ -377,6 +388,36 @@ describe("tRPC subproduction — mehrstufige Fremdvergabe (T-04)", () => {
     const { caller } = setup(PRODUKTION);
     await expect(
       caller.subproduction.advance({ subProductionId: "sub_1", to: "BEISTELLUNG_VERSANDT" })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+describe("tRPC threeWayMatch — Eingangsrechnungsprüfung + RBAC (Kap. 9.6)", () => {
+  it("setzt GEPRUEFT bei Übereinstimmung", async () => {
+    const { caller, twmRepo } = setup(BUCHHALTUNG);
+    const res = await caller.threeWayMatch.verify({ incomingInvoiceId: "iinv_ok", invoicedQty: 10, invoicedUnitCents: 500 });
+    expect(res).toMatchObject({ status: "GEPRUEFT", ok: true });
+    expect(twmRepo.statusOf("iinv_ok")).toBe("GEPRUEFT");
+  });
+
+  it("sperrt (GESPERRT) bei Preisabweichung", async () => {
+    const { caller, twmRepo } = setup(BUCHHALTUNG);
+    const res = await caller.threeWayMatch.verify({ incomingInvoiceId: "iinv_bad", invoicedQty: 10, invoicedUnitCents: 600 });
+    expect(res).toMatchObject({ status: "GESPERRT", ok: false });
+    expect(res.variances).toContain("PREIS_ABWEICHUNG");
+    expect(twmRepo.statusOf("iinv_bad")).toBe("GESPERRT");
+  });
+
+  it("meldet KEINE_BESTELLUNG ohne verknüpfte PO", async () => {
+    const { caller } = setup(BUCHHALTUNG);
+    const res = await caller.threeWayMatch.verify({ incomingInvoiceId: "iinv_nopo", invoicedQty: 1, invoicedUnitCents: 1 });
+    expect(res.status).toBe("KEINE_BESTELLUNG");
+  });
+
+  it("PRODUKTION darf nicht prüfen (FORBIDDEN)", async () => {
+    const { caller } = setup(PRODUKTION);
+    await expect(
+      caller.threeWayMatch.verify({ incomingInvoiceId: "iinv_ok", invoicedQty: 10, invoicedUnitCents: 500 })
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });

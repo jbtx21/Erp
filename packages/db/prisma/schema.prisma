@@ -564,6 +564,7 @@ model PurchaseOrder {
   status      PurchaseOrderStatus @default(ENTWURF)
   lines       PurchaseOrderLine[]
   goodsReceipts GoodsReceipt[]
+  incomingInvoices IncomingInvoice[] // 3-Way-Match (Kap. 9.6)
   createdAt   DateTime @default(now())
 
   @@index([supplierId])
@@ -629,6 +630,9 @@ model IncomingInvoice {
   number      String
   supplierId  String
   supplier    Supplier @relation(fields: [supplierId], references: [id])
+  // Bezug zur Bestellung für den 3-Way-Match (Kap. 9.6)
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
   netCents    Int
   taxCents    Int
   grossCents  Int
