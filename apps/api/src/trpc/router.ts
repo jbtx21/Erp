@@ -288,6 +288,16 @@ export const appRouter = router({
       .input(z.object({ companyId: z.string().min(1) }))
       .query(async ({ input, ctx }) => ctx.stickerei.routeForCompany(input.companyId)),
   }),
+
+  reorder: router({
+    /** Bestellvorschlag je Lieferant aus unterschrittenen Mindestbeständen (T-12). */
+    proposals: roleProcedure(...supplierRoles).query(async ({ ctx }) => ctx.reorder.proposals()),
+
+    /** Erzeugt aus dem Vorschlag je Lieferant eine Bestellung (Kap. 6.1). */
+    createPurchaseOrders: roleProcedure("ADMIN", "BUERO").mutation(async ({ ctx }) =>
+      ctx.reorder.createPurchaseOrders()
+    ),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

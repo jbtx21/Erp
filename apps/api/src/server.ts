@@ -24,6 +24,7 @@ import { PostCalcService } from "./modules/postcalc/postcalc.service.js";
 import { ReklamationService } from "./modules/reklamation/reklamation.service.js";
 import { AmpelService } from "./modules/ampel/ampel.service.js";
 import { StickereiService } from "./modules/stickerei/stickerei.service.js";
+import { ReorderService } from "./modules/reorder/reorder.service.js";
 import { PrismaSessionRepository, PrismaUserRepository } from "./repositories/prisma-auth.repository.js";
 import { PrismaOrderRepository } from "./repositories/prisma-order.repository.js";
 import { PrismaSupplierRepository } from "./repositories/prisma-supplier.repository.js";
@@ -38,6 +39,7 @@ import { PrismaPostCalcRepository } from "./repositories/prisma-postcalc.reposit
 import { PrismaReklamationRepository } from "./repositories/prisma-reklamation.repository.js";
 import { PrismaAmpelRepository } from "./repositories/prisma-ampel.repository.js";
 import { PrismaStickereiRepository } from "./repositories/prisma-stickerei.repository.js";
+import { PrismaReorderRepository } from "./repositories/prisma-reorder.repository.js";
 import { appRouter } from "./trpc/router.js";
 import type { Context } from "./trpc/trpc.js";
 
@@ -66,6 +68,7 @@ export function buildServer(): FastifyInstance {
   const reklamation = new ReklamationService(new PrismaReklamationRepository(), new PrismaAuditSink());
   const ampel = new AmpelService(new PrismaAmpelRepository());
   const stickerei = new StickereiService(new PrismaStickereiRepository());
+  const reorder = new ReorderService(new PrismaReorderRepository(), new PrismaAuditSink());
   const auth = new AuthService(
     new PrismaUserRepository(),
     new PrismaSessionRepository(),
@@ -102,6 +105,7 @@ export function buildServer(): FastifyInstance {
           reklamation,
           ampel,
           stickerei,
+          reorder,
           auth,
           user,
           sessionToken,

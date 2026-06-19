@@ -18,6 +18,7 @@ import { PostCalcService } from "../modules/postcalc/postcalc.service.js";
 import { ReklamationService } from "../modules/reklamation/reklamation.service.js";
 import { AmpelService } from "../modules/ampel/ampel.service.js";
 import { StickereiService } from "../modules/stickerei/stickerei.service.js";
+import { ReorderService } from "../modules/reorder/reorder.service.js";
 import { InMemoryOrderRepository } from "../repositories/in-memory-order.repository.js";
 import { InMemorySupplierRepository } from "../repositories/in-memory-supplier.repository.js";
 import { InMemoryIncomingInvoiceRepository } from "../repositories/in-memory-incoming-invoice.repository.js";
@@ -31,6 +32,7 @@ import { InMemoryPostCalcRepository } from "../repositories/in-memory-postcalc.r
 import { InMemoryReklamationRepository } from "../repositories/in-memory-reklamation.repository.js";
 import { InMemoryAmpelRepository } from "../repositories/in-memory-ampel.repository.js";
 import { InMemoryStickereiRepository } from "../repositories/in-memory-stickerei.repository.js";
+import { InMemoryReorderRepository } from "../repositories/in-memory-reorder.repository.js";
 import { appRouter } from "./router.js";
 import { createCallerFactory } from "./trpc.js";
 import type { Context } from "./trpc.js";
@@ -117,6 +119,12 @@ function setup(user: AuthUser | null = BUERO) {
       c_neu: { stickereiPartnerId: null, hatStickdatei: false },
     })
   );
+  // T-12: v1 unterschreitet Mindestbestand (3<10) → Vorschlag, v2 ausreichend.
+  const reorderRepo = new InMemoryReorderRepository([
+    { variantId: "v1", qty: 3, minStock: 10, supplierId: "sup_id", ekCents: 500 },
+    { variantId: "v2", qty: 20, minStock: 5, supplierId: "sup_id", ekCents: 400 },
+  ]);
+  const reorder = new ReorderService(reorderRepo, new MemoryAuditSink());
   const ctx: Context = {
     orderImport,
     orders: repo,
@@ -136,6 +144,7 @@ function setup(user: AuthUser | null = BUERO) {
     reklamation,
     ampel,
     stickerei,
+    reorder,
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -143,7 +152,7 @@ function setup(user: AuthUser | null = BUERO) {
     clearSessionCookie: vi.fn(),
   };
   const caller = createCallerFactory(appRouter)(ctx);
-  return { caller, repo, supplierRepo, invoiceRepo, shipmentRepo, bankingRepo, dunningRepo, subRepo, twmRepo };
+  return { caller, repo, supplierRepo, invoiceRepo, shipmentRepo, bankingRepo, dunningRepo, subRepo, twmRepo, reorderRepo };
 }
 
 const woo = (number: string, first: string) => ({
@@ -213,6 +222,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       reklamation: {} as Context["reklamation"],
       ampel: {} as Context["ampel"],
       stickerei: {} as Context["stickerei"],
+      reorder: {} as Context["reorder"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",
@@ -522,5 +532,28 @@ describe("tRPC stickerei — Partnerwahl (Kap. 5.4)", () => {
     await expect(caller.stickerei.routeForCompany({ companyId: "c_direkt" })).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
+  });
+});
+
+describe("tRPC reorder — Mindestbestand-Nachbestellung (T-12)", () => {
+  it("erzeugt einen Bestellvorschlag je Lieferant aus unterschrittenen Beständen", async () => {
+    const { caller } = setup(BUERO);
+    const groups = await caller.reorder.proposals();
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({ supplierId: "sup_id", totalEkCents: 7 * 500 });
+    expect(groups[0]?.lines).toEqual([{ variantId: "v1", supplierId: "sup_id", orderQty: 7, ekCents: 500 }]);
+  });
+
+  it("macht aus dem Vorschlag eine Bestellung je Lieferant", async () => {
+    const { caller, reorderRepo } = setup(BUERO);
+    const created = await caller.reorder.createPurchaseOrders();
+    expect(created).toHaveLength(1);
+    expect(created[0]).toMatchObject({ supplierId: "sup_id", lineCount: 1 });
+    expect(reorderRepo.createdOrders).toEqual([{ supplierId: "sup_id", lines: 1 }]);
+  });
+
+  it("PRODUKTION darf keinen Bestellvorschlag sehen (FORBIDDEN)", async () => {
+    const { caller } = setup(PRODUKTION);
+    await expect(caller.reorder.proposals()).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });
