@@ -49,8 +49,19 @@ export function App(): JSX.Element {
   return <Orders user={user} onLogout={async () => { await trpc.auth.logout.mutate(); setUser(null); }} />;
 }
 
+type Tab = "orders" | "differentiators" | "reporting";
+const TABS: readonly Tab[] = ["orders", "differentiators", "reporting"];
+const hashTab = (): Tab => {
+  const h = (typeof location !== "undefined" ? location.hash.replace("#", "") : "") as Tab;
+  return TABS.includes(h) ? h : "orders";
+};
+
 function Orders({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<void> }): JSX.Element {
-  const [tab, setTab] = useState<"orders" | "differentiators" | "reporting">("orders");
+  const [tab, setTabState] = useState<Tab>(hashTab);
+  const setTab = useCallback((t: Tab) => {
+    setTabState(t);
+    if (typeof location !== "undefined") location.hash = t; // teilbarer Deep-Link je Tab
+  }, []);
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [status, setStatus] = useState("");
 
