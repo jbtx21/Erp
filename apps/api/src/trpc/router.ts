@@ -341,6 +341,13 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) =>
         ctx.reporting.aiSummary(input.granularity, input.reference ? new Date(input.reference) : new Date())
       ),
+
+    /** Umsatz-Auswertung als PDF (base64) — Übersicht + Shop-/Kundengruppen-Aufriss. */
+    exportPdf: roleProcedure(...supplierRoles)
+      .input(z.object({ granularity: granularityEnum, reference: z.string().datetime().optional() }))
+      .mutation(async ({ input, ctx }) =>
+        ctx.reporting.exportPdf(input.granularity, input.reference ? new Date(input.reference) : new Date())
+      ),
   }),
 
   productionReporting: router({

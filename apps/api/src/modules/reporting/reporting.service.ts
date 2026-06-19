@@ -19,6 +19,8 @@ import {
   type RevenuePoint,
 } from "@texma/shared";
 import { buildReportPrompt } from "./report-prompt.js";
+import { buildReportDocument } from "./report-document.js";
+import { renderReportPdf } from "../../pdf/report-pdf.js";
 
 /** Liest die für Auswertungen nötigen Roh-Datenpunkte (read-only). */
 export interface ReportingRepository {
@@ -59,6 +61,11 @@ export interface AiSummary {
   /** true, wenn ein KI-Client konfiguriert war und geantwortet hat. */
   aiGenerated: boolean;
   narrative: string;
+}
+
+export interface ReportPdf {
+  fileName: string;
+  pdfBase64: string;
 }
 
 export class ReportingService {
@@ -103,6 +110,30 @@ export class ReportingService {
   /** Umsatz: aktuelle vs. vorhergehende Periode (Tag/Woche/Monat/Jahr). */
   async compareRevenue(granularity: Granularity, reference: Date): Promise<PeriodComparison> {
     return comparePeriods(await this.repo.revenuePoints(), granularity, reference);
+  }
+
+  /** Erzeugt die Umsatz-Auswertung als druckbares PDF (Kap. 29) — base64-kodiert. */
+  async exportPdf(granularity: Granularity, reference: Date): Promise<ReportPdf> {
+    const [revenuePoints, orderPoints, byShop, byPriceGroup] = await Promise.all([
+      this.repo.revenuePoints(),
+      this.repo.orderPoints(),
+      this.repo.revenueByShopPoints(),
+      this.repo.revenueByPriceGroupPoints(),
+    ]);
+    const document = buildReportDocument({
+      granularity,
+      generatedAt: reference,
+      revenueBuckets: bucketRevenue(revenuePoints, granularity),
+      orderBuckets: bucketRevenue(orderPoints, granularity),
+      byShop: breakdownRevenue(byShop),
+      byPriceGroup: breakdownRevenue(byPriceGroup),
+      comparison: comparePeriods(revenuePoints, granularity, reference),
+    });
+    const bytes = await renderReportPdf(document);
+    return {
+      fileName: `Umsatz-Auswertung-${granularity}.pdf`,
+      pdfBase64: Buffer.from(bytes).toString("base64"),
+    };
   }
 
   /** Aufträge: aktuelle vs. vorhergehende Periode (Tag/Woche/Monat/Jahr). */

@@ -676,10 +676,20 @@ describe("tRPC reporting — Auswertungen (Kap. 29)", () => {
     expect(typeof res.aiGenerated).toBe("boolean");
   });
 
+  it("exportiert die Umsatz-Auswertung als PDF (base64)", async () => {
+    const { caller } = setup(BUCHHALTUNG);
+    const res = await caller.reporting.exportPdf({ granularity: "MONTH" });
+    expect(res.fileName).toBe("Umsatz-Auswertung-MONTH.pdf");
+    expect(Buffer.from(res.pdfBase64, "base64").subarray(0, 5).toString("ascii")).toBe("%PDF-");
+  });
+
   it("verweigert PRODUKTION den Zugriff (FORBIDDEN, Finanzdaten)", async () => {
     const { caller } = setup(PRODUKTION);
     await expect(
       caller.reporting.revenueOverview({ granularity: "MONTH" })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
+      caller.reporting.exportPdf({ granularity: "MONTH" })
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });

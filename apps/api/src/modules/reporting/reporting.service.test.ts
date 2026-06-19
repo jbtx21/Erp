@@ -86,6 +86,12 @@ describe("ReportingService (Kap. 29)", () => {
     expect(res.narrative).toContain("gestiegen");
   });
 
+  it("exportiert die Umsatz-Auswertung als PDF (base64)", async () => {
+    const res = await service().exportPdf("MONTH", at("2026-06-19T00:00:00Z"));
+    expect(res.fileName).toBe("Umsatz-Auswertung-MONTH.pdf");
+    expect(Buffer.from(res.pdfBase64, "base64").subarray(0, 5).toString("ascii")).toBe("%PDF-");
+  });
+
   it("fällt bei einem KI-Fehler auf die Heuristik zurück (Bericht bleibt verfügbar)", async () => {
     const ai: AiReportClient = { summarize: vi.fn().mockRejectedValue(new Error("kein Budget")) };
     const res = await service(ai).aiSummary("MONTH", at("2026-06-19T00:00:00Z"));
