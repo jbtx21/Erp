@@ -738,6 +738,11 @@ Ergänzend zu den Fachprozessen werden nichtfunktionale Anforderungen festgelegt
 - Rollen- und berechtigungsbasierter Zugriff (Kapitel 12).
 - Revisionssicherer Audit-Trail über Datenänderungen (Kapitel 10.1).
 - Verschlüsselte Datenübertragung (TLS) zu Shops, Banken und Lieferanten-APIs.
+- **Secrets-Management:** Zugangsdaten zu Shops, Banken und Lieferanten-APIs werden nicht im
+  Klartext gehalten, sondern über einen austauschbaren Secrets-Provider aufgelöst. Zielbild
+  ist ein verwalteter Schlüsseltresor (Azure Key Vault, Zugriff per Managed Identity statt
+  Master-Schlüssel; ADR 0002). Bis zur Anbindung dient eine AES-256-GCM-At-rest-Verschlüsselung
+  als Fallback. Die Anwendung speichert nur undurchsichtige Referenzen, nie das Geheimnis selbst.
 
 # 28. Datenschutz und DSGVO
 

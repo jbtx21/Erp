@@ -132,6 +132,13 @@ Gegenmaßnahmen sind **feste Bestandteile, nicht optional**:
   Reguliertes Commodity wird integriert, nicht weiter vertieft. Der vorhandene C1-Eigenbau
   bleibt **eingefrorener Interim hinter Ports**, bis die Integration steht.
 
+## In Arbeit
+
+- **Schritt 1 — `SecretsProvider`-Port:** umgesetzt in `packages/shared/src/secrets.ts`
+  (Port + AES-GCM-Dev-Fallback + Key-Vault-Adapter + Backend-Auswahl, voll getestet).
+  Offen: echten Azure-Key-Vault-Client verdrahten und die drei Connector-Consumer auf den
+  Port umstellen. Details/Status: `docs/adr/0002-…` (Offene Punkte #1).
+
 ## Verbleibend offen
 
 - **finAPI-Kontotyp:** PSD2-Pfad (wenige Konten, ~90-Tage-SCA-Reconsent) vs. EBICS/Corporate

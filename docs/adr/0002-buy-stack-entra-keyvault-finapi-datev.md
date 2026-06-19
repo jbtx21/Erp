@@ -46,8 +46,13 @@ Der Standard-Block wird **eingekauft/integriert**, kohärent im Microsoft-Stack:
 
 ## Offene Punkte (Folge-ADRs/Tasks)
 
-1. **`SecretsProvider`-Port** (analog OIDC-Port): Azure-Key-Vault-Adapter + AES-GCM nur als
-   Dev-Fallback; `crypto.ts` dahinter kapseln.
+1. **`SecretsProvider`-Port** (analog OIDC-Port) — **umgesetzt** in `packages/shared/src/secrets.ts`:
+   `SecretsProvider` (seal/resolve), `AesGcmSecretsProvider` (Dev-Fallback über crypto.ts),
+   `KeyVaultSecretsProvider` (Prod, gegen injizierten `KeyVaultClient` testbar) und
+   `createSecretsProvider` (Backend-Auswahl per `SECRETS_BACKEND`). Tests in `secrets.test.ts`.
+   **Rest:** echten `@azure/keyvault-secrets`-Client (Managed Identity) verdrahten und die drei
+   Consumer (`runtime.ts`, Woo-/Supplier-Runner) von `decryptSecret`/`loadSecretsKey` auf den
+   Port umstellen.
 2. **`BankingProvider`-Port + finAPI-Connector** im bestehenden `services/workers/connectors/*`-Muster.
 3. **finAPI-Kontotyp klären** — PSD2 (SCA-Reconsent ~90 Tage) vs. EBICS/Corporate (unbeaufsichtigt).
 4. **DATEV-/EN-16931-Integration** terminieren; Cookie-Session-Pfad nach Entra-Anbindung zurückbauen.
