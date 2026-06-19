@@ -5,6 +5,7 @@
 
 import {
   formatEur,
+  type DateRange,
   type Granularity,
   type PeriodComparison,
   type RevenueBreakdownItem,
@@ -28,11 +29,22 @@ export interface ReportDocument {
 export interface ReportData {
   granularity: Granularity;
   generatedAt: Date;
+  /** Optionaler Auswertungszeitraum (für den Untertitel). */
+  range?: DateRange;
   revenueBuckets: ReadonlyArray<RevenueBucket>;
   orderBuckets: ReadonlyArray<RevenueBucket>;
   byShop: ReadonlyArray<RevenueBreakdownItem>;
   byPriceGroup: ReadonlyArray<RevenueBreakdownItem>;
   comparison: PeriodComparison;
+}
+
+const deDate = (d: Date): string => d.toLocaleDateString("de-DE", { timeZone: "UTC" });
+
+function rangeLabel(range?: DateRange): string {
+  if (!range || (!range.from && !range.to)) return "";
+  const from = range.from ? deDate(range.from) : "Beginn";
+  const to = range.to ? deDate(range.to) : "heute";
+  return ` · Zeitraum ${from}–${to}`;
 }
 
 const GRANULARITY_LABEL: Record<Granularity, string> = {
@@ -54,7 +66,7 @@ function breakdownTable(items: ReadonlyArray<RevenueBreakdownItem>): ReportTable
 /** Baut das druckbare Berichtsmodell aus den aufbereiteten Umsatz-Kennzahlen (Kap. 29). */
 export function buildReportDocument(data: ReportData): ReportDocument {
   const periode = GRANULARITY_LABEL[data.granularity];
-  const generated = data.generatedAt.toLocaleDateString("de-DE", { timeZone: "UTC" });
+  const generated = deDate(data.generatedAt);
   const orderByKey = new Map(data.orderBuckets.map((b) => [b.key, b]));
 
   const pct = data.comparison.deltaPercent;
@@ -65,7 +77,7 @@ export function buildReportDocument(data: ReportData): ReportDocument {
 
   return {
     title: "TEXMA — Umsatz-Auswertung",
-    subtitle: `Granularität: ${periode} · erstellt ${generated} · ${comparison}`,
+    subtitle: `Granularität: ${periode} · erstellt ${generated}${rangeLabel(data.range)} · ${comparison}`,
     sections: [
       {
         heading: `Umsatz & Aufträge je ${periode}`,

@@ -68,9 +68,19 @@ const euro = (cents: number) => (cents / 100).toLocaleString("de-DE", { style: "
 const pct = (p: number | null) => (p == null ? "—" : `${p > 0 ? "+" : ""}${p} %`);
 const ratePct = (p: number | null) => (p == null ? "—" : `${p} %`);
 
+/** Wandelt die <input type="date">-Werte (YYYY-MM-DD) in einen ISO-Range (UTC). */
+function buildRange(from: string, to: string): { from?: string; to?: string } {
+  return {
+    ...(from ? { from: `${from}T00:00:00.000Z` } : {}),
+    ...(to ? { to: `${to}T23:59:59.999Z` } : {}),
+  };
+}
+
 export function Reporting({ role }: { role: string }): JSX.Element {
   const isProduction = role === "PRODUKTION";
   const [granularity, setGranularity] = useState<Granularity>("MONTH");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [status, setStatus] = useState("");
 
   const [revenue, setRevenue] = useState<RevenueOverview | null>(null);
@@ -88,11 +98,12 @@ export function Reporting({ role }: { role: string }): JSX.Element {
   const load = useCallback(async () => {
     setStatus("");
     setAi(null);
+    const range = buildRange(from, to);
     try {
       const [lt, df, ot] = await Promise.all([
-        trpc.productionReporting.leadTime.query({ granularity }),
-        trpc.productionReporting.defects.query({ granularity }),
-        trpc.productionReporting.onTime.query({ granularity }),
+        trpc.productionReporting.leadTime.query({ granularity, ...range }),
+        trpc.productionReporting.defects.query({ granularity, ...range }),
+        trpc.productionReporting.onTime.query({ granularity, ...range }),
       ]);
       setLeadTime(lt as LeadTimeOverview);
       setDefects(df as DefectOverview);
@@ -100,11 +111,11 @@ export function Reporting({ role }: { role: string }): JSX.Element {
 
       if (!isProduction) {
         const [rev, ord, cmp, shop, pg] = await Promise.all([
-          trpc.reporting.revenueOverview.query({ granularity }),
-          trpc.reporting.orderOverview.query({ granularity }),
+          trpc.reporting.revenueOverview.query({ granularity, ...range }),
+          trpc.reporting.orderOverview.query({ granularity, ...range }),
           trpc.reporting.compareRevenue.query({ granularity }),
-          trpc.reporting.revenueByShop.query(),
-          trpc.reporting.revenueByPriceGroup.query(),
+          trpc.reporting.revenueByShop.query(range),
+          trpc.reporting.revenueByPriceGroup.query(range),
         ]);
         setRevenue(rev as RevenueOverview);
         setOrders(ord as OrderOverview);
@@ -115,7 +126,7 @@ export function Reporting({ role }: { role: string }): JSX.Element {
     } catch (err) {
       setStatus(`Fehler: ${(err as Error).message}`);
     }
-  }, [granularity, isProduction]);
+  }, [granularity, from, to, isProduction]);
 
   useEffect(() => {
     void load();
@@ -124,25 +135,28 @@ export function Reporting({ role }: { role: string }): JSX.Element {
   const runAi = useCallback(async () => {
     setAiBusy(true);
     try {
-      setAi((await trpc.reporting.aiSummary.mutate({ granularity })) as AiSummary);
+      setAi((await trpc.reporting.aiSummary.mutate({ granularity, ...buildRange(from, to) })) as AiSummary);
     } catch (err) {
       setStatus(`KI-Fehler: ${(err as Error).message}`);
     } finally {
       setAiBusy(false);
     }
-  }, [granularity]);
+  }, [granularity, from, to]);
 
   const exportPdf = useCallback(async () => {
     setPdfBusy(true);
     try {
-      const res = (await trpc.reporting.exportPdf.mutate({ granularity })) as { fileName: string; pdfBase64: string };
+      const res = (await trpc.reporting.exportPdf.mutate({ granularity, ...buildRange(from, to) })) as {
+        fileName: string;
+        pdfBase64: string;
+      };
       downloadBase64Pdf(res.fileName, res.pdfBase64);
     } catch (err) {
       setStatus(`PDF-Fehler: ${(err as Error).message}`);
     } finally {
       setPdfBusy(false);
     }
-  }, [granularity]);
+  }, [granularity, from, to]);
 
   return (
     <section style={box}>
@@ -156,6 +170,11 @@ export function Reporting({ role }: { role: string }): JSX.Element {
           <option value="YEAR">Jahr</option>
         </select>
       </label>{" "}
+      <label>von <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>{" "}
+      <label>bis <input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label>{" "}
+      {(from || to) && (
+        <button onClick={() => { setFrom(""); setTo(""); }}>Zeitraum zurücksetzen</button>
+      )}{" "}
       <button onClick={() => void load()}>Aktualisieren</button>{" "}
       {!isProduction && (
         <button onClick={() => void exportPdf()} disabled={pdfBusy}>

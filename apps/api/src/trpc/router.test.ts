@@ -149,12 +149,12 @@ function setup(user: AuthUser | null = BUERO) {
         { at: new Date("2026-06-05T09:00:00Z"), netCents: 35_000 },
       ],
       [
-        { label: "shop_a", name: "Shop A", netCents: 30_000 },
-        { label: "shop_b", name: "Shop B", netCents: 20_000 },
+        { at: new Date("2026-05-10T09:00:00Z"), label: "shop_a", name: "Shop A", netCents: 30_000 },
+        { at: new Date("2026-06-05T09:00:00Z"), label: "shop_b", name: "Shop B", netCents: 20_000 },
       ],
       [
-        { label: "STANDARD", name: "Standard", netCents: 35_000 },
-        { label: "PREMIUM", name: "Premium", netCents: 15_000 },
+        { at: new Date("2026-05-10T09:00:00Z"), label: "STANDARD", name: "Standard", netCents: 35_000 },
+        { at: new Date("2026-06-05T09:00:00Z"), label: "PREMIUM", name: "Premium", netCents: 15_000 },
       ]
     )
   );
@@ -653,6 +653,13 @@ describe("tRPC reporting — Auswertungen (Kap. 29)", () => {
     expect(byShop[0]).toMatchObject({ name: "Shop A", sharePercent: 60 });
     const byPg = await caller.reporting.revenueByPriceGroup();
     expect(byPg[0]).toMatchObject({ label: "STANDARD", sharePercent: 70 });
+  });
+
+  it("begrenzt die Umsatz-Übersicht auf den Zeitraum (von–bis)", async () => {
+    const { caller } = setup(BUCHHALTUNG);
+    const res = await caller.reporting.revenueOverview({ granularity: "MONTH", from: "2026-06-01T00:00:00.000Z" });
+    expect(res.buckets.map((b) => b.key)).toEqual(["2026-06"]);
+    expect(res.totalNetCents).toBe(30_000);
   });
 
   it("vergleicht Umsatz aktueller Monat vs. Vormonat", async () => {

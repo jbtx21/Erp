@@ -18,10 +18,10 @@ describe("buildReportDocument", () => {
     revenueBuckets: bucketRevenue(revenue, "MONTH"),
     orderBuckets: bucketRevenue(revenue, "MONTH"),
     byShop: breakdownRevenue([
-      { label: "shop_a", name: "Shop A", netCents: 30_000 },
-      { label: "shop_b", name: "Shop B", netCents: 20_000 },
+      { at: at("2026-05-10T00:00:00Z"), label: "shop_a", name: "Shop A", netCents: 30_000 },
+      { at: at("2026-06-05T00:00:00Z"), label: "shop_b", name: "Shop B", netCents: 20_000 },
     ]),
-    byPriceGroup: breakdownRevenue([{ label: "STANDARD", name: "Standard", netCents: 50_000 }]),
+    byPriceGroup: breakdownRevenue([{ at: at("2026-06-05T00:00:00Z"), label: "STANDARD", name: "Standard", netCents: 50_000 }]),
     comparison: comparePeriods(revenue, "MONTH", at("2026-06-19T00:00:00Z")),
   });
 

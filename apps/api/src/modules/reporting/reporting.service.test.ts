@@ -19,12 +19,12 @@ const orders: OrderPoint[] = [
   { at: at("2026-06-06T09:00:00Z"), netCents: 5_000 },
 ];
 const byShop: LabeledRevenuePoint[] = [
-  { label: "shop_a", name: "Shop A", netCents: 30_000 },
-  { label: "shop_b", name: "Shop B", netCents: 20_000 },
+  { at: at("2026-05-10T09:00:00Z"), label: "shop_a", name: "Shop A", netCents: 30_000 },
+  { at: at("2026-06-05T09:00:00Z"), label: "shop_b", name: "Shop B", netCents: 20_000 },
 ];
 const byPriceGroup: LabeledRevenuePoint[] = [
-  { label: "STANDARD", name: "Standard", netCents: 35_000 },
-  { label: "PREMIUM", name: "Premium", netCents: 15_000 },
+  { at: at("2026-05-10T09:00:00Z"), label: "STANDARD", name: "Standard", netCents: 35_000 },
+  { at: at("2026-06-05T09:00:00Z"), label: "PREMIUM", name: "Premium", netCents: 15_000 },
 ];
 
 function service(ai: AiReportClient | null = null): ReportingService {
@@ -58,6 +58,18 @@ describe("ReportingService (Kap. 29)", () => {
   it("schlüsselt den Umsatz nach Kundengruppe auf", async () => {
     const res = await service().revenueByPriceGroup();
     expect(res[0]).toMatchObject({ label: "STANDARD", netCents: 35_000, sharePercent: 70 });
+  });
+
+  it("begrenzt die Übersicht auf den Zeitraum (von–bis)", async () => {
+    // Nur Juni (05.06. + 20.06.); Mai (10.05.) fällt heraus.
+    const res = await service().revenueOverview("MONTH", { from: at("2026-06-01T00:00:00Z") });
+    expect(res.buckets.map((b) => b.key)).toEqual(["2026-06"]);
+    expect(res.totalNetCents).toBe(30_000);
+  });
+
+  it("begrenzt die Aufschlüsselung nach Shop auf den Zeitraum", async () => {
+    const res = await service().revenueByShop({ from: at("2026-06-01T00:00:00Z") });
+    expect(res.map((r) => r.label)).toEqual(["shop_b"]);
   });
 
   it("vergleicht den Umsatz Juni mit Mai (Delta + Prozent)", async () => {

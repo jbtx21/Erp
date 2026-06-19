@@ -9,7 +9,9 @@ import {
   breakdownRevenue,
   bucketRevenue,
   comparePeriods,
+  filterByRange,
   totalRevenueCents,
+  type DateRange,
   type Granularity,
   type LabeledRevenuePoint,
   type OrderPoint,
@@ -76,8 +78,8 @@ export class ReportingService {
   ) {}
 
   /** Umsatz-Übersicht (Netto je Periode) + Gesamtsumme (Kap. 29). */
-  async revenueOverview(granularity: Granularity): Promise<RevenueOverview> {
-    const points = await this.repo.revenuePoints();
+  async revenueOverview(granularity: Granularity, range?: DateRange): Promise<RevenueOverview> {
+    const points = filterByRange(await this.repo.revenuePoints(), range);
     return {
       granularity,
       buckets: bucketRevenue(points, granularity),
@@ -86,8 +88,8 @@ export class ReportingService {
   }
 
   /** Auftrags-Übersicht (Anzahl + Auftragswert je Periode) + Gesamtsummen (Kap. 29). */
-  async orderOverview(granularity: Granularity): Promise<OrderOverview> {
-    const points = await this.repo.orderPoints();
+  async orderOverview(granularity: Granularity, range?: DateRange): Promise<OrderOverview> {
+    const points = filterByRange(await this.repo.orderPoints(), range);
     const buckets = bucketRevenue(points, granularity);
     return {
       granularity,
@@ -98,13 +100,13 @@ export class ReportingService {
   }
 
   /** Umsatz nach Shop aufgeschlüsselt (Kap. 29), absteigend mit Anteilen. */
-  async revenueByShop(): Promise<RevenueBreakdownItem[]> {
-    return breakdownRevenue(await this.repo.revenueByShopPoints());
+  async revenueByShop(range?: DateRange): Promise<RevenueBreakdownItem[]> {
+    return breakdownRevenue(filterByRange(await this.repo.revenueByShopPoints(), range));
   }
 
   /** Umsatz nach Kundengruppe (Preisgruppe) aufgeschlüsselt (Kap. 29). */
-  async revenueByPriceGroup(): Promise<RevenueBreakdownItem[]> {
-    return breakdownRevenue(await this.repo.revenueByPriceGroupPoints());
+  async revenueByPriceGroup(range?: DateRange): Promise<RevenueBreakdownItem[]> {
+    return breakdownRevenue(filterByRange(await this.repo.revenueByPriceGroupPoints(), range));
   }
 
   /** Umsatz: aktuelle vs. vorhergehende Periode (Tag/Woche/Monat/Jahr). */
@@ -113,21 +115,23 @@ export class ReportingService {
   }
 
   /** Erzeugt die Umsatz-Auswertung als druckbares PDF (Kap. 29) — base64-kodiert. */
-  async exportPdf(granularity: Granularity, reference: Date): Promise<ReportPdf> {
+  async exportPdf(granularity: Granularity, reference: Date, range?: DateRange): Promise<ReportPdf> {
     const [revenuePoints, orderPoints, byShop, byPriceGroup] = await Promise.all([
       this.repo.revenuePoints(),
       this.repo.orderPoints(),
       this.repo.revenueByShopPoints(),
       this.repo.revenueByPriceGroupPoints(),
     ]);
+    const revenue = filterByRange(revenuePoints, range);
     const document = buildReportDocument({
       granularity,
       generatedAt: reference,
-      revenueBuckets: bucketRevenue(revenuePoints, granularity),
-      orderBuckets: bucketRevenue(orderPoints, granularity),
-      byShop: breakdownRevenue(byShop),
-      byPriceGroup: breakdownRevenue(byPriceGroup),
-      comparison: comparePeriods(revenuePoints, granularity, reference),
+      range,
+      revenueBuckets: bucketRevenue(revenue, granularity),
+      orderBuckets: bucketRevenue(filterByRange(orderPoints, range), granularity),
+      byShop: breakdownRevenue(filterByRange(byShop, range)),
+      byPriceGroup: breakdownRevenue(filterByRange(byPriceGroup, range)),
+      comparison: comparePeriods(revenue, granularity, reference),
     });
     const bytes = await renderReportPdf(document);
     return {
@@ -147,11 +151,13 @@ export class ReportingService {
    * wird eine deterministische Heuristik geliefert (`aiGenerated: false`) — der Bericht
    * bleibt verfügbar, nur ohne KI-Prosa.
    */
-  async aiSummary(granularity: Granularity, reference: Date): Promise<AiSummary> {
-    const [revenuePoints, orderPoints] = await Promise.all([
+  async aiSummary(granularity: Granularity, reference: Date, range?: DateRange): Promise<AiSummary> {
+    const [allRevenue, allOrders] = await Promise.all([
       this.repo.revenuePoints(),
       this.repo.orderPoints(),
     ]);
+    const revenuePoints = filterByRange(allRevenue, range);
+    const orderPoints = filterByRange(allOrders, range);
     const revenueBuckets = bucketRevenue(revenuePoints, granularity);
     const orderBuckets = bucketRevenue(orderPoints, granularity);
     const revenueComparison = comparePeriods(revenuePoints, granularity, reference);

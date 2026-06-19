@@ -12,6 +12,16 @@ const supplierRoles = ["ADMIN", "BUERO", "BUCHHALTUNG"] as const;
 // Zeitliche Granularität für Auswertungen (Kap. 29).
 const granularityEnum = z.enum(["DAY", "WEEK", "MONTH", "YEAR"]);
 
+// Optionaler Auswertungszeitraum (von–bis) als ISO-Strings.
+const rangeShape = { from: z.string().datetime().optional(), to: z.string().datetime().optional() };
+function toRange(input: { from?: string; to?: string }): { from?: Date; to?: Date } | undefined {
+  if (!input.from && !input.to) return undefined;
+  return {
+    ...(input.from ? { from: new Date(input.from) } : {}),
+    ...(input.to ? { to: new Date(input.to) } : {}),
+  };
+}
+
 const supplierCatalogItem = z.object({
   supplierSku: z.string().min(1),
   sku: z.string().min(1),
@@ -305,21 +315,23 @@ export const appRouter = router({
   reporting: router({
     /** Umsatz-Übersicht (Netto je Tag/Woche/Monat/Jahr) + Gesamtsumme (Kap. 29). */
     revenueOverview: roleProcedure(...supplierRoles)
-      .input(z.object({ granularity: granularityEnum }))
-      .query(async ({ input, ctx }) => ctx.reporting.revenueOverview(input.granularity)),
+      .input(z.object({ granularity: granularityEnum, ...rangeShape }))
+      .query(async ({ input, ctx }) => ctx.reporting.revenueOverview(input.granularity, toRange(input))),
 
     /** Auftrags-Übersicht (Anzahl + Auftragswert je Periode) + Gesamtsummen (Kap. 29). */
     orderOverview: roleProcedure(...supplierRoles)
-      .input(z.object({ granularity: granularityEnum }))
-      .query(async ({ input, ctx }) => ctx.reporting.orderOverview(input.granularity)),
+      .input(z.object({ granularity: granularityEnum, ...rangeShape }))
+      .query(async ({ input, ctx }) => ctx.reporting.orderOverview(input.granularity, toRange(input))),
 
     /** Umsatz nach Shop aufgeschlüsselt (Kap. 29). */
-    revenueByShop: roleProcedure(...supplierRoles).query(async ({ ctx }) => ctx.reporting.revenueByShop()),
+    revenueByShop: roleProcedure(...supplierRoles)
+      .input(z.object({ ...rangeShape }).optional())
+      .query(async ({ input, ctx }) => ctx.reporting.revenueByShop(toRange(input ?? {}))),
 
     /** Umsatz nach Kundengruppe (Preisgruppe) aufgeschlüsselt (Kap. 29). */
-    revenueByPriceGroup: roleProcedure(...supplierRoles).query(async ({ ctx }) =>
-      ctx.reporting.revenueByPriceGroup()
-    ),
+    revenueByPriceGroup: roleProcedure(...supplierRoles)
+      .input(z.object({ ...rangeShape }).optional())
+      .query(async ({ input, ctx }) => ctx.reporting.revenueByPriceGroup(toRange(input ?? {}))),
 
     /** Periodenvergleich Umsatz: aktuell vs. Vorperiode (Kap. 29). */
     compareRevenue: roleProcedure(...supplierRoles)
@@ -337,34 +349,42 @@ export const appRouter = router({
 
     /** KI-gestützte Zusammenfassung der Kennzahlen (Claude); ohne Schlüssel Heuristik. */
     aiSummary: roleProcedure(...supplierRoles)
-      .input(z.object({ granularity: granularityEnum, reference: z.string().datetime().optional() }))
+      .input(z.object({ granularity: granularityEnum, reference: z.string().datetime().optional(), ...rangeShape }))
       .mutation(async ({ input, ctx }) =>
-        ctx.reporting.aiSummary(input.granularity, input.reference ? new Date(input.reference) : new Date())
+        ctx.reporting.aiSummary(
+          input.granularity,
+          input.reference ? new Date(input.reference) : new Date(),
+          toRange(input)
+        )
       ),
 
     /** Umsatz-Auswertung als PDF (base64) — Übersicht + Shop-/Kundengruppen-Aufriss. */
     exportPdf: roleProcedure(...supplierRoles)
-      .input(z.object({ granularity: granularityEnum, reference: z.string().datetime().optional() }))
+      .input(z.object({ granularity: granularityEnum, reference: z.string().datetime().optional(), ...rangeShape }))
       .mutation(async ({ input, ctx }) =>
-        ctx.reporting.exportPdf(input.granularity, input.reference ? new Date(input.reference) : new Date())
+        ctx.reporting.exportPdf(
+          input.granularity,
+          input.reference ? new Date(input.reference) : new Date(),
+          toRange(input)
+        )
       ),
   }),
 
   productionReporting: router({
     /** Durchlaufzeit je Periode + Kennzahlen (operativ, auch für PRODUKTION). */
     leadTime: protectedProcedure
-      .input(z.object({ granularity: granularityEnum }))
-      .query(async ({ input, ctx }) => ctx.productionReporting.leadTimeOverview(input.granularity)),
+      .input(z.object({ granularity: granularityEnum, ...rangeShape }))
+      .query(async ({ input, ctx }) => ctx.productionReporting.leadTimeOverview(input.granularity, toRange(input))),
 
     /** Fehlerquote je Periode, gesamt und je Ursache (Kap. 20/29, operativ). */
     defects: protectedProcedure
-      .input(z.object({ granularity: granularityEnum }))
-      .query(async ({ input, ctx }) => ctx.productionReporting.defectOverview(input.granularity)),
+      .input(z.object({ granularity: granularityEnum, ...rangeShape }))
+      .query(async ({ input, ctx }) => ctx.productionReporting.defectOverview(input.granularity, toRange(input))),
 
     /** Termintreue (On-Time-Quote) je Periode + gesamt (Kap. 35.4, operativ). */
     onTime: protectedProcedure
-      .input(z.object({ granularity: granularityEnum }))
-      .query(async ({ input, ctx }) => ctx.productionReporting.onTimeOverview(input.granularity)),
+      .input(z.object({ granularity: granularityEnum, ...rangeShape }))
+      .query(async ({ input, ctx }) => ctx.productionReporting.onTimeOverview(input.granularity, toRange(input))),
   }),
 
   productionSheet: router({

@@ -192,11 +192,39 @@ export function totalRevenueCents(points: ReadonlyArray<RevenuePoint>): Cents {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Zeitraum-Filter (von–bis) — Kap. 29.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Optionaler Auswertungszeitraum (inklusive Grenzen). */
+export interface DateRange {
+  from?: Date;
+  to?: Date;
+}
+
+/** Ob `at` im (optionalen) Zeitraum liegt (Grenzen inklusiv). */
+export function inRange(at: Date, range?: DateRange): boolean {
+  if (!range) return true;
+  if (range.from && at.getTime() < range.from.getTime()) return false;
+  if (range.to && at.getTime() > range.to.getTime()) return false;
+  return true;
+}
+
+/** Filtert datierte Datenpunkte auf den Zeitraum (ohne Range: unverändert). */
+export function filterByRange<T extends { at: Date }>(
+  points: ReadonlyArray<T>,
+  range?: DateRange
+): T[] {
+  return range ? points.filter((p) => inRange(p.at, range)) : [...points];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Aufschlüsselung nach Dimension (Shop, Kundengruppe …) — Kap. 29.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Umsatzpunkt mit Dimensionsmerkmal (z. B. Shop-Id/Preisgruppen-Kind). */
 export interface LabeledRevenuePoint {
+  /** Bezugszeitpunkt (für den optionalen Zeitraum-Filter). */
+  at: Date;
   /** Stabiler Schlüssel der Dimension (z. B. shopConnectorId oder PriceGroupKind). */
   label: string;
   /** Anzeigename der Dimension (Shop-Name, Preisgruppen-Name). */

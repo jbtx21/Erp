@@ -11,7 +11,9 @@ import {
   computeLeadTimeStats,
   defectRate,
   defectsByCause,
+  filterByRange,
   onTimeRate,
+  type DateRange,
   type DefectBucket,
   type DefectCause,
   type DefectPoint,
@@ -58,8 +60,8 @@ export class ProductionReportingService {
   constructor(private readonly repo: ProductionReportingRepository) {}
 
   /** Durchlaufzeit-Übersicht je Periode + Gesamtkennzahlen (Kap. 29/35). */
-  async leadTimeOverview(granularity: Granularity): Promise<LeadTimeOverview> {
-    const points = await this.repo.leadTimePoints();
+  async leadTimeOverview(granularity: Granularity, range?: DateRange): Promise<LeadTimeOverview> {
+    const points = filterByRange(await this.repo.leadTimePoints(), range);
     return {
       granularity,
       buckets: bucketLeadTime(points, granularity),
@@ -68,8 +70,8 @@ export class ProductionReportingService {
   }
 
   /** Fehlerquoten-Übersicht je Periode + Gesamt + Ursachen (Kap. 20/29). */
-  async defectOverview(granularity: Granularity): Promise<DefectOverview> {
-    const points = await this.repo.defectPoints();
+  async defectOverview(granularity: Granularity, range?: DateRange): Promise<DefectOverview> {
+    const points = filterByRange(await this.repo.defectPoints(), range);
     return {
       granularity,
       buckets: bucketDefectRate(points, granularity),
@@ -79,8 +81,8 @@ export class ProductionReportingService {
   }
 
   /** Termintreue-Übersicht je Periode + Gesamt (Kap. 35.4/29). */
-  async onTimeOverview(granularity: Granularity): Promise<OnTimeOverview> {
-    const points = await this.repo.onTimePoints();
+  async onTimeOverview(granularity: Granularity, range?: DateRange): Promise<OnTimeOverview> {
+    const points = filterByRange(await this.repo.onTimePoints(), range);
     return {
       granularity,
       buckets: bucketOnTimeRate(points, granularity),

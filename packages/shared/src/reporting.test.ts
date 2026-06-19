@@ -8,6 +8,7 @@ import {
   bucketStart,
   breakdownRevenue,
   comparePeriods,
+  filterByRange,
   percentChange,
   previousBucketStart,
   totalRevenueCents,
@@ -142,11 +143,33 @@ describe("totalRevenueCents", () => {
   });
 });
 
+describe("filterByRange (Zeitraum von–bis)", () => {
+  const points: RevenuePoint[] = [
+    { at: at("2026-05-31T23:00:00Z"), netCents: 1 },
+    { at: at("2026-06-15T12:00:00Z"), netCents: 2 },
+    { at: at("2026-07-01T00:30:00Z"), netCents: 3 },
+  ];
+
+  it("gibt ohne Range alle Punkte zurück", () => {
+    expect(filterByRange(points)).toHaveLength(3);
+  });
+
+  it("filtert inklusiv auf [from, to]", () => {
+    const res = filterByRange(points, { from: at("2026-06-01T00:00:00Z"), to: at("2026-06-30T23:59:59Z") });
+    expect(res.map((p) => p.netCents)).toEqual([2]);
+  });
+
+  it("akzeptiert offene Grenzen", () => {
+    expect(filterByRange(points, { from: at("2026-06-16T00:00:00Z") }).map((p) => p.netCents)).toEqual([3]);
+    expect(filterByRange(points, { to: at("2026-06-01T00:00:00Z") }).map((p) => p.netCents)).toEqual([1]);
+  });
+});
+
 describe("breakdownRevenue (Umsatz nach Shop/Kundengruppe)", () => {
   const points: LabeledRevenuePoint[] = [
-    { label: "shop_a", name: "Shop A", netCents: 30_000 },
-    { label: "shop_b", name: "Shop B", netCents: 10_000 },
-    { label: "shop_a", name: "Shop A", netCents: 10_000 },
+    { at: at("2026-06-01T00:00:00Z"), label: "shop_a", name: "Shop A", netCents: 30_000 },
+    { at: at("2026-06-02T00:00:00Z"), label: "shop_b", name: "Shop B", netCents: 10_000 },
+    { at: at("2026-06-03T00:00:00Z"), label: "shop_a", name: "Shop A", netCents: 10_000 },
   ];
 
   it("aggregiert je Dimension, sortiert absteigend und rechnet Anteile", () => {
@@ -157,7 +180,7 @@ describe("breakdownRevenue (Umsatz nach Shop/Kundengruppe)", () => {
   });
 
   it("liefert sharePercent null, wenn der Gesamtumsatz 0 ist", () => {
-    const res = breakdownRevenue([{ label: "x", name: "X", netCents: 0 }]);
+    const res = breakdownRevenue([{ at: at("2026-06-01T00:00:00Z"), label: "x", name: "X", netCents: 0 }]);
     expect(res[0]?.sharePercent).toBeNull();
   });
 

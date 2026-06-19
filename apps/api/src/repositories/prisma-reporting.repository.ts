@@ -30,11 +30,11 @@ export class PrismaReportingRepository implements ReportingRepository {
     // Herkunfts-Shop des Auftrags je finalisierter Rechnung; ohne Shop → „manuell".
     const invoices = await prisma.invoice.findMany({
       where: { finalized: true },
-      select: { netCents: true, order: { select: { shopConnector: { select: { id: true, name: true } } } } },
+      select: { netCents: true, issuedAt: true, order: { select: { shopConnector: { select: { id: true, name: true } } } } },
     });
     return invoices.map((i) => {
       const shop = i.order.shopConnector;
-      return { label: shop?.id ?? "manual", name: shop?.name ?? "Manuell", netCents: i.netCents };
+      return { at: i.issuedAt, label: shop?.id ?? "manual", name: shop?.name ?? "Manuell", netCents: i.netCents };
     });
   }
 
@@ -42,11 +42,11 @@ export class PrismaReportingRepository implements ReportingRepository {
     // Kundengruppe = Preisgruppe der Firma je finalisierter Rechnung.
     const invoices = await prisma.invoice.findMany({
       where: { finalized: true },
-      select: { netCents: true, company: { select: { priceGroup: { select: { kind: true, name: true } } } } },
+      select: { netCents: true, issuedAt: true, company: { select: { priceGroup: { select: { kind: true, name: true } } } } },
     });
     return invoices.map((i) => {
       const pg = i.company.priceGroup;
-      return { label: pg?.kind ?? "OHNE", name: pg?.name ?? "Ohne Preisgruppe", netCents: i.netCents };
+      return { at: i.issuedAt, label: pg?.kind ?? "OHNE", name: pg?.name ?? "Ohne Preisgruppe", netCents: i.netCents };
     });
   }
 }
