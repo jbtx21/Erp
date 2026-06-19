@@ -700,6 +700,13 @@ describe("tRPC reporting — Auswertungen (Kap. 29)", () => {
     expect(Buffer.from(res.pdfBase64, "base64").subarray(0, 5).toString("ascii")).toBe("%PDF-");
   });
 
+  it("exportiert den kombinierten Gesamtbericht als PDF (Umsatz + KPIs)", async () => {
+    const { caller } = setup(BUCHHALTUNG);
+    const res = await caller.reporting.exportFullPdf({ granularity: "MONTH" });
+    expect(res.fileName).toBe("Gesamtbericht-MONTH.pdf");
+    expect(Buffer.from(res.pdfBase64, "base64").subarray(0, 5).toString("ascii")).toBe("%PDF-");
+  });
+
   it("verweigert PRODUKTION den Zugriff (FORBIDDEN, Finanzdaten)", async () => {
     const { caller } = setup(PRODUKTION);
     await expect(

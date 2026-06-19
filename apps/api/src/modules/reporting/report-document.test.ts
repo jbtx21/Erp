@@ -45,4 +45,28 @@ describe("buildReportDocument", () => {
     expect(shop.rows[0]?.[0]).toBe("Shop A");
     expect(shop.rows[0]?.[3]).toBe("60 %");
   });
+
+  it("ergänzt im Gesamtbericht Artikel- und Produktions-Abschnitte", () => {
+    const full = buildReportDocument({
+      granularity: "MONTH",
+      generatedAt: at("2026-06-19T00:00:00Z"),
+      revenueBuckets: bucketRevenue(revenue, "MONTH"),
+      orderBuckets: bucketRevenue(revenue, "MONTH"),
+      byShop: [],
+      byPriceGroup: [],
+      byArticle: breakdownRevenue([{ at: at("2026-06-01T00:00:00Z"), label: "Polo", name: "Polo", netCents: 10_000 }]),
+      comparison: comparePeriods(revenue, "MONTH", at("2026-06-19T00:00:00Z")),
+      production: {
+        leadTime: { stats: { count: 2, avgHours: 36, medianHours: 36, minHours: 24, maxHours: 48 }, buckets: [{ key: "2026-06", start: at("2026-06-01T00:00:00Z"), count: 2, avgHours: 36 }] },
+        defects: { overall: { total: 4, defects: 1, ratePercent: 25 }, byCause: { LIEFERANT: 0, INTERN: 1, EXTERN_VEREDLER: 0 }, buckets: [{ key: "2026-06", start: at("2026-06-01T00:00:00Z"), total: 4, defects: 1, ratePercent: 25 }] },
+        onTime: { overall: { total: 3, onTime: 2, ratePercent: 67 }, buckets: [{ key: "2026-06", start: at("2026-06-01T00:00:00Z"), total: 3, onTime: 2, ratePercent: 67 }] },
+      },
+    });
+    expect(full.title).toBe("TEXMA — Gesamtbericht");
+    const headings = full.sections.map((s) => s.heading);
+    expect(headings.some((h) => h.startsWith("Umsatz nach Artikel"))).toBe(true);
+    expect(headings.some((h) => h.startsWith("Durchlaufzeit"))).toBe(true);
+    expect(headings.some((h) => h.startsWith("Fehlerquote"))).toBe(true);
+    expect(headings.some((h) => h.startsWith("Termintreue"))).toBe(true);
+  });
 });

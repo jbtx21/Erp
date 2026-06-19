@@ -21,7 +21,7 @@ import {
   type RevenuePoint,
 } from "@texma/shared";
 import { buildReportPrompt } from "./report-prompt.js";
-import { buildReportDocument } from "./report-document.js";
+import { buildReportDocument, type ProductionReportData } from "./report-document.js";
 import { renderReportPdf } from "../../pdf/report-pdf.js";
 
 /** Liest die für Auswertungen nötigen Roh-Datenpunkte (read-only). */
@@ -154,6 +154,45 @@ export class ReportingService {
   /** Aufträge: aktuelle vs. vorhergehende Periode (Tag/Woche/Monat/Jahr). */
   async compareOrders(granularity: Granularity, reference: Date): Promise<PeriodComparison> {
     return comparePeriods(await this.repo.orderPoints(), granularity, reference);
+  }
+
+  /**
+   * Kombinierter Gesamtbericht als PDF (Kap. 29): Umsatz + Aufträge + Aufrisse nach
+   * Shop/Kundengruppe/Artikel UND operative KPIs (Durchlaufzeit/Fehlerquote/Termintreue).
+   * Die Produktionsdaten werden übergeben (vom ProductionReporting), damit dieser Service
+   * frei von der Produktions-Repository bleibt.
+   */
+  async exportFullPdf(
+    granularity: Granularity,
+    reference: Date,
+    production: ProductionReportData,
+    range?: DateRange
+  ): Promise<ReportPdf> {
+    const [revenuePoints, orderPoints, byShop, byPriceGroup, byArticle] = await Promise.all([
+      this.repo.revenuePoints(),
+      this.repo.orderPoints(),
+      this.repo.revenueByShopPoints(),
+      this.repo.revenueByPriceGroupPoints(),
+      this.repo.revenueByArticlePoints(),
+    ]);
+    const revenue = filterByRange(revenuePoints, range);
+    const document = buildReportDocument({
+      granularity,
+      generatedAt: reference,
+      range,
+      revenueBuckets: bucketRevenue(revenue, granularity),
+      orderBuckets: bucketRevenue(filterByRange(orderPoints, range), granularity),
+      byShop: breakdownRevenue(filterByRange(byShop, range)),
+      byPriceGroup: breakdownRevenue(filterByRange(byPriceGroup, range)),
+      byArticle: breakdownRevenue(filterByRange(byArticle, range)),
+      comparison: comparePeriods(revenue, granularity, reference),
+      production,
+    });
+    const bytes = await renderReportPdf(document);
+    return {
+      fileName: `Gesamtbericht-${granularity}.pdf`,
+      pdfBase64: Buffer.from(bytes).toString("base64"),
+    };
   }
 
   /**

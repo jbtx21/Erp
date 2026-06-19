@@ -373,6 +373,24 @@ export const appRouter = router({
           toRange(input)
         )
       ),
+
+    /** Kombinierter Gesamtbericht als PDF: Umsatz + Aufrisse + operative KPIs (Kap. 29/35). */
+    exportFullPdf: roleProcedure(...supplierRoles)
+      .input(z.object({ granularity: granularityEnum, reference: z.string().datetime().optional(), ...rangeShape }))
+      .mutation(async ({ input, ctx }) => {
+        const range = toRange(input);
+        const [leadTime, defects, onTime] = await Promise.all([
+          ctx.productionReporting.leadTimeOverview(input.granularity, range),
+          ctx.productionReporting.defectOverview(input.granularity, range),
+          ctx.productionReporting.onTimeOverview(input.granularity, range),
+        ]);
+        return ctx.reporting.exportFullPdf(
+          input.granularity,
+          input.reference ? new Date(input.reference) : new Date(),
+          { leadTime, defects, onTime },
+          range
+        );
+      }),
   }),
 
   productionReporting: router({

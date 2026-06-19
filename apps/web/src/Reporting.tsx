@@ -146,20 +146,23 @@ export function Reporting({ role }: { role: string }): JSX.Element {
     }
   }, [granularity, from, to]);
 
-  const exportPdf = useCallback(async () => {
-    setPdfBusy(true);
-    try {
-      const res = (await trpc.reporting.exportPdf.mutate({ granularity, ...buildRange(from, to) })) as {
-        fileName: string;
-        pdfBase64: string;
-      };
-      downloadBase64Pdf(res.fileName, res.pdfBase64);
-    } catch (err) {
-      setStatus(`PDF-Fehler: ${(err as Error).message}`);
-    } finally {
-      setPdfBusy(false);
-    }
-  }, [granularity, from, to]);
+  const exportPdf = useCallback(
+    async (full: boolean) => {
+      setPdfBusy(true);
+      try {
+        const input = { granularity, ...buildRange(from, to) };
+        const res = (await (full
+          ? trpc.reporting.exportFullPdf.mutate(input)
+          : trpc.reporting.exportPdf.mutate(input))) as { fileName: string; pdfBase64: string };
+        downloadBase64Pdf(res.fileName, res.pdfBase64);
+      } catch (err) {
+        setStatus(`PDF-Fehler: ${(err as Error).message}`);
+      } finally {
+        setPdfBusy(false);
+      }
+    },
+    [granularity, from, to]
+  );
 
   return (
     <section style={box}>
@@ -180,9 +183,14 @@ export function Reporting({ role }: { role: string }): JSX.Element {
       )}{" "}
       <button onClick={() => void load()}>Aktualisieren</button>{" "}
       {!isProduction && (
-        <button onClick={() => void exportPdf()} disabled={pdfBusy}>
-          {pdfBusy ? "PDF…" : "PDF-Export"}
-        </button>
+        <>
+          <button onClick={() => void exportPdf(false)} disabled={pdfBusy}>
+            {pdfBusy ? "PDF…" : "Umsatz-PDF"}
+          </button>{" "}
+          <button onClick={() => void exportPdf(true)} disabled={pdfBusy}>
+            {pdfBusy ? "PDF…" : "Gesamtbericht (PDF)"}
+          </button>
+        </>
       )}
       {status && <p><em>{status}</em></p>}
 

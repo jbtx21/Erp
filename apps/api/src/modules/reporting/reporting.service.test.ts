@@ -115,6 +115,17 @@ describe("ReportingService (Kap. 29)", () => {
     expect(Buffer.from(res.pdfBase64, "base64").subarray(0, 5).toString("ascii")).toBe("%PDF-");
   });
 
+  it("exportiert den kombinierten Gesamtbericht als PDF (base64)", async () => {
+    const production = {
+      leadTime: { stats: { count: 1, avgHours: 24, medianHours: 24, minHours: 24, maxHours: 24 }, buckets: [] },
+      defects: { overall: { total: 2, defects: 1, ratePercent: 50 }, byCause: { LIEFERANT: 0, INTERN: 1, EXTERN_VEREDLER: 0 }, buckets: [] },
+      onTime: { overall: { total: 2, onTime: 2, ratePercent: 100 }, buckets: [] },
+    };
+    const res = await service().exportFullPdf("MONTH", at("2026-06-19T00:00:00Z"), production);
+    expect(res.fileName).toBe("Gesamtbericht-MONTH.pdf");
+    expect(Buffer.from(res.pdfBase64, "base64").subarray(0, 5).toString("ascii")).toBe("%PDF-");
+  });
+
   it("fällt bei einem KI-Fehler auf die Heuristik zurück (Bericht bleibt verfügbar)", async () => {
     const ai: AiReportClient = { summarize: vi.fn().mockRejectedValue(new Error("kein Budget")) };
     const res = await service(ai).aiSummary("MONTH", at("2026-06-19T00:00:00Z"));
