@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { postCalc, type CostSide } from "./postcalc.js";
+import { decomposeVariance, marginPct, postCalc, type CostSide } from "./postcalc.js";
 
 const plan: CostSide = {
   revenueCents: 100000,
@@ -29,5 +29,36 @@ describe("Nachkalkulation Soll-Ist (T-10)", () => {
     const r = postCalc(plan, ist);
     // 8000 Cent schlechter bei Plan-DB 48000 → ~ -16,7 %
     expect(r.dbVariancePct).toBeCloseTo(-8000 / 48000, 5);
+  });
+
+  it("zerlegt die DB-Abweichung in Umsatz/Material/Lohn (Menge/Satz)", () => {
+    const ist: CostSide = {
+      revenueCents: 98_000, // 2.000 weniger Umsatz
+      materialCents: 45_000, // 5.000 mehr Material
+      laborMinutes: 180, // 60 min mehr
+      laborRateCentsPerMinute: 110, // 10 ct/min teurer
+    };
+    const v = decomposeVariance(plan, ist);
+    expect(v.revenueVarianceCents).toBe(-2_000);
+    expect(v.materialVarianceCents).toBe(-5_000);
+    expect(v.laborQtyVarianceCents).toBe((120 - 180) * 100); // -6.000
+    expect(v.laborRateVarianceCents).toBe((100 - 110) * 180); // -1.800
+    // Kontrolle: Summe der Komponenten = DB-Gesamtabweichung.
+    const sum = v.revenueVarianceCents + v.materialVarianceCents + v.laborQtyVarianceCents + v.laborRateVarianceCents;
+    expect(sum).toBe(postCalc(plan, ist).dbVarianceCents);
+  });
+
+  it("berechnet die DB-Marge und klassifiziert das Ergebnis (Ampel)", () => {
+    const r = postCalc(plan, plan);
+    expect(r.planMarginPct).toBe(marginPct(r.plan));
+    expect(r.planMarginPct).toBe(48); // 48.000/100.000
+    expect(r.status).toBe("GRUEN");
+
+    // 5 % unter Plan-DB → GELB (Toleranz 10 %).
+    const gelb = postCalc(plan, { ...plan, materialCents: 40000 + Math.round(48000 * 0.05) });
+    expect(gelb.status).toBe("GELB");
+    // 20 % unter Plan-DB → ROT.
+    const rot = postCalc(plan, { ...plan, materialCents: 40000 + Math.round(48000 * 0.2) });
+    expect(rot.status).toBe("ROT");
   });
 });

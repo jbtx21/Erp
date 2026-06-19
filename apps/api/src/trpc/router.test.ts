@@ -549,13 +549,19 @@ describe("tRPC postcalc — Nachkalkulation Soll-Ist + RBAC (T-10, Kap. 12)", ()
   // Plan: Umsatz 1000 €, Material 350 €, 500 min × 0,80 € = 400 € → DB 250 €.
   const plan = { revenueCents: 100000, materialCents: 35000, laborMinutes: 500, laborRateCentsPerMinute: 80 };
 
-  it("zeigt die DB-Abweichung Ist vs. Plan", async () => {
+  it("zeigt die DB-Abweichung, Zerlegung und Ampel Ist vs. Plan", async () => {
     const { caller } = setup(BUCHHALTUNG);
     // Ist: Material 400 €, 600 min × 0,80 € = 480 € → DB 120 € → Abweichung −130 €.
     const res = await caller.postcalc.compute({ productionId: "pa_1", plan, istLaborRateCentsPerMinute: 80 });
     expect(res.plan.dbCents).toBe(25000);
     expect(res.ist.dbCents).toBe(12000);
     expect(res.dbVarianceCents).toBe(-13000);
+    // Zerlegung: Material −5.000, Lohn-Menge (500−600)×80 = −8.000, Satz 0, Umsatz 0.
+    expect(res.variance.materialVarianceCents).toBe(-5000);
+    expect(res.variance.laborQtyVarianceCents).toBe(-8000);
+    // 52 % unter Plan-DB → ROT; DB-Marge wird ausgewiesen.
+    expect(res.status).toBe("ROT");
+    expect(res.planMarginPct).toBe(25);
   });
 
   it("PRODUKTION darf keine Nachkalkulation sehen (FORBIDDEN)", async () => {
