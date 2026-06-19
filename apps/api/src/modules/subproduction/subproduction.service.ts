@@ -7,8 +7,11 @@
 import {
   allStagesReturned,
   canStartStage,
+  planSubProduction,
   SubProductionTransitionError,
   transitionStage,
+  validateReturnQty,
+  type SubProductionPlan,
   type SubProductionStage,
   type SubProductionStatus,
 } from "@texma/shared";
@@ -19,14 +22,23 @@ export interface StoredStage extends SubProductionStage {
   productionId: string;
 }
 
+/** Felder, die der Statuswechsel persistiert (inkl. Mengenfluss). */
+export type StageUpdate = Pick<
+  SubProductionStage,
+  "status" | "beistellungVersandtAm" | "ruecklaufErhaltenAm" | "beistellMenge" | "ruecklaufMenge"
+>;
+
 export interface SubProductionRepository {
   getStage(subProductionId: string): Promise<StoredStage | null>;
   /** Alle Stufen einer PA (für die sequenzielle Gate-Prüfung + Übersicht). */
   listStages(productionId: string): Promise<SubProductionStage[]>;
-  updateStage(
-    subProductionId: string,
-    data: Pick<SubProductionStage, "status" | "beistellungVersandtAm" | "ruecklaufErhaltenAm">
-  ): Promise<void>;
+  updateStage(subProductionId: string, data: StageUpdate): Promise<void>;
+}
+
+/** Optionale Angaben beim Statuswechsel: Mengenfluss (Beistellung/Rücklauf). */
+export interface AdvanceOptions {
+  /** Beistellmenge (bei BEISTELLUNG_VERSANDT) bzw. Rücklaufmenge (bei RUECKLAUF_ERHALTEN). */
+  menge?: number;
 }
 
 export interface ProductionSubStatus {
@@ -46,7 +58,8 @@ export class SubProductionService {
   async advanceStage(
     subProductionId: string,
     to: SubProductionStatus,
-    at: Date = new Date()
+    at: Date = new Date(),
+    opts: AdvanceOptions = {}
   ): Promise<SubProductionStage> {
     const stage = await this.repo.getStage(subProductionId);
     if (!stage) {
@@ -63,11 +76,24 @@ export class SubProductionService {
       }
     }
 
+    // Mengenfluss: Beistellmenge beim Versand, Rücklaufmenge (gegen Beistellung geprüft) beim Rücklauf.
+    let beistellMenge = stage.beistellMenge ?? null;
+    let ruecklaufMenge = stage.ruecklaufMenge ?? null;
+    if (to === "BEISTELLUNG_VERSANDT" && opts.menge != null) {
+      beistellMenge = opts.menge;
+    }
+    if (to === "RUECKLAUF_ERHALTEN" && opts.menge != null) {
+      validateReturnQty(beistellMenge, opts.menge);
+      ruecklaufMenge = opts.menge;
+    }
+
     const next = transitionStage(stage, to, at);
     await this.repo.updateStage(subProductionId, {
       status: next.status,
       beistellungVersandtAm: next.beistellungVersandtAm ?? null,
       ruecklaufErhaltenAm: next.ruecklaufErhaltenAm ?? null,
+      beistellMenge,
+      ruecklaufMenge,
     });
 
     await this.audit.append(
@@ -75,15 +101,20 @@ export class SubProductionService {
         entity: "SubProductionOrder",
         entityId: subProductionId,
         action: "UPDATE",
-        after: { status: next.status, sequence: stage.sequence },
+        after: { status: next.status, sequence: stage.sequence, beistellMenge, ruecklaufMenge },
       })
     );
 
-    return next;
+    return { ...next, beistellMenge, ruecklaufMenge };
   }
 
   async productionSubStatus(productionId: string): Promise<ProductionSubStatus> {
     const stages = await this.repo.listStages(productionId);
     return { productionId, stages, allReturned: allStagesReturned(stages) };
+  }
+
+  /** Verdichteter Fremdvergabe-Plan (nächste/blockierte/überfällige Stufe, Schwund, Yield). */
+  async productionSubPlan(productionId: string, now: Date = new Date()): Promise<SubProductionPlan> {
+    return planSubProduction(await this.repo.listStages(productionId), now);
   }
 }

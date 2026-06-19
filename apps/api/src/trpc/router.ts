@@ -200,6 +200,8 @@ export const appRouter = router({
           subProductionId: z.string().min(1),
           to: z.enum(["BEISTELLUNG_VERSANDT", "RUECKLAUF_ERHALTEN", "ABGESCHLOSSEN"]),
           at: z.string().datetime().optional(),
+          /** Beistell- bzw. Rücklaufmenge (Mengenfluss/Schwund, T-04). */
+          menge: z.number().int().nonnegative().optional(),
         })
       )
       .mutation(async ({ input, ctx }) => {
@@ -207,7 +209,8 @@ export const appRouter = router({
           return await ctx.subproduction.advanceStage(
             input.subProductionId,
             input.to,
-            input.at ? new Date(input.at) : new Date()
+            input.at ? new Date(input.at) : new Date(),
+            input.menge != null ? { menge: input.menge } : {}
           );
         } catch (err) {
           if (err instanceof SubProductionTransitionError) {
@@ -221,6 +224,13 @@ export const appRouter = router({
     list: protectedProcedure
       .input(z.object({ productionId: z.string().min(1) }))
       .query(async ({ input, ctx }) => ctx.subproduction.productionSubStatus(input.productionId)),
+
+    /** Fremdvergabe-Plan je PA: nächste/blockierte/überfällige Stufe, Schwund, Yield (T-04). */
+    plan: protectedProcedure
+      .input(z.object({ productionId: z.string().min(1), now: z.string().datetime().optional() }))
+      .query(async ({ input, ctx }) =>
+        ctx.subproduction.productionSubPlan(input.productionId, input.now ? new Date(input.now) : new Date())
+      ),
   }),
 
   threeWayMatch: router({

@@ -452,6 +452,11 @@ model SubProductionOrder {
   beistellungVersandtAm DateTime? // Material an Veredler geschickt
   ruecklaufErhaltenAm   DateTime? // Rücklauf gebucht
   status        String   @default("OFFEN")
+  // Tiefe T-04: Mengenfluss (Schwund/Ausbeute), Termin, Lohnkosten je Stufe
+  beistellMenge  Int? // beigestellte Menge
+  ruecklaufMenge Int? // zurückerhaltene Menge (<= Beistellmenge)
+  dueDate        DateTime? // zugesagter Rücklauftermin der Stufe
+  lohnCents      Int? // Lohnkosten dieser Veredelungsstufe (Nachkalkulation)
 
   @@index([productionId])
 }

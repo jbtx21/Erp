@@ -2,6 +2,7 @@
 
 import type { SubProductionStage } from "@texma/shared";
 import type {
+  StageUpdate,
   StoredStage,
   SubProductionRepository,
 } from "../modules/subproduction/subproduction.service.js";
@@ -23,18 +24,21 @@ export class InMemorySubProductionRepository implements SubProductionRepository 
         status: s.status,
         beistellungVersandtAm: s.beistellungVersandtAm ?? null,
         ruecklaufErhaltenAm: s.ruecklaufErhaltenAm ?? null,
+        beistellMenge: s.beistellMenge ?? null,
+        ruecklaufMenge: s.ruecklaufMenge ?? null,
+        dueDate: s.dueDate ?? null,
+        lohnCents: s.lohnCents ?? null,
       }));
   }
 
-  async updateStage(
-    subProductionId: string,
-    data: Pick<SubProductionStage, "status" | "beistellungVersandtAm" | "ruecklaufErhaltenAm">
-  ): Promise<void> {
+  async updateStage(subProductionId: string, data: StageUpdate): Promise<void> {
     const s = this.stages.find((x) => x.id === subProductionId);
     if (s) {
       s.status = data.status;
       s.beistellungVersandtAm = data.beistellungVersandtAm ?? null;
       s.ruecklaufErhaltenAm = data.ruecklaufErhaltenAm ?? null;
+      s.beistellMenge = data.beistellMenge ?? null;
+      s.ruecklaufMenge = data.ruecklaufMenge ?? null;
     }
   }
 }

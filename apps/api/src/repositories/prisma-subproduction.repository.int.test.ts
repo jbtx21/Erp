@@ -55,24 +55,31 @@ if (!dbConfigured) {
       await prisma.$disconnect();
     });
 
-    it("erzwingt die Reihenfolge und bucht Rückläufe sequenziell", async () => {
+    it("erzwingt die Reihenfolge, bucht Mengen und liefert einen Plan mit Schwund", async () => {
       // Stufe 2 zuerst → blockiert.
       await expect(service.advanceStage(SUB2, "BEISTELLUNG_VERSANDT")).rejects.toBeInstanceOf(
         SubProductionTransitionError
       );
 
       const at = new Date(Date.UTC(2026, 5, 10));
-      await service.advanceStage(SUB1, "BEISTELLUNG_VERSANDT", at);
-      await service.advanceStage(SUB1, "RUECKLAUF_ERHALTEN", at);
-      await service.advanceStage(SUB2, "BEISTELLUNG_VERSANDT", at);
-      await service.advanceStage(SUB2, "RUECKLAUF_ERHALTEN", at);
+      await service.advanceStage(SUB1, "BEISTELLUNG_VERSANDT", at, { menge: 100 });
+      await service.advanceStage(SUB1, "RUECKLAUF_ERHALTEN", at, { menge: 96 });
+      await service.advanceStage(SUB2, "BEISTELLUNG_VERSANDT", at, { menge: 96 });
+      await service.advanceStage(SUB2, "RUECKLAUF_ERHALTEN", at, { menge: 90 });
 
       const sub2 = await prisma.subProductionOrder.findUnique({ where: { id: SUB2 } });
-      expect(sub2).toMatchObject({ status: "RUECKLAUF_ERHALTEN" });
+      expect(sub2).toMatchObject({ status: "RUECKLAUF_ERHALTEN", beistellMenge: 96, ruecklaufMenge: 90 });
       expect(sub2?.ruecklaufErhaltenAm?.toISOString().slice(0, 10)).toBe("2026-06-10");
 
       const status = await service.productionSubStatus(PA);
       expect(status.allReturned).toBe(true);
+
+      // Plan: Gesamtschwund 4 (Stufe 1) + 6 (Stufe 2) = 10; Kettenausbeute 90 %.
+      const plan = await service.productionSubPlan(PA, new Date(Date.UTC(2026, 5, 12)));
+      expect(plan.totalScrap).toBe(10);
+      expect(plan.yieldPercent).toBe(90);
+      expect(plan.progressPercent).toBe(100);
+      expect(plan.allReturned).toBe(true);
     });
   });
 }

@@ -495,6 +495,24 @@ describe("tRPC subproduction — mehrstufige Fremdvergabe (T-04)", () => {
       caller.subproduction.advance({ subProductionId: "sub_1", to: "BEISTELLUNG_VERSANDT" })
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
+
+  it("erfasst Mengen und liefert einen Plan mit Schwund (T-04-Tiefe)", async () => {
+    const { caller } = setup(BUERO);
+    await caller.subproduction.advance({ subProductionId: "sub_1", to: "BEISTELLUNG_VERSANDT", menge: 80 });
+    await caller.subproduction.advance({ subProductionId: "sub_1", to: "RUECKLAUF_ERHALTEN", menge: 75 });
+    const plan = await caller.subproduction.plan({ productionId: "pa_1" });
+    expect(plan.totalScrap).toBe(5);
+    expect(plan.nextActionable?.sequence).toBe(2);
+    expect(plan.progressPercent).toBe(50);
+  });
+
+  it("lehnt Rücklauf über die Beistellmenge ab (CONFLICT)", async () => {
+    const { caller } = setup(BUERO);
+    await caller.subproduction.advance({ subProductionId: "sub_1", to: "BEISTELLUNG_VERSANDT", menge: 50 });
+    await expect(
+      caller.subproduction.advance({ subProductionId: "sub_1", to: "RUECKLAUF_ERHALTEN", menge: 60 })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+  });
 });
 
 describe("tRPC threeWayMatch — Eingangsrechnungsprüfung + RBAC (Kap. 9.6)", () => {
