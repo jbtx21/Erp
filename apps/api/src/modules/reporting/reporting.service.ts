@@ -6,12 +6,15 @@
 // der KI-Client ist optional (graceful degradation ohne ANTHROPIC_API_KEY).
 
 import {
+  breakdownRevenue,
   bucketRevenue,
   comparePeriods,
   totalRevenueCents,
   type Granularity,
+  type LabeledRevenuePoint,
   type OrderPoint,
   type PeriodComparison,
+  type RevenueBreakdownItem,
   type RevenueBucket,
   type RevenuePoint,
 } from "@texma/shared";
@@ -23,6 +26,10 @@ export interface ReportingRepository {
   revenuePoints(): Promise<RevenuePoint[]>;
   /** Ein Datenpunkt je Auftrag: Auftragsdatum + Auftragswert (Summe der Positionen). */
   orderPoints(): Promise<OrderPoint[]>;
+  /** Umsatz je Rechnung mit Shop-Dimension (Herkunfts-Shop, „manuell" wenn ohne). */
+  revenueByShopPoints(): Promise<LabeledRevenuePoint[]>;
+  /** Umsatz je Rechnung mit Kundengruppen-Dimension (Preisgruppe der Firma). */
+  revenueByPriceGroupPoints(): Promise<LabeledRevenuePoint[]>;
 }
 
 /**
@@ -81,6 +88,16 @@ export class ReportingService {
       totalNetCents: totalRevenueCents(points),
       totalCount: points.length,
     };
+  }
+
+  /** Umsatz nach Shop aufgeschlüsselt (Kap. 29), absteigend mit Anteilen. */
+  async revenueByShop(): Promise<RevenueBreakdownItem[]> {
+    return breakdownRevenue(await this.repo.revenueByShopPoints());
+  }
+
+  /** Umsatz nach Kundengruppe (Preisgruppe) aufgeschlüsselt (Kap. 29). */
+  async revenueByPriceGroup(): Promise<RevenueBreakdownItem[]> {
+    return breakdownRevenue(await this.repo.revenueByPriceGroupPoints());
   }
 
   /** Umsatz: aktuelle vs. vorhergehende Periode (Tag/Woche/Monat/Jahr). */

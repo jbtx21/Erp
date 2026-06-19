@@ -6,10 +6,12 @@ import {
   bucketKey,
   bucketRevenue,
   bucketStart,
+  breakdownRevenue,
   comparePeriods,
   percentChange,
   previousBucketStart,
   totalRevenueCents,
+  type LabeledRevenuePoint,
   type RevenuePoint,
 } from "./reporting.js";
 
@@ -137,5 +139,29 @@ describe("totalRevenueCents", () => {
         { at: at("2026-02-01T00:00:00Z"), netCents: 250 },
       ])
     ).toBe(350);
+  });
+});
+
+describe("breakdownRevenue (Umsatz nach Shop/Kundengruppe)", () => {
+  const points: LabeledRevenuePoint[] = [
+    { label: "shop_a", name: "Shop A", netCents: 30_000 },
+    { label: "shop_b", name: "Shop B", netCents: 10_000 },
+    { label: "shop_a", name: "Shop A", netCents: 10_000 },
+  ];
+
+  it("aggregiert je Dimension, sortiert absteigend und rechnet Anteile", () => {
+    const res = breakdownRevenue(points);
+    expect(res.map((r) => r.label)).toEqual(["shop_a", "shop_b"]);
+    expect(res[0]).toMatchObject({ name: "Shop A", count: 2, netCents: 40_000, sharePercent: 80 });
+    expect(res[1]).toMatchObject({ name: "Shop B", count: 1, netCents: 10_000, sharePercent: 20 });
+  });
+
+  it("liefert sharePercent null, wenn der Gesamtumsatz 0 ist", () => {
+    const res = breakdownRevenue([{ label: "x", name: "X", netCents: 0 }]);
+    expect(res[0]?.sharePercent).toBeNull();
+  });
+
+  it("ist robust ohne Datenpunkte", () => {
+    expect(breakdownRevenue([])).toEqual([]);
   });
 });

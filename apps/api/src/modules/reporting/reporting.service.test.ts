@@ -2,7 +2,7 @@
 // und KI-Zusammenfassung. Repository + KI-Client als Fakes — keine DB, kein Netz.
 
 import { describe, expect, it, vi } from "vitest";
-import type { OrderPoint, RevenuePoint } from "@texma/shared";
+import type { LabeledRevenuePoint, OrderPoint, RevenuePoint } from "@texma/shared";
 import { InMemoryReportingRepository } from "../../repositories/in-memory-reporting.repository.js";
 import { ReportingService, type AiReportClient } from "./reporting.service.js";
 
@@ -18,9 +18,20 @@ const orders: OrderPoint[] = [
   { at: at("2026-06-05T09:00:00Z"), netCents: 30_000 },
   { at: at("2026-06-06T09:00:00Z"), netCents: 5_000 },
 ];
+const byShop: LabeledRevenuePoint[] = [
+  { label: "shop_a", name: "Shop A", netCents: 30_000 },
+  { label: "shop_b", name: "Shop B", netCents: 20_000 },
+];
+const byPriceGroup: LabeledRevenuePoint[] = [
+  { label: "STANDARD", name: "Standard", netCents: 35_000 },
+  { label: "PREMIUM", name: "Premium", netCents: 15_000 },
+];
 
 function service(ai: AiReportClient | null = null): ReportingService {
-  return new ReportingService(new InMemoryReportingRepository(revenue, orders), ai);
+  return new ReportingService(
+    new InMemoryReportingRepository(revenue, orders, byShop, byPriceGroup),
+    ai
+  );
 }
 
 describe("ReportingService (Kap. 29)", () => {
@@ -36,6 +47,17 @@ describe("ReportingService (Kap. 29)", () => {
     expect(res.totalCount).toBe(3);
     expect(res.totalNetCents).toBe(60_000);
     expect(res.buckets[1]).toMatchObject({ key: "2026-06", count: 2, netCents: 35_000 });
+  });
+
+  it("schlüsselt den Umsatz nach Shop auf (absteigend, mit Anteil)", async () => {
+    const res = await service().revenueByShop();
+    expect(res.map((r) => r.label)).toEqual(["shop_a", "shop_b"]);
+    expect(res[0]).toMatchObject({ name: "Shop A", netCents: 30_000, sharePercent: 60 });
+  });
+
+  it("schlüsselt den Umsatz nach Kundengruppe auf", async () => {
+    const res = await service().revenueByPriceGroup();
+    expect(res[0]).toMatchObject({ label: "STANDARD", netCents: 35_000, sharePercent: 70 });
   });
 
   it("vergleicht den Umsatz Juni mit Mai (Delta + Prozent)", async () => {

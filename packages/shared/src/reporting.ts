@@ -190,3 +190,54 @@ export function comparePeriods(
 export function totalRevenueCents(points: ReadonlyArray<RevenuePoint>): Cents {
   return points.reduce((sum, p) => sum + p.netCents, 0);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Aufschlüsselung nach Dimension (Shop, Kundengruppe …) — Kap. 29.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Umsatzpunkt mit Dimensionsmerkmal (z. B. Shop-Id/Preisgruppen-Kind). */
+export interface LabeledRevenuePoint {
+  /** Stabiler Schlüssel der Dimension (z. B. shopConnectorId oder PriceGroupKind). */
+  label: string;
+  /** Anzeigename der Dimension (Shop-Name, Preisgruppen-Name). */
+  name: string;
+  netCents: Cents;
+}
+
+export interface RevenueBreakdownItem {
+  label: string;
+  name: string;
+  count: number;
+  netCents: Cents;
+  /** Anteil am Gesamtumsatz in Prozent (kaufmännisch gerundet); null, wenn Gesamt 0. */
+  sharePercent: number | null;
+}
+
+/**
+ * Schlüsselt den Umsatz nach einer Dimension auf (Umsatz nach Shop/Kundengruppe,
+ * Kap. 29) — absteigend nach Umsatz sortiert, mit Anteil am Gesamtumsatz.
+ */
+export function breakdownRevenue(
+  points: ReadonlyArray<LabeledRevenuePoint>
+): RevenueBreakdownItem[] {
+  const total = points.reduce((s, p) => s + p.netCents, 0);
+  const byLabel = new Map<string, { name: string; count: number; netCents: Cents }>();
+  for (const p of points) {
+    const e = byLabel.get(p.label);
+    if (e) {
+      e.count += 1;
+      e.netCents += p.netCents;
+    } else {
+      byLabel.set(p.label, { name: p.name, count: 1, netCents: p.netCents });
+    }
+  }
+  return [...byLabel.entries()]
+    .map(([label, e]) => ({
+      label,
+      name: e.name,
+      count: e.count,
+      netCents: e.netCents,
+      sharePercent: total === 0 ? null : Math.round((e.netCents / total) * 100),
+    }))
+    .sort((a, b) => b.netCents - a.netCents);
+}

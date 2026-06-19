@@ -112,5 +112,20 @@ if (!dbConfigured) {
       expect(cmp.previous?.netCents).toBe(20_000);
       expect(cmp.deltaCents).toBe(-5_000);
     });
+
+    it("schlüsselt den Umsatz nach Kundengruppe auf (Preisgruppe der Firma)", async () => {
+      const res = await service.revenueByPriceGroup();
+      const wv = res.find((r) => r.label === "WIEDERVERKAEUFER");
+      expect(wv?.name).toBe("Wiederverkäufer");
+      // Beide Rechnungen (35.000) gehören zur Firma mit dieser Preisgruppe.
+      expect(wv?.netCents).toBeGreaterThanOrEqual(35_000);
+    });
+
+    it("schlüsselt den Umsatz nach Shop auf (manuelle Aufträge → 'Manuell')", async () => {
+      const res = await service.revenueByShop();
+      // Die Fixture-Aufträge haben keinen Shop → Sammelposten „Manuell".
+      const manual = res.find((r) => r.label === "manual");
+      expect(manual?.name).toBe("Manuell");
+    });
   });
 }

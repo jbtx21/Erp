@@ -313,6 +313,14 @@ export const appRouter = router({
       .input(z.object({ granularity: granularityEnum }))
       .query(async ({ input, ctx }) => ctx.reporting.orderOverview(input.granularity)),
 
+    /** Umsatz nach Shop aufgeschlüsselt (Kap. 29). */
+    revenueByShop: roleProcedure(...supplierRoles).query(async ({ ctx }) => ctx.reporting.revenueByShop()),
+
+    /** Umsatz nach Kundengruppe (Preisgruppe) aufgeschlüsselt (Kap. 29). */
+    revenueByPriceGroup: roleProcedure(...supplierRoles).query(async ({ ctx }) =>
+      ctx.reporting.revenueByPriceGroup()
+    ),
+
     /** Periodenvergleich Umsatz: aktuell vs. Vorperiode (Kap. 29). */
     compareRevenue: roleProcedure(...supplierRoles)
       .input(z.object({ granularity: granularityEnum, reference: z.string().datetime().optional() }))

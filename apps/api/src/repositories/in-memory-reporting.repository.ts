@@ -1,13 +1,15 @@
 // In-Memory-Implementierung des Reporting-Repositories — für Tests/Durchstiche.
 // Hält Umsatz- und Auftragsdatenpunkte als einfache Listen.
 
-import type { OrderPoint, RevenuePoint } from "@texma/shared";
+import type { LabeledRevenuePoint, OrderPoint, RevenuePoint } from "@texma/shared";
 import type { ReportingRepository } from "../modules/reporting/reporting.service.js";
 
 export class InMemoryReportingRepository implements ReportingRepository {
   constructor(
     private readonly revenue: RevenuePoint[] = [],
-    private readonly orders: OrderPoint[] = []
+    private readonly orders: OrderPoint[] = [],
+    private readonly byShop: LabeledRevenuePoint[] = [],
+    private readonly byPriceGroup: LabeledRevenuePoint[] = []
   ) {}
 
   async revenuePoints(): Promise<RevenuePoint[]> {
@@ -16,5 +18,13 @@ export class InMemoryReportingRepository implements ReportingRepository {
 
   async orderPoints(): Promise<OrderPoint[]> {
     return this.orders;
+  }
+
+  async revenueByShopPoints(): Promise<LabeledRevenuePoint[]> {
+    return this.byShop;
+  }
+
+  async revenueByPriceGroupPoints(): Promise<LabeledRevenuePoint[]> {
+    return this.byPriceGroup;
   }
 }
