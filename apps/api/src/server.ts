@@ -28,6 +28,7 @@ import { ReorderService } from "./modules/reorder/reorder.service.js";
 import { ProductionSheetService } from "./modules/production-sheet/production-sheet.service.js";
 import { ReportingService } from "./modules/reporting/reporting.service.js";
 import { AnthropicReportClient } from "./modules/reporting/anthropic-report-client.js";
+import { ProductionReportingService } from "./modules/production-reporting/production-reporting.service.js";
 import { PrismaSessionRepository, PrismaUserRepository } from "./repositories/prisma-auth.repository.js";
 import { PrismaOrderRepository } from "./repositories/prisma-order.repository.js";
 import { PrismaSupplierRepository } from "./repositories/prisma-supplier.repository.js";
@@ -45,6 +46,7 @@ import { PrismaStickereiRepository } from "./repositories/prisma-stickerei.repos
 import { PrismaReorderRepository } from "./repositories/prisma-reorder.repository.js";
 import { PrismaProductionSheetRepository } from "./repositories/prisma-production-sheet.repository.js";
 import { PrismaReportingRepository } from "./repositories/prisma-reporting.repository.js";
+import { PrismaProductionReportingRepository } from "./repositories/prisma-production-reporting.repository.js";
 import { appRouter } from "./trpc/router.js";
 import type { Context } from "./trpc/trpc.js";
 
@@ -77,6 +79,7 @@ export function buildServer(): FastifyInstance {
   const productionSheet = new ProductionSheetService(new PrismaProductionSheetRepository());
   // KI-Reporting nutzt Claude nur, wenn ein API-Schlüssel hinterlegt ist (sonst Heuristik).
   const reporting = new ReportingService(new PrismaReportingRepository(), AnthropicReportClient.fromEnv());
+  const productionReporting = new ProductionReportingService(new PrismaProductionReportingRepository());
   const auth = new AuthService(
     new PrismaUserRepository(),
     new PrismaSessionRepository(),
@@ -116,6 +119,7 @@ export function buildServer(): FastifyInstance {
           reorder,
           productionSheet,
           reporting,
+          productionReporting,
           auth,
           user,
           sessionToken,

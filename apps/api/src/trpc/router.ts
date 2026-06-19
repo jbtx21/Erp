@@ -335,6 +335,18 @@ export const appRouter = router({
       ),
   }),
 
+  productionReporting: router({
+    /** Durchlaufzeit je Periode + Kennzahlen (operativ, auch für PRODUKTION). */
+    leadTime: protectedProcedure
+      .input(z.object({ granularity: granularityEnum }))
+      .query(async ({ input, ctx }) => ctx.productionReporting.leadTimeOverview(input.granularity)),
+
+    /** Fehlerquote je Periode, gesamt und je Ursache (Kap. 20/29, operativ). */
+    defects: protectedProcedure
+      .input(z.object({ granularity: granularityEnum }))
+      .query(async ({ input, ctx }) => ctx.productionReporting.defectOverview(input.granularity)),
+  }),
+
   productionSheet: router({
     /** Erzeugt den Produktionszettel-PDF (T-11); fehlende Pflichtfelder → BAD_REQUEST. */
     render: protectedProcedure

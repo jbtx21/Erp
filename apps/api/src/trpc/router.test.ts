@@ -21,6 +21,7 @@ import { StickereiService } from "../modules/stickerei/stickerei.service.js";
 import { ReorderService } from "../modules/reorder/reorder.service.js";
 import { ProductionSheetService } from "../modules/production-sheet/production-sheet.service.js";
 import { ReportingService } from "../modules/reporting/reporting.service.js";
+import { ProductionReportingService } from "../modules/production-reporting/production-reporting.service.js";
 import { InMemoryOrderRepository } from "../repositories/in-memory-order.repository.js";
 import { InMemorySupplierRepository } from "../repositories/in-memory-supplier.repository.js";
 import { InMemoryIncomingInvoiceRepository } from "../repositories/in-memory-incoming-invoice.repository.js";
@@ -37,6 +38,7 @@ import { InMemoryStickereiRepository } from "../repositories/in-memory-stickerei
 import { InMemoryReorderRepository } from "../repositories/in-memory-reorder.repository.js";
 import { InMemoryProductionSheetRepository } from "../repositories/in-memory-production-sheet.repository.js";
 import { InMemoryReportingRepository } from "../repositories/in-memory-reporting.repository.js";
+import { InMemoryProductionReportingRepository } from "../repositories/in-memory-production-reporting.repository.js";
 import { appRouter } from "./router.js";
 import { createCallerFactory } from "./trpc.js";
 import type { Context } from "./trpc.js";
@@ -148,6 +150,19 @@ function setup(user: AuthUser | null = BUERO) {
       ]
     )
   );
+  // Kap. 29/35: operative KPIs (Durchlaufzeit/Fehlerquote) — auch für PRODUKTION.
+  const productionReporting = new ProductionReportingService(
+    new InMemoryProductionReportingRepository(
+      [
+        { at: new Date("2026-06-05T00:00:00Z"), hours: 24 },
+        { at: new Date("2026-06-20T00:00:00Z"), hours: 72 },
+      ],
+      [
+        { at: new Date("2026-06-01T00:00:00Z"), defective: false },
+        { at: new Date("2026-06-02T00:00:00Z"), defective: true, cause: "INTERN" },
+      ]
+    )
+  );
   const ctx: Context = {
     orderImport,
     orders: repo,
@@ -170,6 +185,7 @@ function setup(user: AuthUser | null = BUERO) {
     reorder,
     productionSheet,
     reporting,
+    productionReporting,
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -250,6 +266,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       reorder: {} as Context["reorder"],
       productionSheet: {} as Context["productionSheet"],
       reporting: {} as Context["reporting"],
+      productionReporting: {} as Context["productionReporting"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",
@@ -644,5 +661,28 @@ describe("tRPC reporting — Auswertungen (Kap. 29)", () => {
     await expect(
       caller.reporting.revenueOverview({ granularity: "MONTH" })
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+describe("tRPC productionReporting — operative KPIs (Kap. 29/35)", () => {
+  it("liefert PRODUKTION die Durchlaufzeit (operativ, kein FORBIDDEN)", async () => {
+    const { caller } = setup(PRODUKTION);
+    const res = await caller.productionReporting.leadTime({ granularity: "MONTH" });
+    expect(res.stats).toMatchObject({ count: 2, minHours: 24, maxHours: 72 });
+    expect(res.buckets[0]).toMatchObject({ key: "2026-06", count: 2, avgHours: 48 });
+  });
+
+  it("liefert PRODUKTION die Fehlerquote samt Ursachen", async () => {
+    const { caller } = setup(PRODUKTION);
+    const res = await caller.productionReporting.defects({ granularity: "MONTH" });
+    expect(res.overall).toEqual({ total: 2, defects: 1, ratePercent: 50 });
+    expect(res.byCause.INTERN).toBe(1);
+  });
+
+  it("erfordert eine Anmeldung (UNAUTHORIZED ohne Session)", async () => {
+    const { caller } = setup(null);
+    await expect(
+      caller.productionReporting.leadTime({ granularity: "MONTH" })
+    ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
 });
