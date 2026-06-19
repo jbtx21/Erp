@@ -3,6 +3,7 @@
 import { type CSSProperties, useCallback, useEffect, useState } from "react";
 import { Login } from "./Login.js";
 import { Reporting } from "./Reporting.js";
+import { Differentiators } from "./Differentiators.js";
 import { trpc } from "./trpc.js";
 
 interface AuthUser {
@@ -49,7 +50,7 @@ export function App(): JSX.Element {
 }
 
 function Orders({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<void> }): JSX.Element {
-  const [tab, setTab] = useState<"orders" | "reporting">("orders");
+  const [tab, setTab] = useState<"orders" | "differentiators" | "reporting">("orders");
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [status, setStatus] = useState("");
 
@@ -75,9 +76,16 @@ function Orders({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
       </div>
       <nav style={{ display: "flex", gap: "0.5rem", margin: "0.5rem 0 1rem" }}>
         <button onClick={() => setTab("orders")} disabled={tab === "orders"}>Aufträge</button>
+        <button onClick={() => setTab("differentiators")} disabled={tab === "differentiators"}>Differenzierer</button>
         <button onClick={() => setTab("reporting")} disabled={tab === "reporting"}>Auswertungen</button>
       </nav>
-      {tab === "reporting" ? <Reporting role={user.role} /> : <OrdersTable orders={orders} status={status} role={user.role} onReload={load} />}
+      {tab === "reporting" ? (
+        <Reporting role={user.role} />
+      ) : tab === "differentiators" ? (
+        <Differentiators role={user.role} />
+      ) : (
+        <OrdersTable orders={orders} status={status} role={user.role} onReload={load} />
+      )}
     </main>
   );
 }
