@@ -25,6 +25,7 @@ import { ReklamationService } from "./modules/reklamation/reklamation.service.js
 import { AmpelService } from "./modules/ampel/ampel.service.js";
 import { StickereiService } from "./modules/stickerei/stickerei.service.js";
 import { ReorderService } from "./modules/reorder/reorder.service.js";
+import { ProductionSheetService } from "./modules/production-sheet/production-sheet.service.js";
 import { PrismaSessionRepository, PrismaUserRepository } from "./repositories/prisma-auth.repository.js";
 import { PrismaOrderRepository } from "./repositories/prisma-order.repository.js";
 import { PrismaSupplierRepository } from "./repositories/prisma-supplier.repository.js";
@@ -40,6 +41,7 @@ import { PrismaReklamationRepository } from "./repositories/prisma-reklamation.r
 import { PrismaAmpelRepository } from "./repositories/prisma-ampel.repository.js";
 import { PrismaStickereiRepository } from "./repositories/prisma-stickerei.repository.js";
 import { PrismaReorderRepository } from "./repositories/prisma-reorder.repository.js";
+import { PrismaProductionSheetRepository } from "./repositories/prisma-production-sheet.repository.js";
 import { appRouter } from "./trpc/router.js";
 import type { Context } from "./trpc/trpc.js";
 
@@ -69,6 +71,7 @@ export function buildServer(): FastifyInstance {
   const ampel = new AmpelService(new PrismaAmpelRepository());
   const stickerei = new StickereiService(new PrismaStickereiRepository());
   const reorder = new ReorderService(new PrismaReorderRepository(), new PrismaAuditSink());
+  const productionSheet = new ProductionSheetService(new PrismaProductionSheetRepository());
   const auth = new AuthService(
     new PrismaUserRepository(),
     new PrismaSessionRepository(),
@@ -106,6 +109,7 @@ export function buildServer(): FastifyInstance {
           ampel,
           stickerei,
           reorder,
+          productionSheet,
           auth,
           user,
           sessionToken,

@@ -19,6 +19,7 @@ import { ReklamationService } from "../modules/reklamation/reklamation.service.j
 import { AmpelService } from "../modules/ampel/ampel.service.js";
 import { StickereiService } from "../modules/stickerei/stickerei.service.js";
 import { ReorderService } from "../modules/reorder/reorder.service.js";
+import { ProductionSheetService } from "../modules/production-sheet/production-sheet.service.js";
 import { InMemoryOrderRepository } from "../repositories/in-memory-order.repository.js";
 import { InMemorySupplierRepository } from "../repositories/in-memory-supplier.repository.js";
 import { InMemoryIncomingInvoiceRepository } from "../repositories/in-memory-incoming-invoice.repository.js";
@@ -33,6 +34,7 @@ import { InMemoryReklamationRepository } from "../repositories/in-memory-reklama
 import { InMemoryAmpelRepository } from "../repositories/in-memory-ampel.repository.js";
 import { InMemoryStickereiRepository } from "../repositories/in-memory-stickerei.repository.js";
 import { InMemoryReorderRepository } from "../repositories/in-memory-reorder.repository.js";
+import { InMemoryProductionSheetRepository } from "../repositories/in-memory-production-sheet.repository.js";
 import { appRouter } from "./router.js";
 import { createCallerFactory } from "./trpc.js";
 import type { Context } from "./trpc.js";
@@ -125,6 +127,12 @@ function setup(user: AuthUser | null = BUERO) {
     { variantId: "v2", qty: 20, minStock: 5, supplierId: "sup_id", ekCents: 400 },
   ]);
   const reorder = new ReorderService(reorderRepo, new MemoryAuditSink());
+  // T-11: PA mit Basisfeldern; vorlagenspezifische Felder kommen als extra.
+  const productionSheet = new ProductionSheetService(
+    new InMemoryProductionSheetRepository({
+      pa_1: { orderNumber: "AB-1", articleName: "Polo", farbe: "Blau", groesse: "XL", qty: 50, logoLabel: "Logo v3" },
+    })
+  );
   const ctx: Context = {
     orderImport,
     orders: repo,
@@ -145,6 +153,7 @@ function setup(user: AuthUser | null = BUERO) {
     ampel,
     stickerei,
     reorder,
+    productionSheet,
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -223,6 +232,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       ampel: {} as Context["ampel"],
       stickerei: {} as Context["stickerei"],
       reorder: {} as Context["reorder"],
+      productionSheet: {} as Context["productionSheet"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",
@@ -555,5 +565,30 @@ describe("tRPC reorder — Mindestbestand-Nachbestellung (T-12)", () => {
   it("PRODUKTION darf keinen Bestellvorschlag sehen (FORBIDDEN)", async () => {
     const { caller } = setup(PRODUKTION);
     await expect(caller.reorder.proposals()).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+describe("tRPC productionSheet — Produktionszettel-PDF (T-11)", () => {
+  it("erzeugt den externen Zettel als PDF, wenn alle Pflichtfelder befüllt sind", async () => {
+    const { caller } = setup(PRODUKTION); // operativ auch für Produktion
+    const res = await caller.productionSheet.render({
+      productionId: "pa_1",
+      kind: "EXTERN",
+      extra: {
+        dienstleister: "Siebdruck-Partner",
+        positionierung: "Brust links",
+        anlieferDatum: "2026-06-01T00:00:00.000Z",
+        fertigstellDatum: "2026-06-08T00:00:00.000Z",
+      },
+    });
+    expect(res.fileName).toBe("Produktionszettel-AB-1-EXTERN.pdf");
+    expect(Buffer.from(res.pdfBase64, "base64").subarray(0, 5).toString("ascii")).toBe("%PDF-");
+  });
+
+  it("lehnt einen unvollständigen Zettel ab (BAD_REQUEST mit fehlenden Feldern)", async () => {
+    const { caller } = setup(PRODUKTION);
+    await expect(
+      caller.productionSheet.render({ productionId: "pa_1", kind: "EXTERN", extra: {} })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 });

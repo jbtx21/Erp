@@ -16,6 +16,7 @@ import type { ReklamationService } from "../modules/reklamation/reklamation.serv
 import type { AmpelService } from "../modules/ampel/ampel.service.js";
 import type { StickereiService } from "../modules/stickerei/stickerei.service.js";
 import type { ReorderService } from "../modules/reorder/reorder.service.js";
+import type { ProductionSheetService } from "../modules/production-sheet/production-sheet.service.js";
 import type {
   BankingQueryRepository,
   DunningQueryRepository,
@@ -45,6 +46,7 @@ export interface Context {
   ampel: AmpelService;
   stickerei: StickereiService;
   reorder: ReorderService;
+  productionSheet: ProductionSheetService;
   auth: AuthService;
   user: AuthUser | null;
   /** Roh-Token aus dem Cookie (für den 2FA-Zwischenschritt/Logout, wenn user noch null ist). */

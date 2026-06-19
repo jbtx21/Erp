@@ -1,6 +1,6 @@
 // tRPC-AppRouter: Auth (Login/2FA/RBAC) + Shop-Order-Ingest/Liste.
 import { TRPCError } from "@trpc/server";
-import { redactOrderForRole, SubProductionTransitionError } from "@texma/shared";
+import { ProductionSheetIncompleteError, redactOrderForRole, SubProductionTransitionError } from "@texma/shared";
 import { ReklamationValidationError } from "../modules/reklamation/reklamation.service.js";
 import { z } from "zod";
 import { AuthError, SESSION_TTL_SECONDS } from "../modules/auth/auth.service.js";
@@ -297,6 +297,47 @@ export const appRouter = router({
     createPurchaseOrders: roleProcedure("ADMIN", "BUERO").mutation(async ({ ctx }) =>
       ctx.reorder.createPurchaseOrders()
     ),
+  }),
+
+  productionSheet: router({
+    /** Erzeugt den Produktionszettel-PDF (T-11); fehlende Pflichtfelder → BAD_REQUEST. */
+    render: protectedProcedure
+      .input(
+        z.object({
+          productionId: z.string().min(1),
+          kind: z.enum(["INTERN", "EXTERN"]),
+          extra: z
+            .object({
+              maschine: z.string().optional(),
+              temperaturC: z.number().optional(),
+              presszeitSek: z.number().optional(),
+              dienstleister: z.string().optional(),
+              positionierung: z.string().optional(),
+              anlieferDatum: z.string().datetime().optional(),
+              fertigstellDatum: z.string().datetime().optional(),
+            })
+            .default({}),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const { anlieferDatum, fertigstellDatum, ...rest } = input.extra;
+        try {
+          return await ctx.productionSheet.render({
+            productionId: input.productionId,
+            kind: input.kind,
+            extra: {
+              ...rest,
+              ...(anlieferDatum ? { anlieferDatum: new Date(anlieferDatum) } : {}),
+              ...(fertigstellDatum ? { fertigstellDatum: new Date(fertigstellDatum) } : {}),
+            },
+          });
+        } catch (err) {
+          if (err instanceof ProductionSheetIncompleteError) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: err.message });
+          }
+          throw err;
+        }
+      }),
   }),
 });
 
