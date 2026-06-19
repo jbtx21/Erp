@@ -26,6 +26,8 @@ import { AmpelService } from "./modules/ampel/ampel.service.js";
 import { StickereiService } from "./modules/stickerei/stickerei.service.js";
 import { ReorderService } from "./modules/reorder/reorder.service.js";
 import { ProductionSheetService } from "./modules/production-sheet/production-sheet.service.js";
+import { ReportingService } from "./modules/reporting/reporting.service.js";
+import { AnthropicReportClient } from "./modules/reporting/anthropic-report-client.js";
 import { PrismaSessionRepository, PrismaUserRepository } from "./repositories/prisma-auth.repository.js";
 import { PrismaOrderRepository } from "./repositories/prisma-order.repository.js";
 import { PrismaSupplierRepository } from "./repositories/prisma-supplier.repository.js";
@@ -42,6 +44,7 @@ import { PrismaAmpelRepository } from "./repositories/prisma-ampel.repository.js
 import { PrismaStickereiRepository } from "./repositories/prisma-stickerei.repository.js";
 import { PrismaReorderRepository } from "./repositories/prisma-reorder.repository.js";
 import { PrismaProductionSheetRepository } from "./repositories/prisma-production-sheet.repository.js";
+import { PrismaReportingRepository } from "./repositories/prisma-reporting.repository.js";
 import { appRouter } from "./trpc/router.js";
 import type { Context } from "./trpc/trpc.js";
 
@@ -72,6 +75,8 @@ export function buildServer(): FastifyInstance {
   const stickerei = new StickereiService(new PrismaStickereiRepository());
   const reorder = new ReorderService(new PrismaReorderRepository(), new PrismaAuditSink());
   const productionSheet = new ProductionSheetService(new PrismaProductionSheetRepository());
+  // KI-Reporting nutzt Claude nur, wenn ein API-Schlüssel hinterlegt ist (sonst Heuristik).
+  const reporting = new ReportingService(new PrismaReportingRepository(), AnthropicReportClient.fromEnv());
   const auth = new AuthService(
     new PrismaUserRepository(),
     new PrismaSessionRepository(),
@@ -110,6 +115,7 @@ export function buildServer(): FastifyInstance {
           stickerei,
           reorder,
           productionSheet,
+          reporting,
           auth,
           user,
           sessionToken,

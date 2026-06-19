@@ -9,6 +9,9 @@ import { protectedProcedure, publicProcedure, roleProcedure, router } from "./tr
 // EK-Preise sind finanziell sensibel → kein PRODUKTION-Zugriff (Kap. 12, C3).
 const supplierRoles = ["ADMIN", "BUERO", "BUCHHALTUNG"] as const;
 
+// Zeitliche Granularität für Auswertungen (Kap. 29).
+const granularityEnum = z.enum(["DAY", "WEEK", "MONTH", "YEAR"]);
+
 const supplierCatalogItem = z.object({
   supplierSku: z.string().min(1),
   sku: z.string().min(1),
@@ -297,6 +300,39 @@ export const appRouter = router({
     createPurchaseOrders: roleProcedure("ADMIN", "BUERO").mutation(async ({ ctx }) =>
       ctx.reorder.createPurchaseOrders()
     ),
+  }),
+
+  reporting: router({
+    /** Umsatz-Übersicht (Netto je Tag/Woche/Monat/Jahr) + Gesamtsumme (Kap. 29). */
+    revenueOverview: roleProcedure(...supplierRoles)
+      .input(z.object({ granularity: granularityEnum }))
+      .query(async ({ input, ctx }) => ctx.reporting.revenueOverview(input.granularity)),
+
+    /** Auftrags-Übersicht (Anzahl + Auftragswert je Periode) + Gesamtsummen (Kap. 29). */
+    orderOverview: roleProcedure(...supplierRoles)
+      .input(z.object({ granularity: granularityEnum }))
+      .query(async ({ input, ctx }) => ctx.reporting.orderOverview(input.granularity)),
+
+    /** Periodenvergleich Umsatz: aktuell vs. Vorperiode (Kap. 29). */
+    compareRevenue: roleProcedure(...supplierRoles)
+      .input(z.object({ granularity: granularityEnum, reference: z.string().datetime().optional() }))
+      .query(async ({ input, ctx }) =>
+        ctx.reporting.compareRevenue(input.granularity, input.reference ? new Date(input.reference) : new Date())
+      ),
+
+    /** Periodenvergleich Aufträge: aktuell vs. Vorperiode (Kap. 29). */
+    compareOrders: roleProcedure(...supplierRoles)
+      .input(z.object({ granularity: granularityEnum, reference: z.string().datetime().optional() }))
+      .query(async ({ input, ctx }) =>
+        ctx.reporting.compareOrders(input.granularity, input.reference ? new Date(input.reference) : new Date())
+      ),
+
+    /** KI-gestützte Zusammenfassung der Kennzahlen (Claude); ohne Schlüssel Heuristik. */
+    aiSummary: roleProcedure(...supplierRoles)
+      .input(z.object({ granularity: granularityEnum, reference: z.string().datetime().optional() }))
+      .mutation(async ({ input, ctx }) =>
+        ctx.reporting.aiSummary(input.granularity, input.reference ? new Date(input.reference) : new Date())
+      ),
   }),
 
   productionSheet: router({

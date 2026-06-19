@@ -20,6 +20,7 @@ import { AmpelService } from "../modules/ampel/ampel.service.js";
 import { StickereiService } from "../modules/stickerei/stickerei.service.js";
 import { ReorderService } from "../modules/reorder/reorder.service.js";
 import { ProductionSheetService } from "../modules/production-sheet/production-sheet.service.js";
+import { ReportingService } from "../modules/reporting/reporting.service.js";
 import { InMemoryOrderRepository } from "../repositories/in-memory-order.repository.js";
 import { InMemorySupplierRepository } from "../repositories/in-memory-supplier.repository.js";
 import { InMemoryIncomingInvoiceRepository } from "../repositories/in-memory-incoming-invoice.repository.js";
@@ -35,6 +36,7 @@ import { InMemoryAmpelRepository } from "../repositories/in-memory-ampel.reposit
 import { InMemoryStickereiRepository } from "../repositories/in-memory-stickerei.repository.js";
 import { InMemoryReorderRepository } from "../repositories/in-memory-reorder.repository.js";
 import { InMemoryProductionSheetRepository } from "../repositories/in-memory-production-sheet.repository.js";
+import { InMemoryReportingRepository } from "../repositories/in-memory-reporting.repository.js";
 import { appRouter } from "./router.js";
 import { createCallerFactory } from "./trpc.js";
 import type { Context } from "./trpc.js";
@@ -133,6 +135,19 @@ function setup(user: AuthUser | null = BUERO) {
       pa_1: { orderNumber: "AB-1", articleName: "Polo", farbe: "Blau", groesse: "XL", qty: 50, logoLabel: "Logo v3" },
     })
   );
+  // Kap. 29: zwei Rechnungen (Mai/Juni) + zwei Aufträge für die Reporting-Endpunkte.
+  const reporting = new ReportingService(
+    new InMemoryReportingRepository(
+      [
+        { at: new Date("2026-05-10T09:00:00Z"), netCents: 20_000 },
+        { at: new Date("2026-06-05T09:00:00Z"), netCents: 30_000 },
+      ],
+      [
+        { at: new Date("2026-05-10T09:00:00Z"), netCents: 25_000 },
+        { at: new Date("2026-06-05T09:00:00Z"), netCents: 35_000 },
+      ]
+    )
+  );
   const ctx: Context = {
     orderImport,
     orders: repo,
@@ -154,6 +169,7 @@ function setup(user: AuthUser | null = BUERO) {
     stickerei,
     reorder,
     productionSheet,
+    reporting,
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -233,6 +249,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       stickerei: {} as Context["stickerei"],
       reorder: {} as Context["reorder"],
       productionSheet: {} as Context["productionSheet"],
+      reporting: {} as Context["reporting"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",
@@ -590,5 +607,42 @@ describe("tRPC productionSheet — Produktionszettel-PDF (T-11)", () => {
     await expect(
       caller.productionSheet.render({ productionId: "pa_1", kind: "EXTERN", extra: {} })
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+});
+
+describe("tRPC reporting — Auswertungen (Kap. 29)", () => {
+  it("liefert die Umsatz-Übersicht je Monat (BUCHHALTUNG)", async () => {
+    const { caller } = setup(BUCHHALTUNG);
+    const res = await caller.reporting.revenueOverview({ granularity: "MONTH" });
+    expect(res.buckets.map((b) => b.key)).toEqual(["2026-05", "2026-06"]);
+    expect(res.totalNetCents).toBe(50_000);
+  });
+
+  it("vergleicht Umsatz aktueller Monat vs. Vormonat", async () => {
+    const { caller } = setup(BUERO);
+    const cmp = await caller.reporting.compareRevenue({
+      granularity: "MONTH",
+      reference: "2026-06-19T00:00:00.000Z",
+    });
+    expect(cmp.current.netCents).toBe(30_000);
+    expect(cmp.previous?.netCents).toBe(20_000);
+    expect(cmp.deltaPercent).toBe(50);
+  });
+
+  it("liefert eine KI-/Heuristik-Zusammenfassung", async () => {
+    const { caller } = setup(BUERO);
+    const res = await caller.reporting.aiSummary({
+      granularity: "MONTH",
+      reference: "2026-06-19T00:00:00.000Z",
+    });
+    expect(res.narrative.length).toBeGreaterThan(0);
+    expect(typeof res.aiGenerated).toBe("boolean");
+  });
+
+  it("verweigert PRODUKTION den Zugriff (FORBIDDEN, Finanzdaten)", async () => {
+    const { caller } = setup(PRODUKTION);
+    await expect(
+      caller.reporting.revenueOverview({ granularity: "MONTH" })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });

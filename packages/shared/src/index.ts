@@ -27,3 +27,4 @@ export * from "./supplier-catalog.js";
 export * from "./camt053.js";
 export * from "./reorder.js";
 export * from "./production-sheet.js";
+export * from "./reporting.js";
