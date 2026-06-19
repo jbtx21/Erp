@@ -6,7 +6,7 @@ Ablösung von CDH Office
 |---|---|
 | **Unternehmen** | TEXMA Textilveredelung GmbH, Herrenberg |
 | **Dokument** | Lastenheft für ERP-Beratung und -Umsetzung (Make-or-Buy) |
-| **Version** | 3.2 — UI/UX- und Bedienbarkeits-Anforderungen ergänzt (messbar, mit Nutzer-Usability-Test als Abnahmekriterium) (ohne Budget) |
+| **Version** | 3.3 — Staffelpreise (Mengenstaffeln) in Angebotskalkulation (Kap. 4.4), Funktionsabdeckungs-Matrix (Kap. 31) und Pflicht-Testfälle (T-15, Kap. 15) ergänzt (ohne Budget) |
 | **Funktionaler Maßstab** | Xentral (State of the Art / Benchmark) — Zielsystem offen, Make-or-Buy zu prüfen |
 | **Altsystem** | CDH Office (lokal) |
 | **Status** | Zur Angebotsanfrage freigegeben |
@@ -114,6 +114,7 @@ Ablösung von CDH Office
 - Jede Veredelungsposition als separate Angebotszeile (nie Pauschalpreis)
 - DB-Kalkulation bereits im Angebot sichtbar
 - Stick-EK: manuell eintragen nach Dienstleister-Rückmeldung → Xentral berechnet VK über hinterlegten Aufschlagsfaktor (1,88)
+- Mengenstaffeln (Staffelpreise): mengenabhängige Stückpreise je Position, die mit der Bestellmenge degressiv sinken. Besonders relevant bei der Veredelung, da sich die fixen Einrichtungskosten (Sieb, Stickdatei, DTF-/Transfer-Setup) auf die Stückzahl verteilen. Die Staffel ist je Artikel bzw. je Veredelungsart hinterlegbar und wirkt zusätzlich zur Preisgruppe des Kunden — Annahme: multiplikativ über dem Preisgruppen-Preis, von TEXMA zu bestätigen. Bei Mengenänderung im Angebot oder Auftrag wird der zutreffende Staffelpreis automatisch gezogen.
 - Auftragsänderungen nach Status „In Bearbeitung“: nur über Storno + Neuanlage erlaubt
 
 # 5. Produktionssteuerung
@@ -422,6 +423,7 @@ Die folgenden Testfälle müssen vor Go-Live vollständig bestanden sein. Das Ab
 | T-12 | Transferdruck-Mindestlager unterschritten | Bestellvorschlag automatisch erzeugt | Mittel |
 | T-13 | Banking-Abgleich: Zahlungseingang → offener Posten automatisch ausgeglichen | Rechnung automatisch als bezahlt markiert; nicht zuordenbare Zahlung in Klärungsliste | Hoch |
 | T-14 | Mahnlauf: überfällige Rechnung → automatische Mahnung Stufe 1 | Mahnung korrekt generiert und versendet; Mahnsperre wird respektiert | Hoch |
+| T-15 | Staffelpreis: Bestellmenge überschreitet eine hinterlegte Staffelgrenze | System zieht automatisch den Stückpreis der zutreffenden Mengenstufe; Einrichtungskosten korrekt auf die Menge verteilt; Preisgruppe bleibt kombiniert wirksam | Hoch |
 
 # 16. Offene Klärungspunkte vor Vertragsabschluss
 
@@ -457,7 +459,7 @@ Die folgenden Testfälle müssen vor Go-Live vollständig bestanden sein. Das Ab
 - Benannter Projektverantwortlicher mit direkter Erreichbarkeit
 - Hyper-Care-Phase nach Go-Live: mindestens 4 Wochen intensiv
 - Schulung auf echten TEXMA-Daten und TEXMA-Prozessen (nicht auf Demodaten)
-- Abnahmeprotokoll mit den 14 definierten Testfällen als Vertragsbestandteil
+- Abnahmeprotokoll mit den 15 definierten Testfällen als Vertragsbestandteil
 
 ## 17.3 Go-Live-Strategie
 
@@ -758,6 +760,7 @@ Diese Matrix übersetzt die Kriterien aus Kapitel 30 in eine konkrete Prüfung g
 |---|---|
 | Belegkette Angebot→Auftrag→Rechnung, Faktura bei Versand | nativ |
 | Variantenartikel (Farbe × Größe) | nativ |
+| Mengenstaffeln / Staffelpreise (mengenabhängiger Stück-VK) | nativ |
 | Stücklisten und mehrstufige Unterproduktionen | nativ |
 | E-Rechnung Empfang + Versand (XRechnung/ZUGFeRD) | nativ |
 | Banking-Zahlungsabgleich + mehrstufiges Mahnwesen | nativ |

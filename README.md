@@ -4,7 +4,7 @@ ERP für die TEXMA Textilveredelung — Ablösung von CDH Office. **Teil-Make** 
 gekaufter/integrierter Standard-Block, Eigenbau nur an den vier Differenzierern.
 TypeScript, modularer Monolith + separate Connector-Schicht, Cloud/SaaS (EU).
 
-Vollständige fachliche Grundlage: [`docs/lastenheft.md`](docs/lastenheft.md) (v3.2, 39 Kapitel).
+Vollständige fachliche Grundlage: [`docs/lastenheft.md`](docs/lastenheft.md) (v3.3, 39 Kapitel).
 Strategie & Architektur (**Teil-Make**): [`docs/make-or-buy-leitplanken.md`](docs/make-or-buy-leitplanken.md)
 und die ADRs unter [`docs/adr/`](docs/adr/) (0001 Auth/OIDC, 0002 Buy-Stack: Entra ID · Key Vault · finAPI · DATEV).
 
