@@ -87,13 +87,14 @@ export class KeyVaultSecretsProvider implements SecretsProvider {
 }
 
 /**
- * Wählt den Provider anhand der Umgebung:
+ * Wählt den Provider anhand der Umgebung (synchron, für Tests/Injektion):
  *   - SECRETS_BACKEND=azure-keyvault → Key Vault (Adapter wird vom Aufrufer injiziert,
  *     da der echte SDK-Client Netzwerk/Managed Identity braucht; siehe ADR 0002 #1),
  *   - sonst                         → AES-GCM-Fallback (Dev/Test).
  *
  * Der Key-Vault-Zweig erwartet einen vorab gebauten `KeyVaultClient`, damit dieses Paket
- * frei von Azure-SDK-Abhängigkeiten und voll offline testbar bleibt.
+ * frei von Azure-SDK-Abhängigkeiten und voll offline testbar bleibt. Prozesse, die den
+ * Client aus der Umgebung selbst bauen sollen, nutzen `secretsProviderFromEnv`.
  */
 export function createSecretsProvider(
   opts: { keyVaultClient?: KeyVaultClient; env?: NodeJS.ProcessEnv } = {},
@@ -106,6 +107,60 @@ export function createSecretsProvider(
       );
     }
     return new KeyVaultSecretsProvider(opts.keyVaultClient);
+  }
+  return AesGcmSecretsProvider.fromEnv(env);
+}
+
+/** Minimaler Ausschnitt des `@azure/keyvault-secrets`-SecretClient, den der Adapter braucht. */
+interface AzureSecretClient {
+  getSecret(name: string): Promise<{ value?: string }>;
+  setSecret(name: string, value: string): Promise<unknown>;
+}
+
+/**
+ * Baut den echten Key-Vault-`KeyVaultClient` per Managed Identity. `@azure/identity` und
+ * `@azure/keyvault-secrets` sind **optionale** Laufzeit-Abhängigkeiten, die erst bei
+ * aktiviertem Key Vault installiert sein müssen — daher dynamische Importe mit variablem
+ * Specifier (kein statischer Typ-/Build-Zwang gegen das Azure-SDK). DefaultAzureCredential
+ * nutzt in Azure die Managed Identity, lokal die Azure-CLI/Env — kein Master-Secret nötig.
+ */
+export async function createAzureKeyVaultClient(vaultUrl: string): Promise<KeyVaultClient> {
+  const identityPkg = "@azure/identity";
+  const secretsPkg = "@azure/keyvault-secrets";
+  const { DefaultAzureCredential } = (await import(identityPkg)) as {
+    DefaultAzureCredential: new () => unknown;
+  };
+  const { SecretClient } = (await import(secretsPkg)) as {
+    SecretClient: new (url: string, credential: unknown) => AzureSecretClient;
+  };
+  const client = new SecretClient(vaultUrl, new DefaultAzureCredential());
+  return {
+    async getSecret(name) {
+      const secret = await client.getSecret(name);
+      if (secret.value === undefined) throw new Error(`Key Vault: Secret ${name} ohne Wert.`);
+      return secret.value;
+    },
+    async setSecret(name, value) {
+      await client.setSecret(name, value);
+      return name;
+    },
+  };
+}
+
+/**
+ * Asynchrone Provider-Auswahl für Prozess-Einstiegspunkte: baut bei
+ * SECRETS_BACKEND=azure-keyvault den echten Vault-Client aus AZURE_KEYVAULT_URL selbst,
+ * sonst den AES-GCM-Fallback. So bleibt die Backend-Logik an einer Stelle.
+ */
+export async function secretsProviderFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<SecretsProvider> {
+  if (env.SECRETS_BACKEND === "azure-keyvault") {
+    const vaultUrl = env.AZURE_KEYVAULT_URL;
+    if (!vaultUrl) {
+      throw new Error("SECRETS_BACKEND=azure-keyvault gesetzt, aber AZURE_KEYVAULT_URL fehlt.");
+    }
+    return new KeyVaultSecretsProvider(await createAzureKeyVaultClient(vaultUrl));
   }
   return AesGcmSecretsProvider.fromEnv(env);
 }

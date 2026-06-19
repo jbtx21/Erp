@@ -3,7 +3,7 @@
 // laufen die Teile zusammen, die andernorts bewusst entkoppelt sind — ohne dass die
 // Connector-Pakete vom Orchestrierungspaket abhängen müssen (Zyklusvermeidung).
 
-import { createRetryPolicy, decryptSecret, loadSecretsKey } from "@texma/shared";
+import { createRetryPolicy, secretsProviderFromEnv, type SecretsProvider } from "@texma/shared";
 import { createDispatcher, OutboxRelay } from "@texma/orchestration";
 import {
   PrismaIntegrationLogStore,
@@ -21,8 +21,8 @@ import { runSupplierSync } from "@texma/connector-supplier";
 import { dpdAuthFromEnv, runDpdShipments } from "@texma/connector-dpd";
 import { createOrderStatusUpdateHandler, type ShopWriter } from "./order-status-handler.js";
 
-/** Baut den Shop-Schreibclient für eine Connector-Id aus den (entschlüsselten) DB-Daten. */
-function prismaShopWriterResolver(secretsKey: Buffer) {
+/** Baut den Shop-Schreibclient für eine Connector-Id aus den DB-Daten (Secret via Port). */
+function prismaShopWriterResolver(secrets: SecretsProvider) {
   return async (shopConnectorId: string): Promise<ShopWriter> => {
     const sc = await prisma.shopConnector.findUnique({ where: { id: shopConnectorId } });
     if (!sc || !sc.consumerKey || !sc.consumerSecretEnc) {
@@ -31,7 +31,7 @@ function prismaShopWriterResolver(secretsKey: Buffer) {
     return new WooRestClient({
       baseUrl: sc.baseUrl,
       consumerKey: sc.consumerKey,
-      consumerSecret: decryptSecret(sc.consumerSecretEnc, secretsKey),
+      consumerSecret: await secrets.resolve(sc.consumerSecretEnc),
     });
   };
 }
@@ -40,7 +40,8 @@ export interface RuntimeConfig {
   redisHost: string;
   redisPort: number;
   apiUrl: string;
-  secretsKey: Buffer;
+  /** Secrets-Manager-Port (ADR 0002): löst gespeicherte Secret-Referenzen auf. */
+  secrets: SecretsProvider;
   dpdBaseUrl: string;
   /** Poll-Intervalle in ms je Connector-Job. */
   schedule: Record<string, number>;
@@ -53,7 +54,7 @@ export async function startWorkerRuntime(config: RuntimeConfig): Promise<void> {
   // Outbound: Outbox-Relay mit Dispatcher (Shop-Status-Push).
   const dispatcher = createDispatcher({
     "order.status.update": createOrderStatusUpdateHandler({
-      resolveShopWriter: prismaShopWriterResolver(config.secretsKey),
+      resolveShopWriter: prismaShopWriterResolver(config.secrets),
     }),
   });
   const relay = new OutboxRelay(new PrismaOutboxStore(), dispatcher, new PrismaIntegrationLogStore(), createRetryPolicy(5));
@@ -64,8 +65,8 @@ export async function startWorkerRuntime(config: RuntimeConfig): Promise<void> {
   // Inbound: wiederkehrende Connector-Polls.
   const connectorQueue = createConnectorQueue(connection);
   createConnectorWorker(connection, {
-    "supplier.sync": () => runSupplierSync({ apiUrl: config.apiUrl, secretsKey: config.secretsKey }),
-    "woocommerce.sync": () => runWooSync({ apiUrl: config.apiUrl, secretsKey: config.secretsKey }),
+    "supplier.sync": () => runSupplierSync({ apiUrl: config.apiUrl, secrets: config.secrets }),
+    "woocommerce.sync": () => runWooSync({ apiUrl: config.apiUrl, secrets: config.secrets }),
     "dpd.ship": () =>
       runDpdShipments({ apiUrl: config.apiUrl, baseUrl: config.dpdBaseUrl, auth: dpdAuthFromEnv() }),
   });
@@ -80,7 +81,7 @@ export async function main(): Promise<void> {
     redisHost: process.env.REDIS_HOST ?? "127.0.0.1",
     redisPort: Number(process.env.REDIS_PORT ?? 6379),
     apiUrl: process.env.API_URL ?? "http://localhost:3000/trpc",
-    secretsKey: loadSecretsKey(),
+    secrets: await secretsProviderFromEnv(),
     dpdBaseUrl: process.env.DPD_BASE_URL ?? "https://api.dpd.example",
     schedule: {
       "supplier.sync": Number(process.env.SUPPLIER_POLL_MS ?? 3_600_000),

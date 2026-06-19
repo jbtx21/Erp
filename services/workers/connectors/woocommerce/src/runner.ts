@@ -3,14 +3,15 @@
 // syncCursor zurück. Scheduler/Queue (BullMQ, Retry/Outbox) = Block C2.
 
 import { prisma } from "@texma/db";
-import { decryptSecret, loadSecretsKey } from "@texma/shared";
+import { secretsProviderFromEnv, type SecretsProvider } from "@texma/shared";
 import { WooCommerceConnector } from "./index.js";
 import { TrpcOrderIntake } from "./trpc-intake.js";
 import { WooRestClient } from "./woo-rest-client.js";
 
 export interface RunnerEnv {
   apiUrl: string; // tRPC-Endpunkt von apps/api, z. B. http://localhost:3000/trpc
-  secretsKey: Buffer;
+  /** Secrets-Manager-Port (ADR 0002): löst gespeicherte Secret-Referenzen auf. */
+  secrets: SecretsProvider;
 }
 
 export interface ShopRunSummary {
@@ -37,7 +38,7 @@ export async function runWooSync(env: RunnerEnv): Promise<ShopRunSummary[]> {
     const client = new WooRestClient({
       baseUrl: sc.baseUrl,
       consumerKey: sc.consumerKey,
-      consumerSecret: decryptSecret(sc.consumerSecretEnc, env.secretsKey),
+      consumerSecret: await env.secrets.resolve(sc.consumerSecretEnc),
     });
 
     const result = await new WooCommerceConnector(client, intake).run({
@@ -62,7 +63,7 @@ export async function runWooSync(env: RunnerEnv): Promise<ShopRunSummary[]> {
 /** Einstiegspunkt des Worker-Prozesses. */
 export async function main(): Promise<void> {
   const apiUrl = process.env.API_URL ?? "http://localhost:3000/trpc";
-  const summaries = await runWooSync({ apiUrl, secretsKey: loadSecretsKey() });
+  const summaries = await runWooSync({ apiUrl, secrets: await secretsProviderFromEnv() });
   console.log(`WooCommerce-Sync fertig: ${summaries.length} Shop(s).`);
   await prisma.$disconnect();
 }

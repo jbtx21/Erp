@@ -4,7 +4,7 @@
 // Lauf im IntegrationLog (INBOUND/catalog.sync). Scheduler/Queue (BullMQ) = Block C2.
 
 import { prisma } from "@texma/db";
-import { decryptSecret, loadSecretsKey, type SupplierKind } from "@texma/shared";
+import { secretsProviderFromEnv, type SecretsProvider, type SupplierKind } from "@texma/shared";
 import { PrismaIntegrationLogStore } from "@texma/worker-orchestration";
 import { SupplierConnector } from "./index.js";
 import { RestSupplierCatalogClient, type SupplierAuth } from "./rest-client.js";
@@ -12,7 +12,8 @@ import { TrpcSupplierIntake } from "./trpc-intake.js";
 
 export interface RunnerEnv {
   apiUrl: string; // tRPC-Endpunkt von apps/api
-  secretsKey: Buffer;
+  /** Secrets-Manager-Port (ADR 0002): löst gespeicherte Secret-Referenzen auf. */
+  secrets: SecretsProvider;
   /** Header für die rollen­geschützte Session (suppliers.ingestCatalog, Kap. 12). */
   apiHeaders?: Record<string, string>;
 }
@@ -56,7 +57,7 @@ export async function runSupplierSync(env: RunnerEnv): Promise<SupplierRunSummar
       continue;
     }
 
-    const secret = decryptSecret(s.consumerSecretEnc, env.secretsKey);
+    const secret = await env.secrets.resolve(s.consumerSecretEnc);
     const auth: SupplierAuth =
       profile.scheme === "basic"
         ? { scheme: "basic", consumerKey: s.consumerKey, consumerSecret: secret }
@@ -115,7 +116,7 @@ export async function runSupplierSync(env: RunnerEnv): Promise<SupplierRunSummar
 /** Einstiegspunkt des Worker-Prozesses. */
 export async function main(): Promise<void> {
   const apiUrl = process.env.API_URL ?? "http://localhost:3000/trpc";
-  const summaries = await runSupplierSync({ apiUrl, secretsKey: loadSecretsKey() });
+  const summaries = await runSupplierSync({ apiUrl, secrets: await secretsProviderFromEnv() });
   console.log(`Lieferanten-Sync fertig: ${summaries.length} Lieferant(en).`);
   await prisma.$disconnect();
 }

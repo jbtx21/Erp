@@ -32,7 +32,13 @@ Der Standard-Block wird **eingekauft/integriert**, kohärent im Microsoft-Stack:
 | `OIDC_AUDIENCE` | App-(Client-)ID der ERP-Registrierung |
 | `OIDC_JWKS_URI` | `https://login.microsoftonline.com/<tenant-id>/discovery/v2.0/keys` |
 | `OIDC_ROLE_CLAIM` | `roles` (Entra App Roles) |
-| Secrets | via Managed Identity gegen Key-Vault-URI (kein `SECRETS_KEY` in Prod) |
+| `SECRETS_BACKEND` | `azure-keyvault` (Prod) · leer/sonst → AES-GCM-Fallback (Dev) |
+| `AZURE_KEYVAULT_URL` | `https://<vault-name>.vault.azure.net` (nur bei `azure-keyvault`) |
+| Secrets-Auth | via Managed Identity (DefaultAzureCredential) — kein `SECRETS_KEY` in Prod |
+
+> Optionale Laufzeit-Abhängigkeiten für den Key-Vault-Zweig (erst bei Aktivierung
+> installieren): `@azure/identity`, `@azure/keyvault-secrets`. Werden lazy importiert,
+> damit Build/Tests ohne Azure-SDK laufen.
 
 ## Konsequenzen
 
@@ -46,13 +52,13 @@ Der Standard-Block wird **eingekauft/integriert**, kohärent im Microsoft-Stack:
 
 ## Offene Punkte (Folge-ADRs/Tasks)
 
-1. **`SecretsProvider`-Port** (analog OIDC-Port) — **umgesetzt** in `packages/shared/src/secrets.ts`:
+1. **`SecretsProvider`-Port** (analog OIDC-Port) — **erledigt** in `packages/shared/src/secrets.ts`:
    `SecretsProvider` (seal/resolve), `AesGcmSecretsProvider` (Dev-Fallback über crypto.ts),
-   `KeyVaultSecretsProvider` (Prod, gegen injizierten `KeyVaultClient` testbar) und
-   `createSecretsProvider` (Backend-Auswahl per `SECRETS_BACKEND`). Tests in `secrets.test.ts`.
-   **Rest:** echten `@azure/keyvault-secrets`-Client (Managed Identity) verdrahten und die drei
-   Consumer (`runtime.ts`, Woo-/Supplier-Runner) von `decryptSecret`/`loadSecretsKey` auf den
-   Port umstellen.
+   `KeyVaultSecretsProvider` (Prod, gegen injizierten `KeyVaultClient` testbar),
+   `createAzureKeyVaultClient` (lazy Managed-Identity-Adapter) sowie `createSecretsProvider`
+   (synchron, Injektion) und `secretsProviderFromEnv` (asynchron, baut den Vault-Client selbst).
+   Die drei Consumer — `runtime.ts`, Woo- und Supplier-Runner — sind von
+   `decryptSecret`/`loadSecretsKey` auf den Port umgestellt. Tests in `secrets.test.ts`.
 2. **`BankingProvider`-Port + finAPI-Connector** im bestehenden `services/workers/connectors/*`-Muster.
 3. **finAPI-Kontotyp klären** — PSD2 (SCA-Reconsent ~90 Tage) vs. EBICS/Corporate (unbeaufsichtigt).
 4. **DATEV-/EN-16931-Integration** terminieren; Cookie-Session-Pfad nach Entra-Anbindung zurückbauen.
