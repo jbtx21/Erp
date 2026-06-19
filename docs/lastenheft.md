@@ -6,7 +6,7 @@ Ablösung von CDH Office
 |---|---|
 | **Unternehmen** | TEXMA Textilveredelung GmbH, Herrenberg |
 | **Dokument** | Lastenheft für ERP-Beratung und -Umsetzung (Make-or-Buy) |
-| **Version** | 3.3 — Staffelpreise (Mengenstaffeln) in Angebotskalkulation (Kap. 4.4), Funktionsabdeckungs-Matrix (Kap. 31) und Pflicht-Testfälle (T-15, Kap. 15) ergänzt (ohne Budget) |
+| **Version** | 3.4 — Kap. 38.1 um Darstellungs- und Konsistenzanforderungen ergänzt (kompakte Listenansichten, einheitliche Status-/Ampeldarstellung, konsistente Bedienmuster); zuvor Staffelpreise (Kap. 4.4/31, T-15) (ohne Budget) |
 | **Funktionaler Maßstab** | Xentral (State of the Art / Benchmark) — Zielsystem offen, Make-or-Buy zu prüfen |
 | **Altsystem** | CDH Office (lokal) |
 | **Status** | Zur Angebotsanfrage freigegeben |
@@ -987,6 +987,9 @@ Das ERP ist ein internes Werkzeug für sechs Mitarbeitende. Maßstab ist nicht d
 - Rollenspezifische Ansichten: Innendienst sieht die volle Abwicklung; die Produktion sieht eine reduzierte Ansicht mit großen Bedienelementen für Status- und Zeiterfassung, ohne Preis- und Kundendaten (verzahnt mit Kapitel 12). Die Produktionsansicht ist tablet-/touchtauglich für die Werkstatt.
 - Nicht genutzte Module und Felder lassen sich ausblenden (Scope gemäß Kapitel 37).
 - Globale, fehlertolerante Suche über Belege und Stammdaten; Belegsuche unter 3 Sekunden (Kapitel 26).
+- Listen- und Tabellenansichten stellen viele Datensätze kompakt und übersichtlich dar; relevante Spalten sind je Nutzer ein- und ausblendbar, Sortier- und Filterfunktionen ohne Umwege erreichbar.
+- Status und Termin-Ampel (Kapitel 35) sind auf einen Blick erfassbar und über alle Ansichten einheitlich dargestellt. Die Signalwirkung beruht nicht allein auf Farbe (zusätzlich Symbol oder Text), damit sie auch bei Farbfehlsichtigkeit und im Werkstattlicht eindeutig bleibt.
+- Die Bedienmuster sind im gesamten System konsistent: gleichartige Aufgaben werden gleich bedient (Wiedererkennbarkeit verkürzt die Einarbeitung und senkt die Fehlerquote).
 - Die häufig genutzten Erfassungsmasken (insbesondere Auftragserfassung) sind vollständig tastaturbedienbar; Barcode-/Scan-Eingabe, wo sinnvoll.
 - Fehlervermeidung durch Pflichtfelder und Plausibilitätsprüfungen; eine ausdrückliche Bestätigung wird nur bei kritischen, schwer umkehrbaren Aktionen verlangt (Storno, Freigabe — Kapitel 12.1/K-26).
 
