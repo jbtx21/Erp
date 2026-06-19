@@ -2,6 +2,7 @@
 // Preise/Kundendaten sieht (serverseitig redigiert).
 import { type CSSProperties, useCallback, useEffect, useState } from "react";
 import { Login } from "./Login.js";
+import { Reporting } from "./Reporting.js";
 import { trpc } from "./trpc.js";
 
 interface AuthUser {
@@ -48,6 +49,7 @@ export function App(): JSX.Element {
 }
 
 function Orders({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<void> }): JSX.Element {
+  const [tab, setTab] = useState<"orders" | "reporting">("orders");
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [status, setStatus] = useState("");
 
@@ -66,17 +68,30 @@ function Orders({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
   return (
     <main style={box}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1>TEXMA ERP — Auftrags-Eingang</h1>
+        <h1>TEXMA ERP</h1>
         <span>
           {user.name} ({user.role}) · <button onClick={() => void onLogout()}>Abmelden</button>
         </span>
       </div>
+      <nav style={{ display: "flex", gap: "0.5rem", margin: "0.5rem 0 1rem" }}>
+        <button onClick={() => setTab("orders")} disabled={tab === "orders"}>Aufträge</button>
+        <button onClick={() => setTab("reporting")} disabled={tab === "reporting"}>Auswertungen</button>
+      </nav>
+      {tab === "reporting" ? <Reporting role={user.role} /> : <OrdersTable orders={orders} status={status} role={user.role} onReload={load} />}
+    </main>
+  );
+}
+
+function OrdersTable({ orders, status, role, onReload }: { orders: OrderRow[]; status: string; role: string; onReload: () => Promise<void> }): JSX.Element {
+  return (
+    <>
+      <h2>Auftrags-Eingang</h2>
       <p style={{ color: "#555" }}>
-        {user.role === "PRODUKTION"
+        {role === "PRODUKTION"
           ? "Rolle PRODUKTION: Preise/Kundendaten sind serverseitig ausgeblendet (Kap. 12)."
           : "Shop-Bestellungen werden der Firma zugeordnet (T-01)."}
       </p>
-      <button onClick={() => void load()}>Aktualisieren</button>
+      <button onClick={() => void onReload()}>Aktualisieren</button>
       {status && <p><em>{status}</em></p>}
       <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "1rem" }}>
         <thead>
@@ -103,6 +118,6 @@ function Orders({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
           )}
         </tbody>
       </table>
-    </main>
+    </>
   );
 }
