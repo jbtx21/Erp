@@ -596,6 +596,14 @@ describe("tRPC ampel — Terminübersicht (Kap. 35.4)", () => {
     expect(rows[0]).toMatchObject({ id: "p_late", ampel: "ROT" });
     expect(rows[1]).toMatchObject({ id: "p_ok", ampel: "GRUEN" });
   });
+
+  it("liefert die Dashboard-Verdichtung (Zählungen + Eskalation)", async () => {
+    const { caller } = setup(PRODUKTION);
+    const sum = await caller.ampel.summary({ today: "2026-06-15T00:00:00.000Z" });
+    expect(sum).toMatchObject({ total: 2, rot: 1, gruen: 1, overdue: 1, kritisch: 1 });
+    expect(sum.mostUrgent?.id).toBe("p_late");
+    expect(sum.byLevel.PRODUKTION.rot).toBe(1);
+  });
 });
 
 describe("tRPC stickerei — Partnerwahl (Kap. 5.4)", () => {

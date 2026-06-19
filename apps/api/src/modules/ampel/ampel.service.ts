@@ -3,7 +3,13 @@
 // mit Wiedervorlage, Produktionsaufträge mit Liefertermin). Ersetzt die Excel-Terminliste.
 // Reine Lese-Analyse; Repository als Interface.
 
-import { buildAmpelOverview, type AmpelRow, type TrackedProcess } from "@texma/shared";
+import {
+  buildAmpelOverview,
+  summarizeAmpel,
+  type AmpelRow,
+  type AmpelSummary,
+  type TrackedProcess,
+} from "@texma/shared";
 
 export interface AmpelRepository {
   /** Alle terminierten Vorgänge (Angebot/Auftrag/Produktion/Veredler). */
@@ -15,5 +21,10 @@ export class AmpelService {
 
   async overview(today: Date = new Date()): Promise<AmpelRow[]> {
     return buildAmpelOverview(await this.repo.trackedProcesses(), today);
+  }
+
+  /** Dashboard-Verdichtung der Ampel (Zählungen je Status/Ebene, Eskalation). */
+  async summary(today: Date = new Date()): Promise<AmpelSummary> {
+    return summarizeAmpel(buildAmpelOverview(await this.repo.trackedProcesses(), today));
   }
 }

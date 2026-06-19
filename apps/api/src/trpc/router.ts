@@ -297,11 +297,18 @@ export const appRouter = router({
   }),
 
   ampel: router({
-    /** Ebenenübergreifende Terminübersicht (Kap. 35.4): ROT zuerst (operativ). */
+    /** Ebenenübergreifende Terminübersicht (Kap. 35.4): kritisch/ROT zuerst (operativ). */
     overview: protectedProcedure
       .input(z.object({ today: z.string().datetime().optional() }).optional())
       .query(async ({ input, ctx }) =>
         ctx.ampel.overview(input?.today ? new Date(input.today) : new Date())
+      ),
+
+    /** Ampel-Dashboard: Zählungen je Status/Ebene, Überfällige, Eskalation (Kap. 35.4). */
+    summary: protectedProcedure
+      .input(z.object({ today: z.string().datetime().optional() }).optional())
+      .query(async ({ input, ctx }) =>
+        ctx.ampel.summary(input?.today ? new Date(input.today) : new Date())
       ),
   }),
 
