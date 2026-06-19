@@ -1,5 +1,10 @@
 # Xentral-/OpenXE-Orientierung
 
+> **Verbindlich vorgelagert:** `docs/make-or-buy-leitplanken.md` — Fokus-Schnitt
+> (differenzierend zuerst, Standard-Block einfrieren), Auth/Identity nicht selbst bauen,
+> Bus-Faktor als Bauziel + Entscheidungs-Gate. Diese Leitplanken haben Vorrang vor der
+> Reihenfolge weiter unten.
+
 ## Entscheidung
 
 Der TEXMA-ERP bleibt **Eigenbau (Greenfield) in TypeScript** (siehe Plan). Xentral und
