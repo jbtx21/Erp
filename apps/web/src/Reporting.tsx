@@ -1,8 +1,12 @@
-// Reporting-Ansicht (Kap. 29/35): Umsatz-/Auftragsübersicht, Periodenvergleich,
+// Reporting-Ansicht (Kap. 29/35): Umsatz-/Auftragsübersicht (Tabelle + Liniendiagramm),
+// Umsatz nach Shop/Kundengruppe (Tabelle + Balkendiagramm), Periodenvergleich,
 // KI-Zusammenfassung sowie operative Produktions-KPIs (Durchlaufzeit, Fehlerquote,
-// Termintreue). Granularität Tag/Woche/Monat/Jahr umschaltbar. Finanzkennzahlen nur
-// für nicht-PRODUKTION (serverseitig per RBAC erzwungen); operative KPIs für alle.
+// Termintreue). Granularität Tag/Woche/Monat/Jahr umschaltbar. CSV-Export je Abschnitt
+// (clientseitig) + PDF-Export der Umsatz-Auswertung (serverseitig gerendert).
+// Finanzkennzahlen nur für nicht-PRODUKTION (serverseitig per RBAC erzwungen).
 import { type CSSProperties, useCallback, useEffect, useState } from "react";
+import { BarChart, LineChart } from "./charts.js";
+import { downloadBase64Pdf, downloadCsv } from "./export.js";
 import { trpc } from "./trpc.js";
 
 type Granularity = "DAY" | "WEEK" | "MONTH" | "YEAR";
@@ -20,6 +24,13 @@ interface OrderOverview {
   buckets: Bucket[];
   totalNetCents: number;
   totalCount: number;
+}
+interface BreakdownItem {
+  label: string;
+  name: string;
+  count: number;
+  netCents: number;
+  sharePercent: number | null;
 }
 interface PeriodComparison {
   current: { key: string; netCents: number };
@@ -50,6 +61,8 @@ const th: CSSProperties = { textAlign: "left", borderBottom: "2px solid #ccc", p
 const tdc: CSSProperties = { borderBottom: "1px solid #eee", padding: "6px 8px" };
 const card: CSSProperties = { border: "1px solid #e2e2e2", borderRadius: 8, padding: "1rem", marginTop: "1.25rem" };
 const kpi: CSSProperties = { display: "inline-block", marginRight: "2rem", fontSize: "1.1rem" };
+const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", marginTop: "1rem" };
+const csvBtn: CSSProperties = { float: "right", fontSize: "0.85rem" };
 
 const euro = (cents: number) => (cents / 100).toLocaleString("de-DE", { style: "currency", currency: "EUR" });
 const pct = (p: number | null) => (p == null ? "—" : `${p > 0 ? "+" : ""}${p} %`);
@@ -63,17 +76,19 @@ export function Reporting({ role }: { role: string }): JSX.Element {
   const [revenue, setRevenue] = useState<RevenueOverview | null>(null);
   const [orders, setOrders] = useState<OrderOverview | null>(null);
   const [compare, setCompare] = useState<PeriodComparison | null>(null);
+  const [byShop, setByShop] = useState<BreakdownItem[]>([]);
+  const [byPriceGroup, setByPriceGroup] = useState<BreakdownItem[]>([]);
   const [leadTime, setLeadTime] = useState<LeadTimeOverview | null>(null);
   const [defects, setDefects] = useState<DefectOverview | null>(null);
   const [onTime, setOnTime] = useState<OnTimeOverview | null>(null);
   const [ai, setAi] = useState<AiSummary | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   const load = useCallback(async () => {
     setStatus("");
     setAi(null);
     try {
-      // Operative KPIs (alle Rollen).
       const [lt, df, ot] = await Promise.all([
         trpc.productionReporting.leadTime.query({ granularity }),
         trpc.productionReporting.defects.query({ granularity }),
@@ -83,16 +98,19 @@ export function Reporting({ role }: { role: string }): JSX.Element {
       setDefects(df as DefectOverview);
       setOnTime(ot as OnTimeOverview);
 
-      // Finanzkennzahlen nur für nicht-PRODUKTION.
       if (!isProduction) {
-        const [rev, ord, cmp] = await Promise.all([
+        const [rev, ord, cmp, shop, pg] = await Promise.all([
           trpc.reporting.revenueOverview.query({ granularity }),
           trpc.reporting.orderOverview.query({ granularity }),
           trpc.reporting.compareRevenue.query({ granularity }),
+          trpc.reporting.revenueByShop.query(),
+          trpc.reporting.revenueByPriceGroup.query(),
         ]);
         setRevenue(rev as RevenueOverview);
         setOrders(ord as OrderOverview);
         setCompare(cmp as PeriodComparison);
+        setByShop(shop as BreakdownItem[]);
+        setByPriceGroup(pg as BreakdownItem[]);
       }
     } catch (err) {
       setStatus(`Fehler: ${(err as Error).message}`);
@@ -114,6 +132,18 @@ export function Reporting({ role }: { role: string }): JSX.Element {
     }
   }, [granularity]);
 
+  const exportPdf = useCallback(async () => {
+    setPdfBusy(true);
+    try {
+      const res = (await trpc.reporting.exportPdf.mutate({ granularity })) as { fileName: string; pdfBase64: string };
+      downloadBase64Pdf(res.fileName, res.pdfBase64);
+    } catch (err) {
+      setStatus(`PDF-Fehler: ${(err as Error).message}`);
+    } finally {
+      setPdfBusy(false);
+    }
+  }, [granularity]);
+
   return (
     <section style={box}>
       <h2>Auswertungen</h2>
@@ -126,12 +156,34 @@ export function Reporting({ role }: { role: string }): JSX.Element {
           <option value="YEAR">Jahr</option>
         </select>
       </label>{" "}
-      <button onClick={() => void load()}>Aktualisieren</button>
+      <button onClick={() => void load()}>Aktualisieren</button>{" "}
+      {!isProduction && (
+        <button onClick={() => void exportPdf()} disabled={pdfBusy}>
+          {pdfBusy ? "PDF…" : "PDF-Export"}
+        </button>
+      )}
       {status && <p><em>{status}</em></p>}
 
       {!isProduction && revenue && orders && compare && (
         <div style={card}>
-          <h3>Umsatz &amp; Aufträge</h3>
+          <h3>
+            Umsatz &amp; Aufträge
+            <button
+              style={csvBtn}
+              onClick={() =>
+                downloadCsv(
+                  `umsatz-${granularity}.csv`,
+                  ["Periode", "Umsatz Netto (Cent)", "Rechnungen", "Aufträge", "Auftragswert (Cent)"],
+                  revenue.buckets.map((b) => {
+                    const o = orders.buckets.find((x) => x.key === b.key);
+                    return [b.key, String(b.netCents), String(b.count), String(o?.count ?? 0), String(o?.netCents ?? 0)];
+                  })
+                )
+              }
+            >
+              CSV
+            </button>
+          </h3>
           <div>
             <span style={kpi}>Umsatz gesamt: <strong>{euro(revenue.totalNetCents)}</strong></span>
             <span style={kpi}>Aufträge gesamt: <strong>{orders.totalCount}</strong></span>
@@ -139,7 +191,8 @@ export function Reporting({ role }: { role: string }): JSX.Element {
               Vergleich {compare.current.key}: <strong>{euro(compare.deltaCents)}</strong> ({pct(compare.deltaPercent)})
             </span>
           </div>
-          <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "1rem" }}>
+          <LineChart data={revenue.buckets.map((b) => ({ label: b.key, value: b.netCents }))} format={euro} />
+          <table style={tableStyle}>
             <thead>
               <tr>
                 <th style={th}>Periode</th>
@@ -183,16 +236,38 @@ export function Reporting({ role }: { role: string }): JSX.Element {
         </div>
       )}
 
+      {!isProduction && (
+        <Breakdown title="Umsatz nach Shop" items={byShop} fileName={`umsatz-shop-${granularity}.csv`} />
+      )}
+      {!isProduction && (
+        <Breakdown title="Umsatz nach Kundengruppe" items={byPriceGroup} fileName={`umsatz-kundengruppe-${granularity}.csv`} />
+      )}
+
       {leadTime && (
         <div style={card}>
-          <h3>Durchlaufzeit (Lead Time)</h3>
+          <h3>
+            Durchlaufzeit (Lead Time)
+            <button
+              style={csvBtn}
+              onClick={() =>
+                downloadCsv(
+                  `durchlaufzeit-${granularity}.csv`,
+                  ["Periode", "Aufträge", "Ø Durchlaufzeit (h)"],
+                  leadTime.buckets.map((b) => [b.key, String(b.count), String(b.avgHours)])
+                )
+              }
+            >
+              CSV
+            </button>
+          </h3>
           <div>
             <span style={kpi}>Ø: <strong>{leadTime.stats.avgHours} h</strong></span>
             <span style={kpi}>Median: <strong>{leadTime.stats.medianHours} h</strong></span>
             <span style={kpi}>Min/Max: <strong>{leadTime.stats.minHours} / {leadTime.stats.maxHours} h</strong></span>
             <span style={kpi}>Aufträge: <strong>{leadTime.stats.count}</strong></span>
           </div>
-          <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "1rem" }}>
+          <LineChart data={leadTime.buckets.map((b) => ({ label: b.key, value: b.avgHours }))} format={(v) => `${v} h`} />
+          <table style={tableStyle}>
             <thead><tr><th style={th}>Periode</th><th style={th}>Aufträge</th><th style={th}>Ø Durchlaufzeit</th></tr></thead>
             <tbody>
               {leadTime.buckets.map((b) => (
@@ -206,14 +281,37 @@ export function Reporting({ role }: { role: string }): JSX.Element {
 
       {defects && (
         <div style={card}>
-          <h3>Fehlerquote (Reklamationen)</h3>
+          <h3>
+            Fehlerquote (Reklamationen)
+            <button
+              style={csvBtn}
+              onClick={() =>
+                downloadCsv(
+                  `fehlerquote-${granularity}.csv`,
+                  ["Periode", "Aufträge", "Reklamationen", "Quote (%)"],
+                  defects.buckets.map((b) => [b.key, String(b.total), String(b.defects), b.ratePercent == null ? "" : String(b.ratePercent)])
+                )
+              }
+            >
+              CSV
+            </button>
+          </h3>
           <div>
             <span style={kpi}>Gesamt: <strong>{ratePct(defects.overall.ratePercent)}</strong> ({defects.overall.defects}/{defects.overall.total})</span>
             <span style={kpi}>Lieferant: <strong>{defects.byCause.LIEFERANT}</strong></span>
             <span style={kpi}>Intern: <strong>{defects.byCause.INTERN}</strong></span>
             <span style={kpi}>Veredler: <strong>{defects.byCause.EXTERN_VEREDLER}</strong></span>
           </div>
-          <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "1rem" }}>
+          <BarChart
+            data={[
+              { label: "Lieferant", value: defects.byCause.LIEFERANT },
+              { label: "Intern", value: defects.byCause.INTERN },
+              { label: "Veredler", value: defects.byCause.EXTERN_VEREDLER },
+            ]}
+            format={(v) => String(v)}
+            height={160}
+          />
+          <table style={tableStyle}>
             <thead><tr><th style={th}>Periode</th><th style={th}>Aufträge</th><th style={th}>Reklamationen</th><th style={th}>Quote</th></tr></thead>
             <tbody>
               {defects.buckets.map((b) => (
@@ -227,11 +325,26 @@ export function Reporting({ role }: { role: string }): JSX.Element {
 
       {onTime && (
         <div style={card}>
-          <h3>Termintreue (On-Time)</h3>
+          <h3>
+            Termintreue (On-Time)
+            <button
+              style={csvBtn}
+              onClick={() =>
+                downloadCsv(
+                  `termintreue-${granularity}.csv`,
+                  ["Periode", "Aufträge", "Pünktlich", "Quote (%)"],
+                  onTime.buckets.map((b) => [b.key, String(b.total), String(b.onTime), b.ratePercent == null ? "" : String(b.ratePercent)])
+                )
+              }
+            >
+              CSV
+            </button>
+          </h3>
           <div>
             <span style={kpi}>Gesamt: <strong>{ratePct(onTime.overall.ratePercent)}</strong> ({onTime.overall.onTime}/{onTime.overall.total})</span>
           </div>
-          <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "1rem" }}>
+          <LineChart data={onTime.buckets.map((b) => ({ label: b.key, value: b.ratePercent ?? 0 }))} format={(v) => `${v} %`} />
+          <table style={tableStyle}>
             <thead><tr><th style={th}>Periode</th><th style={th}>Aufträge</th><th style={th}>Pünktlich</th><th style={th}>Quote</th></tr></thead>
             <tbody>
               {onTime.buckets.map((b) => (
@@ -243,5 +356,42 @@ export function Reporting({ role }: { role: string }): JSX.Element {
         </div>
       )}
     </section>
+  );
+}
+
+function Breakdown({ title, items, fileName }: { title: string; items: BreakdownItem[]; fileName: string }): JSX.Element {
+  return (
+    <div style={card}>
+      <h3>
+        {title}
+        <button
+          style={csvBtn}
+          onClick={() =>
+            downloadCsv(
+              fileName,
+              ["Bezeichnung", "Umsatz Netto (Cent)", "Rechnungen", "Anteil (%)"],
+              items.map((i) => [i.name, String(i.netCents), String(i.count), i.sharePercent == null ? "" : String(i.sharePercent)])
+            )
+          }
+        >
+          CSV
+        </button>
+      </h3>
+      <BarChart data={items.map((i) => ({ label: i.name, value: i.netCents }))} format={euro} />
+      <table style={tableStyle}>
+        <thead><tr><th style={th}>Bezeichnung</th><th style={th}>Umsatz (Netto)</th><th style={th}>Rechnungen</th><th style={th}>Anteil</th></tr></thead>
+        <tbody>
+          {items.map((i) => (
+            <tr key={i.label}>
+              <td style={tdc}>{i.name}</td>
+              <td style={tdc}>{euro(i.netCents)}</td>
+              <td style={tdc}>{i.count}</td>
+              <td style={tdc}>{ratePct(i.sharePercent)}</td>
+            </tr>
+          ))}
+          {items.length === 0 && <tr><td style={tdc} colSpan={4}>Keine Daten.</td></tr>}
+        </tbody>
+      </table>
+    </div>
   );
 }
