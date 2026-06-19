@@ -16,16 +16,26 @@ function service() {
 }
 
 describe("StickereiService.routeForCompany (Kap. 5.4)", () => {
-  it("DIREKT nur bei Partner UND Stickdatei", async () => {
-    expect((await service().routeForCompany("direkt")).route).toBe("DIREKT");
+  it("DIREKT ohne Digitalisierung bei Partner UND Stickdatei", async () => {
+    const res = await service().routeForCompany("direkt");
+    expect(res).toMatchObject({ route: "DIREKT", needsDigitizing: false });
   });
 
-  it("AUSSCHREIBUNG ohne Stickdatei oder ohne Partner", async () => {
-    expect((await service().routeForCompany("ohne_datei")).route).toBe("AUSSCHREIBUNG");
+  it("AUSSCHREIBUNG + Digitalisierung ohne Stickdatei; AUSSCHREIBUNG ohne Partner", async () => {
+    const ohneDatei = await service().routeForCompany("ohne_datei");
+    expect(ohneDatei).toMatchObject({ route: "AUSSCHREIBUNG", needsDigitizing: true });
     expect((await service().routeForCompany("neu")).route).toBe("AUSSCHREIBUNG");
   });
 
   it("wirft für eine unbekannte Firma", async () => {
     await expect(service().routeForCompany("x")).rejects.toThrow(/nicht gefunden/);
+  });
+
+  it("vergleicht Ausschreibungs-Angebote nach Stichzahl", () => {
+    const cmp = service().compareOffers(10_000, [
+      { partnerId: "a", name: "A", setupCents: 2_000, pricePer1000Cents: 200, leadDays: 7 },
+      { partnerId: "b", name: "B", setupCents: 1_000, pricePer1000Cents: 250, leadDays: 5 },
+    ]);
+    expect(cmp.chosen?.partnerId).toBe("b");
   });
 });

@@ -613,6 +613,19 @@ describe("tRPC stickerei — Partnerwahl (Kap. 5.4)", () => {
     expect((await caller.stickerei.routeForCompany({ companyId: "c_neu" })).route).toBe("AUSSCHREIBUNG");
   });
 
+  it("vergleicht Ausschreibungs-Angebote nach Stichzahl (günstigstes zuerst)", async () => {
+    const { caller } = setup(BUERO);
+    const cmp = await caller.stickerei.compareOffers({
+      stitches: 10_000,
+      offers: [
+        { partnerId: "a", name: "A", setupCents: 2_000, pricePer1000Cents: 200, leadDays: 7 },
+        { partnerId: "b", name: "B", setupCents: 1_000, pricePer1000Cents: 250, leadDays: 5 },
+      ],
+    });
+    expect(cmp.chosen?.partnerId).toBe("b");
+    expect(cmp.quotes[0]?.totalCents).toBe(3_500);
+  });
+
   it("PRODUKTION darf die Partnerwahl nicht abfragen (FORBIDDEN)", async () => {
     const { caller } = setup(PRODUKTION);
     await expect(caller.stickerei.routeForCompany({ companyId: "c_direkt" })).rejects.toMatchObject({

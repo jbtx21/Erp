@@ -313,10 +313,28 @@ export const appRouter = router({
   }),
 
   stickerei: router({
-    /** Stickerei-Weg einer Firma (Kap. 5.4): DIREKT vs. AUSSCHREIBUNG. */
+    /** Stickerei-Plan einer Firma (Kap. 5.4): Weg + Digitalisierungsbedarf + Begründung. */
     routeForCompany: roleProcedure("ADMIN", "BUERO")
       .input(z.object({ companyId: z.string().min(1) }))
       .query(async ({ input, ctx }) => ctx.stickerei.routeForCompany(input.companyId)),
+
+    /** Angebotsvergleich einer Ausschreibung nach Stichzahl (Kap. 5.4). */
+    compareOffers: roleProcedure("ADMIN", "BUERO")
+      .input(
+        z.object({
+          stitches: z.number().int().nonnegative(),
+          offers: z.array(
+            z.object({
+              partnerId: z.string().min(1),
+              name: z.string().min(1),
+              setupCents: z.number().int().nonnegative(),
+              pricePer1000Cents: z.number().int().nonnegative(),
+              leadDays: z.number().int().nonnegative(),
+            })
+          ),
+        })
+      )
+      .query(({ input, ctx }) => ctx.stickerei.compareOffers(input.stitches, input.offers)),
   }),
 
   reorder: router({
