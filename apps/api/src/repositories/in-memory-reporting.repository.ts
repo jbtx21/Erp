@@ -9,7 +9,8 @@ export class InMemoryReportingRepository implements ReportingRepository {
     private readonly revenue: RevenuePoint[] = [],
     private readonly orders: OrderPoint[] = [],
     private readonly byShop: LabeledRevenuePoint[] = [],
-    private readonly byPriceGroup: LabeledRevenuePoint[] = []
+    private readonly byPriceGroup: LabeledRevenuePoint[] = [],
+    private readonly byArticle: LabeledRevenuePoint[] = []
   ) {}
 
   async revenuePoints(): Promise<RevenuePoint[]> {
@@ -26,5 +27,9 @@ export class InMemoryReportingRepository implements ReportingRepository {
 
   async revenueByPriceGroupPoints(): Promise<LabeledRevenuePoint[]> {
     return this.byPriceGroup;
+  }
+
+  async revenueByArticlePoints(): Promise<LabeledRevenuePoint[]> {
+    return this.byArticle;
   }
 }

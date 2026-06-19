@@ -333,6 +333,11 @@ export const appRouter = router({
       .input(z.object({ ...rangeShape }).optional())
       .query(async ({ input, ctx }) => ctx.reporting.revenueByPriceGroup(toRange(input ?? {}))),
 
+    /** Auftragswert nach Artikel/Veredelungsart (Position) aufgeschlüsselt (Kap. 29). */
+    revenueByArticle: roleProcedure(...supplierRoles)
+      .input(z.object({ ...rangeShape }).optional())
+      .query(async ({ input, ctx }) => ctx.reporting.revenueByArticle(toRange(input ?? {}))),
+
     /** Periodenvergleich Umsatz: aktuell vs. Vorperiode (Kap. 29). */
     compareRevenue: roleProcedure(...supplierRoles)
       .input(z.object({ granularity: granularityEnum, reference: z.string().datetime().optional() }))

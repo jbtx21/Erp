@@ -155,6 +155,10 @@ function setup(user: AuthUser | null = BUERO) {
       [
         { at: new Date("2026-05-10T09:00:00Z"), label: "STANDARD", name: "Standard", netCents: 35_000 },
         { at: new Date("2026-06-05T09:00:00Z"), label: "PREMIUM", name: "Premium", netCents: 15_000 },
+      ],
+      [
+        { at: new Date("2026-06-01T09:00:00Z"), label: "Polo / L", name: "Polo / L", netCents: 40_000 },
+        { at: new Date("2026-06-02T09:00:00Z"), label: "Stick Brust", name: "Stick Brust", netCents: 10_000 },
       ]
     )
   );
@@ -653,6 +657,12 @@ describe("tRPC reporting — Auswertungen (Kap. 29)", () => {
     expect(byShop[0]).toMatchObject({ name: "Shop A", sharePercent: 60 });
     const byPg = await caller.reporting.revenueByPriceGroup();
     expect(byPg[0]).toMatchObject({ label: "STANDARD", sharePercent: 70 });
+  });
+
+  it("schlüsselt den Auftragswert nach Artikel/Position auf", async () => {
+    const { caller } = setup(BUCHHALTUNG);
+    const byArticle = await caller.reporting.revenueByArticle();
+    expect(byArticle[0]).toMatchObject({ name: "Polo / L", netCents: 40_000, sharePercent: 80 });
   });
 
   it("begrenzt die Umsatz-Übersicht auf den Zeitraum (von–bis)", async () => {

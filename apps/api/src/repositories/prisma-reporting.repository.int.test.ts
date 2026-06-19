@@ -127,5 +127,13 @@ if (!dbConfigured) {
       const manual = res.find((r) => r.label === "manual");
       expect(manual?.name).toBe("Manuell");
     });
+
+    it("schlüsselt den Auftragswert nach Artikel/Position auf (OrderLine.description)", async () => {
+      const res = await service.revenueByArticle();
+      const polo = res.find((r) => r.name === "Polo");
+      const shirt = res.find((r) => r.name === "Shirt");
+      expect(polo?.netCents).toBeGreaterThanOrEqual(20_000); // 10 × 2.000
+      expect(shirt?.netCents).toBeGreaterThanOrEqual(15_000); // 5 × 3.000
+    });
   });
 }

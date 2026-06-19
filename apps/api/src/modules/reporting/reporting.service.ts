@@ -34,6 +34,8 @@ export interface ReportingRepository {
   revenueByShopPoints(): Promise<LabeledRevenuePoint[]>;
   /** Umsatz je Rechnung mit Kundengruppen-Dimension (Preisgruppe der Firma). */
   revenueByPriceGroupPoints(): Promise<LabeledRevenuePoint[]>;
+  /** Auftragswert je Position mit Artikel-/Veredelungs-Dimension (OrderLine.description). */
+  revenueByArticlePoints(): Promise<LabeledRevenuePoint[]>;
 }
 
 /**
@@ -107,6 +109,15 @@ export class ReportingService {
   /** Umsatz nach Kundengruppe (Preisgruppe) aufgeschlüsselt (Kap. 29). */
   async revenueByPriceGroup(range?: DateRange): Promise<RevenueBreakdownItem[]> {
     return breakdownRevenue(filterByRange(await this.repo.revenueByPriceGroupPoints(), range));
+  }
+
+  /**
+   * Auftragswert nach Artikel/Veredelungsart (Position) aufgeschlüsselt (Kap. 29).
+   * Grundlage ist der Auftragswert je Auftragsposition (OrderLine), da Rechnungen
+   * nicht artikelfein vorliegen — jede Veredelung ist eine eigene Position (Kap. 4.4).
+   */
+  async revenueByArticle(range?: DateRange): Promise<RevenueBreakdownItem[]> {
+    return breakdownRevenue(filterByRange(await this.repo.revenueByArticlePoints(), range));
   }
 
   /** Umsatz: aktuelle vs. vorhergehende Periode (Tag/Woche/Monat/Jahr). */

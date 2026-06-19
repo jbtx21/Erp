@@ -88,6 +88,7 @@ export function Reporting({ role }: { role: string }): JSX.Element {
   const [compare, setCompare] = useState<PeriodComparison | null>(null);
   const [byShop, setByShop] = useState<BreakdownItem[]>([]);
   const [byPriceGroup, setByPriceGroup] = useState<BreakdownItem[]>([]);
+  const [byArticle, setByArticle] = useState<BreakdownItem[]>([]);
   const [leadTime, setLeadTime] = useState<LeadTimeOverview | null>(null);
   const [defects, setDefects] = useState<DefectOverview | null>(null);
   const [onTime, setOnTime] = useState<OnTimeOverview | null>(null);
@@ -110,18 +111,20 @@ export function Reporting({ role }: { role: string }): JSX.Element {
       setOnTime(ot as OnTimeOverview);
 
       if (!isProduction) {
-        const [rev, ord, cmp, shop, pg] = await Promise.all([
+        const [rev, ord, cmp, shop, pg, art] = await Promise.all([
           trpc.reporting.revenueOverview.query({ granularity, ...range }),
           trpc.reporting.orderOverview.query({ granularity, ...range }),
           trpc.reporting.compareRevenue.query({ granularity }),
           trpc.reporting.revenueByShop.query(range),
           trpc.reporting.revenueByPriceGroup.query(range),
+          trpc.reporting.revenueByArticle.query(range),
         ]);
         setRevenue(rev as RevenueOverview);
         setOrders(ord as OrderOverview);
         setCompare(cmp as PeriodComparison);
         setByShop(shop as BreakdownItem[]);
         setByPriceGroup(pg as BreakdownItem[]);
+        setByArticle(art as BreakdownItem[]);
       }
     } catch (err) {
       setStatus(`Fehler: ${(err as Error).message}`);
@@ -260,6 +263,13 @@ export function Reporting({ role }: { role: string }): JSX.Element {
       )}
       {!isProduction && (
         <Breakdown title="Umsatz nach Kundengruppe" items={byPriceGroup} fileName={`umsatz-kundengruppe-${granularity}.csv`} />
+      )}
+      {!isProduction && (
+        <Breakdown
+          title="Umsatz nach Artikel/Veredelung (Auftragswert)"
+          items={byArticle}
+          fileName={`umsatz-artikel-${granularity}.csv`}
+        />
       )}
 
       {leadTime && (

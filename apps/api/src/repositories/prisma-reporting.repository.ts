@@ -49,4 +49,18 @@ export class PrismaReportingRepository implements ReportingRepository {
       return { at: i.issuedAt, label: pg?.kind ?? "OHNE", name: pg?.name ?? "Ohne Preisgruppe", netCents: i.netCents };
     });
   }
+
+  async revenueByArticlePoints(): Promise<LabeledRevenuePoint[]> {
+    // Auftragswert je Position; Artikel/Veredelung wird über die Positionsbezeichnung
+    // gruppiert (OrderLine ist nicht artikelfein verknüpft — jede Veredelung = Position).
+    const lines = await prisma.orderLine.findMany({
+      select: { description: true, qty: true, unitNetCents: true, order: { select: { createdAt: true } } },
+    });
+    return lines.map((l) => ({
+      at: l.order.createdAt,
+      label: l.description,
+      name: l.description,
+      netCents: l.qty * l.unitNetCents,
+    }));
+  }
 }

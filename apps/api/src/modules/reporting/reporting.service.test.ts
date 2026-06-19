@@ -26,10 +26,15 @@ const byPriceGroup: LabeledRevenuePoint[] = [
   { at: at("2026-05-10T09:00:00Z"), label: "STANDARD", name: "Standard", netCents: 35_000 },
   { at: at("2026-06-05T09:00:00Z"), label: "PREMIUM", name: "Premium", netCents: 15_000 },
 ];
+const byArticle: LabeledRevenuePoint[] = [
+  { at: at("2026-06-01T09:00:00Z"), label: "Polo / L", name: "Polo / L", netCents: 30_000 },
+  { at: at("2026-06-02T09:00:00Z"), label: "Stick Brust", name: "Stick Brust", netCents: 20_000 },
+  { at: at("2026-06-03T09:00:00Z"), label: "Polo / L", name: "Polo / L", netCents: 10_000 },
+];
 
 function service(ai: AiReportClient | null = null): ReportingService {
   return new ReportingService(
-    new InMemoryReportingRepository(revenue, orders, byShop, byPriceGroup),
+    new InMemoryReportingRepository(revenue, orders, byShop, byPriceGroup, byArticle),
     ai
   );
 }
@@ -58,6 +63,12 @@ describe("ReportingService (Kap. 29)", () => {
   it("schlüsselt den Umsatz nach Kundengruppe auf", async () => {
     const res = await service().revenueByPriceGroup();
     expect(res[0]).toMatchObject({ label: "STANDARD", netCents: 35_000, sharePercent: 70 });
+  });
+
+  it("schlüsselt den Auftragswert nach Artikel/Position auf", async () => {
+    const res = await service().revenueByArticle();
+    expect(res.map((r) => r.label)).toEqual(["Polo / L", "Stick Brust"]);
+    expect(res[0]).toMatchObject({ netCents: 40_000, count: 2, sharePercent: 67 });
   });
 
   it("begrenzt die Übersicht auf den Zeitraum (von–bis)", async () => {
