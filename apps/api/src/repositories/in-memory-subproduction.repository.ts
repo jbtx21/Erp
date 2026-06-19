@@ -1,6 +1,5 @@
 // In-Memory-Implementierung des Fremdvergabe-Repositories — für Tests/lokale Durchstiche.
 
-import type { SubProductionStage } from "@texma/shared";
 import type {
   StageUpdate,
   StoredStage,
@@ -14,11 +13,13 @@ export class InMemorySubProductionRepository implements SubProductionRepository 
     return this.stages.find((s) => s.id === subProductionId) ?? null;
   }
 
-  async listStages(productionId: string): Promise<SubProductionStage[]> {
+  async listStages(productionId: string): Promise<StoredStage[]> {
     return this.stages
       .filter((s) => s.productionId === productionId)
       .sort((a, b) => a.sequence - b.sequence)
       .map((s) => ({
+        id: s.id,
+        productionId: s.productionId,
         sequence: s.sequence,
         supplierId: s.supplierId,
         status: s.status,

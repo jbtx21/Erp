@@ -30,8 +30,8 @@ export type StageUpdate = Pick<
 
 export interface SubProductionRepository {
   getStage(subProductionId: string): Promise<StoredStage | null>;
-  /** Alle Stufen einer PA (für die sequenzielle Gate-Prüfung + Übersicht). */
-  listStages(productionId: string): Promise<SubProductionStage[]>;
+  /** Alle Stufen einer PA (mit id, für Aktionen + sequenzielle Gate-Prüfung + Übersicht). */
+  listStages(productionId: string): Promise<StoredStage[]>;
   updateStage(subProductionId: string, data: StageUpdate): Promise<void>;
 }
 
@@ -43,7 +43,7 @@ export interface AdvanceOptions {
 
 export interface ProductionSubStatus {
   productionId: string;
-  stages: SubProductionStage[];
+  stages: StoredStage[];
   /** Fremdvergabe komplett (jede Stufe zurück) → interne Weiterverarbeitung frei. */
   allReturned: boolean;
 }

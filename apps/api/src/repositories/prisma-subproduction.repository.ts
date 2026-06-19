@@ -1,7 +1,7 @@
 // Prisma-Implementierung des Fremdvergabe-Repositories (Produktionspfad, T-04).
 
 import { prisma } from "@texma/db";
-import type { SubProductionStage, SubProductionStatus } from "@texma/shared";
+import type { SubProductionStatus } from "@texma/shared";
 import type {
   StageUpdate,
   StoredStage,
@@ -27,12 +27,14 @@ export class PrismaSubProductionRepository implements SubProductionRepository {
     };
   }
 
-  async listStages(productionId: string): Promise<SubProductionStage[]> {
+  async listStages(productionId: string): Promise<StoredStage[]> {
     const rows = await prisma.subProductionOrder.findMany({
       where: { productionId },
       orderBy: { sequence: "asc" },
     });
     return rows.map((s) => ({
+      id: s.id,
+      productionId: s.productionId,
       sequence: s.sequence,
       supplierId: s.supplierId,
       status: s.status as SubProductionStatus,

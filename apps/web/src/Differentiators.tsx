@@ -42,7 +42,7 @@ export function Differentiators({ role }: { role: string }): JSX.Element {
           Rolle PRODUKTION ausgeblendet (Kap. 12).
         </p>
       )}
-      <SubproductionPlan />
+      <SubproductionPlan role={role} />
     </>
   );
 }
@@ -344,17 +344,18 @@ function Postcalc(): JSX.Element {
   );
 }
 
-// ── Fremdvergabe-Plan (T-04 / Kap. 5.3) ─────────────────────────────────────────
+// ── Mehrstufige Fremdvergabe — Plan + Klickpfad (T-04 / Kap. 5.3) ────────────────
+type SubStatus = "OFFEN" | "BEISTELLUNG_VERSANDT" | "RUECKLAUF_ERHALTEN" | "ABGESCHLOSSEN";
 interface Stage {
+  id: string;
   sequence: number;
   supplierId: string;
-  status: string;
+  status: SubStatus;
+  beistellMenge?: number | null;
+  ruecklaufMenge?: number | null;
   dueDate?: string | null;
 }
 interface SubPlan {
-  nextActionable: Stage | null;
-  blocked: Stage[];
-  overdue: Stage[];
   totalScrap: number;
   totalLohnCents: number;
   progressPercent: number;
@@ -362,57 +363,133 @@ interface SubPlan {
   allReturned: boolean;
 }
 
-function SubproductionPlan(): JSX.Element {
+const RETURNED = new Set<SubStatus>(["RUECKLAUF_ERHALTEN", "ABGESCHLOSSEN"]);
+const STATUS_LABEL: Record<SubStatus, string> = {
+  OFFEN: "offen",
+  BEISTELLUNG_VERSANDT: "beigestellt",
+  RUECKLAUF_ERHALTEN: "Rücklauf erhalten",
+  ABGESCHLOSSEN: "abgeschlossen",
+};
+const isOverdue = (s: Stage): boolean =>
+  !!s.dueDate && !RETURNED.has(s.status) && new Date(s.dueDate).getTime() < Date.now();
+
+function SubproductionPlan({ role }: { role: string }): JSX.Element {
   const [productionId, setProductionId] = useState("");
   const [plan, setPlan] = useState<SubPlan | null>(null);
+  const [stages, setStages] = useState<Stage[]>([]);
+  const [menge, setMenge] = useState<Record<string, string>>({});
   const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const canAct = role === "ADMIN" || role === "BUERO";
 
   const load = useCallback(async () => {
     setErr("");
     try {
-      setPlan((await trpc.subproduction.plan.query({ productionId })) as SubPlan);
+      const [p, s] = await Promise.all([
+        trpc.subproduction.plan.query({ productionId }),
+        trpc.subproduction.list.query({ productionId }),
+      ]);
+      setPlan(p as unknown as SubPlan);
+      setStages((s as unknown as { stages: Stage[] }).stages);
     } catch (e) {
       setErr(errMsg(e));
     }
   }, [productionId]);
 
+  const advance = useCallback(
+    async (stage: Stage, to: SubStatus, withMenge: boolean) => {
+      setErr("");
+      setBusy(true);
+      try {
+        const raw = menge[stage.id];
+        const m = withMenge && raw != null && raw !== "" ? Number(raw) : undefined;
+        await trpc.subproduction.advance.mutate({
+          subProductionId: stage.id,
+          to: to as "BEISTELLUNG_VERSANDT" | "RUECKLAUF_ERHALTEN" | "ABGESCHLOSSEN",
+          ...(m != null ? { menge: m } : {}),
+        });
+        await load();
+      } catch (e) {
+        setErr(errMsg(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [menge, load]
+  );
+
+  // Client-Gate (zusätzlich zur Server-Prüfung, T-04): eine OFFENE Stufe ist erst startbar,
+  // wenn alle vorherigen Stufen zurück sind.
+  const canStart = (i: number): boolean => stages.slice(0, i).every((s) => RETURNED.has(s.status));
+
+  const mengeBox = (s: Stage, ph: string): JSX.Element => (
+    <input style={{ width: 64, marginRight: 6 }} type="number" min={0} placeholder={ph}
+      value={menge[s.id] ?? ""} onChange={(e) => setMenge((m) => ({ ...m, [s.id]: e.target.value }))} />
+  );
+
+  const action = (s: Stage, i: number): JSX.Element => {
+    if (s.status === "ABGESCHLOSSEN") return <span style={dot("GRUEN")}>✓ abgeschlossen</span>;
+    if (!canAct) return <span style={{ color: "#999" }}>—</span>;
+    if (s.status === "OFFEN") {
+      return canStart(i)
+        ? <>{mengeBox(s, "Menge")}<button disabled={busy} onClick={() => void advance(s, "BEISTELLUNG_VERSANDT", true)}>Beistellung versenden</button></>
+        : <span style={{ color: "#999" }}>blockiert</span>;
+    }
+    if (s.status === "BEISTELLUNG_VERSANDT") {
+      return <>{mengeBox(s, "Rückl.")}<button disabled={busy} onClick={() => void advance(s, "RUECKLAUF_ERHALTEN", true)}>Rücklauf erfassen</button></>;
+    }
+    return <button disabled={busy} onClick={() => void advance(s, "ABGESCHLOSSEN", false)}>Abschließen</button>;
+  };
+
   return (
     <section style={card}>
-      <h3>Mehrstufige Fremdvergabe — Plan (T-04, Kap. 5.3)</h3>
+      <h3>Mehrstufige Fremdvergabe — Plan + Aktionen (T-04, Kap. 5.3)</h3>
       <p style={{ color: "#555", marginTop: 0 }}>
-        Nächste handlungsfähige Stufe, blockierte/überfällige Stufen, Schwund und Kettenausbeute je PA.
+        Stufen sequenziell weiterschalten: Beistellung → Rücklauf → Abschluss (mit Mengenfluss/Schwund).
       </p>
       <label>PA-ID:{" "}
-        <input value={productionId} placeholder="Produktions­auftrag-ID" onChange={(e) => setProductionId(e.target.value)} />
+        <input value={productionId} placeholder="Produktions-Auftrag-ID" onChange={(e) => setProductionId(e.target.value)} />
       </label>{" "}
       <button onClick={() => void load()} disabled={!productionId}>Plan laden</button>
       {err && <p style={errStyle}>Fehler: {err}</p>}
       {plan && (
-        <>
-          <p style={{ marginTop: "0.75rem" }}>
-            <span style={kpi}>Fortschritt: <strong>{plan.progressPercent} %</strong></span>
-            <span style={kpi}>Ausbeute: <strong>{plan.yieldPercent == null ? "—" : `${plan.yieldPercent} %`}</strong></span>
-            <span style={kpi}>Schwund: <strong>{plan.totalScrap}</strong></span>
-            <span style={kpi}>Lohn gesamt: <strong>{euro(plan.totalLohnCents)}</strong></span>
-            <span style={kpi}>{plan.allReturned ? "✓ alle zurück" : "offen"}</span>
-          </p>
-          <p>
-            Nächste Stufe:{" "}
-            {plan.nextActionable
-              ? <strong>#{plan.nextActionable.sequence} {plan.nextActionable.supplierId} ({plan.nextActionable.status})</strong>
-              : "—"}
-          </p>
-          {plan.overdue.length > 0 && (
-            <p style={dot("ROT")}>
-              Überfällig: {plan.overdue.map((s) => `#${s.sequence} ${s.supplierId}`).join(", ")}
-            </p>
-          )}
-          {plan.blocked.length > 0 && (
-            <p style={{ color: "#555" }}>
-              Blockiert (warten auf Vorstufe): {plan.blocked.map((s) => `#${s.sequence} ${s.supplierId}`).join(", ")}
-            </p>
-          )}
-        </>
+        <p style={{ marginTop: "0.75rem" }}>
+          <span style={kpi}>Fortschritt: <strong>{plan.progressPercent} %</strong></span>
+          <span style={kpi}>Ausbeute: <strong>{plan.yieldPercent == null ? "—" : `${plan.yieldPercent} %`}</strong></span>
+          <span style={kpi}>Schwund: <strong>{plan.totalScrap}</strong></span>
+          <span style={kpi}>Lohn gesamt: <strong>{euro(plan.totalLohnCents)}</strong></span>
+          <span style={kpi}>{plan.allReturned ? "✓ alle zurück" : "offen"}</span>
+        </p>
+      )}
+      {stages.length > 0 && (
+        <table style={tableStyle}>
+          <thead>
+            <tr>
+              <th style={th}>Stufe</th>
+              <th style={th}>Veredler</th>
+              <th style={th}>Status</th>
+              <th style={th}>Menge B/R</th>
+              <th style={th}>Aktion</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stages.map((s, i) => (
+              <tr key={s.id}>
+                <td style={td}>#{s.sequence}</td>
+                <td style={td}>{s.supplierId}</td>
+                <td style={td}>
+                  {STATUS_LABEL[s.status]}
+                  {isOverdue(s) && <span style={{ ...dot("ROT"), marginLeft: 6 }}>überfällig</span>}
+                </td>
+                <td style={td}>{s.beistellMenge ?? "—"}{s.ruecklaufMenge != null ? ` / ${s.ruecklaufMenge}` : ""}</td>
+                <td style={td}>{action(s, i)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {!canAct && stages.length > 0 && (
+        <p style={{ color: "#555" }}>Aktionen erfordern Rolle ADMIN/BÜRO (Kap. 12).</p>
       )}
     </section>
   );
