@@ -78,7 +78,10 @@ vorangetrieben.
   Code, wird aber an die externen Identitäts-Claims gebunden, nicht an eigene Nutzer-/
   Session-Tabellen.
 
-**Status der Umsetzung:** offen — siehe „Offene Entscheidung" unten. Bis dahin bleibt der
+**Status der Umsetzung:** entschieden — **„höchster Sicherheitsstandard ist Maxime"**. Erster
+Schritt umgesetzt: OIDC-Identitätsprüfung per `jose` (`apps/api/src/modules/auth/oidc.ts`),
+Server bevorzugt den Bearer-Pfad; Cookie-Session ist Übergangs-Fallback (deprecated). Details:
+`docs/adr/0001-auth-oidc-externalisierung.md`. Bis zur Provider-Anbindung bleibt der
 vorhandene Auth-Code **eingefroren** (keine neue Funktion, nur Sicherheits-Bugfixes).
 
 ---
@@ -113,9 +116,13 @@ Gegenmaßnahmen sind **feste Bestandteile, nicht optional**:
 4. **Bus-Faktor:** Doku + „Zweiter kann übernehmen" als laufendes Abnahmekriterium führen;
    Entscheidungs-Gate mit den vier harten Kriterien vorbereiten.
 
-## Offene Entscheidung (TEXMA / Projektleitung)
+## Entschieden (TEXMA / Projektleitung)
 
-- **Auth-Migration jetzt oder nach dem Gate?** Den vorhandenen C1-Eigenbau bis zur Make-or-
-  Buy-Entscheidung nur einfrieren+dokumentieren, ODER schon vor dem Gate auf eine externe
-  Identity-Lösung umstellen (Aufwand, der bei „Buy" teils verloren ginge — vs. Sicherheits-
-  gewinn unabhängig vom Ausgang).
+- **Auth-Migration:** **jetzt**, Sicherheit als Maxime. OIDC-Verifikation per `jose` ist
+  eingebaut (Bearer bevorzugt, Cookie-Session deprecated). Folge-Schritte: konkreten Provider
+  wählen, `crypto.ts` durch Secrets-Manager ablösen, Cookie-Pfad nach Anbindung zurückbauen.
+  Siehe `docs/adr/0001-auth-oidc-externalisierung.md`.
+
+## Verbleibend offen
+
+- Konkrete Provider-Auswahl (OIDC-/Identity-Lösung) + Secrets-Manager.

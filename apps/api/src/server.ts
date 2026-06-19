@@ -9,6 +9,7 @@ import {
 import Fastify, { type FastifyInstance } from "fastify";
 import { PrismaAuditSink } from "./audit/prisma-audit-sink.js";
 import { AuthService } from "./modules/auth/auth.service.js";
+import { JoseOidcVerifier, type IdentityVerifier } from "./modules/auth/oidc.js";
 import { Argon2Hasher } from "./modules/auth/password.js";
 import { OtpauthTotpService } from "./modules/auth/totp.js";
 import { OrderImportService } from "./modules/shop-import/order-import.service.js";
@@ -53,7 +54,12 @@ import type { Context } from "./trpc/trpc.js";
 const COOKIE_NAME = "sid";
 const secure = process.env.NODE_ENV === "production";
 
-export function buildServer(): FastifyInstance {
+export interface ServerOptions {
+  /** Überschreibt den OIDC-Verifier (Tests); sonst aus der Umgebung (OIDC_*). */
+  identityVerifier?: IdentityVerifier | null;
+}
+
+export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const server = Fastify({ logger: true });
   void server.register(cookie);
 
@@ -87,6 +93,9 @@ export function buildServer(): FastifyInstance {
     new Argon2Hasher(),
     new OtpauthTotpService()
   );
+  // Sicherheits-Maxime (Leitplanke 2): primär externe OIDC-Identität, wenn konfiguriert.
+  // Der selbstgebaute Session-Pfad bleibt nur als Fallback (Dev/Übergang) bestehen.
+  const oidc = opts.identityVerifier !== undefined ? opts.identityVerifier : JoseOidcVerifier.fromEnv();
 
   server.get("/health", async () => ({ ok: true }));
 
@@ -96,7 +105,20 @@ export function buildServer(): FastifyInstance {
       router: appRouter,
       createContext: async ({ req, res }: CreateFastifyContextOptions): Promise<Context> => {
         const sessionToken = req.cookies[COOKIE_NAME] ?? null;
-        const user = sessionToken ? await auth.resolveSession(sessionToken) : null;
+        // Bevorzugt: vom Identity-Provider ausgestelltes Bearer-Token (OIDC, jose-verifiziert).
+        // Fallback: selbstgebaute Cookie-Session (Übergang bis zur vollständigen Ablösung).
+        const authz = req.headers.authorization;
+        let user = null;
+        if (oidc && authz?.startsWith("Bearer ")) {
+          try {
+            user = await oidc.verify(authz.slice("Bearer ".length));
+          } catch {
+            user = null;
+          }
+        }
+        if (!user && sessionToken) {
+          user = await auth.resolveSession(sessionToken);
+        }
         return {
           orderImport,
           orders: repo,
