@@ -2,7 +2,7 @@
 // Repository als Fake — keine DB.
 
 import { describe, expect, it } from "vitest";
-import type { DefectPoint, LeadTimePoint } from "@texma/shared";
+import type { DefectPoint, LeadTimePoint, OnTimePoint } from "@texma/shared";
 import { InMemoryProductionReportingRepository } from "../../repositories/in-memory-production-reporting.repository.js";
 import { ProductionReportingService } from "./production-reporting.service.js";
 
@@ -19,10 +19,15 @@ const defects: DefectPoint[] = [
   { at: at("2026-06-03T00:00:00Z"), defective: false },
   { at: at("2026-06-04T00:00:00Z"), defective: true, cause: "EXTERN_VEREDLER" },
 ];
+const onTimes: OnTimePoint[] = [
+  { at: at("2026-06-05T00:00:00Z"), onTime: true },
+  { at: at("2026-06-10T00:00:00Z"), onTime: true },
+  { at: at("2026-06-15T00:00:00Z"), onTime: false },
+];
 
 function service(): ProductionReportingService {
   return new ProductionReportingService(
-    new InMemoryProductionReportingRepository(leadTimes, defects)
+    new InMemoryProductionReportingRepository(leadTimes, defects, onTimes)
   );
 }
 
@@ -39,5 +44,11 @@ describe("ProductionReportingService (Kap. 29/35)", () => {
     expect(res.overall).toEqual({ total: 4, defects: 2, ratePercent: 50 });
     expect(res.byCause).toEqual({ LIEFERANT: 0, INTERN: 1, EXTERN_VEREDLER: 1 });
     expect(res.buckets[0]).toMatchObject({ key: "2026-06", total: 4, defects: 2, ratePercent: 50 });
+  });
+
+  it("liefert die Termintreue je Monat und gesamt", async () => {
+    const res = await service().onTimeOverview("MONTH");
+    expect(res.overall).toEqual({ total: 3, onTime: 2, ratePercent: 67 });
+    expect(res.buckets[0]).toMatchObject({ key: "2026-06", total: 3, onTime: 2, ratePercent: 67 });
   });
 });

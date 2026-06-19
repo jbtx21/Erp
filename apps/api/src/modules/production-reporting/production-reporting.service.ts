@@ -7,9 +7,11 @@
 import {
   bucketDefectRate,
   bucketLeadTime,
+  bucketOnTimeRate,
   computeLeadTimeStats,
   defectRate,
   defectsByCause,
+  onTimeRate,
   type DefectBucket,
   type DefectCause,
   type DefectPoint,
@@ -17,6 +19,8 @@ import {
   type LeadTimeBucket,
   type LeadTimePoint,
   type LeadTimeStats,
+  type OnTimeBucket,
+  type OnTimePoint,
 } from "@texma/shared";
 
 export interface ProductionReportingRepository {
@@ -24,6 +28,8 @@ export interface ProductionReportingRepository {
   leadTimePoints(): Promise<LeadTimePoint[]>;
   /** Je Auftrag: Auftragsdatum + ob reklamiert (mit Ursache). */
   defectPoints(): Promise<DefectPoint[]>;
+  /** Je fertiggestelltem Auftrag mit Zieltermin: Fertigstellung + ob pünktlich. */
+  onTimePoints(): Promise<OnTimePoint[]>;
 }
 
 export interface LeadTimeOverview {
@@ -39,6 +45,13 @@ export interface DefectOverview {
   overall: { total: number; defects: number; ratePercent: number | null };
   /** Reklamationen je Ursache (Ursachenanalyse, Kap. 20). */
   byCause: Record<DefectCause, number>;
+}
+
+export interface OnTimeOverview {
+  granularity: Granularity;
+  buckets: OnTimeBucket[];
+  /** Gesamt-Termintreue über alle Aufträge mit Zieltermin. */
+  overall: { total: number; onTime: number; ratePercent: number | null };
 }
 
 export class ProductionReportingService {
@@ -62,6 +75,16 @@ export class ProductionReportingService {
       buckets: bucketDefectRate(points, granularity),
       overall: defectRate(points),
       byCause: defectsByCause(points),
+    };
+  }
+
+  /** Termintreue-Übersicht je Periode + Gesamt (Kap. 35.4/29). */
+  async onTimeOverview(granularity: Granularity): Promise<OnTimeOverview> {
+    const points = await this.repo.onTimePoints();
+    return {
+      granularity,
+      buckets: bucketOnTimeRate(points, granularity),
+      overall: onTimeRate(points),
     };
   }
 }

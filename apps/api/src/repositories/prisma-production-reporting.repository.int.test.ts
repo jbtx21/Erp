@@ -13,6 +13,7 @@ const ORD_A = "order_prep_a";
 const ORD_B = "order_prep_b";
 const DN_A = "dn_prep_a";
 const CMP_B = "cmp_prep_b";
+const PA_A = "pa_prep_a";
 
 const dbConfigured = process.env.RUN_DB_TESTS === "1";
 
@@ -27,6 +28,7 @@ if (!dbConfigured) {
     async function cleanup() {
       await prisma.complaint.deleteMany({ where: { id: { in: [CMP_B] } } });
       await prisma.deliveryNote.deleteMany({ where: { id: { in: [DN_A] } } });
+      await prisma.productionOrder.deleteMany({ where: { id: { in: [PA_A] } } });
       await prisma.orderLine.deleteMany({ where: { order: { id: { in: [ORD_A, ORD_B] } } } });
       await prisma.order.deleteMany({ where: { id: { in: [ORD_A, ORD_B] } } });
       await prisma.company.deleteMany({ where: { id: CO } });
@@ -50,6 +52,10 @@ if (!dbConfigured) {
       });
       await prisma.deliveryNote.create({
         data: { id: DN_A, number: "LS-PREP-1", orderId: ORD_A, createdAt: new Date(Date.UTC(2026, 5, 3, 0, 0, 0)) },
+      });
+      // Zieltermin 2026-06-05 > Lieferschein 2026-06-03 → pünktlich.
+      await prisma.productionOrder.create({
+        data: { id: PA_A, number: "PA-PREP-1", orderId: ORD_A, dueDate: new Date(Date.UTC(2026, 5, 5, 0, 0, 0)) },
       });
 
       // Auftrag B: reklamiert (Ursache INTERN), nicht versendet → keine Durchlaufzeit.
@@ -86,6 +92,13 @@ if (!dbConfigured) {
       expect(res.overall.total).toBeGreaterThanOrEqual(2);
       expect(res.overall.defects).toBeGreaterThanOrEqual(1);
       expect(res.byCause.INTERN).toBeGreaterThanOrEqual(1);
+    });
+
+    it("ermittelt die Termintreue gegen den Zieltermin", async () => {
+      const res = await service.onTimeOverview("MONTH");
+      // Auftrag A wurde vor dem Zieltermin fertig → mind. ein pünktlicher Auftrag.
+      expect(res.overall.total).toBeGreaterThanOrEqual(1);
+      expect(res.overall.onTime).toBeGreaterThanOrEqual(1);
     });
   });
 }

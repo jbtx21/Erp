@@ -5,13 +5,18 @@ import { describe, expect, it } from "vitest";
 import {
   bucketDefectRate,
   bucketLeadTime,
+  bucketOnTimeRate,
   computeDefectRate,
   computeLeadTimeStats,
+  computeOnTimeRate,
   defectRate,
   defectsByCause,
+  isOnTime,
   leadTimeHours,
+  onTimeRate,
   type DefectPoint,
   type LeadTimePoint,
+  type OnTimePoint,
 } from "./production-metrics.js";
 
 const at = (iso: string): Date => new Date(iso);
@@ -95,5 +100,36 @@ describe("Fehlerquote", () => {
   it("bucketDefectRate je Monat", () => {
     const buckets = bucketDefectRate(points, "MONTH");
     expect(buckets[0]).toMatchObject({ key: "2026-06", total: 4, defects: 2, ratePercent: 50 });
+  });
+});
+
+describe("Termintreue (On-Time)", () => {
+  it("isOnTime: am Termin gilt als pünktlich, danach nicht", () => {
+    expect(isOnTime(at("2026-06-05T00:00:00Z"), at("2026-06-05T00:00:00Z"))).toBe(true);
+    expect(isOnTime(at("2026-06-04T00:00:00Z"), at("2026-06-05T00:00:00Z"))).toBe(true);
+    expect(isOnTime(at("2026-06-06T00:00:00Z"), at("2026-06-05T00:00:00Z"))).toBe(false);
+  });
+
+  it("computeOnTimeRate schützt vor Division durch 0", () => {
+    expect(computeOnTimeRate(4, 3)).toEqual({ total: 4, onTime: 3, ratePercent: 75 });
+    expect(computeOnTimeRate(0, 0).ratePercent).toBeNull();
+  });
+
+  const points: OnTimePoint[] = [
+    { at: at("2026-06-01T00:00:00Z"), onTime: true },
+    { at: at("2026-06-02T00:00:00Z"), onTime: true },
+    { at: at("2026-06-03T00:00:00Z"), onTime: false },
+    { at: at("2026-07-01T00:00:00Z"), onTime: true },
+  ];
+
+  it("onTimeRate über alle Aufträge", () => {
+    expect(onTimeRate(points)).toEqual({ total: 4, onTime: 3, ratePercent: 75 });
+  });
+
+  it("bucketOnTimeRate je Monat", () => {
+    const buckets = bucketOnTimeRate(points, "MONTH");
+    expect(buckets.map((b) => b.key)).toEqual(["2026-06", "2026-07"]);
+    expect(buckets[0]).toMatchObject({ total: 3, onTime: 2, ratePercent: 67 });
+    expect(buckets[1]).toMatchObject({ total: 1, onTime: 1, ratePercent: 100 });
   });
 });

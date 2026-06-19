@@ -160,6 +160,10 @@ function setup(user: AuthUser | null = BUERO) {
       [
         { at: new Date("2026-06-01T00:00:00Z"), defective: false },
         { at: new Date("2026-06-02T00:00:00Z"), defective: true, cause: "INTERN" },
+      ],
+      [
+        { at: new Date("2026-06-05T00:00:00Z"), onTime: true },
+        { at: new Date("2026-06-10T00:00:00Z"), onTime: false },
       ]
     )
   );
@@ -677,6 +681,12 @@ describe("tRPC productionReporting — operative KPIs (Kap. 29/35)", () => {
     const res = await caller.productionReporting.defects({ granularity: "MONTH" });
     expect(res.overall).toEqual({ total: 2, defects: 1, ratePercent: 50 });
     expect(res.byCause.INTERN).toBe(1);
+  });
+
+  it("liefert PRODUKTION die Termintreue (On-Time-Quote)", async () => {
+    const { caller } = setup(PRODUKTION);
+    const res = await caller.productionReporting.onTime({ granularity: "MONTH" });
+    expect(res.overall).toEqual({ total: 2, onTime: 1, ratePercent: 50 });
   });
 
   it("erfordert eine Anmeldung (UNAUTHORIZED ohne Session)", async () => {

@@ -160,3 +160,71 @@ export function bucketDefectRate(
     }))
     .sort((a, b) => a.start.getTime() - b.start.getTime());
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Termintreue (On-Time-Quote): Anteil termingerecht fertiggestellter Aufträge.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface OnTimePoint {
+  /** Fertigstellung (Bezug für das Bucketing). */
+  at: Date;
+  /** true, wenn die Fertigstellung am/vor dem Zieltermin lag. */
+  onTime: boolean;
+}
+
+export interface OnTimeRate {
+  total: number;
+  onTime: number;
+  /** Termintreue in Prozent (kaufmännisch gerundet); null, wenn total 0. */
+  ratePercent: number | null;
+}
+
+export interface OnTimeBucket {
+  key: string;
+  start: Date;
+  total: number;
+  onTime: number;
+  ratePercent: number | null;
+}
+
+/** Ob die Fertigstellung den Zieltermin einhält (am Termin gilt als pünktlich). */
+export function isOnTime(completedAt: Date, dueDate: Date): boolean {
+  return completedAt.getTime() <= dueDate.getTime();
+}
+
+/** Termintreue aus Gesamtzahl und Anzahl pünktlicher Aufträge. */
+export function computeOnTimeRate(total: number, onTime: number): OnTimeRate {
+  return { total, onTime, ratePercent: total === 0 ? null : Math.round((onTime / total) * 100) };
+}
+
+/** Gesamt-Termintreue über alle Auftragspunkte (mit Zieltermin). */
+export function onTimeRate(points: ReadonlyArray<OnTimePoint>): OnTimeRate {
+  return computeOnTimeRate(points.length, points.filter((p) => p.onTime).length);
+}
+
+/** Termintreue je Periode (aufsteigend sortiert). */
+export function bucketOnTimeRate(
+  points: ReadonlyArray<OnTimePoint>,
+  g: Granularity
+): OnTimeBucket[] {
+  const byKey = new Map<string, { start: Date; total: number; onTime: number }>();
+  for (const p of points) {
+    const key = bucketKey(p.at, g);
+    const e = byKey.get(key);
+    if (e) {
+      e.total += 1;
+      if (p.onTime) e.onTime += 1;
+    } else {
+      byKey.set(key, { start: bucketStart(p.at, g), total: 1, onTime: p.onTime ? 1 : 0 });
+    }
+  }
+  return [...byKey.entries()]
+    .map(([key, e]) => ({
+      key,
+      start: e.start,
+      total: e.total,
+      onTime: e.onTime,
+      ratePercent: computeOnTimeRate(e.total, e.onTime).ratePercent,
+    }))
+    .sort((a, b) => a.start.getTime() - b.start.getTime());
+}

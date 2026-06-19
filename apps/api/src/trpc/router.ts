@@ -345,6 +345,11 @@ export const appRouter = router({
     defects: protectedProcedure
       .input(z.object({ granularity: granularityEnum }))
       .query(async ({ input, ctx }) => ctx.productionReporting.defectOverview(input.granularity)),
+
+    /** Termintreue (On-Time-Quote) je Periode + gesamt (Kap. 35.4, operativ). */
+    onTime: protectedProcedure
+      .input(z.object({ granularity: granularityEnum }))
+      .query(async ({ input, ctx }) => ctx.productionReporting.onTimeOverview(input.granularity)),
   }),
 
   productionSheet: router({
