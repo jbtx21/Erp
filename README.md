@@ -7,6 +7,7 @@ TypeScript, modularer Monolith + separate Connector-Schicht, Cloud/SaaS (EU).
 Vollständige fachliche Grundlage: [`docs/lastenheft.md`](docs/lastenheft.md) (v3.4, 39 Kapitel).
 Strategie & Architektur (**Teil-Make**): [`docs/make-or-buy-leitplanken.md`](docs/make-or-buy-leitplanken.md)
 und die ADRs unter [`docs/adr/`](docs/adr/) (0001 Auth/OIDC, 0002 Buy-Stack: Entra ID · Key Vault · finAPI · DATEV).
+Internes UI/UX (Tokens, Tabellen, Status/Ampel): [`docs/erp-ui-design.md`](docs/erp-ui-design.md) · `apps/web/src/theme.ts`.
 
 ## Architektur (Kurzfassung)
 

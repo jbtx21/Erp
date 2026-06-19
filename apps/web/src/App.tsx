@@ -1,10 +1,11 @@
 // Auth-Gate + Auftrags-Eingang (Slice T-01). Zeigt, dass Rolle PRODUKTION keine
 // Preise/Kundendaten sieht (serverseitig redigiert).
-import { type CSSProperties, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Login } from "./Login.js";
 import { Reporting } from "./Reporting.js";
 import { Differentiators } from "./Differentiators.js";
 import { trpc } from "./trpc.js";
+import { T, euro, box, th, td, tdNum } from "./theme.js";
 
 interface AuthUser {
   id: string;
@@ -22,12 +23,6 @@ interface OrderRow {
   employeeNote: string | null;
   totalNetCents: number | null;
 }
-
-const box: CSSProperties = { fontFamily: "system-ui, sans-serif", maxWidth: 960, margin: "2rem auto", padding: "0 1rem" };
-const th: CSSProperties = { textAlign: "left", borderBottom: "2px solid #ccc", padding: "6px 8px" };
-const td: CSSProperties = { borderBottom: "1px solid #eee", padding: "6px 8px" };
-
-const euro = (cents: number | null) => (cents == null ? "—" : (cents / 100).toLocaleString("de-DE", { style: "currency", currency: "EUR" }));
 
 export function App(): JSX.Element {
   const [user, setUser] = useState<AuthUser | null | undefined>(undefined); // undefined = lädt
@@ -105,7 +100,7 @@ function OrdersTable({ orders, status, role, onReload }: { orders: OrderRow[]; s
   return (
     <>
       <h2>Auftrags-Eingang</h2>
-      <p style={{ color: "#555" }}>
+      <p style={{ color: T.text2 }}>
         {role === "PRODUKTION"
           ? "Rolle PRODUKTION: Preise/Kundendaten sind serverseitig ausgeblendet (Kap. 12)."
           : "Shop-Bestellungen werden der Firma zugeordnet (T-01)."}
@@ -118,7 +113,7 @@ function OrdersTable({ orders, status, role, onReload }: { orders: OrderRow[]; s
             <th style={th}>Auftrag</th>
             <th style={th}>Shop-Nr.</th>
             <th style={th}>Firma</th>
-            <th style={th}>Auftragswert</th>
+            <th style={{ ...th, textAlign: "right" }}>Auftragswert</th>
             <th style={th}>Mitarbeiter (Vermerk)</th>
           </tr>
         </thead>
@@ -128,7 +123,7 @@ function OrdersTable({ orders, status, role, onReload }: { orders: OrderRow[]; s
               <td style={td}>{o.number}</td>
               <td style={td}>{o.externalNumber ?? "—"}</td>
               <td style={td}>{o.companyId}</td>
-              <td style={td}>{euro(o.totalNetCents)}</td>
+              <td style={tdNum}>{euro(o.totalNetCents)}</td>
               <td style={td}>{o.employeeNote ?? "—"}</td>
             </tr>
           ))}

@@ -5,18 +5,16 @@
 // (Kap. 12) — die Endpunkte erzwingen die Rolle zusätzlich serverseitig.
 import { type CSSProperties, useCallback, useEffect, useState } from "react";
 import { trpc } from "./trpc.js";
+import { T, euro, statusOf, th, td, tdNum, card, kpi, tableStyle, errStyle, inputStyle } from "./theme.js";
 
-const th: CSSProperties = { textAlign: "left", borderBottom: "2px solid #ccc", padding: "6px 8px" };
-const td: CSSProperties = { borderBottom: "1px solid #eee", padding: "6px 8px" };
-const card: CSSProperties = { border: "1px solid #e2e2e2", borderRadius: 8, padding: "1rem", marginTop: "1.25rem" };
-const kpi: CSSProperties = { display: "inline-block", marginRight: "1.5rem", fontSize: "1.05rem" };
-const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", marginTop: "0.75rem" };
-const numInput: CSSProperties = { width: 90 };
-const errStyle: CSSProperties = { color: "#b00", margin: "0.5rem 0" };
+const numInput: CSSProperties = { ...inputStyle, width: 90 };
+const dot = (status: string): CSSProperties => ({ color: statusOf(status).color, fontWeight: 700 });
 
-const euro = (cents: number) => (cents / 100).toLocaleString("de-DE", { style: "currency", currency: "EUR" });
-const AMPEL_COLOR: Record<string, string> = { ROT: "#c0392b", GELB: "#b8860b", GRUEN: "#2e7d32" };
-const dot = (status: string): CSSProperties => ({ color: AMPEL_COLOR[status] ?? "#555", fontWeight: 700 });
+/** Status als Farbe + Symbol + Text (Skill erp-ui-design: Signal nie allein über Farbe). */
+function StatusTag({ s }: { s: string }): JSX.Element {
+  const t = statusOf(s);
+  return <span style={{ color: t.color, fontWeight: 700 }}>{t.symbol} {t.label}</span>;
+}
 
 function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -94,7 +92,7 @@ function AmpelDashboard(): JSX.Element {
           {data.mostUrgent && (
             <p>
               Dringendster Vorgang: <strong>{data.mostUrgent.label}</strong> ({data.mostUrgent.level}) ·{" "}
-              <span style={dot(data.mostUrgent.ampel)}>{data.mostUrgent.ampel}</span> ·{" "}
+              <StatusTag s={data.mostUrgent.ampel} /> ·{" "}
               {data.mostUrgent.overdueDays > 0
                 ? `${data.mostUrgent.overdueDays} Tage überfällig`
                 : `${data.mostUrgent.daysRemaining} Tage Restlauf`}
@@ -113,9 +111,9 @@ function AmpelDashboard(): JSX.Element {
               {Object.entries(data.byLevel).map(([level, c]) => (
                 <tr key={level}>
                   <td style={td}>{level}</td>
-                  <td style={{ ...td, ...dot("ROT") }}>{c.rot}</td>
-                  <td style={{ ...td, ...dot("GELB") }}>{c.gelb}</td>
-                  <td style={{ ...td, ...dot("GRUEN") }}>{c.gruen}</td>
+                  <td style={{ ...tdNum, ...dot("ROT") }}>{c.rot}</td>
+                  <td style={{ ...tdNum, ...dot("GELB") }}>{c.gelb}</td>
+                  <td style={{ ...tdNum, ...dot("GRUEN") }}>{c.gruen}</td>
                 </tr>
               ))}
             </tbody>
@@ -237,11 +235,11 @@ function StickereiCompare(): JSX.Element {
             {result.quotes.map((q, i) => {
               const isChosen = result.chosen?.partnerId === q.partnerId;
               return (
-                <tr key={q.partnerId} style={isChosen ? { background: "#eafbea" } : undefined}>
+                <tr key={q.partnerId} style={isChosen ? { background: T.surface } : undefined}>
                   <td style={td}>{i + 1}{isChosen ? " ✓" : ""}</td>
                   <td style={td}>{q.name}</td>
-                  <td style={td}>{euro(q.totalCents)}</td>
-                  <td style={td}>{q.leadDays} Tage</td>
+                  <td style={tdNum}>{euro(q.totalCents)}</td>
+                  <td style={tdNum}>{q.leadDays} Tage</td>
                 </tr>
               );
             })}
@@ -327,15 +325,15 @@ function Postcalc(): JSX.Element {
             <span style={kpi}>Ist-DB: <strong>{euro(res.ist.dbCents)}</strong> ({res.istMarginPct} %)</span>
             <span style={kpi}>Abweichung: <strong style={dot(res.status === "ROT" ? "ROT" : res.status === "GELB" ? "GELB" : "GRUEN")}>
               {res.dbVarianceCents >= 0 ? "+" : ""}{euro(res.dbVarianceCents)}</strong></span>
-            <span style={kpi}>Status: <span style={dot(res.status)}>{res.status}</span></span>
+            <span style={kpi}>Status: <StatusTag s={res.status} /></span>
           </p>
           <table style={tableStyle}>
-            <thead><tr><th style={th}>Abweichungskomponente</th><th style={th}>Wirkung auf DB</th></tr></thead>
+            <thead><tr><th style={th}>Abweichungskomponente</th><th style={{ ...th, textAlign: "right" }}>Wirkung auf DB</th></tr></thead>
             <tbody>
-              <tr><td style={td}>Umsatz (Ist − Plan)</td><td style={td}>{euro(res.variance.revenueVarianceCents)}</td></tr>
-              <tr><td style={td}>Material (Plan − Ist)</td><td style={td}>{euro(res.variance.materialVarianceCents)}</td></tr>
-              <tr><td style={td}>Lohn-Menge (Zeit)</td><td style={td}>{euro(res.variance.laborQtyVarianceCents)}</td></tr>
-              <tr><td style={td}>Lohn-Satz</td><td style={td}>{euro(res.variance.laborRateVarianceCents)}</td></tr>
+              <tr><td style={td}>Umsatz (Ist − Plan)</td><td style={tdNum}>{euro(res.variance.revenueVarianceCents)}</td></tr>
+              <tr><td style={td}>Material (Plan − Ist)</td><td style={tdNum}>{euro(res.variance.materialVarianceCents)}</td></tr>
+              <tr><td style={td}>Lohn-Menge (Zeit)</td><td style={tdNum}>{euro(res.variance.laborQtyVarianceCents)}</td></tr>
+              <tr><td style={td}>Lohn-Satz</td><td style={tdNum}>{euro(res.variance.laborRateVarianceCents)}</td></tr>
             </tbody>
           </table>
         </>
@@ -468,7 +466,7 @@ function SubproductionPlan({ role }: { role: string }): JSX.Element {
               <th style={th}>Stufe</th>
               <th style={th}>Veredler</th>
               <th style={th}>Status</th>
-              <th style={th}>Menge B/R</th>
+              <th style={{ ...th, textAlign: "right" }}>Menge B/R</th>
               <th style={th}>Aktion</th>
             </tr>
           </thead>
@@ -481,7 +479,7 @@ function SubproductionPlan({ role }: { role: string }): JSX.Element {
                   {STATUS_LABEL[s.status]}
                   {isOverdue(s) && <span style={{ ...dot("ROT"), marginLeft: 6 }}>überfällig</span>}
                 </td>
-                <td style={td}>{s.beistellMenge ?? "—"}{s.ruecklaufMenge != null ? ` / ${s.ruecklaufMenge}` : ""}</td>
+                <td style={tdNum}>{s.beistellMenge ?? "—"}{s.ruecklaufMenge != null ? ` / ${s.ruecklaufMenge}` : ""}</td>
                 <td style={td}>{action(s, i)}</td>
               </tr>
             ))}
