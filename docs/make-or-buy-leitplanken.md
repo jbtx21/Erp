@@ -119,10 +119,21 @@ Gegenmaßnahmen sind **feste Bestandteile, nicht optional**:
 ## Entschieden (TEXMA / Projektleitung)
 
 - **Auth-Migration:** **jetzt**, Sicherheit als Maxime. OIDC-Verifikation per `jose` ist
-  eingebaut (Bearer bevorzugt, Cookie-Session deprecated). Folge-Schritte: konkreten Provider
-  wählen, `crypto.ts` durch Secrets-Manager ablösen, Cookie-Pfad nach Anbindung zurückbauen.
-  Siehe `docs/adr/0001-auth-oidc-externalisierung.md`.
+  eingebaut (Bearer bevorzugt, Cookie-Session deprecated). Siehe
+  `docs/adr/0001-auth-oidc-externalisierung.md`.
+- **Buy-Stack festgelegt (Microsoft-zentriert):**
+  - **Identität → Microsoft Entra ID** (OIDC). Issuer `https://login.microsoftonline.com/{tenant}/v2.0`,
+    Rollen über App Roles → `OIDC_ROLE_CLAIM`.
+  - **Secrets → Azure Key Vault** (per Managed Identity; löst `crypto.ts`/`SECRETS_KEY` ab).
+  - **Banking → finAPI** (PSD2 AIS/PIS, BaFin-lizenziert, DE-Hosting); hinter `BankingProvider`-Port.
+  - **FiBu/E-Rechnung → DATEV-Anbindung + EN-16931-Bibliothek** statt Eigenbau.
+  - Begründung/Details: `docs/adr/0002-buy-stack-entra-keyvault-finapi-datev.md`.
+- **Standard-Block (Banking, Mahnwesen, E-Rechnung-Inbound, 3-Way-Match):** **Buy/Integrate.**
+  Reguliertes Commodity wird integriert, nicht weiter vertieft. Der vorhandene C1-Eigenbau
+  bleibt **eingefrorener Interim hinter Ports**, bis die Integration steht.
 
 ## Verbleibend offen
 
-- Konkrete Provider-Auswahl (OIDC-/Identity-Lösung) + Secrets-Manager.
+- **finAPI-Kontotyp:** PSD2-Pfad (wenige Konten, ~90-Tage-SCA-Reconsent) vs. EBICS/Corporate
+  (voll-unbeaufsichtigter Tagesabruf). Klärt den Connector-Zuschnitt.
+- Reihenfolge/Termine der Integrationen (Entra-Tenant, Key-Vault-Bereitstellung, DATEV-Mandant).
