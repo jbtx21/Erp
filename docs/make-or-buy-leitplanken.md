@@ -2,20 +2,44 @@
 
 > Status: **verbindlich** ab Review-Datum. Quelle: Make-or-Buy-Review zum TEXMA-ERP.
 > Bezug: Lastenheft Kap. 24.2 (Bus-Faktor), Kap. 30/31.1 (Buy-Kandidaten Xentral/reybex/
-> orgaMAX), `docs/xentral-alignment.md` (Greenfield als Referenz-Benchmark).
+> orgaMAX), ADR 0002 (Buy-Stack), `docs/xentral-alignment.md` (Xentral/OpenXE als fachliche Referenz).
 
-## Ausgangslage
+## Ausgangslage — Teil-Make entschieden
 
-Der Greenfield-Eigenbau läuft **bewusst parallel** zu einem Buy-Auswahlverfahren
-(Demo-/Usability-Tests am echten TEXMA-Fall). Die Make-or-Buy-Entscheidung ist **offen**.
-Daraus folgen drei verbindliche Leitplanken für die Priorisierung bis zur Entscheidung.
+Die Make-or-Buy-Frage ist **zugunsten von Teil-Make entschieden** (Lastenheft Kap. 24.1):
+ein gekaufter/integrierter Standard-Kern plus **gezielter Eigenbau nur an den
+differenzierenden Stellen**. K-16 und K-24 sind damit **nicht gegenstandslos, sondern
+entschieden** — die Bewertungsmatrix (Kap. 30) ist zugunsten Teil-Make aufgelöst.
+
+- **Selbst gebaut (Moat):** die vier Differenzierer — Stickerei-Partnerlogik (A7),
+  mehrstufige Fremdvergabe (A2), Nachkalkulation (A6), Termin/Ampel (A8). Hier liegt der
+  Wettbewerbsvorteil; kein Standard-ERP kann das von der Stange.
+- **Eingekauft/integriert:** der regulierte Standard-Block — Identität, Secrets, Banking,
+  FiBu/Mahnwesen, E-Rechnung. Reguliertes Commodity ohne Differenzierungswert; bei Eigenbau
+  dauerhafte Compliance-Last und Klumpenrisiko (Kap. 24.2).
+
+Konkretisiert ist der Buy-Stack in **ADR 0002** (Entra ID · Azure Key Vault · finAPI ·
+DATEV/EN-16931). Die drei Leitplanken unten bleiben gültig — sie steuern jetzt die
+**Teil-Make-Umsetzung** (Differenzierer bauen, Standard-Block integrieren statt vertiefen).
+
+### Zielarchitektur Standard-Block (Buy/Integrate)
+
+| Schicht | Lösung (Buy/Integrate) | Status |
+|---|---|---|
+| **Identität / Auth / 2FA** | Microsoft Entra ID (OIDC, per `jose` verifiziert); RBAC über App-Roles-Claim (Kap. 12/14) | Verifier eingebaut (ADR 0001), Entra-Konfiguration ausstehend |
+| **Secrets** | Azure Key Vault über Managed Identity (`SecretsProvider`-Port); AES-GCM nur Dev-Fallback | Port + Adapter umgesetzt (ADR 0002 #1) |
+| **Banking** | finAPI (AIS/PIS, BaFin-lizenziert) hinter `BankingProvider`-Port | Port-Zuschnitt offen (Kontotyp) |
+| **FiBu / E-Rechnung** | DATEV-Anbindung + validierte EN-16931-Bibliothek — Standard nicht handpflegen | geplant |
+
+Frühere Formulierungen („Greenfield-Make ist gesetzt", „Fachlogik-Breite zuerst", „C1 als
+Eigenbau") sind durch dieses Teil-Make-Framing **ersetzt**.
 
 ---
 
-## Leitplanke 1 — Fokus-Schnitt: differenzierend zuerst, Standard-Block zurückstellen
+## Leitplanke 1 — Fokus-Schnitt: differenzierend bauen, Standard-Block integrieren
 
 **Vorrang** auf die Module, die ein Standard-ERP NICHT von der Stange kann und die den
-Vergleichswert gegen die Buy-Demos bilden:
+Wettbewerbsvorteil (Moat) bilden:
 
 | Modul | Code | Stand |
 |---|---|---|
@@ -25,27 +49,29 @@ Vergleichswert gegen die Buy-Demos bilden:
 | Nachkalkulation (A6) | `packages/shared/src/postcalc.ts`, `apps/api/.../postcalc` | ✅ gebaut — Tiefe ausbauen erlaubt |
 
 Auch das **Reporting** (Kap. 29/35: Umsatz/Aufträge, Aufrisse, operative KPIs, KI) zählt
-zum differenzierenden, demo-tauglichen Vergleichswert und bleibt im Fokus.
+zum differenzierenden Bereich und bleibt im Fokus.
 
-**Zurückstellen** (kein weiterer Eigenbau-Ausbau bis zur Entscheidung) — der regulierte
-Standard-Block, den jedes Buy-System mitbringt:
+**Buy/Integrate** (kein Tiefenausbau im Eigenbau) — der regulierte Standard-Block wird an
+etablierte Lösungen angebunden; der vorhandene Eigenbau bleibt nur **dünner Interim hinter
+Ports**, bis die Integration steht:
 
-| Block | Code (bereits vorhanden) | Maßnahme |
+| Block | Code (bereits vorhanden) | Maßnahme (Buy/Integrate) |
 |---|---|---|
-| Auth/RBAC/2FA (C1) | `apps/api/src/modules/auth/*`, `crypto.ts`, `rbac.ts` | **einfrieren** (s. Leitplanke 2) |
-| Banking-Abgleich (A3) | `banking-match.ts`, `camt053.ts`, `.../banking` | einfrieren — keine Vertiefung |
-| Mahnwesen (A4) | `dunning.ts`, `.../dunning` | einfrieren — keine Vertiefung |
-| E-Rechnung-Inbound | `einvoice-inbound.ts`, `.../incoming-invoice` | einfrieren — keine Vertiefung |
+| Auth/RBAC/2FA (C1) | `apps/api/src/modules/auth/*`, `crypto.ts`, `rbac.ts` | **kein Eigenbau mehr** — Entra-ID-Integration (OIDC-Verifier vorhanden) + Konfiguration Issuer/JWKS/Roles-Claim; Session/TOTP/argon2-Eigenbau eingefroren (Leitplanke 2) |
+| Banking-Abgleich (A3) | `banking-match.ts`, `camt053.ts`, `.../banking` | Reconciliation-Logik bleibt, aber auf **finAPI-Kontodaten** (`BankingProvider`-Port) — kein eigener FinTS/CAMT-Zugang |
+| Mahnwesen (A4) | `dunning.ts`, `.../dunning` | an die **DATEV-Welt** anbinden; Eigenbau nur dünner Interim |
+| 3-Way-Match (A5, Kap. 9.6) | `three-way-match.ts` | an die **DATEV-Welt** anbinden; Eigenbau nur dünner Interim |
+| E-Rechnung-Inbound (C4) | `einvoice-inbound.ts`, `.../incoming-invoice` | über die **EN-16931-Bibliothek** kapseln, nicht handpflegen |
 | GoBD-WORM-Infra (C5) | `packages/audit`, Objektspeicher-Anbindung offen | nicht weiter ausbauen |
-| 3-Way-Match (9.6) | `three-way-match.ts` | einfrieren |
 
-**Begründung:** Gewinnt Buy, ist dieser Eigenbau verloren; gewinnt Make, lässt er sich
-danach bauen. Doppelarbeit **vor** der Entscheidung wird vermieden. Das bereits Gebaute
-wird **nicht gelöscht** (es trägt zur Demo bei), aber **nicht vertieft**.
+**Begründung:** Der Standard-Block ist reguliertes Commodity ohne Differenzierungswert; ihn
+selbst zu vertiefen erzeugt nur Compliance- und Bus-Faktor-Last (Kap. 24.2). Das bereits
+Gebaute wird **nicht gelöscht** (es trägt zur Demo bei und überbrückt bis zur Integration),
+aber **nicht vertieft**.
 
-> Hinweis: Mehrere „Zurückstellen"-Module wurden in früheren Iterationen bereits gebaut.
-> „Zurückstellen" heißt hier **Feature-Freeze**, nicht Rückbau — der vorhandene Stand
-> bleibt lauffähig und getestet, erhält aber keine neue Funktionstiefe.
+> Hinweis: „Interim hinter Ports" heißt **Feature-Freeze**, nicht Rückbau — der vorhandene
+> Stand bleibt lauffähig und getestet hinter der Port-Schnittstelle, bis die eingekaufte
+> Lösung dahinter tritt.
 
 ---
 
@@ -68,14 +94,15 @@ vorangetrieben.
 | Credential-Tresor (AES-256-GCM) | **eigen** (`crypto.ts`, `node:crypto`) | ⚠️ selbst komponiert → ablösen/auslagern |
 | RBAC-Durchsetzung | **eigen** (`roleProcedure`, `redactOrderForRole`) | ⚠️ Policy-Layer bleibt fachlich, Identität externalisieren |
 
-### Zielbild
+### Zielbild (festgelegt, ADR 0002)
 
-- **Identität + Session + 2FA**: externe Auth-/Identity-Lösung (z. B. gehosteter OIDC-/
-  Identity-Provider). Die App konsumiert Tokens/Claims, statt Sessions selbst auszustellen.
-- **Credential-Verschlüsselung** (Shop-/Lieferanten-Secrets): Secrets-Manager des Providers
-  bzw. der Plattform statt selbst komponierter AES-GCM-Schicht.
+- **Identität + Session + 2FA → Microsoft Entra ID** (OIDC). Die App konsumiert verifizierte
+  Tokens/Claims, statt Sessions selbst auszustellen. 2FA wird beim IdP erzwungen.
+- **Credential-Verschlüsselung** (Shop-/Lieferanten-Secrets) **→ Azure Key Vault** über
+  Managed Identity (`SecretsProvider`-Port) statt selbst komponierter AES-GCM-Schicht; AES-GCM
+  bleibt nur Dev-Fallback.
 - **RBAC**: die **fachliche** Rechtelogik (z. B. „PRODUKTION sieht keine Preise") bleibt im
-  Code, wird aber an die externen Identitäts-Claims gebunden, nicht an eigene Nutzer-/
+  Code, wird aber an den **Entra-App-Roles-Claim** gebunden, nicht an eigene Nutzer-/
   Session-Tabellen.
 
 **Status der Umsetzung:** entschieden — **„höchster Sicherheitsstandard ist Maxime"**. Erster
@@ -95,26 +122,30 @@ Gegenmaßnahmen sind **feste Bestandteile, nicht optional**:
 - **„Ein Zweiter kann übernehmen"** als **Abnahmekriterium** — nicht nur Wunsch.
 - Möglichst **ein zweiter Mensch mit echtem Code-Zugang** (Review, Deploy-Rechte).
 
-### Entscheidungs-Gate (Make-or-Buy)
+### Entscheidungs-Gate (Make-or-Buy) — aufgelöst zu Teil-Make
 
-- **Trigger:** definiert — z. B. nach Abschluss der Buy-Demos am echten TEXMA-Fall.
+Das Gate ist **entschieden: Teil-Make** (Standard-Block Buy/Integrate, vier Differenzierer
+selbst). Die Kriterien bleiben als Begründung und für künftige Einzelfälle dokumentiert:
+
 - **Wenige harte Kriterien:** Betriebsrisiko/Bus-Faktor · Wartungslast · Time-to-Live ·
-  5-Jahres-Gesamtkosten (TCO).
+  5-Jahres-Gesamtkosten (TCO) — sprechen beim regulierten Standard-Block klar für Buy.
 - **Sunk-Cost-Regel:** Die bereits investierte Greenfield-Zeit ist **KEIN** Kriterium. Die
-  Entscheidung blickt **nach vorn**.
+  Entscheidung blickt **nach vorn** — der vorhandene Eigenbau bleibt nur Interim hinter Ports.
 
 ---
 
 ## Konsequenzen für die Roadmap (Kurzfassung)
 
-1. **Weiterbauen:** Tiefe der differenzierenden Module (A2/A6/A7/A8) + Reporting, soweit es
-   den Demo-/Vergleichswert erhöht.
-2. **Einfrieren:** Standard-Block (Auth-Eigenbau, Banking, Mahnwesen, E-Rechnung-Inbound,
-   3-Way-Match, GoBD-WORM-Infra) — vorhandener Stand bleibt, keine Vertiefung.
-3. **Auth externalisieren:** C1 nicht als Eigenbau fortführen; Migrationspfad auf externe
-   Identity-Lösung planen (offene Entscheidung).
-4. **Bus-Faktor:** Doku + „Zweiter kann übernehmen" als laufendes Abnahmekriterium führen;
-   Entscheidungs-Gate mit den vier harten Kriterien vorbereiten.
+1. **Weiterbauen (Moat):** die vier Differenzierer (A2/A6/A7/A8) + Reporting als
+   **demo-fähiger Durchstich** — nächste Bau-Priorität nach Leitplanke 1 (Fokus-Schnitt):
+   `subproduction`, `stickerei`, `ampel`, `postcalc` an die Endpunkte/UI bringen. Kein
+   weiterer Standard-Block-Eigenbau.
+2. **Buy/Integrate:** Standard-Block (Identität, Secrets, Banking, FiBu/Mahnwesen, 3-Way-Match,
+   E-Rechnung-Inbound) an Entra ID / Key Vault / finAPI / DATEV+EN-16931 anbinden; vorhandener
+   Eigenbau bleibt dünner Interim hinter Ports, keine Vertiefung.
+3. **Auth externalisieren:** C1 als Entra-ID-Integration (Verifier vorhanden) + Konfiguration —
+   **entschieden**, kein Eigenbau-Fortführung.
+4. **Bus-Faktor:** Doku + „Zweiter kann übernehmen" als laufendes Abnahmekriterium führen.
 
 ## Entschieden (TEXMA / Projektleitung)
 

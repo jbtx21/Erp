@@ -1,16 +1,19 @@
 # Xentral-/OpenXE-Orientierung
 
-> **Verbindlich vorgelagert:** `docs/make-or-buy-leitplanken.md` — Fokus-Schnitt
-> (differenzierend zuerst, Standard-Block einfrieren), Auth/Identity nicht selbst bauen,
-> Bus-Faktor als Bauziel + Entscheidungs-Gate. Diese Leitplanken haben Vorrang vor der
-> Reihenfolge weiter unten.
+> **Verbindlich vorgelagert:** `docs/make-or-buy-leitplanken.md` — Teil-Make (Differenzierer
+> selbst bauen, Standard-Block Buy/Integrate), Auth/Identity nicht selbst bauen, Bus-Faktor
+> als Bauziel. Diese Leitplanken haben Vorrang vor der Reihenfolge weiter unten.
 
 ## Entscheidung
 
-Der TEXMA-ERP bleibt **Eigenbau (Greenfield) in TypeScript** (siehe Plan). Xentral und
-der quelloffene Xentral-Fork **OpenXE** dienen ausschließlich als **fachliche Referenz** —
+Der TEXMA-ERP ist **Teil-Make** (Lastenheft Kap. 24.1; `docs/make-or-buy-leitplanken.md`):
+die vier Differenzierer (Stickerei-Partnerlogik, mehrstufige Fremdvergabe, Nachkalkulation,
+Termin/Ampel) werden **selbst in TypeScript gebaut**, der regulierte Standard-Block wird
+**eingekauft/integriert** (Identität, Secrets, Banking, FiBu/Mahnwesen, E-Rechnung; ADR 0002).
+Xentral und der quelloffene Xentral-Fork **OpenXE** dienen dabei als **fachliche Referenz** —
 für Domänenabdeckung, Terminologie, Datenmodell und die deutschen Compliance-Logiken
-(Fibu, DATEV, E-Rechnung, GoBD).
+(Fibu, DATEV, E-Rechnung, GoBD), maßgeblich für den selbst gebauten Anteil. Für den
+eingekauften Standard-Block ist die Referenz nur Vollständigkeits-Check, kein Bauauftrag.
 
 ### Lizenz-Disziplin (wichtig)
 

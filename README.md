@@ -1,10 +1,12 @@
 # TEXMA ERP
 
-Greenfield-ERP für die TEXMA Textilveredelung — Ablösung von CDH Office.
+ERP für die TEXMA Textilveredelung — Ablösung von CDH Office. **Teil-Make** (Lastenheft Kap. 24.1):
+gekaufter/integrierter Standard-Block, Eigenbau nur an den vier Differenzierern.
 TypeScript, modularer Monolith + separate Connector-Schicht, Cloud/SaaS (EU).
 
-Vollständige fachliche Grundlage: [`docs/lastenheft.md`](docs/lastenheft.md) (v2.4, 36 Kapitel).
-Architektur & Roadmap: siehe Planfile (Kontext, Phasen 0–3, Testfälle T-01…T-14).
+Vollständige fachliche Grundlage: [`docs/lastenheft.md`](docs/lastenheft.md) (v3.2, 39 Kapitel).
+Strategie & Architektur (**Teil-Make**): [`docs/make-or-buy-leitplanken.md`](docs/make-or-buy-leitplanken.md)
+und die ADRs unter [`docs/adr/`](docs/adr/) (0001 Auth/OIDC, 0002 Buy-Stack: Entra ID · Key Vault · finAPI · DATEV).
 
 ## Architektur (Kurzfassung)
 
@@ -55,6 +57,8 @@ Der Merge-Gate-Plan koppelt die Testfälle T-01…T-14 an die CI (Kap. 15).
 ## Status
 
 Phase 0 (Fundament) steht: Monorepo, validiertes Kerndatenmodell, GoBD-Audit, Preislogik,
-WooCommerce-Mapping inkl. T-01-Abnahme. Nächste Schritte gemäß Roadmap Phase 1:
-HTTP-/NestJS-Layer + RBAC/2FA, WooCommerce-Connector-Worker (Import <2 min), Prisma-Repository,
-Faktura/E-Rechnung, DATEV-Export, Lieferanten ID Identity + Stanley/Stella.
+WooCommerce-Mapping inkl. T-01-Abnahme. Nächste Schritte (Teil-Make, Leitplanke 1 — Fokus auf
+die Differenzierer): `subproduction`/`stickerei`/`ampel`/`postcalc` als demo-fähiger Durchstich
+an Endpunkte/UI. Standard-Block per Buy/Integrate: Entra ID (OIDC-Verifier vorhanden) statt
+Auth-Eigenbau, Azure Key Vault (`SecretsProvider`-Port), finAPI (`BankingProvider`-Port),
+DATEV + EN-16931 für FiBu/E-Rechnung.
