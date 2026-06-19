@@ -51,6 +51,19 @@ pnpm test                          # inkl. Abnahme-Test T-01
 Datenbank: `cp packages/db/.env.example packages/db/.env` und `DATABASE_URL` setzen
 (Postgres, EU-Hosting). Migrationen: `pnpm --filter @texma/db migrate`.
 
+### Differenzierer-Durchstich ohne DB (Demo)
+
+Die vier Moat-Module lassen sich ohne Postgres vorführen — ein Demo-Server seedet
+In-Memory-Repos und erzwingt einen Demo-Nutzer (BUERO):
+
+```bash
+pnpm --filter @texma/api build && pnpm --filter @texma/api demo   # API mit Seed auf :3000
+pnpm --filter @texma/web dev                                       # UI auf :5173 (proxyt /trpc → :3000)
+```
+
+Dann `http://localhost:5173` öffnen → Tab **Differenzierer**. Seed-PA-ID für Fremdvergabe
+und Nachkalkulation: `PA-DEMO`. Der Stickerei-Vergleich läuft auch ohne Seed (reine Eingabe).
+
 CI (`.github/workflows/ci.yml`): install → prisma generate/validate → typecheck → test.
 Der Merge-Gate-Plan koppelt die Testfälle T-01…T-14 an die CI (Kap. 15).
 

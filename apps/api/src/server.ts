@@ -8,7 +8,7 @@ import {
 } from "@trpc/server/adapters/fastify";
 import Fastify, { type FastifyInstance } from "fastify";
 import { PrismaAuditSink } from "./audit/prisma-audit-sink.js";
-import { AuthService } from "./modules/auth/auth.service.js";
+import { AuthService, type AuthUser } from "./modules/auth/auth.service.js";
 import { JoseOidcVerifier, type IdentityVerifier } from "./modules/auth/oidc.js";
 import { Argon2Hasher } from "./modules/auth/password.js";
 import { OtpauthTotpService } from "./modules/auth/totp.js";
@@ -57,6 +57,10 @@ const secure = process.env.NODE_ENV === "production";
 export interface ServerOptions {
   /** Überschreibt den OIDC-Verifier (Tests); sonst aus der Umgebung (OIDC_*). */
   identityVerifier?: IdentityVerifier | null;
+  /** Demo/Durchstich: erzwingt einen authentifizierten Nutzer ohne Login (kein Prod). */
+  demoUser?: AuthUser | null;
+  /** Demo/Durchstich: ersetzt einzelne Context-Services (z. B. In-Memory-Repos). */
+  contextOverrides?: Partial<Context>;
 }
 
 export function buildServer(opts: ServerOptions = {}): FastifyInstance {
@@ -119,6 +123,8 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
         if (!user && sessionToken) {
           user = await auth.resolveSession(sessionToken);
         }
+        // Demo/Durchstich: ohne echte Identität einen festen Nutzer setzen (nur wenn gesetzt).
+        if (!user && opts.demoUser) user = opts.demoUser;
         return {
           orderImport,
           orders: repo,
@@ -154,6 +160,8 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
               maxAge: maxAgeSeconds,
             }),
           clearSessionCookie: () => void res.clearCookie(COOKIE_NAME, { path: "/" }),
+          // Demo/Durchstich: ausgewählte Services überschreiben (In-Memory statt Prisma).
+          ...(opts.contextOverrides ?? {}),
         };
       },
     },

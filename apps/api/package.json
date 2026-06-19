@@ -7,7 +7,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "demo": "node dist/scripts/demo-server.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.70.0",
