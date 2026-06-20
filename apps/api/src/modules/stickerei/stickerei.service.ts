@@ -25,8 +25,19 @@ export interface LogoMarkupContext {
   priceGroupId?: string;
 }
 
+/** Auswahl-Eintrag für den Logo-Picker (Firma + Version, aktiv hervorgehoben). */
+export interface LogoOption {
+  id: string;
+  label: string;
+  companyName?: string;
+  version?: number;
+  active?: boolean;
+}
+
 export interface StickereiRepository {
   contextForCompany(companyId: string): Promise<StickereiContext | null>;
+  /** Auswahlliste aller Logos (für den Picker). */
+  listLogos(): Promise<LogoOption[]>;
   /** Persistierte Staffeln (Stick-EK je Stück) eines Logos, beliebige Reihenfolge. */
   listStaffeln(logoVersionId: string): Promise<StickereiStaffel[]>;
   /** Ersetzt die Staffeln eines Logos vollständig (Set-Semantik). */
@@ -52,6 +63,11 @@ const FINISHING_STICKEREI = "STICKEREI" as const;
 
 export class StickereiService {
   constructor(private readonly repo: StickereiRepository) {}
+
+  /** Auswahlliste aller Logos für den Picker (Firma · Version). */
+  async listLogos(): Promise<LogoOption[]> {
+    return this.repo.listLogos();
+  }
 
   /** Stickerei-Plan einer Firma (Kap. 5.4): Weg + Digitalisierungsbedarf + Begründung. */
   async routeForCompany(companyId: string): Promise<{ companyId: string } & StickereiPlan> {

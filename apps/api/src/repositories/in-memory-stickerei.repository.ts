@@ -1,7 +1,7 @@
 // In-Memory-Implementierung des Stickerei-Repositories — für Tests/Durchstiche.
 
 import { DEFAULT_MARKUP_CONFIG, type MarkupConfig, type StickereiContext, type StickereiStaffel } from "@texma/shared";
-import type { LogoMarkupContext, StickereiRepository } from "../modules/stickerei/stickerei.service.js";
+import type { LogoMarkupContext, LogoOption, StickereiRepository } from "../modules/stickerei/stickerei.service.js";
 
 export interface InMemoryStickereiSeed {
   markupConfig?: MarkupConfig;
@@ -9,12 +9,15 @@ export interface InMemoryStickereiSeed {
   logoOverrides?: Record<string, number>;
   /** Kundengruppe je Logo (logoVersionId → priceGroupId). */
   priceGroups?: Record<string, string>;
+  /** Auswahlliste für den Logo-Picker. */
+  logos?: LogoOption[];
 }
 
 export class InMemoryStickereiRepository implements StickereiRepository {
   private readonly staffeln: Map<string, StickereiStaffel[]>;
   private readonly logoOverrides: Map<string, number>;
   private readonly priceGroups: Map<string, string>;
+  private readonly logos: LogoOption[];
   private markupConfig: MarkupConfig;
 
   constructor(
@@ -25,11 +28,16 @@ export class InMemoryStickereiRepository implements StickereiRepository {
     this.staffeln = new Map(Object.entries(seedStaffeln).map(([k, v]) => [k, [...v]]));
     this.logoOverrides = new Map(Object.entries(seed.logoOverrides ?? {}));
     this.priceGroups = new Map(Object.entries(seed.priceGroups ?? {}));
+    this.logos = seed.logos ? [...seed.logos] : [];
     this.markupConfig = seed.markupConfig ?? DEFAULT_MARKUP_CONFIG;
   }
 
   async contextForCompany(companyId: string): Promise<StickereiContext | null> {
     return this.byCompany[companyId] ?? null;
+  }
+
+  async listLogos(): Promise<LogoOption[]> {
+    return this.logos.map((l) => ({ ...l }));
   }
 
   async listStaffeln(logoVersionId: string): Promise<StickereiStaffel[]> {

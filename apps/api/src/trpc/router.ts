@@ -313,6 +313,9 @@ export const appRouter = router({
   }),
 
   stickerei: router({
+    /** Auswahlliste aller Logos für den Picker (Firma · Version). */
+    logos: roleProcedure("ADMIN", "BUERO").query(({ ctx }) => ctx.stickerei.listLogos()),
+
     /** Stickerei-Plan einer Firma (Kap. 5.4): Weg + Digitalisierungsbedarf + Begründung. */
     routeForCompany: roleProcedure("ADMIN", "BUERO")
       .input(z.object({ companyId: z.string().min(1) }))

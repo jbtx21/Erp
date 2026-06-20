@@ -20,6 +20,7 @@ import { buildServer } from "../server.js";
 
 const DEMO_PA = "PA-DEMO";
 const DEMO_LOGO = "LOGO-DEMO";
+const DEMO_LOGO_GROSS = "LOGO-GROSS";
 const day = 24 * 60 * 60 * 1000;
 const now = Date.now();
 const at = (offsetDays: number): Date => new Date(now + offsetDays * day);
@@ -72,6 +73,11 @@ const stickereiRepo = new InMemoryStickereiRepository(
       { minMenge: 100, ekCents: 520 },
       { minMenge: 250, ekCents: 430 },
     ],
+    [DEMO_LOGO_GROSS]: [
+      { minMenge: 1, ekCents: 1_100 },
+      { minMenge: 25, ekCents: 720 },
+      { minMenge: 100, ekCents: 480 },
+    ],
   },
   {
     markupConfig: {
@@ -81,7 +87,11 @@ const stickereiRepo = new InMemoryStickereiRepository(
         { id: "grosskunde", factor: 1.65, priceGroupId: "PG-GROSSKUNDE", label: "Großkunde" },
       ],
     },
-    priceGroups: { [DEMO_LOGO]: "PG-STANDARD" },
+    priceGroups: { [DEMO_LOGO]: "PG-STANDARD", [DEMO_LOGO_GROSS]: "PG-GROSSKUNDE" },
+    logos: [
+      { id: DEMO_LOGO, label: "Muster GmbH · v3 (aktiv)", companyName: "Muster GmbH", version: 3, active: true },
+      { id: DEMO_LOGO_GROSS, label: "Großkunde AG · v1 (aktiv)", companyName: "Großkunde AG", version: 1, active: true },
+    ],
   }
 );
 

@@ -2,7 +2,8 @@
 // Regeln je Parameter überschrieben wird — Kundengruppe (Preisgruppe), Mengenstaffel,
 // Veredelungsart und EK-Wertbereich — plus optionaler Override je Logo (gewinnt immer).
 // Reine Auflösung; Persistenz/Repositories liegen in der API. „Jederzeit neu definierbar":
-// Default + Regeln sind Daten (kein Code-Konstante mehr).
+// Default + Regeln sind Daten (kein Code-Konstante mehr). Die Regeln sind eine geordnete
+// Prioritätsliste: die ERSTE passende Regel gewinnt (Reihenfolge = Priorität).
 import { STICK_MARKUP_FACTOR } from "./pricing.js";
 
 /** Veredelungsarten (Kap. 5): aktuell modelliert die Stickerei; ausbaubar. */
@@ -50,18 +51,6 @@ export interface ResolvedMarkup {
 /** Vorbelegung: globaler Standard 1,88 (Kap. 4.4), keine Regeln. */
 export const DEFAULT_MARKUP_CONFIG: MarkupConfig = { defaultFactor: STICK_MARKUP_FACTOR, rules: [] };
 
-/** Anzahl gesetzter Bedingungen einer Regel = Spezifität (spezifischere Regel gewinnt). */
-function specificity(rule: MarkupRule): number {
-  return (
-    (rule.priceGroupId !== undefined ? 1 : 0) +
-    (rule.finishingType !== undefined ? 1 : 0) +
-    (rule.minMenge !== undefined ? 1 : 0) +
-    (rule.maxMenge !== undefined ? 1 : 0) +
-    (rule.minEkCents !== undefined ? 1 : 0) +
-    (rule.maxEkCents !== undefined ? 1 : 0)
-  );
-}
-
 /** Greift die Regel im Kontext? Eine gesetzte Bedingung muss erfüllbar UND erfüllt sein. */
 function ruleMatches(rule: MarkupRule, ctx: MarkupContext): boolean {
   if (rule.priceGroupId !== undefined && rule.priceGroupId !== ctx.priceGroupId) return false;
@@ -74,9 +63,9 @@ function ruleMatches(rule: MarkupRule, ctx: MarkupContext): boolean {
 }
 
 /**
- * Löst den gültigen Aufschlagsfaktor auf: Logo-Override (falls gesetzt) gewinnt; sonst
- * die spezifischste passende Regel (bei Gleichstand die zuerst gelistete); sonst der
- * globale Standardfaktor. Liefert zusätzlich die Quelle (für Transparenz in der UI).
+ * Löst den gültigen Aufschlagsfaktor auf: Logo-Override (falls gesetzt) gewinnt; sonst die
+ * ERSTE passende Regel der Prioritätsliste (Reihenfolge = Priorität); sonst der globale
+ * Standardfaktor. Liefert zusätzlich die Quelle (für Transparenz in der UI).
  */
 export function resolveMarkupFactor(
   config: MarkupConfig,
@@ -87,17 +76,9 @@ export function resolveMarkupFactor(
     if (!(logoOverride > 0)) throw new Error("Logo-Aufschlagsfaktor muss > 0 sein.");
     return { factor: logoOverride, source: "logo-override" };
   }
-  let best: MarkupRule | null = null;
-  let bestSpec = -1;
   for (const r of config.rules) {
-    if (!ruleMatches(r, ctx)) continue;
-    const s = specificity(r);
-    if (s > bestSpec) {
-      best = r;
-      bestSpec = s;
-    }
+    if (ruleMatches(r, ctx)) return { factor: r.factor, source: "rule", ruleId: r.id, ruleLabel: r.label };
   }
-  if (best) return { factor: best.factor, source: "rule", ruleId: best.id, ruleLabel: best.label };
   return { factor: config.defaultFactor, source: "default" };
 }
 

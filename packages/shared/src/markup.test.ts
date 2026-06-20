@@ -30,11 +30,12 @@ describe("Aufschlagsfaktor-Auflösung (Kap. 4.4): Default + Regeln + Logo-Overri
     expect(r).toMatchObject({ factor: 2.1, source: "rule", ruleId: "klein" });
   });
 
-  it("spezifischere Regel gewinnt (Veredelung+EK schlägt Menge)", () => {
-    // menge 5 (maxMenge 9 trifft, 1 Bedingung) vs. stick-billig (finishing+maxEk, 2 Bedingungen)
-    const r = resolveMarkupFactor(config, { finishingType: "STICKEREI", menge: 5, ekCents: 400 });
-    expect(r.ruleId).toBe("stick-billig");
-    expect(r.factor).toBe(2.3);
+  it("Reihenfolge bestimmt Priorität: erste passende Regel gewinnt", () => {
+    // Beide passen (menge 5 ≤ 9 UND Stickerei/EK 400 ≤ 500); klein steht vorne → gewinnt.
+    expect(resolveMarkupFactor(config, { finishingType: "STICKEREI", menge: 5, ekCents: 400 }).ruleId).toBe("klein");
+    // Reihenfolge gedreht → stick-billig steht vorne und gewinnt.
+    const flipped = { ...config, rules: [...config.rules].reverse() };
+    expect(resolveMarkupFactor(flipped, { finishingType: "STICKEREI", menge: 5, ekCents: 400 }).ruleId).toBe("stick-billig");
   });
 
   it("Mengen-Bedingung greift nicht, wenn Menge unbekannt", () => {

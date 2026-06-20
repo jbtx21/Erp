@@ -47,6 +47,20 @@ export class PrismaStickereiRepository implements StickereiRepository {
     return { stickereiPartnerId: c.stickereiPartnerId, hatStickdatei: c.hatStickdatei };
   }
 
+  async listLogos() {
+    const rows = await prisma.logoVersion.findMany({
+      select: { id: true, version: true, active: true, company: { select: { name: true } } },
+      orderBy: [{ company: { name: "asc" } }, { version: "desc" }],
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      version: r.version,
+      active: r.active,
+      companyName: r.company.name,
+      label: `${r.company.name} · v${r.version}${r.active ? " (aktiv)" : ""}`,
+    }));
+  }
+
   async listStaffeln(logoVersionId: string): Promise<StickereiStaffel[]> {
     const rows = await prisma.stickereiStaffel.findMany({
       where: { logoVersionId },

@@ -186,6 +186,15 @@ function MarkupConfigCard({ config, onSaved }: { config: MarkupConfig | null; on
     setRules((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   const addRule = () => setRules((prev) => [...prev, { factor: defaultFactor }]);
   const removeRule = (i: number) => setRules((prev) => prev.filter((_, idx) => idx !== i));
+  // Priorität = Reihenfolge: nach oben/unten verschieben (erste passende Regel gewinnt).
+  const moveRule = (i: number, dir: -1 | 1) =>
+    setRules((prev) => {
+      const j = i + dir;
+      if (j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      [next[i], next[j]] = [next[j]!, next[i]!];
+      return next;
+    });
 
   const save = useCallback(async () => {
     setErr("");
@@ -208,8 +217,9 @@ function MarkupConfigCard({ config, onSaved }: { config: MarkupConfig | null; on
       <Title order={4}>Aufschlagsfaktoren (Kap. 4.4)</Title>
       <Text size="sm" c="dimmed">
         Standardfaktor jederzeit änderbar; Regeln überschreiben ihn je Parameter
-        (Kundengruppe · Veredelungsart · Mengen- und EK-Wertbereich). Spezifischste Regel gewinnt;
-        ein Logo-Override (in der Staffel-Karte) schlägt alle Regeln.
+        (Kundengruppe · Veredelungsart · Mengen- und EK-Wertbereich). Geordnete Prioritätsliste:
+        die erste passende Regel gewinnt (▲▼ zum Sortieren); ein Logo-Override (in der
+        Staffel-Karte) schlägt alle Regeln.
       </Text>
       <Group align="end" gap="sm" mt="xs">
         <NumberInput label="Standardfaktor" w={140} hideControls min={0.01} step={0.01} decimalScale={2}
@@ -222,6 +232,7 @@ function MarkupConfigCard({ config, onSaved }: { config: MarkupConfig | null; on
       <Table withTableBorder mt="sm" verticalSpacing="xs">
         <Table.Thead>
           <Table.Tr>
+            <Table.Th ta="center">Prio</Table.Th>
             <Table.Th ta="right">Faktor</Table.Th>
             <Table.Th>Kundengruppe</Table.Th>
             <Table.Th>Veredelung</Table.Th>
@@ -236,6 +247,13 @@ function MarkupConfigCard({ config, onSaved }: { config: MarkupConfig | null; on
         <Table.Tbody>
           {rules.map((r, i) => (
             <Table.Tr key={i}>
+              <Table.Td>
+                <Group gap={2} wrap="nowrap" justify="center">
+                  <Text size="xs" c="dimmed" w={14} ta="right">{i + 1}</Text>
+                  <Button size="compact-xs" px={4} variant="subtle" disabled={i === 0} onClick={() => moveRule(i, -1)}>▲</Button>
+                  <Button size="compact-xs" px={4} variant="subtle" disabled={i === rules.length - 1} onClick={() => moveRule(i, 1)}>▼</Button>
+                </Group>
+              </Table.Td>
               <Table.Td style={numTd}>
                 <NumberInput w={70} size="xs" hideControls min={0.01} step={0.01} decimalScale={2}
                   value={r.factor} onChange={(v) => setRule(i, { factor: Number(v) || 0 })} />
@@ -275,7 +293,7 @@ function MarkupConfigCard({ config, onSaved }: { config: MarkupConfig | null; on
             </Table.Tr>
           ))}
           {rules.length === 0 && (
-            <Table.Tr><Table.Td colSpan={9}><Text size="sm" c="dimmed">Keine Regeln — überall gilt der Standardfaktor.</Text></Table.Td></Table.Tr>
+            <Table.Tr><Table.Td colSpan={10}><Text size="sm" c="dimmed">Keine Regeln — überall gilt der Standardfaktor.</Text></Table.Td></Table.Tr>
           )}
         </Table.Tbody>
       </Table>
@@ -306,6 +324,7 @@ const toStaffeln = (rows: ReadonlyArray<StaffelRow>): StickereiStaffel[] =>
 
 function StickereiStaffeln({ config }: { config: MarkupConfig | null }): JSX.Element {
   const [logoVersionId, setLogoVersionId] = useState("LOGO-DEMO");
+  const [logoOptions, setLogoOptions] = useState<{ value: string; label: string }[]>([]);
   const [rows, setRows] = useState<StaffelRow[]>(DEFAULT_STAFFEL_ROWS);
   const [logoOverride, setLogoOverride] = useState<number | null>(null);
   const [priceGroupId, setPriceGroupId] = useState<string | undefined>(undefined);
@@ -334,11 +353,11 @@ function StickereiStaffeln({ config }: { config: MarkupConfig | null }): JSX.Ele
     setRows((prev) => [...prev, { minMenge: (prev[prev.length - 1]?.minMenge ?? 0) + 50 || 1, ekEuro: 0 }]);
   const removeRow = (i: number) => setRows((prev) => prev.filter((_, idx) => idx !== i));
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (id: string) => {
     setErr("");
     setStatus("");
     try {
-      const res = await trpc.stickerei.staffeln.list.query({ logoVersionId });
+      const res = await trpc.stickerei.staffeln.list.query({ logoVersionId: id });
       setRows(res.staffeln.map((s) => ({ minMenge: s.minMenge, ekEuro: s.ekCents / 100 })));
       setLogoOverride(res.logoOverride);
       setPriceGroupId(res.priceGroupId);
@@ -346,7 +365,25 @@ function StickereiStaffeln({ config }: { config: MarkupConfig | null }): JSX.Ele
     } catch (e) {
       setErr(errMsg(e));
     }
-  }, [logoVersionId]);
+  }, []);
+
+  // Logo-Picker füllen + initiale Auswahl laden (gleiche reine Logik wie der Server).
+  useEffect(() => {
+    void (async () => {
+      try {
+        const opts = await trpc.stickerei.logos.query();
+        setLogoOptions(opts.map((o) => ({ value: o.id, label: o.label })));
+        const initial = opts.find((o) => o.id === logoVersionId)?.id ?? opts[0]?.id;
+        if (initial) {
+          setLogoVersionId(initial);
+          await load(initial);
+        }
+      } catch (e) {
+        setErr(errMsg(e));
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [load]);
 
   const save = useCallback(async () => {
     setErr("");
@@ -368,11 +405,13 @@ function StickereiStaffeln({ config }: { config: MarkupConfig | null }): JSX.Ele
         mit dem aufgelösten Aufschlagsfaktor automatisch berechnet.
       </Text>
       <Group align="end" gap="sm" mt="xs">
-        <TextInput label="Logo-ID" w={180} value={logoVersionId} onChange={(e) => setLogoVersionId(e.currentTarget.value)} />
+        <Select label="Logo" w={240} searchable nothingFoundMessage="kein Logo" placeholder="Logo wählen…"
+          data={logoOptions} value={logoVersionId}
+          onChange={(v) => { if (v) { setLogoVersionId(v); void load(v); } }} />
         <NumberInput label="Logo-Override (×)" w={140} hideControls min={0} step={0.01} decimalScale={2}
           placeholder="aus" value={logoOverride ?? ""}
           onChange={(v) => setLogoOverride(v === "" ? null : Number(v) || 0)} />
-        <Button variant="default" onClick={() => void load()} disabled={!logoVersionId}>Laden</Button>
+        <Button variant="default" onClick={() => void load(logoVersionId)} disabled={!logoVersionId}>Neu laden</Button>
         <Button onClick={() => void save()} disabled={!logoVersionId || !!computeError}>Speichern</Button>
       </Group>
       {status && <Text size="sm" c="dimmed" mt="xs">{status}</Text>}

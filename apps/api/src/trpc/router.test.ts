@@ -125,7 +125,8 @@ function setup(user: AuthUser | null = BUERO) {
         c_direkt: { stickereiPartnerId: "sup_stick", hatStickdatei: true },
         c_neu: { stickereiPartnerId: null, hatStickdatei: false },
       },
-      { "logo-x": [{ minMenge: 1, ekCents: 1_000 }, { minMenge: 50, ekCents: 600 }] }
+      { "logo-x": [{ minMenge: 1, ekCents: 1_000 }, { minMenge: 50, ekCents: 600 }] },
+      { logos: [{ id: "logo-x", label: "Muster GmbH · v1 (aktiv)", version: 1, active: true }] }
     )
   );
   // T-12: v1 unterschreitet Mindestbestand (3<10) → Vorschlag, v2 ausreichend.
@@ -635,6 +636,12 @@ describe("tRPC stickerei — Partnerwahl (Kap. 5.4)", () => {
 
     const price = await caller.stickerei.staffeln.priceForMenge({ logoVersionId: "logo-x", menge: 75 });
     expect(price).toMatchObject({ minMenge: 50, ekCents: 600, vkCents: 1_128 });
+  });
+
+  it("Logo-Picker: listet die verfügbaren Logos", async () => {
+    const { caller } = setup(BUERO);
+    const logos = await caller.stickerei.logos();
+    expect(logos).toEqual([{ id: "logo-x", label: "Muster GmbH · v1 (aktiv)", version: 1, active: true }]);
   });
 
   it("Aufschlagsfaktor: Konfig-Roundtrip (Standard + Regel)", async () => {
