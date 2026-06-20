@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   compareStickereiOffers,
+  computeStickereiStaffelVks,
   decideStickereiRoute,
   planStickerei,
   stickereiCostCents,
+  stickereiPriceForMenge,
+  stickereiTotalForMenge,
   type StickereiOffer,
+  type StickereiStaffel,
 } from "./stickerei.js";
 
 describe("Stickerei-Partnerlogik (Kap. 5.4)", () => {
@@ -57,5 +61,62 @@ describe("Stickerei-Tiefe: Punch, Stichkosten, Angebotsvergleich (Kap. 5.4)", ()
     expect(cmp.chosen?.partnerId).toBe("b");
     expect(cmp.quotes.map((q) => q.partnerId)).toEqual(["b", "a"]);
     expect(cmp.quotes[0]?.totalCents).toBe(3_500);
+  });
+});
+
+describe("Stickerei — variable Mengenstaffeln je Logo (Kap. 4.4 / T-15)", () => {
+  // Frei wählbare Staffeln, je Logo abweichend; Stick-EK manuell, VK = EK × 1,88.
+  const staffeln: StickereiStaffel[] = [
+    { minMenge: 100, ekCents: 500 },
+    { minMenge: 1, ekCents: 1_000 },
+    { minMenge: 50, ekCents: 600 },
+    { minMenge: 10, ekCents: 800 },
+  ];
+
+  it("computeStickereiStaffelVks: sortiert + VK = EK × 1,88 (gerundet) + DB", () => {
+    const vks = computeStickereiStaffelVks(staffeln);
+    expect(vks.map((s) => s.minMenge)).toEqual([1, 10, 50, 100]); // aufsteigend
+    expect(vks[0]).toMatchObject({ minMenge: 1, ekCents: 1_000, vkCents: 1_880, dbCents: 880 });
+    expect(vks[1]).toMatchObject({ ekCents: 800, vkCents: 1_504, dbCents: 704 }); // round(1504)
+    expect(vks[3]).toMatchObject({ minMenge: 100, ekCents: 500, vkCents: 940, dbCents: 440 });
+  });
+
+  it("computeStickereiStaffelVks: eigener Aufschlagsfaktor je Logo möglich", () => {
+    const [s] = computeStickereiStaffelVks([{ minMenge: 1, ekCents: 1_000 }], 2.0);
+    expect(s).toMatchObject({ vkCents: 2_000, dbCents: 1_000 });
+  });
+
+  it("stickereiPriceForMenge: höchste Staffel ≤ Menge (degressiv)", () => {
+    expect(stickereiPriceForMenge(staffeln, 1)?.ekCents).toBe(1_000);
+    expect(stickereiPriceForMenge(staffeln, 9)?.minMenge).toBe(1);
+    expect(stickereiPriceForMenge(staffeln, 10)?.ekCents).toBe(800);
+    expect(stickereiPriceForMenge(staffeln, 75)?.minMenge).toBe(50);
+    expect(stickereiPriceForMenge(staffeln, 100)?.ekCents).toBe(500);
+    expect(stickereiPriceForMenge(staffeln, 250)?.minMenge).toBe(100);
+  });
+
+  it("stickereiPriceForMenge: keine Staffel unter der kleinsten Grenze", () => {
+    expect(stickereiPriceForMenge([{ minMenge: 10, ekCents: 800 }], 5)).toBeNull();
+    expect(stickereiPriceForMenge(staffeln, 0)).toBeNull();
+  });
+
+  it("stickereiTotalForMenge: rechnet die gültige Staffel auf die Menge hoch", () => {
+    const t = stickereiTotalForMenge(staffeln, 50);
+    expect(t).toMatchObject({
+      menge: 50,
+      ekGesamtCents: 30_000, // 600 × 50
+      vkGesamtCents: 56_400, // 1128 × 50
+      dbGesamtCents: 26_400,
+    });
+    expect(t?.staffel.minMenge).toBe(50);
+  });
+
+  it("Validierung: ganze Staffelgrenze ≥ 1, kein EK < 0, keine Dubletten", () => {
+    expect(() => computeStickereiStaffelVks([{ minMenge: 0, ekCents: 100 }])).toThrow(/≥ 1/);
+    expect(() => computeStickereiStaffelVks([{ minMenge: 1.5, ekCents: 100 }])).toThrow(/ganze Zahl/);
+    expect(() => computeStickereiStaffelVks([{ minMenge: 1, ekCents: -1 }])).toThrow(/negativ/);
+    expect(() =>
+      computeStickereiStaffelVks([{ minMenge: 10, ekCents: 100 }, { minMenge: 10, ekCents: 200 }])
+    ).toThrow(/Doppelte Staffelgrenze/);
   });
 });
