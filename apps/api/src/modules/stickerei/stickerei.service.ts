@@ -76,6 +76,14 @@ export interface StoredLogoVersion {
   data: Buffer;
 }
 
+/** Ersatz-Datei für eine bestehende Logo-Version (Bytes bereits dekodiert). */
+export interface StoredLogoFile {
+  logoVersionId: string;
+  fileName: string;
+  mimeType: string;
+  data: Buffer;
+}
+
 export interface StickereiRepository {
   contextForCompany(companyId: string): Promise<StickereiContext | null>;
   /** Auswahlliste aller Logos (für den Picker). */
@@ -86,6 +94,10 @@ export interface StickereiRepository {
   createLogoVersion(input: StoredLogoVersion): Promise<LogoOption>;
   /** Setzt eine Logo-Version aktiv (genau eine aktiv je Firma, Kap. 7.2). */
   setLogoActive(logoVersionId: string): Promise<void>;
+  /** Ersetzt die Datei einer bestehenden Version (Bytes bereits dekodiert). */
+  replaceLogoFile(input: StoredLogoFile): Promise<LogoOption>;
+  /** Löscht eine Logo-Version (inkl. Staffeln/Datei); rückt ggf. die neueste nach. */
+  deleteLogoVersion(logoVersionId: string): Promise<void>;
   /** Liefert die hochgeladene Stickdatei einer Logo-Version (oder null). */
   getLogoFile(logoVersionId: string): Promise<LogoFile | null>;
   /** Persistierte Staffeln (Stick-EK je Stück) eines Logos, beliebige Reihenfolge. */
@@ -130,21 +142,34 @@ export class StickereiService {
    */
   async createLogoVersion(input: CreateLogoVersionInput): Promise<LogoOption> {
     if (!input.companyId) throw new Error("Firma ist erforderlich.");
-    const name = input.file?.name?.trim();
+    const file = this.decodeUpload(input.file);
+    return this.repo.createLogoVersion({ companyId: input.companyId, active: input.active, ...file });
+  }
+
+  /** Ersetzt die hochgeladene Stickdatei einer bestehenden Version (Version/Staffeln bleiben). */
+  async replaceLogoFile(logoVersionId: string, upload: LogoFileUpload): Promise<LogoOption> {
+    if (!logoVersionId) throw new Error("Logo-Version ist erforderlich.");
+    const file = this.decodeUpload(upload);
+    return this.repo.replaceLogoFile({ logoVersionId, ...file });
+  }
+
+  /** Löscht eine Logo-Version (inkl. Staffeln/Datei); war sie aktiv, rückt die neueste nach. */
+  async deleteLogoVersion(logoVersionId: string): Promise<void> {
+    if (!logoVersionId) throw new Error("Logo-Version ist erforderlich.");
+    return this.repo.deleteLogoVersion(logoVersionId);
+  }
+
+  /** Dekodiert + validiert einen Upload (Datei vorhanden, nicht leer, Größenlimit). */
+  private decodeUpload(file: LogoFileUpload): { fileName: string; mimeType: string; data: Buffer } {
+    const name = file?.name?.trim();
     if (!name) throw new Error("Dateiname darf nicht leer sein.");
-    if (!input.file.dataBase64) throw new Error("Es wurde keine Datei hochgeladen.");
-    const data = Buffer.from(input.file.dataBase64, "base64");
+    if (!file.dataBase64) throw new Error("Es wurde keine Datei hochgeladen.");
+    const data = Buffer.from(file.dataBase64, "base64");
     if (data.length === 0) throw new Error("Die hochgeladene Datei ist leer.");
     if (data.length > MAX_LOGO_FILE_BYTES) {
       throw new Error(`Datei zu groß (max. ${Math.round(MAX_LOGO_FILE_BYTES / 1024 / 1024)} MB).`);
     }
-    return this.repo.createLogoVersion({
-      companyId: input.companyId,
-      active: input.active,
-      fileName: name,
-      mimeType: input.file.mimeType || "application/octet-stream",
-      data,
-    });
+    return { fileName: name, mimeType: file.mimeType || "application/octet-stream", data };
   }
 
   /** Setzt eine Logo-Version aktiv (deaktiviert die übrigen Versionen der Firma). */

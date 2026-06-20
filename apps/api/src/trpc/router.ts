@@ -334,6 +334,19 @@ export const appRouter = router({
       activate: roleProcedure("ADMIN", "BUERO")
         .input(z.object({ logoVersionId: z.string().min(1) }))
         .mutation(({ input, ctx }) => ctx.stickerei.activateLogoVersion(input.logoVersionId)),
+
+      replaceFile: roleProcedure("ADMIN", "BUERO")
+        .input(
+          z.object({
+            logoVersionId: z.string().min(1),
+            file: z.object({ name: z.string().min(1), mimeType: z.string(), dataBase64: z.string().min(1) }),
+          })
+        )
+        .mutation(({ input, ctx }) => ctx.stickerei.replaceLogoFile(input.logoVersionId, input.file)),
+
+      delete: roleProcedure("ADMIN", "BUERO")
+        .input(z.object({ logoVersionId: z.string().min(1) }))
+        .mutation(({ input, ctx }) => ctx.stickerei.deleteLogoVersion(input.logoVersionId)),
     }),
 
     /** Stickerei-Plan einer Firma (Kap. 5.4): Weg + Digitalisierungsbedarf + Begründung. */

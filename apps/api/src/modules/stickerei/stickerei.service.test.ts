@@ -144,6 +144,26 @@ describe("StickereiService Logo-Verwaltung (Kap. 7.2)", () => {
     expect(res.staffeln[0]?.vkCents).toBe(1_650); // 1000 × 1,65 (Großkunden-Regel greift)
   });
 
+  it("replaceLogoFile tauscht die Datei in-place (Version/aktiv bleiben)", async () => {
+    const s = svc();
+    const v2 = await s.createLogoVersion({ companyId: "F1", file: upload("alt.dst"), active: true });
+    const updated = await s.replaceLogoFile(v2.id, { name: "neu.emb", mimeType: "x", dataBase64: Buffer.from("NEU").toString("base64") });
+    expect(updated).toMatchObject({ id: v2.id, version: 2, active: true, fileName: "neu.emb" });
+    const file = await s.getLogoFile(v2.id);
+    expect(file?.fileName).toBe("neu.emb");
+    expect(file?.data.toString()).toBe("NEU");
+  });
+
+  it("deleteLogoVersion: aktive Version gelöscht → neueste verbleibende rückt nach", async () => {
+    const s = svc();
+    const v2 = await s.createLogoVersion({ companyId: "F1", file: upload("a.dst"), active: true }); // F1-v2 aktiv, v1 inaktiv
+    await s.deleteLogoVersion(v2.id);
+    const logos = await s.listLogos();
+    expect(logos.find((l) => l.id === v2.id)).toBeUndefined();
+    expect(logos.find((l) => l.id === "F1-v1")?.active).toBe(true); // v1 rückt nach
+    expect(await s.getLogoFile(v2.id)).toBeNull();
+  });
+
   it("activateLogoVersion schaltet die aktive Version um", async () => {
     const s = svc();
     const v2 = await s.createLogoVersion({ companyId: "F1", file: upload("x.dst"), active: false });

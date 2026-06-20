@@ -7,6 +7,7 @@ import type {
   LogoMarkupContext,
   LogoOption,
   StickereiRepository,
+  StoredLogoFile,
   StoredLogoVersion,
 } from "../modules/stickerei/stickerei.service.js";
 
@@ -89,6 +90,31 @@ export class InMemoryStickereiRepository implements StickereiRepository {
     // Labels der Firma neu berechnen (aktiv-Markierung kann sich verschoben haben).
     for (const l of this.logos) if (l.companyId === input.companyId) l.label = logoLabel(l);
     return { ...created };
+  }
+
+  async replaceLogoFile(input: StoredLogoFile): Promise<LogoOption> {
+    const logo = this.logos.find((l) => l.id === input.logoVersionId);
+    if (!logo) throw new Error(`Logo-Version ${input.logoVersionId} nicht gefunden.`);
+    logo.fileName = input.fileName;
+    this.files.set(input.logoVersionId, { fileName: input.fileName, mimeType: input.mimeType, data: input.data });
+    return { ...logo };
+  }
+
+  async deleteLogoVersion(logoVersionId: string): Promise<void> {
+    const idx = this.logos.findIndex((l) => l.id === logoVersionId);
+    if (idx < 0) throw new Error(`Logo-Version ${logoVersionId} nicht gefunden.`);
+    const [removed] = this.logos.splice(idx, 1);
+    this.files.delete(logoVersionId);
+    this.priceGroups.delete(logoVersionId);
+    this.logoOverrides.delete(logoVersionId);
+    this.staffeln.delete(logoVersionId);
+    // War es die aktive Version, rückt die neueste verbleibende der Firma nach.
+    if (removed!.active) {
+      const rest = this.logos.filter((l) => l.companyId === removed!.companyId);
+      const newest = rest.reduce<LogoOption | null>((m, l) => (!m || (l.version ?? 0) > (m.version ?? 0) ? l : m), null);
+      if (newest) newest.active = true;
+      for (const l of rest) l.label = logoLabel(l);
+    }
   }
 
   async getLogoFile(logoVersionId: string): Promise<LogoFile | null> {

@@ -3,7 +3,7 @@
 // Stickerei-Mengenstaffeln je Logo (Kap. 4.4/5.4), Fremdvergabe-Plan (T-04/Kap. 5.3) und
 // Nachkalkulation Soll-Ist (T-10). Preis-sensible Module sind für PRODUKTION ausgeblendet
 // (Kap. 12) — die Endpunkte erzwingen die Rolle zusätzlich serverseitig. UI: Mantine.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Anchor, Badge, Button, Card, Checkbox, FileInput, Group, NumberInput, Select, Table, Text, TextInput, Title } from "@mantine/core";
 import {
   computeStickereiStaffelVks,
@@ -252,6 +252,46 @@ function LogoVerwaltung({ logos, onChanged }: { logos: LogoOption[]; onChanged: 
     }
   }, [onChanged]);
 
+  // Datei einer bestehenden Version ersetzen: verstecktes File-Input je Zeile auslösen.
+  const replaceInputRef = useRef<HTMLInputElement>(null);
+  const replaceTargetId = useRef<string | null>(null);
+  const onReplaceClick = (id: string) => {
+    replaceTargetId.current = id;
+    replaceInputRef.current?.click();
+  };
+  const onReplaceFile = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    const id = replaceTargetId.current;
+    e.target.value = ""; // erlaubt erneutes Wählen derselben Datei
+    if (!f || !id) return;
+    setErr("");
+    setStatus("");
+    try {
+      const dataBase64 = await fileToBase64(f);
+      await trpc.stickerei.logos.replaceFile.mutate({
+        logoVersionId: id,
+        file: { name: f.name, mimeType: f.type || "application/octet-stream", dataBase64 },
+      });
+      await onChanged();
+      setStatus(`Datei ersetzt: ${f.name}.`);
+    } catch (err) {
+      setErr(errMsg(err));
+    }
+  }, [onChanged]);
+
+  const remove = useCallback(async (id: string, label: string) => {
+    if (!window.confirm(`Logo-Version „${label}" wirklich löschen? Zugehörige Mengenstaffeln werden mitgelöscht.`)) return;
+    setErr("");
+    setStatus("");
+    try {
+      await trpc.stickerei.logos.delete.mutate({ logoVersionId: id });
+      await onChanged();
+      setStatus("Version gelöscht.");
+    } catch (e) {
+      setErr(errMsg(e));
+    }
+  }, [onChanged]);
+
   return (
     <Card withBorder mt="md" padding="md">
       <Title order={4}>Logo-Verwaltung (Kap. 7.2)</Title>
@@ -267,6 +307,7 @@ function LogoVerwaltung({ logos, onChanged }: { logos: LogoOption[]; onChanged: 
             <Table.Th ta="right">Version</Table.Th>
             <Table.Th>Stickdatei</Table.Th>
             <Table.Th>Status</Table.Th>
+            <Table.Th ta="right">Aktionen</Table.Th>
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
@@ -284,13 +325,20 @@ function LogoVerwaltung({ logos, onChanged }: { logos: LogoOption[]; onChanged: 
                   ? <Badge color="teal" variant="light">aktiv</Badge>
                   : <Button size="compact-xs" variant="default" onClick={() => void activate(l.id)}>Aktiv setzen</Button>}
               </Table.Td>
+              <Table.Td ta="right">
+                <Group gap={4} justify="flex-end" wrap="nowrap">
+                  <Button size="compact-xs" variant="subtle" onClick={() => onReplaceClick(l.id)}>Ersetzen…</Button>
+                  <Button size="compact-xs" variant="subtle" color="red" onClick={() => void remove(l.id, l.label)}>Löschen</Button>
+                </Group>
+              </Table.Td>
             </Table.Tr>
           ))}
           {logos.length === 0 && (
-            <Table.Tr><Table.Td colSpan={4}><Text size="sm" c="dimmed">Noch keine Logos angelegt.</Text></Table.Td></Table.Tr>
+            <Table.Tr><Table.Td colSpan={5}><Text size="sm" c="dimmed">Noch keine Logos angelegt.</Text></Table.Td></Table.Tr>
           )}
         </Table.Tbody>
       </Table>
+      <input ref={replaceInputRef} type="file" hidden onChange={(e) => void onReplaceFile(e)} />
 
       <Group align="end" gap="sm" mt="md">
         <Select label="Firma" w={220} searchable data={companies} value={companyId}

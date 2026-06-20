@@ -15,6 +15,7 @@ import type {
   LogoMarkupContext,
   LogoOption,
   StickereiRepository,
+  StoredLogoFile,
   StoredLogoVersion,
 } from "../modules/stickerei/stickerei.service.js";
 
@@ -116,6 +117,51 @@ export class PrismaStickereiRepository implements StickereiRepository {
         companyName: company.name,
         label: logoLabel(company.name, created.version, created.active),
       };
+    });
+  }
+
+  async replaceLogoFile(input: StoredLogoFile): Promise<LogoOption> {
+    const updated = await prisma.logoVersion.update({
+      where: { id: input.logoVersionId },
+      data: {
+        fileRef: input.fileName,
+        fileName: input.fileName,
+        mimeType: input.mimeType,
+        fileSize: input.data.length,
+        fileData: new Uint8Array(input.data),
+      },
+      select: { id: true, companyId: true, version: true, active: true, fileName: true, company: { select: { name: true } } },
+    });
+    return {
+      id: updated.id,
+      companyId: updated.companyId,
+      version: updated.version,
+      active: updated.active,
+      companyName: updated.company.name,
+      ...(updated.fileName ? { fileName: updated.fileName } : {}),
+      label: logoLabel(updated.company.name, updated.version, updated.active),
+    };
+  }
+
+  async deleteLogoVersion(logoVersionId: string): Promise<void> {
+    await prisma.$transaction(async (tx) => {
+      const target = await tx.logoVersion.findUnique({
+        where: { id: logoVersionId },
+        select: { companyId: true, active: true },
+      });
+      if (!target) throw new Error(`Logo-Version ${logoVersionId} nicht gefunden.`);
+      await tx.logoVersion.delete({ where: { id: logoVersionId } });
+      // War es die aktive Version, rückt die neueste verbleibende nach (genau eine aktiv).
+      if (target.active) {
+        const newest = await tx.logoVersion.findFirst({
+          where: { companyId: target.companyId },
+          orderBy: { version: "desc" },
+          select: { id: true },
+        });
+        if (newest) {
+          await tx.logoVersion.update({ where: { id: newest.id }, data: { active: true, replacedAt: null } });
+        }
+      }
     });
   }
 
