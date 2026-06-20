@@ -112,23 +112,32 @@ describe("StickereiService Logo-Verwaltung (Kap. 7.2)", () => {
     );
   }
 
+  const upload = (name: string) => ({ name, mimeType: "application/octet-stream", dataBase64: Buffer.from("DATA").toString("base64") });
+
   it("listCompanies", async () => {
     expect(await svc().listCompanies()).toEqual([{ id: "F1", name: "Acme GmbH" }]);
   });
 
-  it("createLogoVersion: nächste Version, setzt vorherige inaktiv, Datei-Ref nötig", async () => {
+  it("createLogoVersion: nächste Version, setzt vorherige inaktiv, Datei nötig", async () => {
     const s = svc();
-    await expect(s.createLogoVersion({ companyId: "F1", fileRef: "  ", active: true })).rejects.toThrow(/Datei-Referenz/);
-    const created = await s.createLogoVersion({ companyId: "F1", fileRef: "logo.emb", active: true });
-    expect(created).toMatchObject({ companyId: "F1", version: 2, active: true, label: "Acme GmbH · v2 (aktiv)" });
+    await expect(s.createLogoVersion({ companyId: "F1", file: upload("  "), active: true })).rejects.toThrow(/Dateiname/);
+    await expect(
+      s.createLogoVersion({ companyId: "F1", file: { name: "x", mimeType: "", dataBase64: "" }, active: true })
+    ).rejects.toThrow(/keine Datei/);
+    const created = await s.createLogoVersion({ companyId: "F1", file: upload("logo.emb"), active: true });
+    expect(created).toMatchObject({ companyId: "F1", version: 2, active: true, fileName: "logo.emb", label: "Acme GmbH · v2 (aktiv)" });
     const logos = await s.listLogos();
     expect(logos.find((l) => l.id === "F1-v1")?.active).toBe(false);
     expect(logos.find((l) => l.id === created.id)?.active).toBe(true);
+    // Hochgeladene Bytes sind abrufbar (Download/Preview).
+    const file = await s.getLogoFile(created.id);
+    expect(file?.fileName).toBe("logo.emb");
+    expect(file?.data.toString()).toBe("DATA");
   });
 
   it("neue Version erbt die Kundengruppe der Firma (Faktor-Auflösung)", async () => {
     const s = svc();
-    const created = await s.createLogoVersion({ companyId: "F1", fileRef: "x", active: true });
+    const created = await s.createLogoVersion({ companyId: "F1", file: upload("x.dst"), active: true });
     await s.saveStaffeln(created.id, [{ minMenge: 1, ekCents: 1_000 }]);
     const res = await s.listStaffeln(created.id);
     expect(res.priceGroupId).toBe("PG-GROSSKUNDE");
@@ -137,7 +146,7 @@ describe("StickereiService Logo-Verwaltung (Kap. 7.2)", () => {
 
   it("activateLogoVersion schaltet die aktive Version um", async () => {
     const s = svc();
-    const v2 = await s.createLogoVersion({ companyId: "F1", fileRef: "x", active: false });
+    const v2 = await s.createLogoVersion({ companyId: "F1", file: upload("x.dst"), active: false });
     expect((await s.listLogos()).find((l) => l.id === "F1-v1")?.active).toBe(true);
     await s.activateLogoVersion(v2.id);
     const logos = await s.listLogos();

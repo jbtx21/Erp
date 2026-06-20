@@ -321,7 +321,14 @@ export const appRouter = router({
       list: roleProcedure("ADMIN", "BUERO").query(({ ctx }) => ctx.stickerei.listLogos()),
 
       create: roleProcedure("ADMIN", "BUERO")
-        .input(z.object({ companyId: z.string().min(1), fileRef: z.string().min(1), active: z.boolean() }))
+        .input(
+          z.object({
+            companyId: z.string().min(1),
+            // Beliebiges Dateiformat (Kap. 7.1); Bytes base64-kodiert.
+            file: z.object({ name: z.string().min(1), mimeType: z.string(), dataBase64: z.string().min(1) }),
+            active: z.boolean(),
+          })
+        )
         .mutation(({ input, ctx }) => ctx.stickerei.createLogoVersion(input)),
 
       activate: roleProcedure("ADMIN", "BUERO")

@@ -3,10 +3,11 @@
 import { DEFAULT_MARKUP_CONFIG, type MarkupConfig, type StickereiContext, type StickereiStaffel } from "@texma/shared";
 import type {
   CompanyOption,
-  CreateLogoVersionInput,
+  LogoFile,
   LogoMarkupContext,
   LogoOption,
   StickereiRepository,
+  StoredLogoVersion,
 } from "../modules/stickerei/stickerei.service.js";
 
 /** Firma inkl. Kundengruppe (für die in-memory Faktor-Auflösung neuer Logos). */
@@ -37,6 +38,7 @@ export class InMemoryStickereiRepository implements StickereiRepository {
   private readonly priceGroups: Map<string, string>;
   private readonly logos: LogoOption[];
   private readonly companies: InMemoryCompany[];
+  private readonly files = new Map<string, LogoFile>();
   private markupConfig: MarkupConfig;
 
   constructor(
@@ -64,7 +66,7 @@ export class InMemoryStickereiRepository implements StickereiRepository {
     return this.companies.map((c) => ({ id: c.id, name: c.name }));
   }
 
-  async createLogoVersion(input: CreateLogoVersionInput): Promise<LogoOption> {
+  async createLogoVersion(input: StoredLogoVersion): Promise<LogoOption> {
     const company = this.companies.find((c) => c.id === input.companyId);
     if (!company) throw new Error(`Firma ${input.companyId} nicht gefunden.`);
     const versions = this.logos.filter((l) => l.companyId === input.companyId);
@@ -77,14 +79,21 @@ export class InMemoryStickereiRepository implements StickereiRepository {
       companyName: company.name,
       version,
       active: input.active,
+      fileName: input.fileName,
       label: "",
     };
     created.label = logoLabel(created);
     this.logos.push(created);
+    this.files.set(id, { fileName: input.fileName, mimeType: input.mimeType, data: input.data });
     if (company.priceGroupId) this.priceGroups.set(id, company.priceGroupId);
     // Labels der Firma neu berechnen (aktiv-Markierung kann sich verschoben haben).
     for (const l of this.logos) if (l.companyId === input.companyId) l.label = logoLabel(l);
     return { ...created };
+  }
+
+  async getLogoFile(logoVersionId: string): Promise<LogoFile | null> {
+    const f = this.files.get(logoVersionId);
+    return f ? { ...f, data: Buffer.from(f.data) } : null;
   }
 
   async setLogoActive(logoVersionId: string): Promise<void> {

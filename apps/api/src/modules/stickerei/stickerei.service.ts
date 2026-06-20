@@ -33,6 +33,8 @@ export interface LogoOption {
   companyName?: string;
   version?: number;
   active?: boolean;
+  /** Dateiname der hochgeladenen Stickdatei (falls vorhanden). */
+  fileName?: string;
 }
 
 /** Firma für die Logo-Zuordnung (Picker beim Anlegen). */
@@ -41,11 +43,37 @@ export interface CompanyOption {
   name: string;
 }
 
-/** Eingabe zum Anlegen einer neuen Logo-Version (Kap. 7.2). */
+/** Hochgeladene Datei (beliebiges Format, Kap. 7.1) — Bytes base64-kodiert übertragen. */
+export interface LogoFileUpload {
+  name: string;
+  mimeType: string;
+  dataBase64: string;
+}
+
+/** Eingabe zum Anlegen einer neuen Logo-Version (Kap. 7.2) inkl. hochgeladener Stickdatei. */
 export interface CreateLogoVersionInput {
   companyId: string;
-  fileRef: string;
+  file: LogoFileUpload;
   active: boolean;
+}
+
+/** Hochgeladene Datei zum Ausliefern (Download/Preview). */
+export interface LogoFile {
+  fileName: string;
+  mimeType: string;
+  data: Buffer;
+}
+
+/** Maximale Upload-Größe je Stickdatei (Kap. 7.1) — großzügig, Format frei. */
+export const MAX_LOGO_FILE_BYTES = 10 * 1024 * 1024;
+
+/** An das Repository übergebene Logo-Version mit bereits dekodierten Datei-Bytes. */
+export interface StoredLogoVersion {
+  companyId: string;
+  active: boolean;
+  fileName: string;
+  mimeType: string;
+  data: Buffer;
 }
 
 export interface StickereiRepository {
@@ -55,9 +83,11 @@ export interface StickereiRepository {
   /** Firmen für die Logo-Zuordnung. */
   listCompanies(): Promise<CompanyOption[]>;
   /** Legt eine neue Logo-Version an (Versionsnummer auto, aktiv setzt andere inaktiv). */
-  createLogoVersion(input: CreateLogoVersionInput): Promise<LogoOption>;
+  createLogoVersion(input: StoredLogoVersion): Promise<LogoOption>;
   /** Setzt eine Logo-Version aktiv (genau eine aktiv je Firma, Kap. 7.2). */
   setLogoActive(logoVersionId: string): Promise<void>;
+  /** Liefert die hochgeladene Stickdatei einer Logo-Version (oder null). */
+  getLogoFile(logoVersionId: string): Promise<LogoFile | null>;
   /** Persistierte Staffeln (Stick-EK je Stück) eines Logos, beliebige Reihenfolge. */
   listStaffeln(logoVersionId: string): Promise<StickereiStaffel[]>;
   /** Ersetzt die Staffeln eines Logos vollständig (Set-Semantik). */
@@ -94,17 +124,38 @@ export class StickereiService {
     return this.repo.listCompanies();
   }
 
-  /** Legt eine neue Logo-Version an (Kap. 7.2): Versionsnummer automatisch, Datei-Ref nötig. */
+  /**
+   * Legt eine neue Logo-Version an (Kap. 7.2) inkl. hochgeladener Stickdatei (beliebiges
+   * Format, Kap. 7.1): Versionsnummer automatisch, Datei erforderlich, Größenlimit geprüft.
+   */
   async createLogoVersion(input: CreateLogoVersionInput): Promise<LogoOption> {
     if (!input.companyId) throw new Error("Firma ist erforderlich.");
-    if (!input.fileRef.trim()) throw new Error("Datei-Referenz darf nicht leer sein.");
-    return this.repo.createLogoVersion({ ...input, fileRef: input.fileRef.trim() });
+    const name = input.file?.name?.trim();
+    if (!name) throw new Error("Dateiname darf nicht leer sein.");
+    if (!input.file.dataBase64) throw new Error("Es wurde keine Datei hochgeladen.");
+    const data = Buffer.from(input.file.dataBase64, "base64");
+    if (data.length === 0) throw new Error("Die hochgeladene Datei ist leer.");
+    if (data.length > MAX_LOGO_FILE_BYTES) {
+      throw new Error(`Datei zu groß (max. ${Math.round(MAX_LOGO_FILE_BYTES / 1024 / 1024)} MB).`);
+    }
+    return this.repo.createLogoVersion({
+      companyId: input.companyId,
+      active: input.active,
+      fileName: name,
+      mimeType: input.file.mimeType || "application/octet-stream",
+      data,
+    });
   }
 
   /** Setzt eine Logo-Version aktiv (deaktiviert die übrigen Versionen der Firma). */
   async activateLogoVersion(logoVersionId: string): Promise<void> {
     if (!logoVersionId) throw new Error("Logo-Version ist erforderlich.");
     return this.repo.setLogoActive(logoVersionId);
+  }
+
+  /** Hochgeladene Stickdatei einer Logo-Version (für Download/Preview). */
+  async getLogoFile(logoVersionId: string): Promise<LogoFile | null> {
+    return this.repo.getLogoFile(logoVersionId);
   }
 
   /** Stickerei-Plan einer Firma (Kap. 5.4): Weg + Digitalisierungsbedarf + Begründung. */

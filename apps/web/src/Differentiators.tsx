@@ -4,7 +4,7 @@
 // Nachkalkulation Soll-Ist (T-10). Preis-sensible Module sind für PRODUKTION ausgeblendet
 // (Kap. 12) — die Endpunkte erzwingen die Rolle zusätzlich serverseitig. UI: Mantine.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Badge, Button, Card, Checkbox, Group, NumberInput, Select, Table, Text, TextInput, Title } from "@mantine/core";
+import { Anchor, Badge, Button, Card, Checkbox, FileInput, Group, NumberInput, Select, Table, Text, TextInput, Title } from "@mantine/core";
 import {
   computeStickereiStaffelVks,
   stickereiPriceForMenge,
@@ -143,7 +143,20 @@ function AmpelDashboard(): JSX.Element {
 // Aufschlags-Konfiguration + Logo-Liste werden einmal geladen und geteilt, damit die
 // Staffel-Live-Berechnung dieselben Faktoren/Regeln nutzt wie der Server und das Anlegen
 // einer Logo-Version den Picker sofort aktualisiert.
-type LogoOption = { id: string; label: string; companyId?: string; companyName?: string; version?: number; active?: boolean };
+type LogoOption = { id: string; label: string; companyId?: string; companyName?: string; version?: number; active?: boolean; fileName?: string };
+
+/** Liest eine Datei als base64 (ohne data:-Präfix) für den Upload über tRPC. */
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const res = reader.result as string;
+      resolve(res.slice(res.indexOf(",") + 1));
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
 
 function PricingTools(): JSX.Element {
   const [config, setConfig] = useState<MarkupConfig | null>(null);
@@ -184,7 +197,7 @@ function PricingTools(): JSX.Element {
 function LogoVerwaltung({ logos, onChanged }: { logos: LogoOption[]; onChanged: () => Promise<void> | void }): JSX.Element {
   const [companies, setCompanies] = useState<{ value: string; label: string }[]>([]);
   const [companyId, setCompanyId] = useState<string | null>(null);
-  const [fileRef, setFileRef] = useState("");
+  const [file, setFile] = useState<File | null>(null);
   const [active, setActive] = useState(true);
   const [status, setStatus] = useState("");
   const [err, setErr] = useState("");
@@ -208,15 +221,24 @@ function LogoVerwaltung({ logos, onChanged }: { logos: LogoOption[]; onChanged: 
       setErr("Bitte eine Firma wählen.");
       return;
     }
+    if (!file) {
+      setErr("Bitte eine Stickdatei wählen.");
+      return;
+    }
     try {
-      const created = await trpc.stickerei.logos.create.mutate({ companyId, fileRef, active });
+      const dataBase64 = await fileToBase64(file);
+      const created = await trpc.stickerei.logos.create.mutate({
+        companyId,
+        file: { name: file.name, mimeType: file.type || "application/octet-stream", dataBase64 },
+        active,
+      });
       await onChanged();
-      setStatus(`Angelegt: ${created.label}.`);
-      setFileRef("");
+      setStatus(`Angelegt: ${created.label} (${file.name}).`);
+      setFile(null);
     } catch (e) {
       setErr(errMsg(e));
     }
-  }, [companyId, fileRef, active, onChanged]);
+  }, [companyId, file, active, onChanged]);
 
   const activate = useCallback(async (id: string) => {
     setErr("");
@@ -243,6 +265,7 @@ function LogoVerwaltung({ logos, onChanged }: { logos: LogoOption[]; onChanged: 
           <Table.Tr>
             <Table.Th>Firma</Table.Th>
             <Table.Th ta="right">Version</Table.Th>
+            <Table.Th>Stickdatei</Table.Th>
             <Table.Th>Status</Table.Th>
           </Table.Tr>
         </Table.Thead>
@@ -252,6 +275,11 @@ function LogoVerwaltung({ logos, onChanged }: { logos: LogoOption[]; onChanged: 
               <Table.Td>{l.companyName ?? l.id}</Table.Td>
               <Table.Td ta="right">v{l.version ?? "?"}</Table.Td>
               <Table.Td>
+                {l.fileName
+                  ? <Anchor href={`/logos/${l.id}/file`} target="_blank" rel="noreferrer" size="sm">{l.fileName}</Anchor>
+                  : <Text size="sm" c="dimmed">—</Text>}
+              </Table.Td>
+              <Table.Td>
                 {l.active
                   ? <Badge color="teal" variant="light">aktiv</Badge>
                   : <Button size="compact-xs" variant="default" onClick={() => void activate(l.id)}>Aktiv setzen</Button>}
@@ -259,7 +287,7 @@ function LogoVerwaltung({ logos, onChanged }: { logos: LogoOption[]; onChanged: 
             </Table.Tr>
           ))}
           {logos.length === 0 && (
-            <Table.Tr><Table.Td colSpan={3}><Text size="sm" c="dimmed">Noch keine Logos angelegt.</Text></Table.Td></Table.Tr>
+            <Table.Tr><Table.Td colSpan={4}><Text size="sm" c="dimmed">Noch keine Logos angelegt.</Text></Table.Td></Table.Tr>
           )}
         </Table.Tbody>
       </Table>
@@ -267,10 +295,10 @@ function LogoVerwaltung({ logos, onChanged }: { logos: LogoOption[]; onChanged: 
       <Group align="end" gap="sm" mt="md">
         <Select label="Firma" w={220} searchable data={companies} value={companyId}
           onChange={setCompanyId} placeholder="Firma wählen…" />
-        <TextInput label="Datei-Referenz" w={240} placeholder="z. B. logo-acme.emb"
-          value={fileRef} onChange={(e) => setFileRef(e.currentTarget.value)} />
+        <FileInput label="Stickdatei (beliebiges Format)" w={260} clearable placeholder="Datei wählen…"
+          value={file} onChange={setFile} />
         <Checkbox label="aktiv setzen" checked={active} onChange={(e) => setActive(e.currentTarget.checked)} mb={6} />
-        <Button onClick={() => void create()} disabled={!companyId || !fileRef.trim()}>Version anlegen</Button>
+        <Button onClick={() => void create()} disabled={!companyId || !file}>Version anlegen</Button>
       </Group>
       {status && <Text size="sm" c="dimmed" mt="xs">{status}</Text>}
       {err && <Text c="red" size="sm" mt="xs">Fehler: {err}</Text>}

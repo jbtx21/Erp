@@ -11,10 +11,11 @@ import {
 } from "@texma/shared";
 import type {
   CompanyOption,
-  CreateLogoVersionInput,
+  LogoFile,
   LogoMarkupContext,
   LogoOption,
   StickereiRepository,
+  StoredLogoVersion,
 } from "../modules/stickerei/stickerei.service.js";
 
 /** Einheitliches Logo-Label: „Firma · vN (aktiv)". */
@@ -60,7 +61,7 @@ export class PrismaStickereiRepository implements StickereiRepository {
 
   async listLogos(): Promise<LogoOption[]> {
     const rows = await prisma.logoVersion.findMany({
-      select: { id: true, companyId: true, version: true, active: true, company: { select: { name: true } } },
+      select: { id: true, companyId: true, version: true, active: true, fileName: true, company: { select: { name: true } } },
       orderBy: [{ company: { name: "asc" } }, { version: "desc" }],
     });
     return rows.map((r) => ({
@@ -69,6 +70,7 @@ export class PrismaStickereiRepository implements StickereiRepository {
       version: r.version,
       active: r.active,
       companyName: r.company.name,
+      ...(r.fileName ? { fileName: r.fileName } : {}),
       label: logoLabel(r.company.name, r.version, r.active),
     }));
   }
@@ -77,7 +79,7 @@ export class PrismaStickereiRepository implements StickereiRepository {
     return prisma.company.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } });
   }
 
-  async createLogoVersion(input: CreateLogoVersionInput): Promise<LogoOption> {
+  async createLogoVersion(input: StoredLogoVersion): Promise<LogoOption> {
     return prisma.$transaction(async (tx) => {
       const company = await tx.company.findUnique({ where: { id: input.companyId }, select: { name: true } });
       if (!company) throw new Error(`Firma ${input.companyId} nicht gefunden.`);
@@ -93,15 +95,41 @@ export class PrismaStickereiRepository implements StickereiRepository {
         });
       }
       const created = await tx.logoVersion.create({
-        data: { companyId: input.companyId, version, fileRef: input.fileRef, active: input.active },
-        select: { id: true, companyId: true, version: true, active: true },
+        data: {
+          companyId: input.companyId,
+          version,
+          fileRef: input.fileName, // Verweis = Originaldateiname (Bytes inline gespeichert)
+          active: input.active,
+          fileName: input.fileName,
+          mimeType: input.mimeType,
+          fileSize: input.data.length,
+          fileData: new Uint8Array(input.data),
+        },
+        select: { id: true, companyId: true, version: true, active: true, fileName: true },
       });
       return {
-        ...created,
+        id: created.id,
+        companyId: created.companyId,
+        version: created.version,
+        active: created.active,
+        fileName: created.fileName ?? input.fileName,
         companyName: company.name,
         label: logoLabel(company.name, created.version, created.active),
       };
     });
+  }
+
+  async getLogoFile(logoVersionId: string): Promise<LogoFile | null> {
+    const row = await prisma.logoVersion.findUnique({
+      where: { id: logoVersionId },
+      select: { fileName: true, mimeType: true, fileData: true },
+    });
+    if (!row?.fileData) return null;
+    return {
+      fileName: row.fileName ?? "logo",
+      mimeType: row.mimeType ?? "application/octet-stream",
+      data: Buffer.from(row.fileData),
+    };
   }
 
   async setLogoActive(logoVersionId: string): Promise<void> {

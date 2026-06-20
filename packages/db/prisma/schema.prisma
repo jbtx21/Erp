@@ -156,6 +156,11 @@ model LogoVersion {
   createdAt  DateTime @default(now())
   // Optionaler Aufschlagsfaktor-Override je Logo (gewinnt über die globalen Regeln, Kap. 4.4).
   markupFactor Float?
+  // Hochgeladene Stickdatei (beliebiges Format, Kap. 7.1) — inline in der DB gespeichert.
+  fileName   String?
+  mimeType   String?
+  fileSize   Int?
+  fileData   Bytes?
 
   stickereiStaffeln StickereiStaffel[]
 

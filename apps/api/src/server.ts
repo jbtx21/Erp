@@ -64,7 +64,8 @@ export interface ServerOptions {
 }
 
 export function buildServer(opts: ServerOptions = {}): FastifyInstance {
-  const server = Fastify({ logger: true });
+  // bodyLimit großzügig: Logo-/Stickdatei-Uploads (≤ 10 MB) reisen base64-kodiert (~+33 %).
+  const server = Fastify({ logger: true, bodyLimit: 15 * 1024 * 1024 });
   void server.register(cookie);
 
   const repo = new PrismaOrderRepository();
@@ -102,6 +103,23 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const oidc = opts.identityVerifier !== undefined ? opts.identityVerifier : JoseOidcVerifier.fromEnv();
 
   server.get("/health", async () => ({ ok: true }));
+
+  // Binär-Download/Preview der hochgeladenen Stickdatei (außerhalb von tRPC, da Bytes).
+  // Nutzt denselben Stickerei-Service wie der Context (inkl. Demo-Override) und ist über
+  // die Session-Cookie abgesichert (gleiche Identität wie die App).
+  const stickereiSvc = (opts.contextOverrides?.stickerei as StickereiService | undefined) ?? stickerei;
+  server.get<{ Params: { id: string } }>("/logos/:id/file", async (req, reply) => {
+    const token = req.cookies[COOKIE_NAME] ?? null;
+    let user = token ? await auth.resolveSession(token) : null;
+    if (!user && opts.demoUser) user = opts.demoUser;
+    if (!user) return reply.code(401).send({ error: "unauthenticated" });
+    const file = await stickereiSvc.getLogoFile(req.params.id);
+    if (!file) return reply.code(404).send({ error: "not found" });
+    return reply
+      .header("content-type", file.mimeType || "application/octet-stream")
+      .header("content-disposition", `inline; filename="${encodeURIComponent(file.fileName)}"`)
+      .send(file.data);
+  });
 
   void server.register(fastifyTRPCPlugin, {
     prefix: "/trpc",

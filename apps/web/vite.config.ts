@@ -4,7 +4,7 @@ import { defineConfig } from "vite";
 export default defineConfig({
   plugins: [react()],
   server: {
-    // tRPC-Aufrufe im Dev an den API-Prozess (Fastify) weiterreichen.
-    proxy: { "/trpc": "http://localhost:3000" },
+    // tRPC-Aufrufe + Logo-Datei-Downloads im Dev an den API-Prozess (Fastify) weiterreichen.
+    proxy: { "/trpc": "http://localhost:3000", "/logos": "http://localhost:3000" },
   },
 });
