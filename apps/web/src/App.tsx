@@ -1,11 +1,12 @@
 // Auth-Gate + Auftrags-Eingang (Slice T-01). Zeigt, dass Rolle PRODUKTION keine
-// Preise/Kundendaten sieht (serverseitig redigiert).
+// Preise/Kundendaten sieht (serverseitig redigiert). UI: Mantine (erp-ui-design).
 import { useCallback, useEffect, useState } from "react";
+import { Button, Container, Group, Loader, Table, Tabs, Text, Title } from "@mantine/core";
 import { Login } from "./Login.js";
 import { Reporting } from "./Reporting.js";
 import { Differentiators } from "./Differentiators.js";
 import { trpc } from "./trpc.js";
-import { T, euro, box, th, td, tdNum } from "./theme.js";
+import { euro, numTd } from "./theme.js";
 
 interface AuthUser {
   id: string;
@@ -39,7 +40,12 @@ export function App(): JSX.Element {
     void loadMe();
   }, [loadMe]);
 
-  if (user === undefined) return <p style={box}>lädt…</p>;
+  if (user === undefined)
+    return (
+      <Container size="lg" py="md">
+        <Group gap="xs"><Loader size="sm" /> <Text>lädt…</Text></Group>
+      </Container>
+    );
   if (!user) return <Login onAuthed={loadMe} />;
   return <Orders user={user} onLogout={async () => { await trpc.auth.logout.mutate(); setUser(null); }} />;
 }
@@ -73,65 +79,71 @@ function Orders({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
   }, [load]);
 
   return (
-    <main style={box}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1>TEXMA ERP</h1>
-        <span>
-          {user.name} ({user.role}) · <button onClick={() => void onLogout()}>Abmelden</button>
-        </span>
+    <Container size="lg" py="md">
+      <Group justify="space-between" align="center">
+        <Title order={2}>TEXMA ERP</Title>
+        <Group gap="xs">
+          <Text size="sm" c="dimmed">{user.name} ({user.role})</Text>
+          <Button variant="subtle" size="xs" onClick={() => void onLogout()}>Abmelden</Button>
+        </Group>
+      </Group>
+
+      <Tabs value={tab} onChange={(v) => v && setTab(v as Tab)} mt="sm">
+        <Tabs.List>
+          <Tabs.Tab value="orders">Aufträge</Tabs.Tab>
+          <Tabs.Tab value="differentiators">Differenzierer</Tabs.Tab>
+          <Tabs.Tab value="reporting">Auswertungen</Tabs.Tab>
+        </Tabs.List>
+      </Tabs>
+
+      {/* Nur den aktiven Tab mounten: inaktive Ansichten sollen keine Queries feuern
+          (sonst batcht der tRPC-Client fremde Endpunkte mit — und ein Fehler reißt
+          die ganze Antwort mit). */}
+      <div style={{ paddingTop: "1rem" }}>
+        {tab === "orders" && <OrdersTable orders={orders} status={status} role={user.role} onReload={load} />}
+        {tab === "differentiators" && <Differentiators role={user.role} />}
+        {tab === "reporting" && <Reporting role={user.role} />}
       </div>
-      <nav style={{ display: "flex", gap: "0.5rem", margin: "0.5rem 0 1rem" }}>
-        <button onClick={() => setTab("orders")} disabled={tab === "orders"}>Aufträge</button>
-        <button onClick={() => setTab("differentiators")} disabled={tab === "differentiators"}>Differenzierer</button>
-        <button onClick={() => setTab("reporting")} disabled={tab === "reporting"}>Auswertungen</button>
-      </nav>
-      {tab === "reporting" ? (
-        <Reporting role={user.role} />
-      ) : tab === "differentiators" ? (
-        <Differentiators role={user.role} />
-      ) : (
-        <OrdersTable orders={orders} status={status} role={user.role} onReload={load} />
-      )}
-    </main>
+    </Container>
   );
 }
 
 function OrdersTable({ orders, status, role, onReload }: { orders: OrderRow[]; status: string; role: string; onReload: () => Promise<void> }): JSX.Element {
   return (
     <>
-      <h2>Auftrags-Eingang</h2>
-      <p style={{ color: T.text2 }}>
+      <Title order={3}>Auftrags-Eingang</Title>
+      <Text size="sm" c="dimmed" mb="xs">
         {role === "PRODUKTION"
           ? "Rolle PRODUKTION: Preise/Kundendaten sind serverseitig ausgeblendet (Kap. 12)."
           : "Shop-Bestellungen werden der Firma zugeordnet (T-01)."}
-      </p>
-      <button onClick={() => void onReload()}>Aktualisieren</button>
-      {status && <p><em>{status}</em></p>}
-      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: "1rem" }}>
-        <thead>
-          <tr>
-            <th style={th}>Auftrag</th>
-            <th style={th}>Shop-Nr.</th>
-            <th style={th}>Firma</th>
-            <th style={{ ...th, textAlign: "right" }}>Auftragswert</th>
-            <th style={th}>Mitarbeiter (Vermerk)</th>
-          </tr>
-        </thead>
-        <tbody>
+      </Text>
+      <Button variant="default" size="xs" onClick={() => void onReload()}>Aktualisieren</Button>
+      {status && <Text size="sm" mt="xs"><em>{status}</em></Text>}
+      <Table striped highlightOnHover withTableBorder mt="sm" verticalSpacing="xs">
+        <Table.Thead>
+          <Table.Tr>
+            <Table.Th>Auftrag</Table.Th>
+            <Table.Th>Shop-Nr.</Table.Th>
+            <Table.Th>Firma</Table.Th>
+            <Table.Th ta="right">Auftragswert</Table.Th>
+            <Table.Th>Mitarbeiter (Vermerk)</Table.Th>
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
           {orders.map((o) => (
-            <tr key={o.id}>
-              <td style={td}>{o.number}</td>
-              <td style={td}>{o.externalNumber ?? "—"}</td>
-              <td style={td}>{o.companyId}</td>
-              <td style={tdNum}>{euro(o.totalNetCents)}</td>
-              <td style={td}>{o.employeeNote ?? "—"}</td>
-            </tr>
+            <Table.Tr key={o.id}>
+              <Table.Td>{o.number}</Table.Td>
+              <Table.Td>{o.externalNumber ?? "—"}</Table.Td>
+              <Table.Td>{o.companyId}</Table.Td>
+              <Table.Td style={numTd}>{euro(o.totalNetCents)}</Table.Td>
+              <Table.Td>{o.employeeNote ?? "—"}</Table.Td>
+            </Table.Tr>
           ))}
           {orders.length === 0 && (
-            <tr><td style={td} colSpan={5}>Keine Aufträge.</td></tr>
+            <Table.Tr><Table.Td colSpan={5}>Keine Aufträge.</Table.Td></Table.Tr>
           )}
-        </tbody>
-      </table>
+        </Table.Tbody>
+      </Table>
     </>
   );
 }

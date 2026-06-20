@@ -10,6 +10,8 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@mantine/core": "^7.17.8",
+    "@mantine/hooks": "^7.17.8",
     "@texma/api": "workspace:*",
     "@trpc/client": "^11.18.0",
     "react": "^18.3.1",

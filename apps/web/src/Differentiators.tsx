@@ -2,18 +2,17 @@
 // TEXMA-Spezialmodule am echten Endpunkt sichtbar — Ampel-Terminübersicht (Kap. 35.4),
 // Stickerei-Angebotsvergleich (Kap. 5.4), Fremdvergabe-Plan (T-04/Kap. 5.3) und
 // Nachkalkulation Soll-Ist (T-10). Preis-sensible Module sind für PRODUKTION ausgeblendet
-// (Kap. 12) — die Endpunkte erzwingen die Rolle zusätzlich serverseitig.
-import { type CSSProperties, useCallback, useEffect, useState } from "react";
+// (Kap. 12) — die Endpunkte erzwingen die Rolle zusätzlich serverseitig. UI: Mantine.
+import { useCallback, useEffect, useState } from "react";
+import { Badge, Button, Card, Group, NumberInput, Table, Text, TextInput, Title } from "@mantine/core";
 import { trpc } from "./trpc.js";
-import { T, euro, statusOf, th, td, tdNum, card, kpi, tableStyle, errStyle, inputStyle } from "./theme.js";
+import { euro, numTd, statusMantineColor, statusOf } from "./theme.js";
 
-const numInput: CSSProperties = { ...inputStyle, width: 90 };
-const dot = (status: string): CSSProperties => ({ color: statusOf(status).color, fontWeight: 700 });
+const countColor: Record<string, string> = { ROT: "red", GELB: "amber.7", GRUEN: "green" };
 
-/** Status als Farbe + Symbol + Text (Skill erp-ui-design: Signal nie allein über Farbe). */
-function StatusTag({ s }: { s: string }): JSX.Element {
-  const t = statusOf(s);
-  return <span style={{ color: t.color, fontWeight: 700 }}>{t.symbol} {t.label}</span>;
+/** Ampel-Status als Badge: Farbe + Text (Skill erp-ui-design: Signal nie allein über Farbe). */
+function StatusBadge({ s }: { s: string }): JSX.Element {
+  return <Badge color={statusMantineColor[s] ?? "gray"} variant="light" radius="sm">{statusOf(s).label}</Badge>;
 }
 
 function errMsg(err: unknown): string {
@@ -24,10 +23,10 @@ export function Differentiators({ role }: { role: string }): JSX.Element {
   const priceAllowed = role !== "PRODUKTION";
   return (
     <>
-      <h2>Differenzierer (TEXMA-Moat)</h2>
-      <p style={{ color: "#555" }}>
+      <Title order={2}>Differenzierer (TEXMA-Moat)</Title>
+      <Text size="sm" c="dimmed">
         Die vier selbst gebauten Spezialmodule — kein Standard-ERP kann das von der Stange.
-      </p>
+      </Text>
       <AmpelDashboard />
       {priceAllowed ? (
         <>
@@ -35,10 +34,12 @@ export function Differentiators({ role }: { role: string }): JSX.Element {
           <Postcalc />
         </>
       ) : (
-        <p style={{ ...card, color: "#555" }}>
-          Stickerei-Angebotsvergleich und Nachkalkulation sind preis-sensibel und für die
-          Rolle PRODUKTION ausgeblendet (Kap. 12).
-        </p>
+        <Card withBorder mt="md" padding="md">
+          <Text size="sm" c="dimmed">
+            Stickerei-Angebotsvergleich und Nachkalkulation sind preis-sensibel und für die
+            Rolle PRODUKTION ausgeblendet (Kap. 12).
+          </Text>
+        </Card>
       )}
       <SubproductionPlan role={role} />
     </>
@@ -75,52 +76,56 @@ function AmpelDashboard(): JSX.Element {
   }, [load]);
 
   return (
-    <section style={card}>
-      <h3>Termin-Ampel — ebenenübergreifend (Kap. 35.4)</h3>
-      <button onClick={() => void load()}>Aktualisieren</button>
-      {err && <p style={errStyle}>Fehler: {err}</p>}
+    <Card withBorder mt="md" padding="md">
+      <Group justify="space-between">
+        <Title order={4}>Termin-Ampel — ebenenübergreifend (Kap. 35.4)</Title>
+        <Button variant="default" size="xs" onClick={() => void load()}>Aktualisieren</Button>
+      </Group>
+      {err && <Text c="red" size="sm" mt="xs">Fehler: {err}</Text>}
       {data && (
         <>
-          <p style={{ marginTop: "0.75rem" }}>
-            <span style={kpi}>Vorgänge: <strong>{data.total}</strong></span>
-            <span style={kpi}><span style={dot("ROT")}>● ROT {data.rot}</span></span>
-            <span style={kpi}><span style={dot("GELB")}>● GELB {data.gelb}</span></span>
-            <span style={kpi}><span style={dot("GRUEN")}>● GRÜN {data.gruen}</span></span>
-            <span style={kpi}>überfällig: <strong>{data.overdue}</strong></span>
-            <span style={kpi}>kritisch: <strong>{data.kritisch}</strong></span>
-          </p>
+          <Group gap="md" mt="sm">
+            <Text size="sm">Vorgänge: <b>{data.total}</b></Text>
+            <Badge color="red" variant="light">ROT {data.rot}</Badge>
+            <Badge color="amber" variant="light">GELB {data.gelb}</Badge>
+            <Badge color="green" variant="light">GRÜN {data.gruen}</Badge>
+            <Text size="sm">überfällig: <b>{data.overdue}</b></Text>
+            <Text size="sm">kritisch: <b>{data.kritisch}</b></Text>
+          </Group>
           {data.mostUrgent && (
-            <p>
-              Dringendster Vorgang: <strong>{data.mostUrgent.label}</strong> ({data.mostUrgent.level}) ·{" "}
-              <StatusTag s={data.mostUrgent.ampel} /> ·{" "}
-              {data.mostUrgent.overdueDays > 0
-                ? `${data.mostUrgent.overdueDays} Tage überfällig`
-                : `${data.mostUrgent.daysRemaining} Tage Restlauf`}
-            </p>
+            <Group gap="xs" mt="xs">
+              <Text size="sm">Dringendster Vorgang: <b>{data.mostUrgent.label}</b> ({data.mostUrgent.level})</Text>
+              <StatusBadge s={data.mostUrgent.ampel} />
+              <Text size="sm" c="dimmed">
+                {data.mostUrgent.overdueDays > 0
+                  ? `${data.mostUrgent.overdueDays} Tage überfällig`
+                  : `${data.mostUrgent.daysRemaining} Tage Restlauf`}
+              </Text>
+            </Group>
           )}
-          <table style={tableStyle}>
-            <thead>
-              <tr>
-                <th style={th}>Ebene</th>
-                <th style={th}>ROT</th>
-                <th style={th}>GELB</th>
-                <th style={th}>GRÜN</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table striped withTableBorder mt="sm" verticalSpacing="xs">
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Ebene</Table.Th>
+                <Table.Th ta="right">ROT</Table.Th>
+                <Table.Th ta="right">GELB</Table.Th>
+                <Table.Th ta="right">GRÜN</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
               {Object.entries(data.byLevel).map(([level, c]) => (
-                <tr key={level}>
-                  <td style={td}>{level}</td>
-                  <td style={{ ...tdNum, ...dot("ROT") }}>{c.rot}</td>
-                  <td style={{ ...tdNum, ...dot("GELB") }}>{c.gelb}</td>
-                  <td style={{ ...tdNum, ...dot("GRUEN") }}>{c.gruen}</td>
-                </tr>
+                <Table.Tr key={level}>
+                  <Table.Td>{level}</Table.Td>
+                  <Table.Td style={numTd}><Text span c={countColor.ROT} fw={700}>{c.rot}</Text></Table.Td>
+                  <Table.Td style={numTd}><Text span c={countColor.GELB} fw={700}>{c.gelb}</Text></Table.Td>
+                  <Table.Td style={numTd}><Text span c={countColor.GRUEN} fw={700}>{c.gruen}</Text></Table.Td>
+                </Table.Tr>
               ))}
-            </tbody>
-          </table>
+            </Table.Tbody>
+          </Table>
         </>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -174,79 +179,73 @@ function StickereiCompare(): JSX.Element {
   }, [stitches, offers]);
 
   return (
-    <section style={card}>
-      <h3>Stickerei-Angebotsvergleich (Kap. 5.4)</h3>
-      <p style={{ color: "#555", marginTop: 0 }}>
+    <Card withBorder mt="md" padding="md">
+      <Title order={4}>Stickerei-Angebotsvergleich (Kap. 5.4)</Title>
+      <Text size="sm" c="dimmed">
         Neukunde/neues Logo → Ausschreibung an die 3 Partner; günstigstes Angebot gewinnt
         (bei Gleichstand kürzere Durchlaufzeit).
-      </p>
-      <label>
-        Stichzahl:{" "}
-        <input
-          style={numInput}
-          type="number"
-          min={0}
-          value={stitches}
-          onChange={(e) => setStitches(Math.max(0, Number(e.target.value)))}
-        />
-      </label>
-      <table style={tableStyle}>
-        <thead>
-          <tr>
-            <th style={th}>Partner</th>
-            <th style={th}>Einrichtung (€)</th>
-            <th style={th}>je 1.000 Stiche (€)</th>
-            <th style={th}>Durchlauf (Tage)</th>
-          </tr>
-        </thead>
-        <tbody>
+      </Text>
+      <NumberInput
+        label="Stichzahl" w={140} mt="xs" min={0} hideControls
+        value={stitches} onChange={(v) => setStitches(Math.max(0, Number(v) || 0))}
+      />
+      <Table withTableBorder mt="sm" verticalSpacing="xs">
+        <Table.Thead>
+          <Table.Tr>
+            <Table.Th>Partner</Table.Th>
+            <Table.Th ta="right">Einrichtung (€)</Table.Th>
+            <Table.Th ta="right">je 1.000 Stiche (€)</Table.Th>
+            <Table.Th ta="right">Durchlauf (Tage)</Table.Th>
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
           {offers.map((o, i) => (
-            <tr key={o.partnerId}>
-              <td style={td}>{o.name}</td>
-              <td style={td}>
-                <input style={numInput} type="number" min={0} step={0.01} value={o.setupEuro}
-                  onChange={(e) => setOffer(i, { setupEuro: Number(e.target.value) })} />
-              </td>
-              <td style={td}>
-                <input style={numInput} type="number" min={0} step={0.01} value={o.per1000Euro}
-                  onChange={(e) => setOffer(i, { per1000Euro: Number(e.target.value) })} />
-              </td>
-              <td style={td}>
-                <input style={numInput} type="number" min={0} value={o.leadDays}
-                  onChange={(e) => setOffer(i, { leadDays: Math.max(0, Number(e.target.value)) })} />
-              </td>
-            </tr>
+            <Table.Tr key={o.partnerId}>
+              <Table.Td>{o.name}</Table.Td>
+              <Table.Td style={numTd}>
+                <NumberInput w={90} size="xs" hideControls min={0} step={0.01} decimalScale={2}
+                  value={o.setupEuro} onChange={(v) => setOffer(i, { setupEuro: Number(v) || 0 })} />
+              </Table.Td>
+              <Table.Td style={numTd}>
+                <NumberInput w={90} size="xs" hideControls min={0} step={0.01} decimalScale={2}
+                  value={o.per1000Euro} onChange={(v) => setOffer(i, { per1000Euro: Number(v) || 0 })} />
+              </Table.Td>
+              <Table.Td style={numTd}>
+                <NumberInput w={90} size="xs" hideControls min={0}
+                  value={o.leadDays} onChange={(v) => setOffer(i, { leadDays: Math.max(0, Number(v) || 0) })} />
+              </Table.Td>
+            </Table.Tr>
           ))}
-        </tbody>
-      </table>
-      <button style={{ marginTop: "0.75rem" }} onClick={() => void compare()}>Vergleichen</button>
-      {err && <p style={errStyle}>Fehler: {err}</p>}
+        </Table.Tbody>
+      </Table>
+      <Button mt="sm" onClick={() => void compare()}>Vergleichen</Button>
+      {err && <Text c="red" size="sm" mt="xs">Fehler: {err}</Text>}
       {result && (
-        <table style={tableStyle}>
-          <thead>
-            <tr>
-              <th style={th}>Rang</th>
-              <th style={th}>Partner</th>
-              <th style={th}>Gesamtkosten</th>
-              <th style={th}>Durchlauf</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table striped highlightOnHover withTableBorder mt="sm" verticalSpacing="xs">
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>Rang</Table.Th>
+              <Table.Th>Partner</Table.Th>
+              <Table.Th ta="right">Gesamtkosten</Table.Th>
+              <Table.Th ta="right">Durchlauf</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
             {result.quotes.map((q, i) => {
               const isChosen = result.chosen?.partnerId === q.partnerId;
               return (
-                <tr key={q.partnerId} style={isChosen ? { background: T.surface } : undefined}>
-                  <td style={td}>{i + 1}{isChosen ? " ✓" : ""}</td>
-                  <td style={td}>{q.name}</td>
-                  <td style={tdNum}>{euro(q.totalCents)}</td>
-                  <td style={tdNum}>{q.leadDays} Tage</td>
-                </tr>
+                <Table.Tr key={q.partnerId}>
+                  <Table.Td>{i + 1}{isChosen ? " ✓" : ""}</Table.Td>
+                  <Table.Td>{isChosen ? <b>{q.name}</b> : q.name}</Table.Td>
+                  <Table.Td style={numTd}>{euro(q.totalCents)}</Table.Td>
+                  <Table.Td style={numTd}>{q.leadDays} Tage</Table.Td>
+                </Table.Tr>
               );
             })}
-          </tbody>
-        </table>
+          </Table.Tbody>
+        </Table>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -295,50 +294,47 @@ function Postcalc(): JSX.Element {
     }
   }, [productionId, revenueEuro, materialEuro, laborMinutes, planRate, istRate]);
 
+  const statusC = statusMantineColor[res?.status ?? ""] ?? "gray";
+
   return (
-    <section style={card}>
-      <h3>Nachkalkulation Soll-Ist (T-10)</h3>
-      <p style={{ color: "#555", marginTop: 0 }}>
+    <Card withBorder mt="md" padding="md">
+      <Title order={4}>Nachkalkulation Soll-Ist (T-10)</Title>
+      <Text size="sm" c="dimmed">
         Plan-DB gegen Ist-DB, inkl. Abweichungszerlegung (Material · Lohn-Menge · Lohn-Satz).
-      </p>
-      <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "end" }}>
-        <label>PA-ID:{" "}
-          <input value={productionId} placeholder="z. B. cuid…" onChange={(e) => setProductionId(e.target.value)} />
-        </label>
-        <label>Umsatz (€):{" "}
-          <input style={numInput} type="number" value={revenueEuro} onChange={(e) => setRevenueEuro(Number(e.target.value))} /></label>
-        <label>Material (€):{" "}
-          <input style={numInput} type="number" value={materialEuro} onChange={(e) => setMaterialEuro(Number(e.target.value))} /></label>
-        <label>Lohn (Min):{" "}
-          <input style={numInput} type="number" value={laborMinutes} onChange={(e) => setLaborMinutes(Number(e.target.value))} /></label>
-        <label>Plan-Satz (ct/Min):{" "}
-          <input style={numInput} type="number" value={planRate} onChange={(e) => setPlanRate(Number(e.target.value))} /></label>
-        <label>Ist-Satz (ct/Min):{" "}
-          <input style={numInput} type="number" value={istRate} onChange={(e) => setIstRate(Number(e.target.value))} /></label>
-      </div>
-      <button style={{ marginTop: "0.75rem" }} onClick={() => void compute()} disabled={!productionId}>Berechnen</button>
-      {err && <p style={errStyle}>Fehler: {err}</p>}
+      </Text>
+      <Group align="end" gap="sm" mt="xs">
+        <TextInput label="PA-ID" placeholder="z. B. cuid…" w={180}
+          value={productionId} onChange={(e) => setProductionId(e.currentTarget.value)} />
+        <NumberInput label="Umsatz (€)" w={110} hideControls value={revenueEuro} onChange={(v) => setRevenueEuro(Number(v) || 0)} />
+        <NumberInput label="Material (€)" w={110} hideControls value={materialEuro} onChange={(v) => setMaterialEuro(Number(v) || 0)} />
+        <NumberInput label="Lohn (Min)" w={100} hideControls value={laborMinutes} onChange={(v) => setLaborMinutes(Number(v) || 0)} />
+        <NumberInput label="Plan-Satz (ct/Min)" w={130} hideControls value={planRate} onChange={(v) => setPlanRate(Number(v) || 0)} />
+        <NumberInput label="Ist-Satz (ct/Min)" w={130} hideControls value={istRate} onChange={(v) => setIstRate(Number(v) || 0)} />
+      </Group>
+      <Button mt="sm" onClick={() => void compute()} disabled={!productionId}>Berechnen</Button>
+      {err && <Text c="red" size="sm" mt="xs">Fehler: {err}</Text>}
       {res && (
         <>
-          <p style={{ marginTop: "0.75rem" }}>
-            <span style={kpi}>Plan-DB: <strong>{euro(res.plan.dbCents)}</strong> ({res.planMarginPct} %)</span>
-            <span style={kpi}>Ist-DB: <strong>{euro(res.ist.dbCents)}</strong> ({res.istMarginPct} %)</span>
-            <span style={kpi}>Abweichung: <strong style={dot(res.status === "ROT" ? "ROT" : res.status === "GELB" ? "GELB" : "GRUEN")}>
-              {res.dbVarianceCents >= 0 ? "+" : ""}{euro(res.dbVarianceCents)}</strong></span>
-            <span style={kpi}>Status: <StatusTag s={res.status} /></span>
-          </p>
-          <table style={tableStyle}>
-            <thead><tr><th style={th}>Abweichungskomponente</th><th style={{ ...th, textAlign: "right" }}>Wirkung auf DB</th></tr></thead>
-            <tbody>
-              <tr><td style={td}>Umsatz (Ist − Plan)</td><td style={tdNum}>{euro(res.variance.revenueVarianceCents)}</td></tr>
-              <tr><td style={td}>Material (Plan − Ist)</td><td style={tdNum}>{euro(res.variance.materialVarianceCents)}</td></tr>
-              <tr><td style={td}>Lohn-Menge (Zeit)</td><td style={tdNum}>{euro(res.variance.laborQtyVarianceCents)}</td></tr>
-              <tr><td style={td}>Lohn-Satz</td><td style={tdNum}>{euro(res.variance.laborRateVarianceCents)}</td></tr>
-            </tbody>
-          </table>
+          <Group gap="lg" mt="sm">
+            <Text size="sm">Plan-DB: <b>{euro(res.plan.dbCents)}</b> ({res.planMarginPct} %)</Text>
+            <Text size="sm">Ist-DB: <b>{euro(res.ist.dbCents)}</b> ({res.istMarginPct} %)</Text>
+            <Text size="sm">Abweichung: <Text span fw={700} c={statusC}>{res.dbVarianceCents >= 0 ? "+" : ""}{euro(res.dbVarianceCents)}</Text></Text>
+            <Group gap={6}><Text size="sm">Status:</Text><StatusBadge s={res.status} /></Group>
+          </Group>
+          <Table withTableBorder mt="sm" verticalSpacing="xs">
+            <Table.Thead>
+              <Table.Tr><Table.Th>Abweichungskomponente</Table.Th><Table.Th ta="right">Wirkung auf DB</Table.Th></Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              <Table.Tr><Table.Td>Umsatz (Ist − Plan)</Table.Td><Table.Td style={numTd}>{euro(res.variance.revenueVarianceCents)}</Table.Td></Table.Tr>
+              <Table.Tr><Table.Td>Material (Plan − Ist)</Table.Td><Table.Td style={numTd}>{euro(res.variance.materialVarianceCents)}</Table.Td></Table.Tr>
+              <Table.Tr><Table.Td>Lohn-Menge (Zeit)</Table.Td><Table.Td style={numTd}>{euro(res.variance.laborQtyVarianceCents)}</Table.Td></Table.Tr>
+              <Table.Tr><Table.Td>Lohn-Satz</Table.Td><Table.Td style={numTd}>{euro(res.variance.laborRateVarianceCents)}</Table.Td></Table.Tr>
+            </Table.Tbody>
+          </Table>
         </>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -421,74 +417,85 @@ function SubproductionPlan({ role }: { role: string }): JSX.Element {
   const canStart = (i: number): boolean => stages.slice(0, i).every((s) => RETURNED.has(s.status));
 
   const mengeBox = (s: Stage, ph: string): JSX.Element => (
-    <input style={{ width: 64, marginRight: 6 }} type="number" min={0} placeholder={ph}
-      value={menge[s.id] ?? ""} onChange={(e) => setMenge((m) => ({ ...m, [s.id]: e.target.value }))} />
+    <NumberInput w={72} size="xs" hideControls min={0} placeholder={ph}
+      value={menge[s.id] ?? ""} onChange={(v) => setMenge((m) => ({ ...m, [s.id]: v === "" ? "" : String(v) }))} />
   );
 
   const action = (s: Stage, i: number): JSX.Element => {
-    if (s.status === "ABGESCHLOSSEN") return <span style={dot("GRUEN")}>✓ abgeschlossen</span>;
-    if (!canAct) return <span style={{ color: "#999" }}>—</span>;
+    if (s.status === "ABGESCHLOSSEN") return <Badge color="green" variant="light">✓ abgeschlossen</Badge>;
+    if (!canAct) return <Text c="dimmed">—</Text>;
     if (s.status === "OFFEN") {
-      return canStart(i)
-        ? <>{mengeBox(s, "Menge")}<button disabled={busy} onClick={() => void advance(s, "BEISTELLUNG_VERSANDT", true)}>Beistellung versenden</button></>
-        : <span style={{ color: "#999" }}>blockiert</span>;
+      return canStart(i) ? (
+        <Group gap="xs" wrap="nowrap">
+          {mengeBox(s, "Menge")}
+          <Button size="xs" disabled={busy} onClick={() => void advance(s, "BEISTELLUNG_VERSANDT", true)}>Beistellung versenden</Button>
+        </Group>
+      ) : <Text c="dimmed">blockiert</Text>;
     }
     if (s.status === "BEISTELLUNG_VERSANDT") {
-      return <>{mengeBox(s, "Rückl.")}<button disabled={busy} onClick={() => void advance(s, "RUECKLAUF_ERHALTEN", true)}>Rücklauf erfassen</button></>;
+      return (
+        <Group gap="xs" wrap="nowrap">
+          {mengeBox(s, "Rückl.")}
+          <Button size="xs" disabled={busy} onClick={() => void advance(s, "RUECKLAUF_ERHALTEN", true)}>Rücklauf erfassen</Button>
+        </Group>
+      );
     }
-    return <button disabled={busy} onClick={() => void advance(s, "ABGESCHLOSSEN", false)}>Abschließen</button>;
+    return <Button size="xs" variant="default" disabled={busy} onClick={() => void advance(s, "ABGESCHLOSSEN", false)}>Abschließen</Button>;
   };
 
   return (
-    <section style={card}>
-      <h3>Mehrstufige Fremdvergabe — Plan + Aktionen (T-04, Kap. 5.3)</h3>
-      <p style={{ color: "#555", marginTop: 0 }}>
+    <Card withBorder mt="md" padding="md">
+      <Title order={4}>Mehrstufige Fremdvergabe — Plan + Aktionen (T-04, Kap. 5.3)</Title>
+      <Text size="sm" c="dimmed">
         Stufen sequenziell weiterschalten: Beistellung → Rücklauf → Abschluss (mit Mengenfluss/Schwund).
-      </p>
-      <label>PA-ID:{" "}
-        <input value={productionId} placeholder="Produktions-Auftrag-ID" onChange={(e) => setProductionId(e.target.value)} />
-      </label>{" "}
-      <button onClick={() => void load()} disabled={!productionId}>Plan laden</button>
-      {err && <p style={errStyle}>Fehler: {err}</p>}
+      </Text>
+      <Group align="end" gap="sm" mt="xs">
+        <TextInput label="PA-ID" placeholder="Produktions-Auftrag-ID" w={220}
+          value={productionId} onChange={(e) => setProductionId(e.currentTarget.value)} />
+        <Button onClick={() => void load()} disabled={!productionId}>Plan laden</Button>
+      </Group>
+      {err && <Text c="red" size="sm" mt="xs">Fehler: {err}</Text>}
       {plan && (
-        <p style={{ marginTop: "0.75rem" }}>
-          <span style={kpi}>Fortschritt: <strong>{plan.progressPercent} %</strong></span>
-          <span style={kpi}>Ausbeute: <strong>{plan.yieldPercent == null ? "—" : `${plan.yieldPercent} %`}</strong></span>
-          <span style={kpi}>Schwund: <strong>{plan.totalScrap}</strong></span>
-          <span style={kpi}>Lohn gesamt: <strong>{euro(plan.totalLohnCents)}</strong></span>
-          <span style={kpi}>{plan.allReturned ? "✓ alle zurück" : "offen"}</span>
-        </p>
+        <Group gap="lg" mt="sm">
+          <Text size="sm">Fortschritt: <b>{plan.progressPercent} %</b></Text>
+          <Text size="sm">Ausbeute: <b>{plan.yieldPercent == null ? "—" : `${plan.yieldPercent} %`}</b></Text>
+          <Text size="sm">Schwund: <b>{plan.totalScrap}</b></Text>
+          <Text size="sm">Lohn gesamt: <b>{euro(plan.totalLohnCents)}</b></Text>
+          <Text size="sm" c={plan.allReturned ? "green" : "dimmed"}>{plan.allReturned ? "✓ alle zurück" : "offen"}</Text>
+        </Group>
       )}
       {stages.length > 0 && (
-        <table style={tableStyle}>
-          <thead>
-            <tr>
-              <th style={th}>Stufe</th>
-              <th style={th}>Veredler</th>
-              <th style={th}>Status</th>
-              <th style={{ ...th, textAlign: "right" }}>Menge B/R</th>
-              <th style={th}>Aktion</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table withTableBorder mt="sm" verticalSpacing="xs">
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>Stufe</Table.Th>
+              <Table.Th>Veredler</Table.Th>
+              <Table.Th>Status</Table.Th>
+              <Table.Th ta="right">Menge B/R</Table.Th>
+              <Table.Th>Aktion</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
             {stages.map((s, i) => (
-              <tr key={s.id}>
-                <td style={td}>#{s.sequence}</td>
-                <td style={td}>{s.supplierId}</td>
-                <td style={td}>
-                  {STATUS_LABEL[s.status]}
-                  {isOverdue(s) && <span style={{ ...dot("ROT"), marginLeft: 6 }}>überfällig</span>}
-                </td>
-                <td style={tdNum}>{s.beistellMenge ?? "—"}{s.ruecklaufMenge != null ? ` / ${s.ruecklaufMenge}` : ""}</td>
-                <td style={td}>{action(s, i)}</td>
-              </tr>
+              <Table.Tr key={s.id}>
+                <Table.Td>#{s.sequence}</Table.Td>
+                <Table.Td>{s.supplierId}</Table.Td>
+                <Table.Td>
+                  <Group gap={6}>
+                    <Text size="sm">{STATUS_LABEL[s.status]}</Text>
+                    {isOverdue(s) && <Badge color="red" variant="light" size="sm">überfällig</Badge>}
+                  </Group>
+                </Table.Td>
+                <Table.Td style={numTd}>{s.beistellMenge ?? "—"}{s.ruecklaufMenge != null ? ` / ${s.ruecklaufMenge}` : ""}</Table.Td>
+                <Table.Td>{action(s, i)}</Table.Td>
+              </Table.Tr>
             ))}
-          </tbody>
-        </table>
+          </Table.Tbody>
+        </Table>
       )}
       {!canAct && stages.length > 0 && (
-        <p style={{ color: "#555" }}>Aktionen erfordern Rolle ADMIN/BÜRO (Kap. 12).</p>
+        <Text size="sm" c="dimmed" mt="xs">Aktionen erfordern Rolle ADMIN/BÜRO (Kap. 12).</Text>
       )}
-    </section>
+    </Card>
   );
 }

@@ -19,14 +19,19 @@ Sechstel des Betriebs.
 | Ton | konsumig, du-Form | knapp, Fachbegriffe |
 | Erfolg = | „sieht hochwertig aus" | „Aufgabe in wenigen Schritten erledigt" |
 
-## 1. Komponenten-Bibliothek
+## 1. Komponenten-Bibliothek — Mantine (entschieden)
 
-Rohes HTML/handgebaute Tabellen sind für den ersten Durchstich okay, **kein Zielzustand**.
-- **Default-Empfehlung: Mantine** — fertige dichte Datenkomponenten (DataTable, Forms+Validierung,
-  DatePicker, Notifications, AppShell), gute Tastatur-/A11y-Defaults, deutsch lokalisierbar.
-- **Alternative: shadcn/ui + TanStack Table** — nur wenn Tailwind bereits fest im Stack ist.
-- **EINE** Lib konsequent, nicht mischen. Stand Repo: kein Tailwind → Mantine ist der nähere Fit.
-  Entscheidung offen / mit der Projektleitung zu treffen, bevor eine Lib eingezogen wird.
+**Mantine** ist gewählt und eingezogen (`@mantine/core` + `@mantine/hooks`, React 18).
+Begründung: fertige dichte Datenkomponenten (Table, Forms+Validierung, Inputs, Tabs, Badge),
+gute Tastatur-/A11y-Defaults, deutsch lokalisierbar, **kein Tailwind nötig** — passt zum Stack.
+
+- Provider + Theme: `main.tsx` (`MantineProvider`) mit `mantineTheme` aus `theme.ts` (Navy primär,
+  Amber-Palette, kompakte `fontSizes`). Stil-Import: `@mantine/core/styles.css`.
+- **EINE** Lib konsequent, nicht mischen (kein shadcn/Tailwind parallel).
+- Migriert: App-Shell (`Tabs`/`Table`/`Button`) + Differenzierer (`Card`/`Table`/`Badge`/`NumberInput`).
+  **Noch offen:** `Reporting.tsx`, `Login.tsx`, `charts.tsx`.
+- Hinweis: nur den **aktiven** Tab mounten (kein `Tabs.Panel`-keepMounted) — sonst feuern inaktive
+  Ansichten Queries, die der tRPC-Client mitbatcht (ein Fehler reißt sonst die ganze Antwort mit).
 
 ## 2. Funktionale Design-Tokens (`apps/web/src/theme.ts`)
 
