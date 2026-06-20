@@ -637,6 +637,28 @@ describe("tRPC stickerei — Partnerwahl (Kap. 5.4)", () => {
     expect(price).toMatchObject({ minMenge: 50, ekCents: 600, vkCents: 1_128 });
   });
 
+  it("Aufschlagsfaktor: Konfig-Roundtrip (Standard + Regel)", async () => {
+    const { caller } = setup(BUERO);
+    await caller.stickerei.markup.saveConfig({
+      defaultFactor: 1.88,
+      rules: [{ factor: 2.1, finishingType: "STICKEREI", maxMenge: 9, label: "Kleinmenge" }],
+    });
+    const cfg = await caller.stickerei.markup.getConfig();
+    expect(cfg.defaultFactor).toBe(1.88);
+    expect(cfg.rules[0]).toMatchObject({ factor: 2.1, maxMenge: 9, finishingType: "STICKEREI" });
+  });
+
+  it("Logo-Override beim Speichern gewinnt über den Standardfaktor", async () => {
+    const { caller } = setup(BUERO);
+    const saved = await caller.stickerei.staffeln.save({
+      logoVersionId: "logo-x",
+      staffeln: [{ minMenge: 1, ekCents: 1_000 }],
+      logoOverride: 2.0,
+    });
+    expect(saved.logoOverride).toBe(2.0);
+    expect(saved.staffeln[0]?.vkCents).toBe(2_000); // 1000 × 2,0
+  });
+
   it("PRODUKTION darf weder Partnerwahl noch Staffeln abfragen (FORBIDDEN)", async () => {
     const { caller } = setup(PRODUKTION);
     await expect(caller.stickerei.routeForCompany({ companyId: "c_direkt" })).rejects.toMatchObject({

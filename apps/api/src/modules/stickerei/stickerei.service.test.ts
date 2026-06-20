@@ -61,3 +61,42 @@ describe("StickereiService Mengenstaffeln je Logo (Kap. 4.4 / T-15)", () => {
     expect(await service().priceForMenge("logo-1", 0)).toBeNull();
   });
 });
+
+describe("StickereiService konfigurierbarer Aufschlagsfaktor (Kap. 4.4)", () => {
+  function svc() {
+    return new StickereiService(
+      new InMemoryStickereiRepository(
+        {},
+        { "logo-2": [{ minMenge: 1, ekCents: 1_000 }, { minMenge: 50, ekCents: 1_000 }] },
+        {
+          markupConfig: { defaultFactor: 1.88, rules: [{ id: "klein", factor: 2.1, maxMenge: 9 }] },
+          logoOverrides: { "logo-ov": 2.0 },
+          priceGroups: { "logo-2": "STD" },
+        }
+      )
+    );
+  }
+
+  it("listStaffeln: Regel je Stufe (kleine Mengen anderer Faktor)", async () => {
+    const res = await svc().listStaffeln("logo-2");
+    expect(res.staffeln[0]).toMatchObject({ minMenge: 1, vkCents: 2_100 }); // 1000 × 2,1 (≤9)
+    expect(res.staffeln[1]).toMatchObject({ minMenge: 50, vkCents: 1_880 }); // 1000 × 1,88 (Default)
+    expect(res.priceGroupId).toBe("STD");
+  });
+
+  it("getMarkupConfig/saveMarkupConfig: Roundtrip + Validierung", async () => {
+    const s = svc();
+    const saved = await s.saveMarkupConfig({ defaultFactor: 1.7, rules: [{ factor: 2.0, priceGroupId: "VIP" }] });
+    expect(saved.defaultFactor).toBe(1.7);
+    expect((await s.getMarkupConfig()).rules[0]).toMatchObject({ factor: 2.0, priceGroupId: "VIP" });
+    await expect(s.saveMarkupConfig({ defaultFactor: 0, rules: [] })).rejects.toThrow(/> 0/);
+  });
+
+  it("Logo-Override gewinnt über die globalen Regeln", async () => {
+    const s = svc();
+    await s.saveStaffeln("logo-ov", [{ minMenge: 1, ekCents: 1_000 }], 2.0);
+    const res = await s.listStaffeln("logo-ov");
+    expect(res.logoOverride).toBe(2.0);
+    expect(res.staffeln[0]?.vkCents).toBe(2_000); // 1000 × 2,0 (Override, nicht 2,1-Regel)
+  });
+});

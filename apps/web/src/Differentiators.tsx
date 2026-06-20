@@ -4,12 +4,20 @@
 // Nachkalkulation Soll-Ist (T-10). Preis-sensible Module sind für PRODUKTION ausgeblendet
 // (Kap. 12) — die Endpunkte erzwingen die Rolle zusätzlich serverseitig. UI: Mantine.
 import { useCallback, useEffect, useState } from "react";
-import { Badge, Button, Card, Group, NumberInput, Table, Text, TextInput, Title } from "@mantine/core";
+import { Badge, Button, Card, Group, NumberInput, Select, Table, Text, TextInput, Title } from "@mantine/core";
 import {
   computeStickereiStaffelVks,
   stickereiPriceForMenge,
+  type StaffelMarkup,
   type StickereiStaffel,
 } from "@texma/shared/stickerei";
+import {
+  DEFAULT_MARKUP_CONFIG,
+  resolveMarkupFactor,
+  type FinishingType,
+  type MarkupConfig,
+  type MarkupRule,
+} from "@texma/shared/markup";
 import { trpc } from "./trpc.js";
 import { euro, numTd, statusMantineColor, statusOf } from "./theme.js";
 
@@ -34,15 +42,12 @@ export function Differentiators({ role }: { role: string }): JSX.Element {
       </Text>
       <AmpelDashboard />
       {priceAllowed ? (
-        <>
-          <StickereiStaffeln />
-          <Postcalc />
-        </>
+        <PricingTools />
       ) : (
         <Card withBorder mt="md" padding="md">
           <Text size="sm" c="dimmed">
-            Stickerei-Mengenstaffeln und Nachkalkulation sind preis-sensibel und für die
-            Rolle PRODUKTION ausgeblendet (Kap. 12).
+            Aufschlagsfaktoren, Stickerei-Mengenstaffeln und Nachkalkulation sind preis-sensibel
+            und für die Rolle PRODUKTION ausgeblendet (Kap. 12).
           </Text>
         </Card>
       )}
@@ -134,10 +139,156 @@ function AmpelDashboard(): JSX.Element {
   );
 }
 
+// ── Preis-Werkzeuge (preis-sensibel): Aufschlagsfaktoren + Stickerei-Staffeln ────
+// Die globale Aufschlags-Konfiguration wird einmal geladen und an beide Karten gegeben,
+// damit die Staffel-Live-Berechnung dieselben Faktoren/Regeln nutzt wie der Server.
+function PricingTools(): JSX.Element {
+  const [config, setConfig] = useState<MarkupConfig | null>(null);
+  useEffect(() => {
+    void (async () => {
+      try {
+        setConfig((await trpc.stickerei.markup.getConfig.query()) as MarkupConfig);
+      } catch {
+        setConfig(DEFAULT_MARKUP_CONFIG);
+      }
+    })();
+  }, []);
+  return (
+    <>
+      <MarkupConfigCard config={config} onSaved={setConfig} />
+      <StickereiStaffeln config={config} />
+      <Postcalc />
+    </>
+  );
+}
+
+const fmtFactor = (f: number): string =>
+  `×${f.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const FINISHING_OPTIONS = ["STICKEREI", "DRUCK", "TRANSFER"];
+
+// ── Konfigurierbarer Aufschlagsfaktor (Kap. 4.4) ────────────────────────────────
+// Globaler Standardfaktor, jederzeit änderbar; dazu Regeln je Parameter (Kundengruppe,
+// Veredelungsart, Mengen- und EK-Wertbereich). Die spezifischste passende Regel gewinnt.
+function MarkupConfigCard({ config, onSaved }: { config: MarkupConfig | null; onSaved: (c: MarkupConfig) => void }): JSX.Element {
+  const [defaultFactor, setDefaultFactor] = useState(DEFAULT_MARKUP_CONFIG.defaultFactor);
+  const [rules, setRules] = useState<MarkupRule[]>([]);
+  const [status, setStatus] = useState("");
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    if (config) {
+      setDefaultFactor(config.defaultFactor);
+      setRules(config.rules);
+    }
+  }, [config]);
+
+  const setRule = (i: number, patch: Partial<MarkupRule>) =>
+    setRules((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  const addRule = () => setRules((prev) => [...prev, { factor: defaultFactor }]);
+  const removeRule = (i: number) => setRules((prev) => prev.filter((_, idx) => idx !== i));
+
+  const save = useCallback(async () => {
+    setErr("");
+    setStatus("");
+    try {
+      const res = (await trpc.stickerei.markup.saveConfig.mutate({ defaultFactor, rules })) as MarkupConfig;
+      onSaved(res);
+      setStatus(`Aufschlags-Konfiguration gespeichert (${res.rules.length} Regeln).`);
+    } catch (e) {
+      setErr(errMsg(e));
+    }
+  }, [defaultFactor, rules, onSaved]);
+
+  // Optionale Felder: leeres Eingabefeld ⇒ Bedingung entfällt (undefined).
+  const optInt = (v: number | string): number | undefined => (v === "" ? undefined : Math.max(1, Math.round(Number(v) || 1)));
+  const euroToCents = (v: number | string): number | undefined => (v === "" ? undefined : Math.round((Number(v) || 0) * 100));
+
+  return (
+    <Card withBorder mt="md" padding="md">
+      <Title order={4}>Aufschlagsfaktoren (Kap. 4.4)</Title>
+      <Text size="sm" c="dimmed">
+        Standardfaktor jederzeit änderbar; Regeln überschreiben ihn je Parameter
+        (Kundengruppe · Veredelungsart · Mengen- und EK-Wertbereich). Spezifischste Regel gewinnt;
+        ein Logo-Override (in der Staffel-Karte) schlägt alle Regeln.
+      </Text>
+      <Group align="end" gap="sm" mt="xs">
+        <NumberInput label="Standardfaktor" w={140} hideControls min={0.01} step={0.01} decimalScale={2}
+          value={defaultFactor} onChange={(v) => setDefaultFactor(Number(v) || 0)} />
+        <Button onClick={() => void save()}>Speichern</Button>
+      </Group>
+      {status && <Text size="sm" c="dimmed" mt="xs">{status}</Text>}
+      {err && <Text c="red" size="sm" mt="xs">Fehler: {err}</Text>}
+
+      <Table withTableBorder mt="sm" verticalSpacing="xs">
+        <Table.Thead>
+          <Table.Tr>
+            <Table.Th ta="right">Faktor</Table.Th>
+            <Table.Th>Kundengruppe</Table.Th>
+            <Table.Th>Veredelung</Table.Th>
+            <Table.Th ta="right">ab Menge</Table.Th>
+            <Table.Th ta="right">bis Menge</Table.Th>
+            <Table.Th ta="right">EK ab (€)</Table.Th>
+            <Table.Th ta="right">EK bis (€)</Table.Th>
+            <Table.Th>Bezeichnung</Table.Th>
+            <Table.Th />
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
+          {rules.map((r, i) => (
+            <Table.Tr key={i}>
+              <Table.Td style={numTd}>
+                <NumberInput w={70} size="xs" hideControls min={0.01} step={0.01} decimalScale={2}
+                  value={r.factor} onChange={(v) => setRule(i, { factor: Number(v) || 0 })} />
+              </Table.Td>
+              <Table.Td>
+                <TextInput w={120} size="xs" placeholder="alle" value={r.priceGroupId ?? ""}
+                  onChange={(e) => setRule(i, { priceGroupId: e.currentTarget.value || undefined })} />
+              </Table.Td>
+              <Table.Td>
+                <Select w={120} size="xs" clearable placeholder="alle" data={FINISHING_OPTIONS}
+                  value={r.finishingType ?? null}
+                  onChange={(v) => setRule(i, { finishingType: (v as FinishingType) || undefined })} />
+              </Table.Td>
+              <Table.Td style={numTd}>
+                <NumberInput w={70} size="xs" hideControls min={1} value={r.minMenge ?? ""}
+                  onChange={(v) => setRule(i, { minMenge: optInt(v) })} />
+              </Table.Td>
+              <Table.Td style={numTd}>
+                <NumberInput w={70} size="xs" hideControls min={1} value={r.maxMenge ?? ""}
+                  onChange={(v) => setRule(i, { maxMenge: optInt(v) })} />
+              </Table.Td>
+              <Table.Td style={numTd}>
+                <NumberInput w={80} size="xs" hideControls min={0} step={0.01} decimalScale={2}
+                  value={r.minEkCents != null ? r.minEkCents / 100 : ""} onChange={(v) => setRule(i, { minEkCents: euroToCents(v) })} />
+              </Table.Td>
+              <Table.Td style={numTd}>
+                <NumberInput w={80} size="xs" hideControls min={0} step={0.01} decimalScale={2}
+                  value={r.maxEkCents != null ? r.maxEkCents / 100 : ""} onChange={(v) => setRule(i, { maxEkCents: euroToCents(v) })} />
+              </Table.Td>
+              <Table.Td>
+                <TextInput w={140} size="xs" placeholder="optional" value={r.label ?? ""}
+                  onChange={(e) => setRule(i, { label: e.currentTarget.value || undefined })} />
+              </Table.Td>
+              <Table.Td ta="right">
+                <Button size="xs" variant="subtle" color="red" onClick={() => removeRule(i)}>✕</Button>
+              </Table.Td>
+            </Table.Tr>
+          ))}
+          {rules.length === 0 && (
+            <Table.Tr><Table.Td colSpan={9}><Text size="sm" c="dimmed">Keine Regeln — überall gilt der Standardfaktor.</Text></Table.Td></Table.Tr>
+          )}
+        </Table.Tbody>
+      </Table>
+      <Button size="xs" variant="default" mt="sm" onClick={addRule}>+ Regel</Button>
+    </Card>
+  );
+}
+
 // ── Stickerei-Mengenstaffeln je Logo (Kap. 4.4 / T-15) ──────────────────────────
 // Die Stickerei gibt uns nur ihren VK (= unseren Stick-EK) je Stück gestaffelt nach
 // Menge; Staffelgrenzen frei wählbar und je Logo abweichend. EK wird manuell erfasst,
-// unser VK = EK × 1,88 live berechnet (gleiche reine Logik wie der Server, @texma/shared).
+// unser VK = EK × Aufschlag (Standard/Regeln/Logo-Override) live berechnet — gleiche reine
+// Logik wie der Server (@texma/shared).
 interface StaffelRow {
   minMenge: number;
   ekEuro: number;
@@ -153,22 +304,26 @@ const DEFAULT_STAFFEL_ROWS: StaffelRow[] = [
 const toStaffeln = (rows: ReadonlyArray<StaffelRow>): StickereiStaffel[] =>
   rows.map((r) => ({ minMenge: Math.round(r.minMenge), ekCents: Math.round(r.ekEuro * 100) }));
 
-function StickereiStaffeln(): JSX.Element {
+function StickereiStaffeln({ config }: { config: MarkupConfig | null }): JSX.Element {
   const [logoVersionId, setLogoVersionId] = useState("LOGO-DEMO");
   const [rows, setRows] = useState<StaffelRow[]>(DEFAULT_STAFFEL_ROWS);
+  const [logoOverride, setLogoOverride] = useState<number | null>(null);
+  const [priceGroupId, setPriceGroupId] = useState<string | undefined>(undefined);
   const [menge, setMenge] = useState(75);
   const [err, setErr] = useState("");
   const [status, setStatus] = useState("");
 
-  // Live-Berechnung (gleiche reine Logik wie der Server): VK/DB je Stufe + Mengenpreis.
-  // Validierungsfehler (Dubletten/minMenge<1) werden abgefangen und angezeigt.
+  // Aufschlags-Auflösung wie auf dem Server: Konfig + Kontext (Kundengruppe/Veredelung) +
+  // Logo-Override. Je Stufe greifen Mengen-/EK-Regeln über den Stufen-Kontext.
+  const cfg = config ?? DEFAULT_MARKUP_CONFIG;
+  const markup: StaffelMarkup = { config: cfg, context: { priceGroupId, finishingType: "STICKEREI" }, logoOverride };
   let byMin = new Map<number, { vkCents: number; dbCents: number }>();
   let computeError = "";
   let price: ReturnType<typeof stickereiPriceForMenge> = null;
   try {
     const staffeln = toStaffeln(rows);
-    byMin = new Map(computeStickereiStaffelVks(staffeln).map((s) => [s.minMenge, s]));
-    price = stickereiPriceForMenge(staffeln, menge);
+    byMin = new Map(computeStickereiStaffelVks(staffeln, markup).map((s) => [s.minMenge, s]));
+    price = stickereiPriceForMenge(staffeln, menge, markup);
   } catch (e) {
     computeError = errMsg(e);
   }
@@ -185,7 +340,9 @@ function StickereiStaffeln(): JSX.Element {
     try {
       const res = await trpc.stickerei.staffeln.list.query({ logoVersionId });
       setRows(res.staffeln.map((s) => ({ minMenge: s.minMenge, ekEuro: s.ekCents / 100 })));
-      setStatus(`${res.staffeln.length} Staffeln geladen.`);
+      setLogoOverride(res.logoOverride);
+      setPriceGroupId(res.priceGroupId);
+      setStatus(`${res.staffeln.length} Staffeln geladen${res.priceGroupId ? ` (Kundengruppe ${res.priceGroupId})` : ""}.`);
     } catch (e) {
       setErr(errMsg(e));
     }
@@ -195,23 +352,26 @@ function StickereiStaffeln(): JSX.Element {
     setErr("");
     setStatus("");
     try {
-      const res = await trpc.stickerei.staffeln.save.mutate({ logoVersionId, staffeln: toStaffeln(rows) });
+      const res = await trpc.stickerei.staffeln.save.mutate({ logoVersionId, staffeln: toStaffeln(rows), logoOverride });
       setStatus(`Gespeichert: ${res.staffeln.length} Staffeln für ${logoVersionId}.`);
     } catch (e) {
       setErr(errMsg(e));
     }
-  }, [logoVersionId, rows]);
+  }, [logoVersionId, rows, logoOverride]);
 
   return (
     <Card withBorder mt="md" padding="md">
       <Title order={4}>Stickerei-Mengenstaffeln je Logo (Kap. 4.4 / T-15)</Title>
       <Text size="sm" c="dimmed">
         Die Stickerei gibt nur ihren VK (= unser Stick-EK) je Stück gestaffelt nach Menge —
-        Staffeln frei wählbar je Logo. Stick-EK manuell eintragen; unser VK = EK × 1,88 (und DB)
-        wird automatisch berechnet.
+        Staffeln frei wählbar je Logo. Stick-EK manuell eintragen; unser VK je Stück (und DB) wird
+        mit dem aufgelösten Aufschlagsfaktor automatisch berechnet.
       </Text>
       <Group align="end" gap="sm" mt="xs">
-        <TextInput label="Logo-ID" w={200} value={logoVersionId} onChange={(e) => setLogoVersionId(e.currentTarget.value)} />
+        <TextInput label="Logo-ID" w={180} value={logoVersionId} onChange={(e) => setLogoVersionId(e.currentTarget.value)} />
+        <NumberInput label="Logo-Override (×)" w={140} hideControls min={0} step={0.01} decimalScale={2}
+          placeholder="aus" value={logoOverride ?? ""}
+          onChange={(v) => setLogoOverride(v === "" ? null : Number(v) || 0)} />
         <Button variant="default" onClick={() => void load()} disabled={!logoVersionId}>Laden</Button>
         <Button onClick={() => void save()} disabled={!logoVersionId || !!computeError}>Speichern</Button>
       </Group>
@@ -223,6 +383,7 @@ function StickereiStaffeln(): JSX.Element {
           <Table.Tr>
             <Table.Th ta="right">ab Menge</Table.Th>
             <Table.Th ta="right">Stick-EK je Stück (€)</Table.Th>
+            <Table.Th ta="right">Faktor</Table.Th>
             <Table.Th ta="right">unser VK je Stück (€)</Table.Th>
             <Table.Th ta="right">DB je Stück</Table.Th>
             <Table.Th />
@@ -231,6 +392,16 @@ function StickereiStaffeln(): JSX.Element {
         <Table.Tbody>
           {rows.map((r, i) => {
             const vk = byMin.get(Math.round(r.minMenge));
+            let resolved: ReturnType<typeof resolveMarkupFactor> | null = null;
+            try {
+              resolved = resolveMarkupFactor(
+                cfg,
+                { priceGroupId, finishingType: "STICKEREI", menge: Math.round(r.minMenge), ekCents: Math.round(r.ekEuro * 100) },
+                logoOverride
+              );
+            } catch {
+              resolved = null;
+            }
             return (
               <Table.Tr key={i}>
                 <Table.Td style={numTd}>
@@ -240,6 +411,14 @@ function StickereiStaffeln(): JSX.Element {
                 <Table.Td style={numTd}>
                   <NumberInput w={100} size="xs" hideControls min={0} step={0.01} decimalScale={2}
                     value={r.ekEuro} onChange={(v) => setRow(i, { ekEuro: Number(v) || 0 })} />
+                </Table.Td>
+                <Table.Td style={numTd}>
+                  {resolved ? (
+                    <Text span size="sm" c={resolved.source === "default" ? "dimmed" : "navy.9"}
+                      title={resolved.source === "rule" ? `Regel${resolved.ruleLabel ? `: ${resolved.ruleLabel}` : ""}` : resolved.source}>
+                      {fmtFactor(resolved.factor)}
+                    </Text>
+                  ) : "—"}
                 </Table.Td>
                 <Table.Td style={numTd}>{vk ? <b>{euro(vk.vkCents)}</b> : "—"}</Table.Td>
                 <Table.Td style={numTd}>{vk ? euro(vk.dbCents) : "—"}</Table.Td>

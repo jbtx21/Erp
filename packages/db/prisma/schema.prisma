@@ -154,11 +154,38 @@ model LogoVersion {
   active     Boolean  @default(false)
   replacedAt DateTime?
   createdAt  DateTime @default(now())
+  // Optionaler Aufschlagsfaktor-Override je Logo (gewinnt über die globalen Regeln, Kap. 4.4).
+  markupFactor Float?
 
   stickereiStaffeln StickereiStaffel[]
 
   @@unique([companyId, version])
   @@index([companyId, active])
+}
+
+// Konfigurierbarer Aufschlagsfaktor (Kap. 4.4) — „jederzeit neu definierbar": EIN globaler
+// Standardfaktor (Singleton-Zeile id=GLOBAL), durch MarkupRule je Parameter überschreibbar.
+model MarkupConfig {
+  id            String   @id @default("GLOBAL")
+  defaultFactor Float    @default(1.88)
+  updatedAt     DateTime @updatedAt
+}
+
+// Eine Aufschlags-Regel: Faktor unter optionalen, UND-verknüpften Bedingungen
+// (Kundengruppe/Veredelungsart/Mengen- und EK-Wertbereich). Spezifischere Regel gewinnt.
+model MarkupRule {
+  id            String   @id @default(cuid())
+  factor        Float
+  label         String?
+  priceGroupId  String? // Kundengruppe (Preisgruppe)
+  finishingType String? // Veredelungsart (STICKEREI/DRUCK/TRANSFER)
+  minMenge      Int?
+  maxMenge      Int?
+  minEkCents    Int?
+  maxEkCents    Int?
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 // Variable Mengenstaffeln je Logo (Kap. 4.4 / T-15): die Stickerei gibt uns nur ihren VK

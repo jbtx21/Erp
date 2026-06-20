@@ -90,6 +90,25 @@ describe("Stickerei — variable Mengenstaffeln je Logo (Kap. 4.4 / T-15)", () =
     expect(t?.staffel.minMenge).toBe(50);
   });
 
+  it("konfigurierbarer Aufschlag: Faktor je Stufe aufgelöst (Menge/EK-Regeln)", () => {
+    // Default 1,88; kleine Mengen (≤ 9 Stück) mit 2,1.
+    const markup = {
+      config: { defaultFactor: 1.88, rules: [{ factor: 2.1, maxMenge: 9 }] },
+    };
+    const vks = computeStickereiStaffelVks(
+      [{ minMenge: 1, ekCents: 1_000 }, { minMenge: 50, ekCents: 600 }],
+      markup
+    );
+    expect(vks[0]).toMatchObject({ minMenge: 1, vkCents: 2_100 }); // 1000 × 2,1 (kleine Menge)
+    expect(vks[1]).toMatchObject({ minMenge: 50, vkCents: 1_128 }); // 600 × 1,88 (Default)
+  });
+
+  it("konfigurierbarer Aufschlag: Logo-Override gewinnt über alle Stufen", () => {
+    const markup = { config: { defaultFactor: 1.88, rules: [] }, logoOverride: 2.0 };
+    const t = stickereiTotalForMenge([{ minMenge: 1, ekCents: 500 }], 10, markup);
+    expect(t?.staffel.vkCents).toBe(1_000); // 500 × 2,0
+  });
+
   it("Validierung: ganze Staffelgrenze ≥ 1, kein EK < 0, keine Dubletten", () => {
     expect(() => computeStickereiStaffelVks([{ minMenge: 0, ekCents: 100 }])).toThrow(/≥ 1/);
     expect(() => computeStickereiStaffelVks([{ minMenge: 1.5, ekCents: 100 }])).toThrow(/ganze Zahl/);

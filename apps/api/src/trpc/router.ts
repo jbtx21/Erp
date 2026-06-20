@@ -325,7 +325,7 @@ export const appRouter = router({
         .input(z.object({ logoVersionId: z.string().min(1) }))
         .query(({ input, ctx }) => ctx.stickerei.listStaffeln(input.logoVersionId)),
 
-      /** Speichert die frei gewählten Staffeln (Stick-EK je Stück), Set-Semantik. */
+      /** Speichert die Staffeln (Stick-EK je Stück) + optional den Logo-Override-Faktor. */
       save: roleProcedure("ADMIN", "BUERO")
         .input(
           z.object({
@@ -336,14 +336,44 @@ export const appRouter = router({
                 ekCents: z.number().int().nonnegative(),
               })
             ),
+            // null = Override löschen, Zahl = setzen, weglassen = unverändert.
+            logoOverride: z.number().positive().nullable().optional(),
           })
         )
-        .mutation(({ input, ctx }) => ctx.stickerei.saveStaffeln(input.logoVersionId, input.staffeln)),
+        .mutation(({ input, ctx }) =>
+          ctx.stickerei.saveStaffeln(input.logoVersionId, input.staffeln, input.logoOverride)
+        ),
 
       /** Gültige Staffel (EK + unser VK je Stück) für eine konkrete Bestellmenge. */
       priceForMenge: roleProcedure("ADMIN", "BUERO")
         .input(z.object({ logoVersionId: z.string().min(1), menge: z.number().int().nonnegative() }))
         .query(({ input, ctx }) => ctx.stickerei.priceForMenge(input.logoVersionId, input.menge)),
+    }),
+
+    /** Konfigurierbarer Aufschlagsfaktor (Kap. 4.4): Standard + Regeln je Parameter. */
+    markup: router({
+      getConfig: roleProcedure("ADMIN", "BUERO").query(({ ctx }) => ctx.stickerei.getMarkupConfig()),
+
+      saveConfig: roleProcedure("ADMIN", "BUERO")
+        .input(
+          z.object({
+            defaultFactor: z.number().positive(),
+            rules: z.array(
+              z.object({
+                id: z.string().optional(),
+                factor: z.number().positive(),
+                label: z.string().optional(),
+                priceGroupId: z.string().optional(),
+                finishingType: z.enum(["STICKEREI", "DRUCK", "TRANSFER"]).optional(),
+                minMenge: z.number().int().min(1).optional(),
+                maxMenge: z.number().int().min(1).optional(),
+                minEkCents: z.number().int().nonnegative().optional(),
+                maxEkCents: z.number().int().nonnegative().optional(),
+              })
+            ),
+          })
+        )
+        .mutation(({ input, ctx }) => ctx.stickerei.saveMarkupConfig(input)),
     }),
   }),
 

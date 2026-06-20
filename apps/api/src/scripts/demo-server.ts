@@ -58,7 +58,9 @@ const postcalcActuals = {
   [DEMO_PA]: { revenueCents: 100_000, materialCents: 42_000, laborMinutes: 130 },
 };
 
-// ── Stickerei: Mengenstaffeln je Logo (Stick-EK je Stück → VK = EK × 1,88) ──────
+// ── Stickerei: Mengenstaffeln je Logo + konfigurierbarer Aufschlagsfaktor ────────
+// Standard 1,88; Kleinmengen (≤ 9 Stück) mit 2,10; Großkunden mit 1,65 (greift hier
+// nicht, da das Demo-Logo der Kundengruppe PG-STANDARD zugeordnet ist).
 const stickereiRepo = new InMemoryStickereiRepository(
   { "FIRMA-DEMO": { stickereiPartnerId: "Stickerei-Nord", hatStickdatei: true } },
   {
@@ -70,6 +72,16 @@ const stickereiRepo = new InMemoryStickereiRepository(
       { minMenge: 100, ekCents: 520 },
       { minMenge: 250, ekCents: 430 },
     ],
+  },
+  {
+    markupConfig: {
+      defaultFactor: 1.88,
+      rules: [
+        { id: "klein", factor: 2.1, finishingType: "STICKEREI", maxMenge: 9, label: "Kleinmenge ≤ 9 Stück" },
+        { id: "grosskunde", factor: 1.65, priceGroupId: "PG-GROSSKUNDE", label: "Großkunde" },
+      ],
+    },
+    priceGroups: { [DEMO_LOGO]: "PG-STANDARD" },
   }
 );
 

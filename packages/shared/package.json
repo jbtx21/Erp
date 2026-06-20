@@ -13,6 +13,10 @@
     "./stickerei": {
       "types": "./dist/stickerei.d.ts",
       "import": "./dist/stickerei.js"
+    },
+    "./markup": {
+      "types": "./dist/markup.d.ts",
+      "import": "./dist/markup.js"
     }
   },
   "scripts": {

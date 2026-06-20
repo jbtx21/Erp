@@ -3,6 +3,7 @@
 // Wiederholer mit hinterlegtem Partner UND vorhandener Stickdatei → Direktauftrag.
 
 import { type Cents, roundCents } from "./money.js";
+import { type MarkupConfig, type MarkupContext, resolveMarkupFactor } from "./markup.js";
 import { STICK_MARKUP_FACTOR, deckungsbeitrag, markupVk } from "./pricing.js";
 
 export type StickereiRoute = "DIREKT" | "AUSSCHREIBUNG";
@@ -82,15 +83,22 @@ function assertStaffel(s: StickereiStaffel): void {
 }
 
 /**
- * Berechnet je frei gewählter Mengenstaffel unseren VK je Stück aus dem manuell
- * eingetragenen Stick-EK (VK = EK × Aufschlag, Standard 1,88; Kap. 4.4) inkl. DB.
- * Aufsteigend nach minMenge sortiert; doppelte Staffelgrenzen sind nicht erlaubt.
- * Je Logo individuell hinterlegbar.
+ * Aufschlag für die Staffel-VK-Berechnung: entweder ein fester Faktor (Standardfall)
+ * oder eine konfigurierbare Auflösung (globaler Standard + Regeln + Logo-Override).
+ * Bei der Auflösung wird je Stufe der Kontext um Menge und EK ergänzt — so greifen
+ * Mengen- und EK-Wert-Regeln pro Stufe (Kap. 4.4).
  */
-export function computeStickereiStaffelVks(
-  staffeln: ReadonlyArray<StickereiStaffel>,
-  factor: number = STICK_MARKUP_FACTOR
-): StickereiStaffelVk[] {
+export type StaffelMarkup =
+  | number
+  | { config: MarkupConfig; context?: MarkupContext; logoOverride?: number | null };
+
+function resolveTierFactor(markup: StaffelMarkup, menge: number, ekCents: Cents): number {
+  if (typeof markup === "number") return markup;
+  return resolveMarkupFactor(markup.config, { ...markup.context, menge, ekCents }, markup.logoOverride).factor;
+}
+
+/** Validiert + sortiert Staffeln aufsteigend (wirft bei Dubletten/ungültigen Grenzen). */
+function sortedValidStaffeln(staffeln: ReadonlyArray<StickereiStaffel>): StickereiStaffel[] {
   for (const s of staffeln) assertStaffel(s);
   const sorted = [...staffeln].sort((a, b) => a.minMenge - b.minMenge);
   for (let i = 1; i < sorted.length; i++) {
@@ -98,30 +106,45 @@ export function computeStickereiStaffelVks(
       throw new Error(`Doppelte Staffelgrenze: ${sorted[i]!.minMenge}.`);
     }
   }
-  return sorted.map((s) => {
-    const vkCents = markupVk(s.ekCents, factor);
-    return { ...s, vkCents, dbCents: deckungsbeitrag(vkCents, s.ekCents) };
-  });
+  return sorted;
+}
+
+function tierVk(s: StickereiStaffel, factor: number): StickereiStaffelVk {
+  const vkCents = markupVk(s.ekCents, factor);
+  return { ...s, vkCents, dbCents: deckungsbeitrag(vkCents, s.ekCents) };
+}
+
+/**
+ * Berechnet je frei gewählter Mengenstaffel unseren VK je Stück aus dem manuell
+ * eingetragenen Stick-EK (VK = EK × Aufschlag; Standard 1,88 oder konfigurierbar, Kap. 4.4)
+ * inkl. DB. Aufsteigend nach minMenge sortiert; doppelte Staffelgrenzen sind nicht erlaubt.
+ * Der Faktor wird je Stufe aufgelöst (Kontext: Stufen-Menge + Stufen-EK).
+ */
+export function computeStickereiStaffelVks(
+  staffeln: ReadonlyArray<StickereiStaffel>,
+  markup: StaffelMarkup = STICK_MARKUP_FACTOR
+): StickereiStaffelVk[] {
+  return sortedValidStaffeln(staffeln).map((s) => tierVk(s, resolveTierFactor(markup, s.minMenge, s.ekCents)));
 }
 
 /**
  * Wählt die für eine Bestellmenge gültige Staffel: die höchste Staffel, deren
  * `minMenge` ≤ Menge ist (degressiv). Liefert Stick-EK + unseren VK je Stück, oder
- * null, wenn keine Staffel greift (Menge unter der kleinsten Grenze). T-15.
+ * null, wenn keine Staffel greift (Menge unter der kleinsten Grenze). Der Faktor wird
+ * für die konkrete Bestellmenge aufgelöst (nicht für die Stufen-Untergrenze). T-15.
  */
 export function stickereiPriceForMenge(
   staffeln: ReadonlyArray<StickereiStaffel>,
   menge: number,
-  factor: number = STICK_MARKUP_FACTOR
+  markup: StaffelMarkup = STICK_MARKUP_FACTOR
 ): StickereiStaffelVk | null {
   if (menge < 0) throw new Error("Menge darf nicht negativ sein.");
-  const sorted = computeStickereiStaffelVks(staffeln, factor);
-  let chosen: StickereiStaffelVk | null = null;
-  for (const s of sorted) {
+  let chosen: StickereiStaffel | null = null;
+  for (const s of sortedValidStaffeln(staffeln)) {
     if (s.minMenge <= menge) chosen = s;
     else break;
   }
-  return chosen;
+  return chosen ? tierVk(chosen, resolveTierFactor(markup, menge, chosen.ekCents)) : null;
 }
 
 /** Gesamt-EK/-VK/-DB für eine konkrete Bestellmenge über die gültige Staffel (T-15). */
@@ -137,9 +160,9 @@ export interface StickereiStaffelTotal {
 export function stickereiTotalForMenge(
   staffeln: ReadonlyArray<StickereiStaffel>,
   menge: number,
-  factor: number = STICK_MARKUP_FACTOR
+  markup: StaffelMarkup = STICK_MARKUP_FACTOR
 ): StickereiStaffelTotal | null {
-  const staffel = stickereiPriceForMenge(staffeln, menge, factor);
+  const staffel = stickereiPriceForMenge(staffeln, menge, markup);
   if (!staffel) return null;
   const ekGesamtCents = roundCents(staffel.ekCents * menge);
   const vkGesamtCents = roundCents(staffel.vkCents * menge);
