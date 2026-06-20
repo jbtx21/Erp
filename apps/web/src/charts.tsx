@@ -1,15 +1,16 @@
 // Einfache, abhängigkeitsfreie SVG-Diagramme (Balken/Linie) für das Reporting.
 // Bewusst minimal gehalten (kein Chart-Framework) — passt zum schlanken Stack.
 import { type CSSProperties } from "react";
+import { T } from "./theme.js";
 
 export interface ChartDatum {
   label: string;
   value: number;
 }
 
-const AXIS = "#bbb";
-const BAR = "#2b6cb0";
-const LINE = "#2b6cb0";
+const AXIS = T.border;
+const BAR = T.primary;
+const LINE = T.primary;
 const wrap: CSSProperties = { maxWidth: "100%", overflowX: "auto" };
 
 function niceMax(max: number): number {
@@ -30,7 +31,7 @@ export function BarChart({
   height?: number;
   barWidth?: number;
 }): JSX.Element {
-  if (data.length === 0) return <p style={{ color: "#777" }}>Keine Daten.</p>;
+  if (data.length === 0) return <p style={{ color: T.text3 }}>Keine Daten.</p>;
   const pad = { top: 20, bottom: 46, left: 8, right: 8 };
   const plotH = height - pad.top - pad.bottom;
   const max = niceMax(Math.max(...data.map((d) => d.value)));
@@ -48,10 +49,10 @@ export function BarChart({
           return (
             <g key={d.label}>
               <rect x={x} y={y} width={barWidth} height={h} fill={BAR} rx={3} />
-              <text x={x + barWidth / 2} y={y - 5} textAnchor="middle" fontSize={10} fill="#333">
+              <text x={x + barWidth / 2} y={y - 5} textAnchor="middle" fontSize={10} fill={T.text}>
                 {format(d.value)}
               </text>
-              <text x={x + barWidth / 2} y={pad.top + plotH + 16} textAnchor="middle" fontSize={10} fill="#555">
+              <text x={x + barWidth / 2} y={pad.top + plotH + 16} textAnchor="middle" fontSize={10} fill={T.text2}>
                 {d.label.length > 12 ? `${d.label.slice(0, 11)}…` : d.label}
               </text>
             </g>
@@ -74,7 +75,7 @@ export function LineChart({
   height?: number;
   width?: number;
 }): JSX.Element {
-  if (data.length === 0) return <p style={{ color: "#777" }}>Keine Daten.</p>;
+  if (data.length === 0) return <p style={{ color: T.text3 }}>Keine Daten.</p>;
   const pad = { top: 20, bottom: 40, left: 8, right: 16 };
   const plotW = width - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
@@ -96,7 +97,7 @@ export function LineChart({
           <g key={p.d.label}>
             <circle cx={p.x} cy={p.y} r={3} fill={LINE} />
             <title>{`${p.d.label}: ${format(p.d.value)}`}</title>
-            <text x={p.x} y={pad.top + plotH + 15} textAnchor="middle" fontSize={9} fill="#555">
+            <text x={p.x} y={pad.top + plotH + 15} textAnchor="middle" fontSize={9} fill={T.text2}>
               {p.d.label}
             </text>
           </g>

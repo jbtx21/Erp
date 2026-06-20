@@ -6,6 +6,11 @@
 import { createTheme, type MantineColorsTuple } from "@mantine/core";
 import type { CSSProperties } from "react";
 
+// Hinweis: Die UI nutzt durchgängig Mantine (App-Shell, Differenzierer, Reporting,
+// Login). Dieses Modul ist die Token-Quelle: Farben (`T`), Status-Kodierung
+// (`STATUS`/`statusOf` + `statusMantineColor`), das Mantine-Theme (`mantineTheme`)
+// und der einzige verbliebene Inline-Helfer `numTd` für rechtsbündige Zahlen.
+
 export const T = {
   bg: "#FFFFFF",
   surface: "#F5F6F8", // Karten, Zebra, Sidebar
@@ -69,43 +74,5 @@ export const mantineTheme = createTheme({
   fontSizes: { xs: "11px", sm: "13px", md: "14px", lg: "16px", xl: "18px" },
 });
 
-// ── Geteilte Stil-Bausteine (eine Vorlage ueberall) ──────────────────────────────
-export const box: CSSProperties = {
-  fontFamily: T.font,
-  color: T.text,
-  maxWidth: 1100,
-  margin: "1.5rem auto",
-  padding: "0 1rem",
-  fontSize: 14,
-};
-export const th: CSSProperties = {
-  textAlign: "left",
-  borderBottom: `2px solid ${T.border}`,
-  padding: "6px 8px",
-  color: T.text2,
-  fontWeight: 600,
-  whiteSpace: "nowrap",
-};
-export const td: CSSProperties = { borderBottom: `1px solid ${T.border}`, padding: "6px 8px" };
-/** Numerische Zelle: tabellarische Ziffern, rechtsbuendig (Spalten richten sich aus). */
-export const tdNum: CSSProperties = { ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" };
-/** Numerische Mantine-Table.Td: rechtsbuendig + tabellarische Ziffern. */
+/** Numerische Mantine-Table.Td: rechtsbuendig + tabellarische Ziffern (Spalten richten sich aus). */
 export const numTd: CSSProperties = { textAlign: "right", fontVariantNumeric: "tabular-nums" };
-export const card: CSSProperties = {
-  border: `1px solid ${T.border}`,
-  borderRadius: 8,
-  padding: "1rem",
-  marginTop: "1.25rem",
-  background: T.bg,
-};
-export const tableStyle: CSSProperties = { width: "100%", borderCollapse: "collapse", marginTop: "0.75rem" };
-export const kpi: CSSProperties = { display: "inline-block", marginRight: "1.5rem", fontSize: "1.05rem" };
-export const num: CSSProperties = { fontVariantNumeric: "tabular-nums" };
-export const errStyle: CSSProperties = { color: T.red, margin: "0.5rem 0" };
-export const inputStyle: CSSProperties = {
-  fontFamily: T.font,
-  fontSize: 14,
-  padding: "4px 6px",
-  border: `1px solid ${T.border}`,
-  borderRadius: 4,
-};

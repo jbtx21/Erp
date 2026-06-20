@@ -1,16 +1,8 @@
 // Login (Kap. 14): Passwort, danach optional TOTP-2FA (wenn für den Nutzer aktiv).
-import { type CSSProperties, useState } from "react";
+// UI: Mantine (erp-ui-design).
+import { useState } from "react";
+import { Button, Paper, PasswordInput, Stack, Text, TextInput, Title } from "@mantine/core";
 import { trpc } from "./trpc.js";
-
-const card: CSSProperties = {
-  fontFamily: "system-ui, sans-serif",
-  maxWidth: 360,
-  margin: "4rem auto",
-  padding: "1.5rem",
-  border: "1px solid #ddd",
-  borderRadius: 8,
-};
-const field: CSSProperties = { display: "block", width: "100%", margin: "0.4rem 0", padding: 6 };
 
 export function Login({ onAuthed }: { onAuthed: () => void }): JSX.Element {
   const [email, setEmail] = useState("");
@@ -41,22 +33,30 @@ export function Login({ onAuthed }: { onAuthed: () => void }): JSX.Element {
   };
 
   return (
-    <main style={card}>
-      <h1 style={{ fontSize: "1.2rem" }}>TEXMA ERP — Anmeldung</h1>
+    <Paper withBorder radius="md" p="lg" maw={360} mx="auto" mt="xl">
+      <Title order={3} mb="md">TEXMA ERP — Anmeldung</Title>
       {!needsTotp ? (
-        <>
-          <input style={field} placeholder="E-Mail" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <input style={field} type="password" placeholder="Passwort" value={password} onChange={(e) => setPassword(e.target.value)} />
-          <button style={field} onClick={() => void submitPassword()}>Anmelden</button>
-        </>
+        <Stack gap="sm">
+          <TextInput label="E-Mail" value={email} onChange={(e) => setEmail(e.currentTarget.value)} />
+          <PasswordInput
+            label="Passwort" value={password}
+            onChange={(e) => setPassword(e.currentTarget.value)}
+            onKeyDown={(e) => e.key === "Enter" && void submitPassword()}
+          />
+          <Button onClick={() => void submitPassword()}>Anmelden</Button>
+        </Stack>
       ) : (
-        <>
-          <p>2FA-Code aus der Authenticator-App eingeben:</p>
-          <input style={field} inputMode="numeric" placeholder="123456" value={code} onChange={(e) => setCode(e.target.value)} />
-          <button style={field} onClick={() => void submitTotp()}>Bestätigen</button>
-        </>
+        <Stack gap="sm">
+          <Text size="sm">2FA-Code aus der Authenticator-App eingeben:</Text>
+          <TextInput
+            inputMode="numeric" placeholder="123456" value={code}
+            onChange={(e) => setCode(e.currentTarget.value)}
+            onKeyDown={(e) => e.key === "Enter" && void submitTotp()}
+          />
+          <Button onClick={() => void submitTotp()}>Bestätigen</Button>
+        </Stack>
       )}
-      {error && <p style={{ color: "#c00" }}>{error}</p>}
-    </main>
+      {error && <Text c="red" size="sm" mt="sm">{error}</Text>}
+    </Paper>
   );
 }
