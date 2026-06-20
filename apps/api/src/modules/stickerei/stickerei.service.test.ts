@@ -100,3 +100,48 @@ describe("StickereiService konfigurierbarer Aufschlagsfaktor (Kap. 4.4)", () => 
     expect(res.staffeln[0]?.vkCents).toBe(2_000); // 1000 × 2,0 (Override, nicht 2,1-Regel)
   });
 });
+
+describe("StickereiService Logo-Verwaltung (Kap. 7.2)", () => {
+  function svc() {
+    return new StickereiService(
+      new InMemoryStickereiRepository({}, {}, {
+        companies: [{ id: "F1", name: "Acme GmbH", priceGroupId: "PG-GROSSKUNDE" }],
+        logos: [{ id: "F1-v1", companyId: "F1", companyName: "Acme GmbH", version: 1, active: true, label: "Acme GmbH · v1 (aktiv)" }],
+        markupConfig: { defaultFactor: 1.88, rules: [{ id: "gk", factor: 1.65, priceGroupId: "PG-GROSSKUNDE" }] },
+      })
+    );
+  }
+
+  it("listCompanies", async () => {
+    expect(await svc().listCompanies()).toEqual([{ id: "F1", name: "Acme GmbH" }]);
+  });
+
+  it("createLogoVersion: nächste Version, setzt vorherige inaktiv, Datei-Ref nötig", async () => {
+    const s = svc();
+    await expect(s.createLogoVersion({ companyId: "F1", fileRef: "  ", active: true })).rejects.toThrow(/Datei-Referenz/);
+    const created = await s.createLogoVersion({ companyId: "F1", fileRef: "logo.emb", active: true });
+    expect(created).toMatchObject({ companyId: "F1", version: 2, active: true, label: "Acme GmbH · v2 (aktiv)" });
+    const logos = await s.listLogos();
+    expect(logos.find((l) => l.id === "F1-v1")?.active).toBe(false);
+    expect(logos.find((l) => l.id === created.id)?.active).toBe(true);
+  });
+
+  it("neue Version erbt die Kundengruppe der Firma (Faktor-Auflösung)", async () => {
+    const s = svc();
+    const created = await s.createLogoVersion({ companyId: "F1", fileRef: "x", active: true });
+    await s.saveStaffeln(created.id, [{ minMenge: 1, ekCents: 1_000 }]);
+    const res = await s.listStaffeln(created.id);
+    expect(res.priceGroupId).toBe("PG-GROSSKUNDE");
+    expect(res.staffeln[0]?.vkCents).toBe(1_650); // 1000 × 1,65 (Großkunden-Regel greift)
+  });
+
+  it("activateLogoVersion schaltet die aktive Version um", async () => {
+    const s = svc();
+    const v2 = await s.createLogoVersion({ companyId: "F1", fileRef: "x", active: false });
+    expect((await s.listLogos()).find((l) => l.id === "F1-v1")?.active).toBe(true);
+    await s.activateLogoVersion(v2.id);
+    const logos = await s.listLogos();
+    expect(logos.find((l) => l.id === v2.id)?.active).toBe(true);
+    expect(logos.find((l) => l.id === "F1-v1")?.active).toBe(false);
+  });
+});

@@ -29,15 +29,35 @@ export interface LogoMarkupContext {
 export interface LogoOption {
   id: string;
   label: string;
+  companyId?: string;
   companyName?: string;
   version?: number;
   active?: boolean;
+}
+
+/** Firma für die Logo-Zuordnung (Picker beim Anlegen). */
+export interface CompanyOption {
+  id: string;
+  name: string;
+}
+
+/** Eingabe zum Anlegen einer neuen Logo-Version (Kap. 7.2). */
+export interface CreateLogoVersionInput {
+  companyId: string;
+  fileRef: string;
+  active: boolean;
 }
 
 export interface StickereiRepository {
   contextForCompany(companyId: string): Promise<StickereiContext | null>;
   /** Auswahlliste aller Logos (für den Picker). */
   listLogos(): Promise<LogoOption[]>;
+  /** Firmen für die Logo-Zuordnung. */
+  listCompanies(): Promise<CompanyOption[]>;
+  /** Legt eine neue Logo-Version an (Versionsnummer auto, aktiv setzt andere inaktiv). */
+  createLogoVersion(input: CreateLogoVersionInput): Promise<LogoOption>;
+  /** Setzt eine Logo-Version aktiv (genau eine aktiv je Firma, Kap. 7.2). */
+  setLogoActive(logoVersionId: string): Promise<void>;
   /** Persistierte Staffeln (Stick-EK je Stück) eines Logos, beliebige Reihenfolge. */
   listStaffeln(logoVersionId: string): Promise<StickereiStaffel[]>;
   /** Ersetzt die Staffeln eines Logos vollständig (Set-Semantik). */
@@ -67,6 +87,24 @@ export class StickereiService {
   /** Auswahlliste aller Logos für den Picker (Firma · Version). */
   async listLogos(): Promise<LogoOption[]> {
     return this.repo.listLogos();
+  }
+
+  /** Firmen für die Logo-Zuordnung beim Anlegen. */
+  async listCompanies(): Promise<CompanyOption[]> {
+    return this.repo.listCompanies();
+  }
+
+  /** Legt eine neue Logo-Version an (Kap. 7.2): Versionsnummer automatisch, Datei-Ref nötig. */
+  async createLogoVersion(input: CreateLogoVersionInput): Promise<LogoOption> {
+    if (!input.companyId) throw new Error("Firma ist erforderlich.");
+    if (!input.fileRef.trim()) throw new Error("Datei-Referenz darf nicht leer sein.");
+    return this.repo.createLogoVersion({ ...input, fileRef: input.fileRef.trim() });
+  }
+
+  /** Setzt eine Logo-Version aktiv (deaktiviert die übrigen Versionen der Firma). */
+  async activateLogoVersion(logoVersionId: string): Promise<void> {
+    if (!logoVersionId) throw new Error("Logo-Version ist erforderlich.");
+    return this.repo.setLogoActive(logoVersionId);
   }
 
   /** Stickerei-Plan einer Firma (Kap. 5.4): Weg + Digitalisierungsbedarf + Begründung. */

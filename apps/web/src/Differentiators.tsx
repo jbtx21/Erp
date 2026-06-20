@@ -3,8 +3,8 @@
 // Stickerei-Mengenstaffeln je Logo (Kap. 4.4/5.4), Fremdvergabe-Plan (T-04/Kap. 5.3) und
 // Nachkalkulation Soll-Ist (T-10). Preis-sensible Module sind für PRODUKTION ausgeblendet
 // (Kap. 12) — die Endpunkte erzwingen die Rolle zusätzlich serverseitig. UI: Mantine.
-import { useCallback, useEffect, useState } from "react";
-import { Badge, Button, Card, Group, NumberInput, Select, Table, Text, TextInput, Title } from "@mantine/core";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Badge, Button, Card, Checkbox, Group, NumberInput, Select, Table, Text, TextInput, Title } from "@mantine/core";
 import {
   computeStickereiStaffelVks,
   stickereiPriceForMenge,
@@ -139,11 +139,22 @@ function AmpelDashboard(): JSX.Element {
   );
 }
 
-// ── Preis-Werkzeuge (preis-sensibel): Aufschlagsfaktoren + Stickerei-Staffeln ────
-// Die globale Aufschlags-Konfiguration wird einmal geladen und an beide Karten gegeben,
-// damit die Staffel-Live-Berechnung dieselben Faktoren/Regeln nutzt wie der Server.
+// ── Preis-Werkzeuge (preis-sensibel): Aufschlagsfaktoren + Logos + Stickerei-Staffeln ──
+// Aufschlags-Konfiguration + Logo-Liste werden einmal geladen und geteilt, damit die
+// Staffel-Live-Berechnung dieselben Faktoren/Regeln nutzt wie der Server und das Anlegen
+// einer Logo-Version den Picker sofort aktualisiert.
+type LogoOption = { id: string; label: string; companyId?: string; companyName?: string; version?: number; active?: boolean };
+
 function PricingTools(): JSX.Element {
   const [config, setConfig] = useState<MarkupConfig | null>(null);
+  const [logos, setLogos] = useState<LogoOption[]>([]);
+  const reloadLogos = useCallback(async () => {
+    try {
+      setLogos(await trpc.stickerei.logos.list.query());
+    } catch {
+      /* Picker bleibt leer */
+    }
+  }, []);
   useEffect(() => {
     void (async () => {
       try {
@@ -153,12 +164,117 @@ function PricingTools(): JSX.Element {
       }
     })();
   }, []);
+  useEffect(() => {
+    void reloadLogos();
+  }, [reloadLogos]);
   return (
     <>
       <MarkupConfigCard config={config} onSaved={setConfig} />
-      <StickereiStaffeln config={config} />
+      <LogoVerwaltung logos={logos} onChanged={reloadLogos} />
+      <StickereiStaffeln config={config} logos={logos} />
       <Postcalc />
     </>
+  );
+}
+
+// ── Logo-Verwaltung (Kap. 7.2): Versionen anlegen + aktiv setzen ─────────────────
+// Logo-Versionen je Firma; genau eine ist aktiv. Beim Anlegen wird die Versionsnummer
+// automatisch vergeben (vorherige aktive Version wird inaktiv); eine ältere Version
+// kann wieder aktiv gesetzt werden.
+function LogoVerwaltung({ logos, onChanged }: { logos: LogoOption[]; onChanged: () => Promise<void> | void }): JSX.Element {
+  const [companies, setCompanies] = useState<{ value: string; label: string }[]>([]);
+  const [companyId, setCompanyId] = useState<string | null>(null);
+  const [fileRef, setFileRef] = useState("");
+  const [active, setActive] = useState(true);
+  const [status, setStatus] = useState("");
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const cs = await trpc.stickerei.companies.query();
+        setCompanies(cs.map((c) => ({ value: c.id, label: c.name })));
+        setCompanyId(cs[0]?.id ?? null);
+      } catch (e) {
+        setErr(errMsg(e));
+      }
+    })();
+  }, []);
+
+  const create = useCallback(async () => {
+    setErr("");
+    setStatus("");
+    if (!companyId) {
+      setErr("Bitte eine Firma wählen.");
+      return;
+    }
+    try {
+      const created = await trpc.stickerei.logos.create.mutate({ companyId, fileRef, active });
+      await onChanged();
+      setStatus(`Angelegt: ${created.label}.`);
+      setFileRef("");
+    } catch (e) {
+      setErr(errMsg(e));
+    }
+  }, [companyId, fileRef, active, onChanged]);
+
+  const activate = useCallback(async (id: string) => {
+    setErr("");
+    setStatus("");
+    try {
+      await trpc.stickerei.logos.activate.mutate({ logoVersionId: id });
+      await onChanged();
+      setStatus("Aktive Version gesetzt.");
+    } catch (e) {
+      setErr(errMsg(e));
+    }
+  }, [onChanged]);
+
+  return (
+    <Card withBorder mt="md" padding="md">
+      <Title order={4}>Logo-Verwaltung (Kap. 7.2)</Title>
+      <Text size="sm" c="dimmed">
+        Logo-Versionen je Firma — genau eine ist aktiv. Neue Version anlegen (Versionsnummer
+        automatisch, setzt die vorherige inaktiv); eine ältere Version kann wieder aktiv gesetzt werden.
+      </Text>
+
+      <Table withTableBorder mt="sm" verticalSpacing="xs">
+        <Table.Thead>
+          <Table.Tr>
+            <Table.Th>Firma</Table.Th>
+            <Table.Th ta="right">Version</Table.Th>
+            <Table.Th>Status</Table.Th>
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
+          {logos.map((l) => (
+            <Table.Tr key={l.id}>
+              <Table.Td>{l.companyName ?? l.id}</Table.Td>
+              <Table.Td ta="right">v{l.version ?? "?"}</Table.Td>
+              <Table.Td>
+                {l.active
+                  ? <Badge color="teal" variant="light">aktiv</Badge>
+                  : <Button size="compact-xs" variant="default" onClick={() => void activate(l.id)}>Aktiv setzen</Button>}
+              </Table.Td>
+            </Table.Tr>
+          ))}
+          {logos.length === 0 && (
+            <Table.Tr><Table.Td colSpan={3}><Text size="sm" c="dimmed">Noch keine Logos angelegt.</Text></Table.Td></Table.Tr>
+          )}
+        </Table.Tbody>
+      </Table>
+
+      <Group align="end" gap="sm" mt="md">
+        <Select label="Firma" w={220} searchable data={companies} value={companyId}
+          onChange={setCompanyId} placeholder="Firma wählen…" />
+        <TextInput label="Datei-Referenz" w={240} placeholder="z. B. logo-acme.emb"
+          value={fileRef} onChange={(e) => setFileRef(e.currentTarget.value)} />
+        <Checkbox label="aktiv setzen" checked={active} onChange={(e) => setActive(e.currentTarget.checked)} mb={6} />
+        <Button onClick={() => void create()} disabled={!companyId || !fileRef.trim()}>Version anlegen</Button>
+      </Group>
+      {status && <Text size="sm" c="dimmed" mt="xs">{status}</Text>}
+      {err && <Text c="red" size="sm" mt="xs">Fehler: {err}</Text>}
+    </Card>
   );
 }
 
@@ -186,15 +302,17 @@ function MarkupConfigCard({ config, onSaved }: { config: MarkupConfig | null; on
     setRules((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   const addRule = () => setRules((prev) => [...prev, { factor: defaultFactor }]);
   const removeRule = (i: number) => setRules((prev) => prev.filter((_, idx) => idx !== i));
-  // Priorität = Reihenfolge: nach oben/unten verschieben (erste passende Regel gewinnt).
-  const moveRule = (i: number, dir: -1 | 1) =>
+  // Priorität = Reihenfolge: erste passende Regel gewinnt. Sortierbar per ▲▼ ODER Drag&Drop.
+  const moveRuleTo = (from: number, to: number) =>
     setRules((prev) => {
-      const j = i + dir;
-      if (j < 0 || j >= prev.length) return prev;
+      if (from === to || from < 0 || to < 0 || from >= prev.length || to >= prev.length) return prev;
       const next = [...prev];
-      [next[i], next[j]] = [next[j]!, next[i]!];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved!);
       return next;
     });
+  const moveRule = (i: number, dir: -1 | 1) => moveRuleTo(i, i + dir);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
 
   const save = useCallback(async () => {
     setErr("");
@@ -246,9 +364,13 @@ function MarkupConfigCard({ config, onSaved }: { config: MarkupConfig | null; on
         </Table.Thead>
         <Table.Tbody>
           {rules.map((r, i) => (
-            <Table.Tr key={i}>
+            <Table.Tr key={i} bg={dragIdx === i ? "blue.0" : undefined}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => { if (dragIdx !== null) moveRuleTo(dragIdx, i); setDragIdx(null); }}>
               <Table.Td>
                 <Group gap={2} wrap="nowrap" justify="center">
+                  <Text span style={{ cursor: "grab" }} c="dimmed" title="Ziehen zum Sortieren"
+                    draggable onDragStart={() => setDragIdx(i)} onDragEnd={() => setDragIdx(null)}>⠿</Text>
                   <Text size="xs" c="dimmed" w={14} ta="right">{i + 1}</Text>
                   <Button size="compact-xs" px={4} variant="subtle" disabled={i === 0} onClick={() => moveRule(i, -1)}>▲</Button>
                   <Button size="compact-xs" px={4} variant="subtle" disabled={i === rules.length - 1} onClick={() => moveRule(i, 1)}>▼</Button>
@@ -322,9 +444,8 @@ const DEFAULT_STAFFEL_ROWS: StaffelRow[] = [
 const toStaffeln = (rows: ReadonlyArray<StaffelRow>): StickereiStaffel[] =>
   rows.map((r) => ({ minMenge: Math.round(r.minMenge), ekCents: Math.round(r.ekEuro * 100) }));
 
-function StickereiStaffeln({ config }: { config: MarkupConfig | null }): JSX.Element {
-  const [logoVersionId, setLogoVersionId] = useState("LOGO-DEMO");
-  const [logoOptions, setLogoOptions] = useState<{ value: string; label: string }[]>([]);
+function StickereiStaffeln({ config, logos }: { config: MarkupConfig | null; logos: LogoOption[] }): JSX.Element {
+  const [logoVersionId, setLogoVersionId] = useState("");
   const [rows, setRows] = useState<StaffelRow[]>(DEFAULT_STAFFEL_ROWS);
   const [logoOverride, setLogoOverride] = useState<number | null>(null);
   const [priceGroupId, setPriceGroupId] = useState<string | undefined>(undefined);
@@ -367,23 +488,15 @@ function StickereiStaffeln({ config }: { config: MarkupConfig | null }): JSX.Ele
     }
   }, []);
 
-  // Logo-Picker füllen + initiale Auswahl laden (gleiche reine Logik wie der Server).
+  // Einmalig die erste verfügbare Logo-Version wählen und laden, sobald die Liste da ist.
+  const didInit = useRef(false);
   useEffect(() => {
-    void (async () => {
-      try {
-        const opts = await trpc.stickerei.logos.query();
-        setLogoOptions(opts.map((o) => ({ value: o.id, label: o.label })));
-        const initial = opts.find((o) => o.id === logoVersionId)?.id ?? opts[0]?.id;
-        if (initial) {
-          setLogoVersionId(initial);
-          await load(initial);
-        }
-      } catch (e) {
-        setErr(errMsg(e));
-      }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [load]);
+    if (didInit.current || logos.length === 0) return;
+    didInit.current = true;
+    const initial = logos[0]!.id;
+    setLogoVersionId(initial);
+    void load(initial);
+  }, [logos, load]);
 
   const save = useCallback(async () => {
     setErr("");
@@ -406,7 +519,7 @@ function StickereiStaffeln({ config }: { config: MarkupConfig | null }): JSX.Ele
       </Text>
       <Group align="end" gap="sm" mt="xs">
         <Select label="Logo" w={240} searchable nothingFoundMessage="kein Logo" placeholder="Logo wählen…"
-          data={logoOptions} value={logoVersionId}
+          data={logos.map((l) => ({ value: l.id, label: l.label }))} value={logoVersionId || null}
           onChange={(v) => { if (v) { setLogoVersionId(v); void load(v); } }} />
         <NumberInput label="Logo-Override (×)" w={140} hideControls min={0} step={0.01} decimalScale={2}
           placeholder="aus" value={logoOverride ?? ""}

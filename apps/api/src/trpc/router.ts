@@ -313,8 +313,21 @@ export const appRouter = router({
   }),
 
   stickerei: router({
-    /** Auswahlliste aller Logos für den Picker (Firma · Version). */
-    logos: roleProcedure("ADMIN", "BUERO").query(({ ctx }) => ctx.stickerei.listLogos()),
+    /** Firmen für die Logo-Zuordnung beim Anlegen. */
+    companies: roleProcedure("ADMIN", "BUERO").query(({ ctx }) => ctx.stickerei.listCompanies()),
+
+    /** Logo-Verwaltung (Kap. 7.2): Liste + Versionen anlegen + aktiv setzen. */
+    logos: router({
+      list: roleProcedure("ADMIN", "BUERO").query(({ ctx }) => ctx.stickerei.listLogos()),
+
+      create: roleProcedure("ADMIN", "BUERO")
+        .input(z.object({ companyId: z.string().min(1), fileRef: z.string().min(1), active: z.boolean() }))
+        .mutation(({ input, ctx }) => ctx.stickerei.createLogoVersion(input)),
+
+      activate: roleProcedure("ADMIN", "BUERO")
+        .input(z.object({ logoVersionId: z.string().min(1) }))
+        .mutation(({ input, ctx }) => ctx.stickerei.activateLogoVersion(input.logoVersionId)),
+    }),
 
     /** Stickerei-Plan einer Firma (Kap. 5.4): Weg + Digitalisierungsbedarf + Begründung. */
     routeForCompany: roleProcedure("ADMIN", "BUERO")

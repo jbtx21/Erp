@@ -88,9 +88,13 @@ const stickereiRepo = new InMemoryStickereiRepository(
       ],
     },
     priceGroups: { [DEMO_LOGO]: "PG-STANDARD", [DEMO_LOGO_GROSS]: "PG-GROSSKUNDE" },
+    companies: [
+      { id: "FIRMA-MUSTER", name: "Muster GmbH", priceGroupId: "PG-STANDARD" },
+      { id: "FIRMA-GROSS", name: "Großkunde AG", priceGroupId: "PG-GROSSKUNDE" },
+    ],
     logos: [
-      { id: DEMO_LOGO, label: "Muster GmbH · v3 (aktiv)", companyName: "Muster GmbH", version: 3, active: true },
-      { id: DEMO_LOGO_GROSS, label: "Großkunde AG · v1 (aktiv)", companyName: "Großkunde AG", version: 1, active: true },
+      { id: DEMO_LOGO, label: "Muster GmbH · v3 (aktiv)", companyId: "FIRMA-MUSTER", companyName: "Muster GmbH", version: 3, active: true },
+      { id: DEMO_LOGO_GROSS, label: "Großkunde AG · v1 (aktiv)", companyId: "FIRMA-GROSS", companyName: "Großkunde AG", version: 1, active: true },
     ],
   }
 );

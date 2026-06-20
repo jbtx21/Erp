@@ -1,7 +1,18 @@
 // In-Memory-Implementierung des Stickerei-Repositories — für Tests/Durchstiche.
 
 import { DEFAULT_MARKUP_CONFIG, type MarkupConfig, type StickereiContext, type StickereiStaffel } from "@texma/shared";
-import type { LogoMarkupContext, LogoOption, StickereiRepository } from "../modules/stickerei/stickerei.service.js";
+import type {
+  CompanyOption,
+  CreateLogoVersionInput,
+  LogoMarkupContext,
+  LogoOption,
+  StickereiRepository,
+} from "../modules/stickerei/stickerei.service.js";
+
+/** Firma inkl. Kundengruppe (für die in-memory Faktor-Auflösung neuer Logos). */
+export interface InMemoryCompany extends CompanyOption {
+  priceGroupId?: string;
+}
 
 export interface InMemoryStickereiSeed {
   markupConfig?: MarkupConfig;
@@ -11,6 +22,13 @@ export interface InMemoryStickereiSeed {
   priceGroups?: Record<string, string>;
   /** Auswahlliste für den Logo-Picker. */
   logos?: LogoOption[];
+  /** Firmen für die Logo-Zuordnung. */
+  companies?: InMemoryCompany[];
+}
+
+/** Einheitliches Logo-Label: „Firma · vN (aktiv)". */
+function logoLabel(l: LogoOption): string {
+  return `${l.companyName ?? l.id} · v${l.version ?? "?"}${l.active ? " (aktiv)" : ""}`;
 }
 
 export class InMemoryStickereiRepository implements StickereiRepository {
@@ -18,6 +36,7 @@ export class InMemoryStickereiRepository implements StickereiRepository {
   private readonly logoOverrides: Map<string, number>;
   private readonly priceGroups: Map<string, string>;
   private readonly logos: LogoOption[];
+  private readonly companies: InMemoryCompany[];
   private markupConfig: MarkupConfig;
 
   constructor(
@@ -28,7 +47,8 @@ export class InMemoryStickereiRepository implements StickereiRepository {
     this.staffeln = new Map(Object.entries(seedStaffeln).map(([k, v]) => [k, [...v]]));
     this.logoOverrides = new Map(Object.entries(seed.logoOverrides ?? {}));
     this.priceGroups = new Map(Object.entries(seed.priceGroups ?? {}));
-    this.logos = seed.logos ? [...seed.logos] : [];
+    this.logos = seed.logos ? seed.logos.map((l) => ({ ...l })) : [];
+    this.companies = seed.companies ? seed.companies.map((c) => ({ ...c })) : [];
     this.markupConfig = seed.markupConfig ?? DEFAULT_MARKUP_CONFIG;
   }
 
@@ -38,6 +58,44 @@ export class InMemoryStickereiRepository implements StickereiRepository {
 
   async listLogos(): Promise<LogoOption[]> {
     return this.logos.map((l) => ({ ...l }));
+  }
+
+  async listCompanies(): Promise<CompanyOption[]> {
+    return this.companies.map((c) => ({ id: c.id, name: c.name }));
+  }
+
+  async createLogoVersion(input: CreateLogoVersionInput): Promise<LogoOption> {
+    const company = this.companies.find((c) => c.id === input.companyId);
+    if (!company) throw new Error(`Firma ${input.companyId} nicht gefunden.`);
+    const versions = this.logos.filter((l) => l.companyId === input.companyId);
+    const version = versions.reduce((m, l) => Math.max(m, l.version ?? 0), 0) + 1;
+    const id = `${input.companyId}-v${version}`;
+    if (input.active) for (const l of versions) l.active = false;
+    const created: LogoOption = {
+      id,
+      companyId: input.companyId,
+      companyName: company.name,
+      version,
+      active: input.active,
+      label: "",
+    };
+    created.label = logoLabel(created);
+    this.logos.push(created);
+    if (company.priceGroupId) this.priceGroups.set(id, company.priceGroupId);
+    // Labels der Firma neu berechnen (aktiv-Markierung kann sich verschoben haben).
+    for (const l of this.logos) if (l.companyId === input.companyId) l.label = logoLabel(l);
+    return { ...created };
+  }
+
+  async setLogoActive(logoVersionId: string): Promise<void> {
+    const target = this.logos.find((l) => l.id === logoVersionId);
+    if (!target) throw new Error(`Logo-Version ${logoVersionId} nicht gefunden.`);
+    for (const l of this.logos) {
+      if (l.companyId === target.companyId) {
+        l.active = l.id === logoVersionId;
+        l.label = logoLabel(l);
+      }
+    }
   }
 
   async listStaffeln(logoVersionId: string): Promise<StickereiStaffel[]> {

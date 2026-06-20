@@ -9,7 +9,18 @@ import {
   type StickereiContext,
   type StickereiStaffel,
 } from "@texma/shared";
-import type { LogoMarkupContext, StickereiRepository } from "../modules/stickerei/stickerei.service.js";
+import type {
+  CompanyOption,
+  CreateLogoVersionInput,
+  LogoMarkupContext,
+  LogoOption,
+  StickereiRepository,
+} from "../modules/stickerei/stickerei.service.js";
+
+/** Einheitliches Logo-Label: „Firma · vN (aktiv)". */
+function logoLabel(companyName: string, version: number, active: boolean): string {
+  return `${companyName} · v${version}${active ? " (aktiv)" : ""}`;
+}
 
 /** DB-Zeile → reine MarkupRule (Prisma-null → undefined, finishingType typisiert). */
 type MarkupRuleRow = {
@@ -47,18 +58,65 @@ export class PrismaStickereiRepository implements StickereiRepository {
     return { stickereiPartnerId: c.stickereiPartnerId, hatStickdatei: c.hatStickdatei };
   }
 
-  async listLogos() {
+  async listLogos(): Promise<LogoOption[]> {
     const rows = await prisma.logoVersion.findMany({
-      select: { id: true, version: true, active: true, company: { select: { name: true } } },
+      select: { id: true, companyId: true, version: true, active: true, company: { select: { name: true } } },
       orderBy: [{ company: { name: "asc" } }, { version: "desc" }],
     });
     return rows.map((r) => ({
       id: r.id,
+      companyId: r.companyId,
       version: r.version,
       active: r.active,
       companyName: r.company.name,
-      label: `${r.company.name} · v${r.version}${r.active ? " (aktiv)" : ""}`,
+      label: logoLabel(r.company.name, r.version, r.active),
     }));
+  }
+
+  async listCompanies(): Promise<CompanyOption[]> {
+    return prisma.company.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } });
+  }
+
+  async createLogoVersion(input: CreateLogoVersionInput): Promise<LogoOption> {
+    return prisma.$transaction(async (tx) => {
+      const company = await tx.company.findUnique({ where: { id: input.companyId }, select: { name: true } });
+      if (!company) throw new Error(`Firma ${input.companyId} nicht gefunden.`);
+      const max = await tx.logoVersion.aggregate({
+        where: { companyId: input.companyId },
+        _max: { version: true },
+      });
+      const version = (max._max.version ?? 0) + 1;
+      if (input.active) {
+        await tx.logoVersion.updateMany({
+          where: { companyId: input.companyId, active: true },
+          data: { active: false, replacedAt: new Date() },
+        });
+      }
+      const created = await tx.logoVersion.create({
+        data: { companyId: input.companyId, version, fileRef: input.fileRef, active: input.active },
+        select: { id: true, companyId: true, version: true, active: true },
+      });
+      return {
+        ...created,
+        companyName: company.name,
+        label: logoLabel(company.name, created.version, created.active),
+      };
+    });
+  }
+
+  async setLogoActive(logoVersionId: string): Promise<void> {
+    await prisma.$transaction(async (tx) => {
+      const target = await tx.logoVersion.findUnique({
+        where: { id: logoVersionId },
+        select: { companyId: true },
+      });
+      if (!target) throw new Error(`Logo-Version ${logoVersionId} nicht gefunden.`);
+      await tx.logoVersion.updateMany({
+        where: { companyId: target.companyId, active: true, id: { not: logoVersionId } },
+        data: { active: false, replacedAt: new Date() },
+      });
+      await tx.logoVersion.update({ where: { id: logoVersionId }, data: { active: true, replacedAt: null } });
+    });
   }
 
   async listStaffeln(logoVersionId: string): Promise<StickereiStaffel[]> {

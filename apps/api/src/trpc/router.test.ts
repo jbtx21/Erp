@@ -640,7 +640,7 @@ describe("tRPC stickerei — Partnerwahl (Kap. 5.4)", () => {
 
   it("Logo-Picker: listet die verfügbaren Logos", async () => {
     const { caller } = setup(BUERO);
-    const logos = await caller.stickerei.logos();
+    const logos = await caller.stickerei.logos.list();
     expect(logos).toEqual([{ id: "logo-x", label: "Muster GmbH · v1 (aktiv)", version: 1, active: true }]);
   });
 
