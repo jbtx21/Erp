@@ -169,6 +169,64 @@ export const appRouter = router({
     listClarifications: roleProcedure(...supplierRoles)
       .input(z.object({ limit: z.number().int().positive().max(200) }).optional())
       .query(async ({ input, ctx }) => ctx.banking.listClarifications(input?.limit ?? 50)),
+
+    /** Bank-Verbindungen (EBICS/PSD2): Auszüge abrufen (AIS, Kap. 9). */
+    connections: router({
+      list: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.bankConnections.listConnections()),
+
+      create: roleProcedure(...supplierRoles)
+        .input(
+          z.object({
+            name: z.string().min(1),
+            kind: z.enum(["EBICS", "PSD2"]),
+            iban: z.string().min(1),
+            bic: z.string().optional(),
+            debtorName: z.string().min(1),
+            consentValidUntil: z.string().datetime().optional(),
+          })
+        )
+        .mutation(({ input, ctx }) =>
+          ctx.bankConnections.createConnection({
+            ...input,
+            consentValidUntil: input.consentValidUntil ? new Date(input.consentValidUntil) : null,
+          })
+        ),
+
+      sync: roleProcedure(...supplierRoles)
+        .input(z.object({ connectionId: z.string().min(1) }))
+        .mutation(({ input, ctx }) => ctx.bankConnections.sync(input.connectionId)),
+    }),
+
+    /** SEPA-Überweisungen auslösen (PIS, pain.001) über EBICS/PSD2 (Kap. 9). */
+    payments: router({
+      list: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.bankConnections.listPaymentOrders()),
+
+      payableInvoices: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.bankConnections.listPayableInvoices()),
+
+      create: roleProcedure(...supplierRoles)
+        .input(
+          z.object({
+            connectionId: z.string().min(1),
+            requestedExecutionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+            transfers: z
+              .array(
+                z.object({
+                  creditorName: z.string().min(1),
+                  creditorIban: z.string().min(1),
+                  creditorBic: z.string().optional(),
+                  amountCents: z.number().int().positive(),
+                  remittance: z.string().max(140),
+                })
+              )
+              .min(1),
+          })
+        )
+        .mutation(({ input, ctx }) => ctx.bankConnections.createPaymentOrder(input)),
+
+      submit: roleProcedure(...supplierRoles)
+        .input(z.object({ orderId: z.string().min(1) }))
+        .mutation(({ input, ctx }) => ctx.bankConnections.submitPaymentOrder(input.orderId)),
+    }),
   }),
 
   dunning: router({

@@ -17,6 +17,9 @@ import { SupplierImportService } from "./modules/supplier-import/supplier-import
 import { IncomingInvoiceService } from "./modules/incoming-invoice/incoming-invoice.service.js";
 import { ShipmentService } from "./modules/shipment/shipment.service.js";
 import { BankingImportService } from "./modules/banking/banking-import.service.js";
+import { BankConnectionService } from "./modules/banking/bank-connection.service.js";
+import { InMemoryFinApiClient } from "./repositories/in-memory-finapi-client.js";
+import { PrismaBankConnectionRepository } from "./repositories/prisma-bank-connection.repository.js";
 import { DunningService } from "./modules/dunning/dunning.service.js";
 import { ProcurementService } from "./modules/procurement/procurement.service.js";
 import { SubProductionService } from "./modules/subproduction/subproduction.service.js";
@@ -77,6 +80,14 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const shipments = new ShipmentService(new PrismaShipmentRepository(), new PrismaAuditSink());
   const bankingRepo = new PrismaBankingRepository();
   const bankingImport = new BankingImportService(bankingRepo, new PrismaAuditSink());
+  // Bank-Anbindung (Kap. 9): EBICS/PSD2 hinter einer Abstraktion. Der FinApiClient ist hier
+  // ein In-Memory-Stand-in — der echte finAPI-/EBICS-HTTP-Client wird per Env konfiguriert.
+  const bankConnections = new BankConnectionService(
+    new PrismaBankConnectionRepository(),
+    new InMemoryFinApiClient(),
+    bankingImport,
+    new PrismaAuditSink()
+  );
   const dunningRepo = new PrismaDunningRepository();
   const dunning = new DunningService(dunningRepo, new PrismaAuditSink());
   const procurement = new ProcurementService(new PrismaProcurementRepository());
@@ -153,6 +164,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           shipments,
           bankingImport,
           banking: bankingRepo,
+          bankConnections,
           dunning,
           dunningQuery: dunningRepo,
           procurement,

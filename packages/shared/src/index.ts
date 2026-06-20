@@ -1,6 +1,7 @@
 export * from "./money.js";
 export * from "./pricing.js";
 export * from "./markup.js";
+export * from "./pain001.js";
 export * from "./woocommerce.js";
 export * from "./variants.js";
 export * from "./shop-sync.js";

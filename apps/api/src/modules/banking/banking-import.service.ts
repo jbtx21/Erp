@@ -44,14 +44,36 @@ export interface BankingImportResult {
   skipped: number; // bereits importiert (Idempotenz)
 }
 
+/** Normalisierte Gutschrift (Quelle: CAMT.053-Datei oder Provider-Sync EBICS/PSD2). */
+export interface NormalizedCreditInput {
+  externalRef: string;
+  reference: string;
+  amountCents: number;
+}
+
 export class BankingImportService {
   constructor(
     private readonly repo: BankingRepository,
     private readonly audit: AuditSink
   ) {}
 
+  /** Importiert einen CAMT.053-Kontoauszug (Datei-Upload, T-13). */
   async importStatement(xml: string): Promise<BankingImportResult> {
     const credits = creditTransactions(parseCamt053(xml));
+    return this.importCredits(
+      credits.map((c) => ({ externalRef: c.externalRef, reference: c.reference, amountCents: c.amountCents })),
+      "camt053"
+    );
+  }
+
+  /**
+   * Importiert normalisierte Gutschriften (z. B. aus dem Bank-Provider-Sync EBICS/PSD2) und
+   * gleicht sie gegen offene Posten ab. Idempotent über die Bank-Referenz (externalRef).
+   */
+  async importCredits(
+    credits: ReadonlyArray<NormalizedCreditInput>,
+    source = "sync"
+  ): Promise<BankingImportResult> {
     const existing = await this.repo.existingExternalRefs(credits.map((c) => c.externalRef));
     const fresh = credits.filter((c) => !existing.has(c.externalRef));
 
@@ -89,9 +111,9 @@ export class BankingImportService {
     await this.audit.append(
       buildEntry({
         entity: "Payment",
-        entityId: "camt.import",
+        entityId: "bank.import",
         action: "CREATE",
-        after: { source: "camt053", imported: fresh.length, matched, clarified },
+        after: { source, imported: fresh.length, matched, clarified },
       })
     );
 

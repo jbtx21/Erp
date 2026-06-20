@@ -7,6 +7,7 @@ import type { SupplierImportService } from "../modules/supplier-import/supplier-
 import type { IncomingInvoiceService } from "../modules/incoming-invoice/incoming-invoice.service.js";
 import type { ShipmentService } from "../modules/shipment/shipment.service.js";
 import type { BankingImportService } from "../modules/banking/banking-import.service.js";
+import type { BankConnectionService } from "../modules/banking/bank-connection.service.js";
 import type { DunningService } from "../modules/dunning/dunning.service.js";
 import type { ProcurementService } from "../modules/procurement/procurement.service.js";
 import type { SubProductionService } from "../modules/subproduction/subproduction.service.js";
@@ -38,6 +39,7 @@ export interface Context {
   shipments: ShipmentService;
   bankingImport: BankingImportService;
   banking: BankingQueryRepository;
+  bankConnections: BankConnectionService;
   dunning: DunningService;
   dunningQuery: DunningQueryRepository;
   procurement: ProcurementService;

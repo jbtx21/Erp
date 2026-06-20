@@ -27,6 +27,9 @@ import { InMemorySupplierRepository } from "../repositories/in-memory-supplier.r
 import { InMemoryIncomingInvoiceRepository } from "../repositories/in-memory-incoming-invoice.repository.js";
 import { InMemoryShipmentRepository } from "../repositories/in-memory-shipment.repository.js";
 import { InMemoryBankingRepository } from "../repositories/in-memory-banking.repository.js";
+import { BankConnectionService } from "../modules/banking/bank-connection.service.js";
+import { InMemoryBankConnectionRepository } from "../repositories/in-memory-bank-connection.repository.js";
+import { InMemoryFinApiClient } from "../repositories/in-memory-finapi-client.js";
 import { InMemoryDunningRepository } from "../repositories/in-memory-dunning.repository.js";
 import { InMemoryProcurementRepository } from "../repositories/in-memory-procurement.repository.js";
 import { InMemorySubProductionRepository } from "../repositories/in-memory-subproduction.repository.js";
@@ -71,6 +74,16 @@ function setup(user: AuthUser | null = BUERO) {
     { id: "oi_1", invoiceNumber: "R-2026-001", openCents: 11900 },
   ]);
   const bankingImport = new BankingImportService(bankingRepo, new MemoryAuditSink());
+  const bankConnections = new BankConnectionService(
+    new InMemoryBankConnectionRepository({
+      connections: [
+        { id: "conn-ebics", name: "Hausbank (EBICS)", kind: "EBICS", iban: "DE89370400440532013000", bic: "COBADEFFXXX", debtorName: "TEXMA GmbH", consentValidUntil: null, lastSyncAt: null, createdAt: new Date("2026-06-01T00:00:00Z") },
+      ],
+    }),
+    new InMemoryFinApiClient({ creditsByConnection: { "conn-ebics": [{ externalRef: "EB-1", reference: "R-2026-001", amountCents: 11900 }] } }),
+    bankingImport,
+    new MemoryAuditSink()
+  );
   const dunningRepo = new InMemoryDunningRepository([
     {
       id: "oi_due",
@@ -193,6 +206,7 @@ function setup(user: AuthUser | null = BUERO) {
     shipments,
     bankingImport,
     banking: bankingRepo,
+    bankConnections,
     dunning,
     dunningQuery: dunningRepo,
     procurement,
@@ -274,6 +288,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       shipments: {} as Context["shipments"],
       bankingImport: {} as Context["bankingImport"],
       banking: buero.bankingRepo,
+      bankConnections: {} as Context["bankConnections"],
       dunning: {} as Context["dunning"],
       dunningQuery: buero.dunningRepo,
       procurement: {} as Context["procurement"],
@@ -431,6 +446,26 @@ describe("tRPC banking — CAMT-Abgleich + RBAC (T-13, Kap. 9.4/12)", () => {
     await expect(
       caller.banking.importStatement({ xml: camt("REF-1", "R-2026-001", "119.00") })
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("banking.connections: Liste mit Consent + EBICS-Sync (AIS) speist Pipeline", async () => {
+    const { caller } = setup(BUERO);
+    const conns = await caller.banking.connections.list();
+    expect(conns.find((c) => c.id === "conn-ebics")?.consent.ok).toBe(true);
+    const res = await caller.banking.connections.sync({ connectionId: "conn-ebics" });
+    expect(res.result).toMatchObject({ imported: 1, matched: 1 });
+  });
+
+  it("banking.payments: SEPA-Auftrag anlegen + einreichen (PIS) → EXECUTED", async () => {
+    const { caller } = setup(BUERO);
+    const order = await caller.banking.payments.create({
+      connectionId: "conn-ebics",
+      requestedExecutionDate: "2026-06-22",
+      transfers: [{ creditorName: "Garn & Co", creditorIban: "DE02120300000000202051", amountCents: 5_000, remittance: "ER-1" }],
+    });
+    expect(order).toMatchObject({ status: "DRAFT", totalCents: 5_000 });
+    const submitted = await caller.banking.payments.submit({ orderId: order.id });
+    expect(submitted.status).toBe("EXECUTED");
   });
 });
 

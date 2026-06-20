@@ -285,6 +285,8 @@ model Supplier {
   id              String   @id @default(cuid())
   name            String
   vatId           String? // USt-IdNr. — Auflösung eingehender E-Rechnungen (Kap. 19/C4)
+  iban            String? // Gläubiger-IBAN für SEPA-Überweisungen (PIS, Kap. 9)
+  bic             String?
   // Inbound-Connector (C3): Katalog/Lager/EK eingehend synchronisieren.
   kind            SupplierKind @default(MANUAL)
   baseUrl         String? // REST-Basis-URL des Lieferantensystems
@@ -577,6 +579,63 @@ model PaymentAllocation {
   amountCents Int // Teilzahlung/Überzahlung (Kap. 9.4)
 
   @@unique([paymentId, openItemId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bank-Anbindung — Kap. 9. Zwei Wege (EBICS / PSD2) hinter einer Abstraktion:
+// Kontoauszüge abrufen (AIS → Matching-Pipeline) + SEPA-Überweisungen auslösen (PIS).
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum BankConnectionKind {
+  EBICS // zertifikatsbasiert, CAMT.053 + pain.001, keine 90-Tage-Re-Auth
+  PSD2 // XS2A-API, 90-Tage-SCA-Zustimmung
+}
+
+enum PaymentOrderStatus {
+  DRAFT // erfasst, noch nicht eingereicht
+  SUBMITTED // an den Bank-Provider übergeben
+  EXECUTED // vom Provider zur Ausführung angenommen
+  REJECTED // vom Provider abgelehnt
+}
+
+model BankConnection {
+  id                String             @id @default(cuid())
+  name              String
+  kind              BankConnectionKind
+  iban              String // eigenes Konto (Auftraggeber)
+  bic               String?
+  debtorName        String
+  consentValidUntil DateTime? // PSD2: Ablauf der SCA-Zustimmung; EBICS: null
+  lastSyncAt        DateTime?
+  createdAt         DateTime           @default(now())
+  paymentOrders     PaymentOrder[]
+}
+
+model PaymentOrder {
+  id                     String             @id @default(cuid())
+  connectionId           String
+  connection             BankConnection     @relation(fields: [connectionId], references: [id])
+  messageId              String             @unique // pain.001 MsgId
+  status                 PaymentOrderStatus @default(DRAFT)
+  totalCents             Int
+  requestedExecutionDate String // YYYY-MM-DD
+  providerRef            String? // Referenz der Bank/des Providers nach Einreichung
+  submittedAt            DateTime?
+  createdAt              DateTime           @default(now())
+  transfers              PaymentTransfer[]
+
+  @@index([connectionId, status])
+}
+
+model PaymentTransfer {
+  id           String       @id @default(cuid())
+  orderId      String
+  order        PaymentOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  creditorName String
+  creditorIban String
+  creditorBic  String?
+  amountCents  Int
+  remittance   String
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

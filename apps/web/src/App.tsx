@@ -5,6 +5,7 @@ import { Button, Container, Group, Loader, Table, Tabs, Text, Title } from "@man
 import { Login } from "./Login.js";
 import { Reporting } from "./Reporting.js";
 import { Differentiators } from "./Differentiators.js";
+import { Banking } from "./Banking.js";
 import { trpc } from "./trpc.js";
 import { euro, numTd } from "./theme.js";
 
@@ -50,8 +51,8 @@ export function App(): JSX.Element {
   return <Orders user={user} onLogout={async () => { await trpc.auth.logout.mutate(); setUser(null); }} />;
 }
 
-type Tab = "orders" | "differentiators" | "reporting";
-const TABS: readonly Tab[] = ["orders", "differentiators", "reporting"];
+type Tab = "orders" | "differentiators" | "banking" | "reporting";
+const TABS: readonly Tab[] = ["orders", "differentiators", "banking", "reporting"];
 const hashTab = (): Tab => {
   const h = (typeof location !== "undefined" ? location.hash.replace("#", "") : "") as Tab;
   return TABS.includes(h) ? h : "orders";
@@ -92,6 +93,7 @@ function Orders({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
         <Tabs.List>
           <Tabs.Tab value="orders">Aufträge</Tabs.Tab>
           <Tabs.Tab value="differentiators">Differenzierer</Tabs.Tab>
+          <Tabs.Tab value="banking">Banking</Tabs.Tab>
           <Tabs.Tab value="reporting">Auswertungen</Tabs.Tab>
         </Tabs.List>
       </Tabs>
@@ -102,6 +104,7 @@ function Orders({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<vo
       <div style={{ paddingTop: "1rem" }}>
         {tab === "orders" && <OrdersTable orders={orders} status={status} role={user.role} onReload={load} />}
         {tab === "differentiators" && <Differentiators role={user.role} />}
+        {tab === "banking" && <Banking role={user.role} />}
         {tab === "reporting" && <Reporting role={user.role} />}
       </div>
     </Container>
