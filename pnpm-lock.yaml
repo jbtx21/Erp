@@ -78,6 +78,9 @@ importers:
       '@texma/api':
         specifier: workspace:*
         version: link:../api
+      '@texma/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@trpc/client':
         specifier: ^11.18.0
         version: 11.18.0(@trpc/server@11.18.0(typescript@5.9.3))(typescript@5.9.3)

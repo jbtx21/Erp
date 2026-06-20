@@ -318,23 +318,33 @@ export const appRouter = router({
       .input(z.object({ companyId: z.string().min(1) }))
       .query(async ({ input, ctx }) => ctx.stickerei.routeForCompany(input.companyId)),
 
-    /** Angebotsvergleich einer Ausschreibung nach Stichzahl (Kap. 5.4). */
-    compareOffers: roleProcedure("ADMIN", "BUERO")
-      .input(
-        z.object({
-          stitches: z.number().int().nonnegative(),
-          offers: z.array(
-            z.object({
-              partnerId: z.string().min(1),
-              name: z.string().min(1),
-              setupCents: z.number().int().nonnegative(),
-              pricePer1000Cents: z.number().int().nonnegative(),
-              leadDays: z.number().int().nonnegative(),
-            })
-          ),
-        })
-      )
-      .query(({ input, ctx }) => ctx.stickerei.compareOffers(input.stitches, input.offers)),
+    /** Mengenstaffeln je Logo (Stick-EK je Stück → unser VK = EK × 1,88, Kap. 4.4 / T-15). */
+    staffeln: router({
+      /** Staffeln eines Logos inkl. berechneter VKs/DB (preis-sensibel, kein PRODUKTION). */
+      list: roleProcedure("ADMIN", "BUERO")
+        .input(z.object({ logoVersionId: z.string().min(1) }))
+        .query(({ input, ctx }) => ctx.stickerei.listStaffeln(input.logoVersionId)),
+
+      /** Speichert die frei gewählten Staffeln (Stick-EK je Stück), Set-Semantik. */
+      save: roleProcedure("ADMIN", "BUERO")
+        .input(
+          z.object({
+            logoVersionId: z.string().min(1),
+            staffeln: z.array(
+              z.object({
+                minMenge: z.number().int().min(1),
+                ekCents: z.number().int().nonnegative(),
+              })
+            ),
+          })
+        )
+        .mutation(({ input, ctx }) => ctx.stickerei.saveStaffeln(input.logoVersionId, input.staffeln)),
+
+      /** Gültige Staffel (EK + unser VK je Stück) für eine konkrete Bestellmenge. */
+      priceForMenge: roleProcedure("ADMIN", "BUERO")
+        .input(z.object({ logoVersionId: z.string().min(1), menge: z.number().int().nonnegative() }))
+        .query(({ input, ctx }) => ctx.stickerei.priceForMenge(input.logoVersionId, input.menge)),
+    }),
   }),
 
   reorder: router({

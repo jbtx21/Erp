@@ -120,10 +120,13 @@ function setup(user: AuthUser | null = BUERO) {
     ])
   );
   const stickerei = new StickereiService(
-    new InMemoryStickereiRepository({
-      c_direkt: { stickereiPartnerId: "sup_stick", hatStickdatei: true },
-      c_neu: { stickereiPartnerId: null, hatStickdatei: false },
-    })
+    new InMemoryStickereiRepository(
+      {
+        c_direkt: { stickereiPartnerId: "sup_stick", hatStickdatei: true },
+        c_neu: { stickereiPartnerId: null, hatStickdatei: false },
+      },
+      { "logo-x": [{ minMenge: 1, ekCents: 1_000 }, { minMenge: 50, ekCents: 600 }] }
+    )
   );
   // T-12: v1 unterschreitet Mindestbestand (3<10) → Vorschlag, v2 ausreichend.
   const reorderRepo = new InMemoryReorderRepository([
@@ -619,22 +622,27 @@ describe("tRPC stickerei — Partnerwahl (Kap. 5.4)", () => {
     expect((await caller.stickerei.routeForCompany({ companyId: "c_neu" })).route).toBe("AUSSCHREIBUNG");
   });
 
-  it("vergleicht Ausschreibungs-Angebote nach Stichzahl (günstigstes zuerst)", async () => {
+  it("Mengenstaffeln je Logo: speichern, listen (VK = EK × 1,88) und Mengenpreis", async () => {
     const { caller } = setup(BUERO);
-    const cmp = await caller.stickerei.compareOffers({
-      stitches: 10_000,
-      offers: [
-        { partnerId: "a", name: "A", setupCents: 2_000, pricePer1000Cents: 200, leadDays: 7 },
-        { partnerId: "b", name: "B", setupCents: 1_000, pricePer1000Cents: 250, leadDays: 5 },
-      ],
+    const saved = await caller.stickerei.staffeln.save({
+      logoVersionId: "logo-x",
+      staffeln: [{ minMenge: 1, ekCents: 1_000 }, { minMenge: 50, ekCents: 600 }],
     });
-    expect(cmp.chosen?.partnerId).toBe("b");
-    expect(cmp.quotes[0]?.totalCents).toBe(3_500);
+    expect(saved.staffeln[0]).toMatchObject({ ekCents: 1_000, vkCents: 1_880 });
+
+    const list = await caller.stickerei.staffeln.list({ logoVersionId: "logo-x" });
+    expect(list.staffeln.map((s) => s.minMenge)).toEqual([1, 50]);
+
+    const price = await caller.stickerei.staffeln.priceForMenge({ logoVersionId: "logo-x", menge: 75 });
+    expect(price).toMatchObject({ minMenge: 50, ekCents: 600, vkCents: 1_128 });
   });
 
-  it("PRODUKTION darf die Partnerwahl nicht abfragen (FORBIDDEN)", async () => {
+  it("PRODUKTION darf weder Partnerwahl noch Staffeln abfragen (FORBIDDEN)", async () => {
     const { caller } = setup(PRODUKTION);
     await expect(caller.stickerei.routeForCompany({ companyId: "c_direkt" })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    await expect(caller.stickerei.staffeln.list({ logoVersionId: "logo-x" })).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
   });

@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./stickerei": {
+      "types": "./dist/stickerei.d.ts",
+      "import": "./dist/stickerei.js"
     }
   },
   "scripts": {

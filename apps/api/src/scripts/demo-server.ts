@@ -10,13 +10,16 @@ import { MemoryAuditSink } from "../audit/memory-audit-sink.js";
 import { AmpelService } from "../modules/ampel/ampel.service.js";
 import { SubProductionService } from "../modules/subproduction/subproduction.service.js";
 import { PostCalcService } from "../modules/postcalc/postcalc.service.js";
+import { StickereiService } from "../modules/stickerei/stickerei.service.js";
 import { InMemoryAmpelRepository } from "../repositories/in-memory-ampel.repository.js";
 import { InMemorySubProductionRepository } from "../repositories/in-memory-subproduction.repository.js";
 import { InMemoryPostCalcRepository } from "../repositories/in-memory-postcalc.repository.js";
+import { InMemoryStickereiRepository } from "../repositories/in-memory-stickerei.repository.js";
 import type { StoredStage } from "../modules/subproduction/subproduction.service.js";
 import { buildServer } from "../server.js";
 
 const DEMO_PA = "PA-DEMO";
+const DEMO_LOGO = "LOGO-DEMO";
 const day = 24 * 60 * 60 * 1000;
 const now = Date.now();
 const at = (offsetDays: number): Date => new Date(now + offsetDays * day);
@@ -55,6 +58,21 @@ const postcalcActuals = {
   [DEMO_PA]: { revenueCents: 100_000, materialCents: 42_000, laborMinutes: 130 },
 };
 
+// ── Stickerei: Mengenstaffeln je Logo (Stick-EK je Stück → VK = EK × 1,88) ──────
+const stickereiRepo = new InMemoryStickereiRepository(
+  { "FIRMA-DEMO": { stickereiPartnerId: "Stickerei-Nord", hatStickdatei: true } },
+  {
+    [DEMO_LOGO]: [
+      { minMenge: 1, ekCents: 1_200 },
+      { minMenge: 10, ekCents: 950 },
+      { minMenge: 25, ekCents: 780 },
+      { minMenge: 50, ekCents: 640 },
+      { minMenge: 100, ekCents: 520 },
+      { minMenge: 250, ekCents: 430 },
+    ],
+  }
+);
+
 const server = buildServer({
   identityVerifier: null,
   demoUser: { id: "demo-user", email: "demo@texma.de", name: "Demo Büro", role: "BUERO", totpEnabled: true },
@@ -62,6 +80,7 @@ const server = buildServer({
     ampel: new AmpelService(new InMemoryAmpelRepository(ampelProcesses)),
     subproduction: new SubProductionService(new InMemorySubProductionRepository(subStages), new MemoryAuditSink()),
     postcalc: new PostCalcService(new InMemoryPostCalcRepository(postcalcActuals)),
+    stickerei: new StickereiService(stickereiRepo),
   },
 });
 
@@ -70,7 +89,7 @@ server
   .listen({ port, host: "0.0.0.0" })
   .then((addr) => {
     console.log(`TEXMA Demo-API (In-Memory) läuft auf ${addr}`);
-    console.log(`Demo-Daten: PA-ID="${DEMO_PA}" (Fremdvergabe + Nachkalkulation), Ampel vorbefüllt.`);
+    console.log(`Demo-Daten: PA-ID="${DEMO_PA}" (Fremdvergabe + Nachkalkulation), Logo-ID="${DEMO_LOGO}" (Stickerei-Staffeln), Ampel vorbefüllt.`);
   })
   .catch((err) => {
     console.error(err);

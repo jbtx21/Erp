@@ -155,8 +155,27 @@ model LogoVersion {
   replacedAt DateTime?
   createdAt  DateTime @default(now())
 
+  stickereiStaffeln StickereiStaffel[]
+
   @@unique([companyId, version])
   @@index([companyId, active])
+}
+
+// Variable Mengenstaffeln je Logo (Kap. 4.4 / T-15): die Stickerei gibt uns nur ihren VK
+// (= unseren Stick-EK) je Stück gestaffelt nach Bestellmenge; Staffelgrenzen frei wählbar
+// und je Logo abweichend. Gespeichert wird nur der manuell erfasste Stick-EK — unser
+// VK = EK × 1,88 (Aufschlagsfaktor) wird berechnet, nicht persistiert.
+model StickereiStaffel {
+  id            String      @id @default(cuid())
+  logoVersionId String
+  logoVersion   LogoVersion @relation(fields: [logoVersionId], references: [id], onDelete: Cascade)
+  minMenge      Int // untere Staffelgrenze in Stück (1, 10, 25, 50, 100, 250 …)
+  ekCents       Int // Stick-EK je Stück in Cent (VK der Stickerei an uns), manuell erfasst
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([logoVersionId, minMenge])
+  @@index([logoVersionId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

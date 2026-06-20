@@ -1,10 +1,15 @@
 // Differenzierer-Durchstich (Moat, Leitplanke 1): macht die vier selbst gebauten
 // TEXMA-Spezialmodule am echten Endpunkt sichtbar — Ampel-Terminübersicht (Kap. 35.4),
-// Stickerei-Angebotsvergleich (Kap. 5.4), Fremdvergabe-Plan (T-04/Kap. 5.3) und
+// Stickerei-Mengenstaffeln je Logo (Kap. 4.4/5.4), Fremdvergabe-Plan (T-04/Kap. 5.3) und
 // Nachkalkulation Soll-Ist (T-10). Preis-sensible Module sind für PRODUKTION ausgeblendet
 // (Kap. 12) — die Endpunkte erzwingen die Rolle zusätzlich serverseitig. UI: Mantine.
 import { useCallback, useEffect, useState } from "react";
 import { Badge, Button, Card, Group, NumberInput, Table, Text, TextInput, Title } from "@mantine/core";
+import {
+  computeStickereiStaffelVks,
+  stickereiPriceForMenge,
+  type StickereiStaffel,
+} from "@texma/shared/stickerei";
 import { trpc } from "./trpc.js";
 import { euro, numTd, statusMantineColor, statusOf } from "./theme.js";
 
@@ -30,13 +35,13 @@ export function Differentiators({ role }: { role: string }): JSX.Element {
       <AmpelDashboard />
       {priceAllowed ? (
         <>
-          <StickereiCompare />
+          <StickereiStaffeln />
           <Postcalc />
         </>
       ) : (
         <Card withBorder mt="md" padding="md">
           <Text size="sm" c="dimmed">
-            Stickerei-Angebotsvergleich und Nachkalkulation sind preis-sensibel und für die
+            Stickerei-Mengenstaffeln und Nachkalkulation sind preis-sensibel und für die
             Rolle PRODUKTION ausgeblendet (Kap. 12).
           </Text>
         </Card>
@@ -129,122 +134,137 @@ function AmpelDashboard(): JSX.Element {
   );
 }
 
-// ── Stickerei-Angebotsvergleich (Kap. 5.4) ──────────────────────────────────────
-interface OfferInput {
-  partnerId: string;
-  name: string;
-  setupEuro: number;
-  per1000Euro: number;
-  leadDays: number;
+// ── Stickerei-Mengenstaffeln je Logo (Kap. 4.4 / T-15) ──────────────────────────
+// Die Stickerei gibt uns nur ihren VK (= unseren Stick-EK) je Stück gestaffelt nach
+// Menge; Staffelgrenzen frei wählbar und je Logo abweichend. EK wird manuell erfasst,
+// unser VK = EK × 1,88 live berechnet (gleiche reine Logik wie der Server, @texma/shared).
+interface StaffelRow {
+  minMenge: number;
+  ekEuro: number;
 }
-interface Quote {
-  partnerId: string;
-  name: string;
-  totalCents: number;
-  leadDays: number;
-}
-
-const DEFAULT_OFFERS: OfferInput[] = [
-  { partnerId: "p1", name: "Stickerei A", setupEuro: 25, per1000Euro: 1.2, leadDays: 7 },
-  { partnerId: "p2", name: "Stickerei B", setupEuro: 15, per1000Euro: 1.6, leadDays: 5 },
-  { partnerId: "p3", name: "Stickerei C", setupEuro: 40, per1000Euro: 0.9, leadDays: 10 },
+const DEFAULT_STAFFEL_ROWS: StaffelRow[] = [
+  { minMenge: 1, ekEuro: 12.0 },
+  { minMenge: 10, ekEuro: 9.5 },
+  { minMenge: 25, ekEuro: 7.8 },
+  { minMenge: 50, ekEuro: 6.4 },
+  { minMenge: 100, ekEuro: 5.2 },
+  { minMenge: 250, ekEuro: 4.3 },
 ];
+const toStaffeln = (rows: ReadonlyArray<StaffelRow>): StickereiStaffel[] =>
+  rows.map((r) => ({ minMenge: Math.round(r.minMenge), ekCents: Math.round(r.ekEuro * 100) }));
 
-function StickereiCompare(): JSX.Element {
-  const [stitches, setStitches] = useState(8000);
-  const [offers, setOffers] = useState<OfferInput[]>(DEFAULT_OFFERS);
-  const [result, setResult] = useState<{ quotes: Quote[]; chosen: Quote | null } | null>(null);
+function StickereiStaffeln(): JSX.Element {
+  const [logoVersionId, setLogoVersionId] = useState("LOGO-DEMO");
+  const [rows, setRows] = useState<StaffelRow[]>(DEFAULT_STAFFEL_ROWS);
+  const [menge, setMenge] = useState(75);
   const [err, setErr] = useState("");
+  const [status, setStatus] = useState("");
 
-  const setOffer = (i: number, patch: Partial<OfferInput>) =>
-    setOffers((prev) => prev.map((o, idx) => (idx === i ? { ...o, ...patch } : o)));
+  // Live-Berechnung (gleiche reine Logik wie der Server): VK/DB je Stufe + Mengenpreis.
+  // Validierungsfehler (Dubletten/minMenge<1) werden abgefangen und angezeigt.
+  let byMin = new Map<number, { vkCents: number; dbCents: number }>();
+  let computeError = "";
+  let price: ReturnType<typeof stickereiPriceForMenge> = null;
+  try {
+    const staffeln = toStaffeln(rows);
+    byMin = new Map(computeStickereiStaffelVks(staffeln).map((s) => [s.minMenge, s]));
+    price = stickereiPriceForMenge(staffeln, menge);
+  } catch (e) {
+    computeError = errMsg(e);
+  }
 
-  const compare = useCallback(async () => {
+  const setRow = (i: number, patch: Partial<StaffelRow>) =>
+    setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  const addRow = () =>
+    setRows((prev) => [...prev, { minMenge: (prev[prev.length - 1]?.minMenge ?? 0) + 50 || 1, ekEuro: 0 }]);
+  const removeRow = (i: number) => setRows((prev) => prev.filter((_, idx) => idx !== i));
+
+  const load = useCallback(async () => {
     setErr("");
+    setStatus("");
     try {
-      const res = await trpc.stickerei.compareOffers.query({
-        stitches,
-        offers: offers.map((o) => ({
-          partnerId: o.partnerId,
-          name: o.name,
-          setupCents: Math.round(o.setupEuro * 100),
-          pricePer1000Cents: Math.round(o.per1000Euro * 100),
-          leadDays: o.leadDays,
-        })),
-      });
-      setResult(res as { quotes: Quote[]; chosen: Quote | null });
+      const res = await trpc.stickerei.staffeln.list.query({ logoVersionId });
+      setRows(res.staffeln.map((s) => ({ minMenge: s.minMenge, ekEuro: s.ekCents / 100 })));
+      setStatus(`${res.staffeln.length} Staffeln geladen.`);
     } catch (e) {
       setErr(errMsg(e));
     }
-  }, [stitches, offers]);
+  }, [logoVersionId]);
+
+  const save = useCallback(async () => {
+    setErr("");
+    setStatus("");
+    try {
+      const res = await trpc.stickerei.staffeln.save.mutate({ logoVersionId, staffeln: toStaffeln(rows) });
+      setStatus(`Gespeichert: ${res.staffeln.length} Staffeln für ${logoVersionId}.`);
+    } catch (e) {
+      setErr(errMsg(e));
+    }
+  }, [logoVersionId, rows]);
 
   return (
     <Card withBorder mt="md" padding="md">
-      <Title order={4}>Stickerei-Angebotsvergleich (Kap. 5.4)</Title>
+      <Title order={4}>Stickerei-Mengenstaffeln je Logo (Kap. 4.4 / T-15)</Title>
       <Text size="sm" c="dimmed">
-        Neukunde/neues Logo → Ausschreibung an die 3 Partner; günstigstes Angebot gewinnt
-        (bei Gleichstand kürzere Durchlaufzeit).
+        Die Stickerei gibt nur ihren VK (= unser Stick-EK) je Stück gestaffelt nach Menge —
+        Staffeln frei wählbar je Logo. Stick-EK manuell eintragen; unser VK = EK × 1,88 (und DB)
+        wird automatisch berechnet.
       </Text>
-      <NumberInput
-        label="Stichzahl" w={140} mt="xs" min={0} hideControls
-        value={stitches} onChange={(v) => setStitches(Math.max(0, Number(v) || 0))}
-      />
+      <Group align="end" gap="sm" mt="xs">
+        <TextInput label="Logo-ID" w={200} value={logoVersionId} onChange={(e) => setLogoVersionId(e.currentTarget.value)} />
+        <Button variant="default" onClick={() => void load()} disabled={!logoVersionId}>Laden</Button>
+        <Button onClick={() => void save()} disabled={!logoVersionId || !!computeError}>Speichern</Button>
+      </Group>
+      {status && <Text size="sm" c="dimmed" mt="xs">{status}</Text>}
+      {err && <Text c="red" size="sm" mt="xs">Fehler: {err}</Text>}
+
       <Table withTableBorder mt="sm" verticalSpacing="xs">
         <Table.Thead>
           <Table.Tr>
-            <Table.Th>Partner</Table.Th>
-            <Table.Th ta="right">Einrichtung (€)</Table.Th>
-            <Table.Th ta="right">je 1.000 Stiche (€)</Table.Th>
-            <Table.Th ta="right">Durchlauf (Tage)</Table.Th>
+            <Table.Th ta="right">ab Menge</Table.Th>
+            <Table.Th ta="right">Stick-EK je Stück (€)</Table.Th>
+            <Table.Th ta="right">unser VK je Stück (€)</Table.Th>
+            <Table.Th ta="right">DB je Stück</Table.Th>
+            <Table.Th />
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
-          {offers.map((o, i) => (
-            <Table.Tr key={o.partnerId}>
-              <Table.Td>{o.name}</Table.Td>
-              <Table.Td style={numTd}>
-                <NumberInput w={90} size="xs" hideControls min={0} step={0.01} decimalScale={2}
-                  value={o.setupEuro} onChange={(v) => setOffer(i, { setupEuro: Number(v) || 0 })} />
-              </Table.Td>
-              <Table.Td style={numTd}>
-                <NumberInput w={90} size="xs" hideControls min={0} step={0.01} decimalScale={2}
-                  value={o.per1000Euro} onChange={(v) => setOffer(i, { per1000Euro: Number(v) || 0 })} />
-              </Table.Td>
-              <Table.Td style={numTd}>
-                <NumberInput w={90} size="xs" hideControls min={0}
-                  value={o.leadDays} onChange={(v) => setOffer(i, { leadDays: Math.max(0, Number(v) || 0) })} />
-              </Table.Td>
-            </Table.Tr>
-          ))}
+          {rows.map((r, i) => {
+            const vk = byMin.get(Math.round(r.minMenge));
+            return (
+              <Table.Tr key={i}>
+                <Table.Td style={numTd}>
+                  <NumberInput w={90} size="xs" hideControls min={1} value={r.minMenge}
+                    onChange={(v) => setRow(i, { minMenge: Math.max(1, Number(v) || 1) })} />
+                </Table.Td>
+                <Table.Td style={numTd}>
+                  <NumberInput w={100} size="xs" hideControls min={0} step={0.01} decimalScale={2}
+                    value={r.ekEuro} onChange={(v) => setRow(i, { ekEuro: Number(v) || 0 })} />
+                </Table.Td>
+                <Table.Td style={numTd}>{vk ? <b>{euro(vk.vkCents)}</b> : "—"}</Table.Td>
+                <Table.Td style={numTd}>{vk ? euro(vk.dbCents) : "—"}</Table.Td>
+                <Table.Td ta="right">
+                  <Button size="xs" variant="subtle" color="red" onClick={() => removeRow(i)}>✕</Button>
+                </Table.Td>
+              </Table.Tr>
+            );
+          })}
         </Table.Tbody>
       </Table>
-      <Button mt="sm" onClick={() => void compare()}>Vergleichen</Button>
-      {err && <Text c="red" size="sm" mt="xs">Fehler: {err}</Text>}
-      {result && (
-        <Table striped highlightOnHover withTableBorder mt="sm" verticalSpacing="xs">
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Rang</Table.Th>
-              <Table.Th>Partner</Table.Th>
-              <Table.Th ta="right">Gesamtkosten</Table.Th>
-              <Table.Th ta="right">Durchlauf</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {result.quotes.map((q, i) => {
-              const isChosen = result.chosen?.partnerId === q.partnerId;
-              return (
-                <Table.Tr key={q.partnerId}>
-                  <Table.Td>{i + 1}{isChosen ? " ✓" : ""}</Table.Td>
-                  <Table.Td>{isChosen ? <b>{q.name}</b> : q.name}</Table.Td>
-                  <Table.Td style={numTd}>{euro(q.totalCents)}</Table.Td>
-                  <Table.Td style={numTd}>{q.leadDays} Tage</Table.Td>
-                </Table.Tr>
-              );
-            })}
-          </Table.Tbody>
-        </Table>
-      )}
+      <Group mt="sm" justify="space-between">
+        <Button size="xs" variant="default" onClick={addRow}>+ Staffel</Button>
+        {computeError && <Text c="red" size="sm">Eingabe ungültig: {computeError}</Text>}
+      </Group>
+
+      <Group align="end" gap="sm" mt="md">
+        <NumberInput label="Bestellmenge" w={130} hideControls min={0} value={menge}
+          onChange={(v) => setMenge(Math.max(0, Number(v) || 0))} />
+        <Text size="sm">
+          {computeError ? "—" : price
+            ? <>gültige Staffel: <b>ab {price.minMenge} Stk.</b> · EK {euro(price.ekCents)} · VK <b>{euro(price.vkCents)}</b> je Stück</>
+            : "keine Staffel für diese Menge (unter der kleinsten Grenze)"}
+        </Text>
+      </Group>
     </Card>
   );
 }

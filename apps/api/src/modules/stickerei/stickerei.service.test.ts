@@ -7,11 +7,14 @@ import { StickereiService } from "./stickerei.service.js";
 
 function service() {
   return new StickereiService(
-    new InMemoryStickereiRepository({
-      direkt: { stickereiPartnerId: "sup", hatStickdatei: true },
-      ohne_datei: { stickereiPartnerId: "sup", hatStickdatei: false },
-      neu: { stickereiPartnerId: null, hatStickdatei: false },
-    })
+    new InMemoryStickereiRepository(
+      {
+        direkt: { stickereiPartnerId: "sup", hatStickdatei: true },
+        ohne_datei: { stickereiPartnerId: "sup", hatStickdatei: false },
+        neu: { stickereiPartnerId: null, hatStickdatei: false },
+      },
+      { "logo-1": [{ minMenge: 1, ekCents: 1_000 }, { minMenge: 50, ekCents: 600 }] }
+    )
   );
 }
 
@@ -30,12 +33,31 @@ describe("StickereiService.routeForCompany (Kap. 5.4)", () => {
   it("wirft für eine unbekannte Firma", async () => {
     await expect(service().routeForCompany("x")).rejects.toThrow(/nicht gefunden/);
   });
+});
 
-  it("vergleicht Ausschreibungs-Angebote nach Stichzahl", () => {
-    const cmp = service().compareOffers(10_000, [
-      { partnerId: "a", name: "A", setupCents: 2_000, pricePer1000Cents: 200, leadDays: 7 },
-      { partnerId: "b", name: "B", setupCents: 1_000, pricePer1000Cents: 250, leadDays: 5 },
-    ]);
-    expect(cmp.chosen?.partnerId).toBe("b");
+describe("StickereiService Mengenstaffeln je Logo (Kap. 4.4 / T-15)", () => {
+  it("listStaffeln: sortiert + VK = EK × 1,88 je Stufe", async () => {
+    const res = await service().listStaffeln("logo-1");
+    expect(res.staffeln.map((s) => s.minMenge)).toEqual([1, 50]);
+    expect(res.staffeln[0]).toMatchObject({ ekCents: 1_000, vkCents: 1_880 });
+  });
+
+  it("saveStaffeln: ersetzt die Staffeln (Set-Semantik) und gibt VKs zurück", async () => {
+    const svc = service();
+    const saved = await svc.saveStaffeln("logo-1", [{ minMenge: 1, ekCents: 500 }, { minMenge: 100, ekCents: 400 }]);
+    expect(saved.staffeln.map((s) => s.minMenge)).toEqual([1, 100]);
+    const reloaded = await svc.listStaffeln("logo-1");
+    expect(reloaded.staffeln.map((s) => s.ekCents)).toEqual([500, 400]);
+  });
+
+  it("saveStaffeln: lehnt ungültige Eingabe ab (Dubletten/minMenge<1)", async () => {
+    await expect(
+      service().saveStaffeln("logo-1", [{ minMenge: 1, ekCents: 100 }, { minMenge: 1, ekCents: 200 }])
+    ).rejects.toThrow(/Doppelte Staffelgrenze/);
+  });
+
+  it("priceForMenge: höchste Staffel ≤ Menge", async () => {
+    expect((await service().priceForMenge("logo-1", 75))?.minMenge).toBe(50);
+    expect(await service().priceForMenge("logo-1", 0)).toBeNull();
   });
 });
