@@ -55,6 +55,8 @@ const STATUS_MAP: Record<OrderStatus, WooStatus> = {
   IN_PRODUKTION: "on-hold",
   VERSANDBEREIT: "on-hold",
   VERSENDET: "completed",
+  FAKTURIERT: "completed",
+  ABGESCHLOSSEN: "completed",
   STORNIERT: "cancelled",
 };
 

@@ -497,6 +497,8 @@ enum OrderStatus {
   IN_PRODUKTION
   VERSANDBEREIT
   VERSENDET
+  FAKTURIERT // B9/K-26 (Kap. 35.2)
+  ABGESCHLOSSEN // B9/K-26
   STORNIERT
 }
 
@@ -510,6 +512,7 @@ model Order {
   shopConnectorId String? // Herkunft Shop (null = manuell)
   shopConnector   ShopConnector? @relation(fields: [shopConnectorId], references: [id])
   status      OrderStatus @default(ANGELEGT)
+  zugesagterLiefertermin DateTime? // Rückwärtsterminierung (B9, Kap. 35.2)
   quoteId     String?     @unique
   quote       Quote?      @relation(fields: [quoteId], references: [id])
   fileLink    String? // Druckdaten-Verweis, Pflicht vor Produktion (Kap. 7.1)

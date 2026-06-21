@@ -52,9 +52,18 @@ describe("orderStatusMachine", () => {
     expect(orderStatusMachine.can("IN_PRODUKTION", "ANGELEGT")).toBe(false);
   });
 
-  it("VERSENDET und STORNIERT sind final", () => {
-    expect(orderStatusMachine.isFinal("VERSENDET")).toBe(true);
+  it("Nachkette nach Versand: VERSENDET → FAKTURIERT → ABGESCHLOSSEN (B9/K-26)", () => {
+    expect(orderStatusMachine.can("VERSENDET", "FAKTURIERT")).toBe(true);
+    expect(orderStatusMachine.can("FAKTURIERT", "ABGESCHLOSSEN")).toBe(true);
+    expect(orderStatusMachine.isFinal("ABGESCHLOSSEN")).toBe(true);
+    // Kein Storno mehr nach Versand, keine Sprünge.
+    expect(orderStatusMachine.can("VERSENDET", "STORNIERT")).toBe(false);
+    expect(orderStatusMachine.can("VERSENDET", "ABGESCHLOSSEN")).toBe(false);
+  });
+
+  it("STORNIERT ist final; VERSENDET nicht mehr (Nachkette folgt)", () => {
     expect(orderStatusMachine.isFinal("STORNIERT")).toBe(true);
+    expect(orderStatusMachine.isFinal("VERSENDET")).toBe(false);
   });
 });
 

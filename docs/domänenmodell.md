@@ -45,12 +45,12 @@ Fremdvergabe: `ProductionOrder` → `SubProductionOrder` je Stufe (z. B. Siebdru
 sequenziell mit Beistellung/Rücklauf.
 
 ## 3. Statusautomaten (F2, `packages/shared`)
-**OrderStatus** (`order.ts`) — Storno aus jedem nicht-finalen Status; keine Rückwärts-Übergänge:
+**OrderStatus** (`order.ts`) — Storno aus jedem nicht-finalen Status bis VERSANDBEREIT;
+keine Rückwärts-Übergänge. Nach Versand läuft die Nachkette (B9/K-26):
 ```
-ANGELEGT → IN_BEARBEITUNG → IN_PRODUKTION → VERSANDBEREIT → VERSENDET
+ANGELEGT → IN_BEARBEITUNG → IN_PRODUKTION → VERSANDBEREIT → VERSENDET → FAKTURIERT → ABGESCHLOSSEN
    └──────────┴───────────────┴──────────────┴──▶ STORNIERT
 ```
-*(B9 ergänzt FAKTURIERT → ABGESCHLOSSEN.)*
 
 **QuoteStatus** (`quote.ts`) — Angebots-Funnel:
 ```
