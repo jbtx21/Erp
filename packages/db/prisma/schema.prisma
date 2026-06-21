@@ -222,11 +222,70 @@ model Article {
   name        String
   description String?
   isVeredelung Boolean  @default(false) // Transfer/Siebdruck/Stick (Kap. 11)
+  // Textil-PIM (B18). Faserzusammensetzung ist EU-Pflicht (VO 1007/2011).
+  materialComposition String? // z. B. "100% Baumwolle"
+  careInstructions    String?
+  brand               String?
+  hsCode              String? // Zolltarifnummer
+  originCountry       String?
+  collectionId String?
+  collection   Collection? @relation(fields: [collectionId], references: [id])
   variants    Variant[]
+  mediaAssets   MediaAsset[]
+  finishingSpecs FinishingSpec[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
   @@index([name])
+}
+
+// Saison/Kollektion (B18, Kap. 3).
+model Collection {
+  id       String    @id @default(cuid())
+  name     String
+  season   String? // z. B. "FS26"
+  articles Article[]
+}
+
+// Digital Asset Management (B18) — Bilder, Druckvorlagen, Stickdateien.
+enum MediaAssetKind {
+  IMAGE
+  PRINT_TEMPLATE
+  EMBROIDERY_FILE
+}
+
+model MediaAsset {
+  id        String         @id @default(cuid())
+  articleId String?
+  article   Article?       @relation(fields: [articleId], references: [id])
+  variantId String?
+  variant   Variant?       @relation(fields: [variantId], references: [id])
+  url       String
+  kind      MediaAssetKind @default(IMAGE)
+  sortOrder Int            @default(0)
+  createdAt DateTime       @default(now())
+
+  @@index([articleId])
+  @@index([variantId])
+}
+
+// Veredelungs-Metadaten je Artikel (B18) — Platzierung/Stichzahl/Farben.
+enum FinishingMethod {
+  STICK
+  DRUCK
+  TRANSFER
+}
+
+model FinishingSpec {
+  id         String          @id @default(cuid())
+  articleId  String
+  article    Article         @relation(fields: [articleId], references: [id])
+  method     FinishingMethod
+  placement  String // z. B. "Brust links", "Rücken"
+  stitchCount Int?
+  colorCount  Int?
+
+  @@index([articleId])
 }
 
 model Variant {
@@ -245,6 +304,9 @@ model Variant {
   stockMoves StockMove[] // Bewegungs-Ledger (F4)
   priceTiers PriceGroupPriceTier[] // Preisgruppen-Mengenstaffel (B4)
   customerPriceTiers CustomerPriceTier[] // kundenindividuelle Staffel (B4)
+  gtin        String? // EAN/GTIN-13 (B18)
+  weightGrams Int? // B18
+  mediaAssets MediaAsset[] // B18
   createdAt  DateTime @default(now())
 
   @@index([articleId])
