@@ -4,6 +4,10 @@
 import { describe, expect, it } from "vitest";
 import {
   aggregateByCostCenter,
+  breakdownMargin,
+  dso,
+  liquidityForecast,
+  opAging,
   bucketKey,
   bucketRevenue,
   bucketStart,
@@ -214,5 +218,55 @@ describe("aggregateByCostCenter (B7 / Kap. 37.1)", () => {
 
   it("ist robust ohne Belege", () => {
     expect(aggregateByCostCenter([])).toEqual([]);
+  });
+});
+
+describe("Finanz-Reporting (B19, Kap. 29)", () => {
+  const asOf = new Date(Date.UTC(2026, 5, 30));
+  const due = (overdueDays: number) => new Date(asOf.getTime() - overdueDays * 86_400_000);
+
+  it("opAging verteilt offene Posten auf Überfälligkeits-Buckets", () => {
+    const r = opAging(
+      [
+        { openCents: 1000, dueDate: due(-5) }, // noch nicht fällig
+        { openCents: 2000, dueDate: due(10) }, // 0–30
+        { openCents: 3000, dueDate: due(45) }, // 31–60
+        { openCents: 4000, dueDate: due(75) }, // 61–90
+        { openCents: 5000, dueDate: due(120) }, // >90
+        { openCents: 0, dueDate: due(200) }, // bezahlt → ignoriert
+      ],
+      asOf
+    );
+    expect(r).toEqual({ notDue: 1000, d0_30: 2000, d31_60: 3000, d61_90: 4000, d90plus: 5000, total: 15000 });
+  });
+
+  it("dso = Forderungen / Umsatz × Tage; robust bei 0-Umsatz", () => {
+    expect(dso(15000, 90000, 90)).toBeCloseTo(15, 5);
+    expect(dso(15000, 0, 90)).toBe(0);
+  });
+
+  it("breakdownMargin berechnet Deckungsbeitrag + Marge je Dimension", () => {
+    const res = breakdownMargin([
+      { label: "STICK", name: "Stickerei", netCents: 10000, costCents: 6000 },
+      { label: "STICK", name: "Stickerei", netCents: 5000, costCents: 3000 },
+      { label: "DRUCK", name: "Druck", netCents: 4000, costCents: 1000 },
+    ]);
+    // STICK: 15000 − 9000 = 6000 DB (40%); DRUCK: 3000 DB (75%). Sortiert nach DB desc.
+    expect(res[0]).toMatchObject({ label: "STICK", dbCents: 6000, margePercent: 40 });
+    expect(res[1]).toMatchObject({ label: "DRUCK", dbCents: 3000, margePercent: 75 });
+  });
+
+  it("liquidityForecast bildet Netto je Periode + laufenden Saldo", () => {
+    const f = liquidityForecast(
+      [
+        { at: new Date(Date.UTC(2026, 0, 5)), amountCents: 1000 }, // Zufluss Jan
+        { at: new Date(Date.UTC(2026, 0, 20)), amountCents: -400 }, // Abfluss Jan
+        { at: new Date(Date.UTC(2026, 1, 10)), amountCents: 500 }, // Zufluss Feb
+      ],
+      "MONTH",
+      2000 // Anfangsbestand
+    );
+    expect(f[0]).toMatchObject({ netCents: 600, cumulativeCents: 2600 });
+    expect(f[1]).toMatchObject({ netCents: 500, cumulativeCents: 3100 });
   });
 });

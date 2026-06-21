@@ -313,3 +313,127 @@ export function aggregateByCostCenter(
     return a.costCenterId.localeCompare(b.costCenterId);
   });
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Finanz-Reporting (B19, Kap. 29). Reine Aggregation — keine Buchung (G1). Geldfelder
+// sind über RBAC auf BÜRO/BUCHHALTUNG/ADMIN beschränkt (Durchsetzung in der API).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AgingItem {
+  openCents: Cents;
+  dueDate: Date;
+}
+
+export interface AgingReport {
+  notDue: Cents; // noch nicht fällig
+  d0_30: Cents; // 0–30 Tage überfällig
+  d31_60: Cents;
+  d61_90: Cents;
+  d90plus: Cents; // > 90 Tage
+  total: Cents;
+}
+
+/** OP-Aging: offene Posten nach Überfälligkeit zum Stichtag (Buckets, Kap. 29). */
+export function opAging(items: ReadonlyArray<AgingItem>, asOf: Date): AgingReport {
+  const r: AgingReport = { notDue: 0, d0_30: 0, d31_60: 0, d61_90: 0, d90plus: 0, total: 0 };
+  for (const it of items) {
+    if (it.openCents <= 0) continue; // bezahlt
+    const overdue = Math.floor((asOf.getTime() - it.dueDate.getTime()) / 86_400_000);
+    r.total += it.openCents;
+    if (overdue < 0) r.notDue += it.openCents;
+    else if (overdue <= 30) r.d0_30 += it.openCents;
+    else if (overdue <= 60) r.d31_60 += it.openCents;
+    else if (overdue <= 90) r.d61_90 += it.openCents;
+    else r.d90plus += it.openCents;
+  }
+  return r;
+}
+
+/** Days Sales Outstanding / Forderungslaufzeit (Kap. 29). */
+export function dso(
+  openReceivableCents: Cents,
+  periodRevenueCents: Cents,
+  periodDays: number
+): number {
+  if (periodRevenueCents <= 0 || periodDays <= 0) return 0;
+  return (openReceivableCents / periodRevenueCents) * periodDays;
+}
+
+export interface MarginPoint {
+  label: string;
+  name: string;
+  netCents: Cents;
+  costCents: Cents;
+}
+
+export interface MarginBreakdownItem {
+  label: string;
+  name: string;
+  netCents: Cents;
+  costCents: Cents;
+  dbCents: Cents; // Deckungsbeitrag
+  margePercent: number | null;
+}
+
+/** Deckungsbeitrag/Marge je Dimension (Artikel/Veredelungsart), absteigend nach DB. */
+export function breakdownMargin(
+  points: ReadonlyArray<MarginPoint>
+): MarginBreakdownItem[] {
+  const byLabel = new Map<string, { name: string; netCents: Cents; costCents: Cents }>();
+  for (const p of points) {
+    const e = byLabel.get(p.label);
+    if (e) {
+      e.netCents += p.netCents;
+      e.costCents += p.costCents;
+    } else {
+      byLabel.set(p.label, { name: p.name, netCents: p.netCents, costCents: p.costCents });
+    }
+  }
+  return [...byLabel.entries()]
+    .map(([label, e]) => {
+      const dbCents = e.netCents - e.costCents;
+      return {
+        label,
+        name: e.name,
+        netCents: e.netCents,
+        costCents: e.costCents,
+        dbCents,
+        margePercent: e.netCents > 0 ? Math.round((dbCents / e.netCents) * 100) : null,
+      };
+    })
+    .sort((a, b) => b.dbCents - a.dbCents);
+}
+
+export interface CashflowEvent {
+  at: Date;
+  /** + Zufluss (OP-Fälligkeit) / − Abfluss (geplante Zahlung). */
+  amountCents: Cents;
+}
+
+export interface LiquidityBucket {
+  periodStart: Date;
+  netCents: Cents;
+  cumulativeCents: Cents;
+}
+
+/** Liquiditätsvorschau: Netto je Periode + laufender Saldo ab Anfangsbestand. */
+export function liquidityForecast(
+  events: ReadonlyArray<CashflowEvent>,
+  g: Granularity,
+  openingCents: Cents = 0
+): LiquidityBucket[] {
+  const byKey = new Map<string, { start: Date; net: Cents }>();
+  for (const e of events) {
+    const key = bucketKey(e.at, g);
+    const cur = byKey.get(key);
+    if (cur) cur.net += e.amountCents;
+    else byKey.set(key, { start: bucketStart(e.at, g), net: e.amountCents });
+  }
+  let cum = openingCents;
+  return [...byKey.values()]
+    .sort((a, b) => a.start.getTime() - b.start.getTime())
+    .map((s) => {
+      cum += s.net;
+      return { periodStart: s.start, netCents: s.net, cumulativeCents: cum };
+    });
+}
