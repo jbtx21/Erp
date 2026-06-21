@@ -73,8 +73,10 @@ GoBD-Pflichtdokument (Kap. 10.5). Versioniert in Git, wächst mit der Implementi
 - **E-Rechnung:** eingehende E-Rechnungen werden gegen das EN16931-Kernprofil **validiert**
   (`einvoice-inbound`); volle Schematron-Konformität optional über KoSIT-Sidecar (F3).
 - **Aufbewahrung:** 10 Jahre (Buchungsbelege) / 6 Jahre (Geschäftsbriefe).
-- **Löschen vs. Aufbewahren (DSGVO, Kap. 28):** Grundsatz **Sperren/Anonymisieren statt Löschen** für
-  aufbewahrungspflichtige Belege. *[offen: Umsetzung + Fristenmatrix mit StB (B12).]*
+- **Löschen vs. Aufbewahren (DSGVO, Kap. 28):** **Sperren/Anonymisieren statt Löschen** ist
+  umgesetzt (B12): PII von Firma/Kontakten wird überschrieben (Rolle/Branche bleiben), Belege
+  (Rechnung/Gutschrift) bleiben als WORM unverändert. *[offen: Fristenmatrix/Aufbewahrungsfristen
+  mit StB, die den Anonymisierungs-Zeitpunkt steuert.]*
 
 ## 6. Belegarten, Quellen und Fristen
 | Belegart | Quelle/System | Nummernkreis | Aufbewahrung |

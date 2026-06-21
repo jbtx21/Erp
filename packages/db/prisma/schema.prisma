@@ -95,6 +95,8 @@ model Company {
   id           String        @id @default(cuid())
   name         String
   branche      String?
+  gesperrtAm     DateTime?   // DSGVO-Sperre (B12, Kap. 28)
+  anonymisiertAm DateTime?   // DSGVO-Anonymisierung (B12)
   zahlungszielTage Int        @default(14)
   mahnsperre   Boolean       @default(false) // Kap. 9.5
   priceGroupId String
@@ -128,6 +130,8 @@ model Contact {
   email     String?
   phone     String?
   role      String? // Funktion im Unternehmen
+  gesperrtAm     DateTime? // DSGVO-Sperre (B12, Kap. 28)
+  anonymisiertAm DateTime? // DSGVO-Anonymisierung (B12)
   createdAt DateTime @default(now())
 
   @@index([companyId])
