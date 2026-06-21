@@ -39,4 +39,43 @@ export class PrismaReklamationRepository implements ReklamationRepository {
       },
     });
   }
+
+  async loadFollowUp(complaintId: string) {
+    const c = await prisma.complaint.findUnique({
+      where: { id: complaintId },
+      select: {
+        orderId: true,
+        followUp: true,
+        costCents: true,
+        order: { select: { companyId: true, invoice: { select: { id: true } } } },
+      },
+    });
+    if (!c) return null;
+    return {
+      orderId: c.orderId,
+      companyId: c.order.companyId,
+      invoiceId: c.order.invoice?.id ?? null,
+      followUp: c.followUp as FollowUpType,
+      costCents: c.costCents,
+    };
+  }
+
+  async createCreditNote(input: { invoiceId: string; number: string; amountCents: number; reason: string }): Promise<{ id: string }> {
+    return prisma.creditNote.create({
+      data: { invoiceId: input.invoiceId, number: input.number, amountCents: input.amountCents, reason: input.reason },
+      select: { id: true },
+    });
+  }
+
+  async createReproductionOrder(input: { companyId: string; number: string; sourceOrderId: string; express: boolean }): Promise<{ id: string }> {
+    return prisma.order.create({
+      data: {
+        number: input.number,
+        companyId: input.companyId,
+        nachproduktionVonId: input.sourceOrderId,
+        employeeNote: input.express ? "Express-Nachproduktion (Reklamation)" : "Nachproduktion (Reklamation)",
+      },
+      select: { id: true },
+    });
+  }
 }

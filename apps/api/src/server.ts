@@ -26,6 +26,8 @@ import { SubProductionService } from "./modules/subproduction/subproduction.serv
 import { ThreeWayMatchService } from "./modules/three-way-match/three-way-match.service.js";
 import { PostCalcService } from "./modules/postcalc/postcalc.service.js";
 import { ReklamationService } from "./modules/reklamation/reklamation.service.js";
+import { NumberingService } from "./modules/numbering/numbering.service.js";
+import { PrismaNumberingRepository } from "./repositories/prisma-numbering.repository.js";
 import { AmpelService } from "./modules/ampel/ampel.service.js";
 import { StickereiService } from "./modules/stickerei/stickerei.service.js";
 import { ReorderService } from "./modules/reorder/reorder.service.js";
@@ -94,7 +96,11 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const subproduction = new SubProductionService(new PrismaSubProductionRepository(), new PrismaAuditSink());
   const threeWayMatch = new ThreeWayMatchService(new PrismaThreeWayMatchRepository(), new PrismaAuditSink());
   const postcalc = new PostCalcService(new PrismaPostCalcRepository());
-  const reklamation = new ReklamationService(new PrismaReklamationRepository(), new PrismaAuditSink());
+  const reklamation = new ReklamationService(
+    new PrismaReklamationRepository(),
+    new PrismaAuditSink(),
+    new NumberingService(new PrismaNumberingRepository())
+  );
   const ampel = new AmpelService(new PrismaAmpelRepository());
   const stickerei = new StickereiService(new PrismaStickereiRepository());
   const reorder = new ReorderService(new PrismaReorderRepository(), new PrismaAuditSink());

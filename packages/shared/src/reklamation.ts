@@ -45,6 +45,28 @@ export function allocateComplaintCost(input: ComplaintInput): CostAllocation {
   return { bearer: costBearer(input.cause), amountCents: input.costCents };
 }
 
+export type FollowUpAction = "NONE" | "CREDIT_NOTE" | "REPRODUCTION";
+
+/**
+ * Klassifiziert den Folgevorgang (B11): Gutschrift → CreditNote, (Express-)
+ * Nachproduktion → neuer Nachproduktions-Auftrag, sonst nichts.
+ */
+export function followUpAction(followUp: FollowUpType): {
+  action: FollowUpAction;
+  express: boolean;
+} {
+  switch (followUp) {
+    case "GUTSCHRIFT":
+      return { action: "CREDIT_NOTE", express: false };
+    case "NACHPRODUKTION":
+      return { action: "REPRODUCTION", express: false };
+    case "EXPRESS_NACHPRODUKTION":
+      return { action: "REPRODUCTION", express: true };
+    case "KEINE":
+      return { action: "NONE", express: false };
+  }
+}
+
 /**
  * Validiert die Kombination aus Ursache und Folgevorgang. Eine Gutschrift bei
  * Lieferantenverschulden ist zulässig; eine Express-Nachproduktion ohne Kosten

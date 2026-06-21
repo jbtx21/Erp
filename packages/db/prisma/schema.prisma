@@ -515,6 +515,10 @@ model Order {
   zugesagterLiefertermin DateTime? // Rückwärtsterminierung (B9, Kap. 35.2)
   quoteId     String?     @unique
   quote       Quote?      @relation(fields: [quoteId], references: [id])
+  // Nachproduktion aus Reklamation (B11): Verweis auf den Ursprungsauftrag.
+  nachproduktionVonId String?
+  nachproduktionVon   Order?  @relation("Nachproduktion", fields: [nachproduktionVonId], references: [id])
+  nachproduktionen    Order[] @relation("Nachproduktion")
   fileLink    String? // Druckdaten-Verweis, Pflicht vor Produktion (Kap. 7.1)
   freigegeben Boolean     @default(false) // kein Produktionsstart ohne Freigabe (Kap. 5.2/7.2)
   // T-01: Mitarbeiter-Info des Shop-Kontos wird hier vermerkt, erzeugt KEINEN Kunden

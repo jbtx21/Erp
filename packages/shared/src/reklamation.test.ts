@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   allocateComplaintCost,
   costBearer,
+  followUpAction,
   validateFollowUp,
   type ComplaintInput,
 } from "./reklamation.js";
@@ -38,5 +39,14 @@ describe("Reklamation / Workflow C (Kap. 20)", () => {
     expect(
       validateFollowUp({ ...base, followUp: "GUTSCHRIFT", costCents: 5000 })
     ).toHaveLength(0);
+  });
+});
+
+describe("followUpAction (B11)", () => {
+  it("klassifiziert jeden Folgevorgang", () => {
+    expect(followUpAction("GUTSCHRIFT")).toEqual({ action: "CREDIT_NOTE", express: false });
+    expect(followUpAction("NACHPRODUKTION")).toEqual({ action: "REPRODUCTION", express: false });
+    expect(followUpAction("EXPRESS_NACHPRODUKTION")).toEqual({ action: "REPRODUCTION", express: true });
+    expect(followUpAction("KEINE")).toEqual({ action: "NONE", express: false });
   });
 });
