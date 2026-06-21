@@ -50,7 +50,7 @@ export class AiQuoteDraftService {
 export class StubLlmExtractor implements LlmExtractor {
   async extract(text: string): Promise<ExtractedQuoteDraft> {
     const lines = text
-      .split(/\n|,/)
+      .split(/\r?\n/)
       .map((l) => l.trim())
       .filter((l) => l.length > 0)
       .map((l) => {

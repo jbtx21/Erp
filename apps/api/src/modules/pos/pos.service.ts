@@ -15,7 +15,7 @@ export interface TseTransaction {
 
 /** Port zur TSE (Deutsche Fiskal) — kapselt Signatur/Transaktion. */
 export interface TseConnector {
-  signSale(input: { betragCents: number; art: PaymentArt; belegNr: string }): Promise<TseTransaction>;
+  signSale(input: { betragCents: number; art: PaymentArt }): Promise<TseTransaction>;
 }
 
 export interface RecordSaleInput {
@@ -49,8 +49,10 @@ export class PosService {
     if (!Number.isInteger(input.betragCents) || input.betragCents <= 0) {
       throw new Error("betragCents must be a positive integer");
     }
+    // TSE signiert zuerst — schlägt sie fehl, wird KEINE BON-Nummer verbraucht
+    // (Kassenbon-Kreis bleibt lückenlos, §146a AO). Erst danach die Nummer.
+    const tse = await this.tse.signSale({ betragCents: input.betragCents, art: input.art });
     const belegNr = await this.numbering.next("CASH_RECEIPT", at);
-    const tse = await this.tse.signSale({ betragCents: input.betragCents, art: input.art, belegNr });
 
     const record: CashSaleRecord = {
       belegNr,
@@ -88,9 +90,9 @@ export class StubTseConnector implements TseConnector {
   private seq = 0;
   constructor(private readonly seriennummer = "TSE-STUB-0001") {}
 
-  async signSale(input: { betragCents: number; art: PaymentArt; belegNr: string }): Promise<TseTransaction> {
+  async signSale(input: { betragCents: number; art: PaymentArt }): Promise<TseTransaction> {
     const txId = `tx-${++this.seq}`;
-    const signatur = Buffer.from(`${input.belegNr}|${input.betragCents}|${input.art}|${txId}`).toString("base64");
+    const signatur = Buffer.from(`${input.betragCents}|${input.art}|${txId}`).toString("base64");
     return { signatur, seriennummer: this.seriennummer, txId };
   }
 }

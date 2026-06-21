@@ -53,9 +53,14 @@ export class InMemoryLeadRepository implements LeadRepository {
     }
   }
 
-  async convert(id: string): Promise<{ companyId: string }> {
+  async convert(
+    id: string,
+    _input: { name: string; email: string | null; phone: string | null }
+  ): Promise<{ companyId: string }> {
     const l = this.leads.get(id);
     if (!l) throw new Error(`Lead ${id} nicht gefunden`);
+    // Gate wie im Prisma-Repo: nur aus QUALIFIZIERT (kein Divergieren der Pfade).
+    if (l.status !== "QUALIFIZIERT") throw new Error(`Lead ${id} ist nicht (mehr) konvertierbar`);
     const companyId = `company_${id}`;
     l.status = "KONVERTIERT";
     l.convertedCompanyId = companyId;

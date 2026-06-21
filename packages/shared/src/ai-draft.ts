@@ -48,7 +48,9 @@ function normalize(s: string): string {
 
 /**
  * Matcht eine Freitextzeile auf einen Katalogeintrag: exakte SKU → exakter Name →
- * EINDEUTIGER Teiltreffer. Mehrdeutige Treffer gelten als nicht zugeordnet (manuell).
+ * EINDEUTIGER Teiltreffer im NAMEN. SKU wird nur exakt gematcht (Teil-SKUs wie
+ * "CAP-BLK-XL" dürfen nicht fälschlich auf "CAP-BLK" auflösen); mehrdeutige Treffer
+ * gelten als nicht zugeordnet und gehen in die manuelle Prüfung.
  */
 export function matchCatalog(
   query: string,
@@ -63,9 +65,7 @@ export function matchCatalog(
   const byName = catalog.find((c) => normalize(c.name) === q);
   if (byName) return byName;
 
-  const partial = catalog.filter(
-    (c) => normalize(c.name).includes(q) || q.includes(normalize(c.sku))
-  );
+  const partial = catalog.filter((c) => normalize(c.name).includes(q));
   return partial.length === 1 ? partial[0] : undefined;
 }
 

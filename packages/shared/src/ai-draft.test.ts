@@ -13,9 +13,19 @@ describe("matchCatalog (B14)", () => {
     expect(matchCatalog("Cap Schwarz", catalog)?.variantId).toBe("v3");
   });
 
-  it("trifft eindeutigen Teiltreffer, lehnt mehrdeutige ab", () => {
+  it("trifft eindeutigen Teiltreffer im NAMEN, lehnt mehrdeutige ab", () => {
     expect(matchCatalog("Cap", catalog)?.variantId).toBe("v3"); // eindeutig
     expect(matchCatalog("Poloshirt Navy", catalog)).toBeUndefined(); // v1+v2 mehrdeutig
+  });
+
+  it("löst eine spezifischere Nicht-Katalog-SKU NICHT auf eine kürzere SKU auf", () => {
+    // "CAP-BLK-XL" existiert nicht; darf nicht fälschlich auf "CAP-BLK" matchen.
+    expect(matchCatalog("CAP-BLK-XL", catalog)).toBeUndefined();
+  });
+
+  it("ignoriert Katalogeinträge mit leerer SKU beim Matching", () => {
+    const withEmpty = [...catalog, { variantId: "vx", sku: "", name: "Sonderposten", netCents: 100 }];
+    expect(matchCatalog("irgendwas ohne Treffer", withEmpty)).toBeUndefined();
   });
 });
 

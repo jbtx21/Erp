@@ -4,6 +4,7 @@
 // Fiskal), die Persistenz aus apps/api.
 
 import type { Cents } from "./money.js";
+import { csvField } from "./csv.js";
 
 export type PaymentArt = "BAR" | "EC";
 
@@ -21,8 +22,6 @@ export interface CashSaleRecord {
 
 const isoDateTime = (d: Date): string => d.toISOString().replace(/\.\d{3}Z$/, "Z");
 
-const csvCell = (s: string): string => (/[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
-
 /** DSFinV-K-Kernzeile (Transaktion) je Kassenbeleg. */
 export const DSFINVK_HEADER =
   "BON_NR;ZEITPUNKT;BETRAG;ZAHLART;KASSIERER;TSE_SERIENNUMMER;TSE_TRANSAKTION;TSE_SIGNATUR";
@@ -38,7 +37,7 @@ export function dsfinvkRow(s: CashSaleRecord): string {
     s.tseTxId,
     s.tseSignatur,
   ]
-    .map(csvCell)
+    .map(csvField)
     .join(";");
 }
 

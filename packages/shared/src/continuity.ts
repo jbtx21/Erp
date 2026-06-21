@@ -8,6 +8,7 @@ import {
   validateProductionBase,
   type ProductionBaseFields,
 } from "./production-sheet.js";
+import { csvField } from "./csv.js";
 
 export type OfflineBundleOrder = ProductionBaseFields;
 
@@ -39,13 +40,11 @@ export function buildOfflineBundle(
   return { generatedAt, items, complete: incomplete.length === 0, incomplete };
 }
 
-const csvCell = (s: string): string => s.replace(/;/g, ",");
-
-/** Flache CSV des Bundles für Druck/Tabelle ohne System. */
+/** Flache CSV des Bundles für Druck/Tabelle ohne System (RFC-4180-Escaping). */
 export function offlineBundleCsv(bundle: OfflineBundle): string {
   const header = "Auftrag;Vollstaendig;Fehlend";
   const rows = bundle.items.map(
-    (i) => `${csvCell(i.orderNumber)};${i.complete ? "ja" : "nein"};${csvCell(i.missing.join("/"))}`
+    (i) => `${csvField(i.orderNumber)};${i.complete ? "ja" : "nein"};${csvField(i.missing.join("/"))}`
   );
   return [header, ...rows].join("\n");
 }
