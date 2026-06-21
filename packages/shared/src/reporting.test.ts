@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  aggregateByCostCenter,
   bucketKey,
   bucketRevenue,
   bucketStart,
@@ -186,5 +187,32 @@ describe("breakdownRevenue (Umsatz nach Shop/Kundengruppe)", () => {
 
   it("ist robust ohne Datenpunkte", () => {
     expect(breakdownRevenue([])).toEqual([]);
+  });
+});
+
+describe("aggregateByCostCenter (B7 / Kap. 37.1)", () => {
+  it("summiert Beträge und zählt Belege je Kostenstelle", () => {
+    const res = aggregateByCostCenter([
+      { costCenterId: "cc-100", amountCents: 5000 },
+      { costCenterId: "cc-200", amountCents: 3000 },
+      { costCenterId: "cc-100", amountCents: 2500 },
+    ]);
+    expect(res).toEqual([
+      { costCenterId: "cc-100", totalCents: 7500, count: 2 },
+      { costCenterId: "cc-200", totalCents: 3000, count: 1 },
+    ]);
+  });
+
+  it("führt nicht zugeordnete Belege unter null und sortiert sie zuletzt", () => {
+    const res = aggregateByCostCenter([
+      { costCenterId: null, amountCents: 1000 },
+      { costCenterId: "cc-100", amountCents: 2000 },
+    ]);
+    expect(res.map((r) => r.costCenterId)).toEqual(["cc-100", null]);
+    expect(res[1]).toEqual({ costCenterId: null, totalCents: 1000, count: 1 });
+  });
+
+  it("ist robust ohne Belege", () => {
+    expect(aggregateByCostCenter([])).toEqual([]);
   });
 });

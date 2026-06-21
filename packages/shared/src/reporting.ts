@@ -269,3 +269,47 @@ export function breakdownRevenue(
     }))
     .sort((a, b) => b.netCents - a.netCents);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Kostenstellen-Auswertung (B7, Kap. 37.1). Reine Aggregation — KEINE Buchung (G1).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface CostCenterAmount {
+  /** Kostenstellen-Id; `null` = nicht zugeordnet. */
+  costCenterId: string | null;
+  amountCents: Cents;
+}
+
+export interface CostCenterTotal {
+  costCenterId: string | null;
+  totalCents: Cents;
+  count: number;
+}
+
+/**
+ * Summiert Beträge je Kostenstelle (B7). Nicht zugeordnete Belege landen unter
+ * `costCenterId = null`. Stabile Sortierung nach Kostenstellen-Id (null zuletzt).
+ */
+export function aggregateByCostCenter(
+  items: ReadonlyArray<CostCenterAmount>
+): CostCenterTotal[] {
+  const byCc = new Map<string | null, CostCenterTotal>();
+  for (const it of items) {
+    const cur = byCc.get(it.costCenterId);
+    if (cur) {
+      cur.totalCents += it.amountCents;
+      cur.count += 1;
+    } else {
+      byCc.set(it.costCenterId, {
+        costCenterId: it.costCenterId,
+        totalCents: it.amountCents,
+        count: 1,
+      });
+    }
+  }
+  return [...byCc.values()].sort((a, b) => {
+    if (a.costCenterId === null) return 1;
+    if (b.costCenterId === null) return -1;
+    return a.costCenterId.localeCompare(b.costCenterId);
+  });
+}

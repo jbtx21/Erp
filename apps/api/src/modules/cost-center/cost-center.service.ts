@@ -1,0 +1,41 @@
+// Kostenstellen (B7, Kap. 37.1). Generische Stammtabelle + optionale Zuordnung an
+// Belege; die Auswertung je Kostenstelle ist reine Aggregation (@texma/shared) —
+// KEINE Buchung/kein Hauptbuch (Gate G1).
+
+import { aggregateByCostCenter, type CostCenterTotal } from "@texma/shared";
+import { buildEntry, type AuditSink } from "@texma/audit";
+
+export interface CostCenterRepository {
+  create(nummer: string, name: string): Promise<{ id: string; nummer: string }>;
+  assignInvoice(invoiceId: string, costCenterId: string | null): Promise<void>;
+  /** Rechnungs-Nettobeträge mit Kostenstellen-Zuordnung (null = nicht zugeordnet). */
+  invoiceAmounts(): Promise<Array<{ costCenterId: string | null; amountCents: number }>>;
+}
+
+export class CostCenterService {
+  constructor(
+    private readonly repo: CostCenterRepository,
+    private readonly audit: AuditSink
+  ) {}
+
+  async create(nummer: string, name: string): Promise<{ id: string; nummer: string }> {
+    const cc = await this.repo.create(nummer, name);
+    await this.audit.append(
+      buildEntry({ entity: "CostCenter", entityId: cc.id, action: "CREATE", after: { nummer, name } })
+    );
+    return cc;
+  }
+
+  /** Ordnet eine Rechnung einer Kostenstelle zu (oder hebt die Zuordnung auf). */
+  async assignInvoice(invoiceId: string, costCenterId: string | null): Promise<void> {
+    await this.repo.assignInvoice(invoiceId, costCenterId);
+    await this.audit.append(
+      buildEntry({ entity: "Invoice", entityId: invoiceId, action: "UPDATE", after: { costCenterId } })
+    );
+  }
+
+  /** Umsatz-Auswertung je Kostenstelle (G1: Auswertung, keine Buchung). */
+  async invoiceReport(): Promise<CostCenterTotal[]> {
+    return aggregateByCostCenter(await this.repo.invoiceAmounts());
+  }
+}

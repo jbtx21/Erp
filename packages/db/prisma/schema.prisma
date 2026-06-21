@@ -616,6 +616,8 @@ model TimeEntry {
   userId       String
   minutes      Int // Stechuhr (Kap. 5.2) — Basis Soll-Ist/Nachkalkulation (T-10)
   note         String?
+  costCenterId String?
+  costCenter   CostCenter? @relation(fields: [costCenterId], references: [id])
   createdAt    DateTime @default(now())
 }
 
@@ -639,8 +641,21 @@ model Invoice {
   creditNotes CreditNote[] // Gutschriften (Kap. 20)
   // GoBD: finalisierte Rechnung unveränderbar; Korrektur nur via Storno/Gutschrift
   finalized   Boolean  @default(false)
+  costCenterId String?
+  costCenter   CostCenter? @relation(fields: [costCenterId], references: [id])
 
   @@index([companyId])
+}
+
+// Kostenstelle (B7, Kap. 37.1) — generische Tabelle; Nummern von TEXMA/StB
+// befüllbar. Dient der Auswertung, NICHT der Buchung (Gate G1).
+model CostCenter {
+  id     String @id @default(cuid())
+  nummer String @unique
+  name   String
+  invoices       Invoice[]
+  purchaseOrders PurchaseOrder[]
+  timeEntries    TimeEntry[]
 }
 
 model OpenItem {
@@ -787,6 +802,8 @@ model PurchaseOrder {
   lines       PurchaseOrderLine[]
   goodsReceipts GoodsReceipt[]
   incomingInvoices IncomingInvoice[] // 3-Way-Match (Kap. 9.6)
+  costCenterId String?
+  costCenter   CostCenter? @relation(fields: [costCenterId], references: [id])
   createdAt   DateTime @default(now())
 
   @@index([supplierId])
