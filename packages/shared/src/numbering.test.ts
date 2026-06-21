@@ -45,9 +45,10 @@ describe("formatSequenceNumber", () => {
       "PURCHASE_ORDER",
       "DELIVERY_NOTE",
       "PRODUCTION_ORDER",
+      "CASH_RECEIPT",
     ];
     for (const k of keys) {
-      expect(SEQUENCE_PREFIX[k]).toMatch(/^[A-Z]{2}$/);
+      expect(SEQUENCE_PREFIX[k]).toMatch(/^[A-Z]{2,3}$/);
     }
   });
 });

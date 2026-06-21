@@ -558,6 +558,7 @@ model Order {
   nachproduktionVonId String?
   nachproduktionVon   Order?  @relation("Nachproduktion", fields: [nachproduktionVonId], references: [id])
   nachproduktionen    Order[] @relation("Nachproduktion")
+  cashSales   CashSale[] // Barverkäufe (B6)
   fileLink    String? // Druckdaten-Verweis, Pflicht vor Produktion (Kap. 7.1)
   freigegeben Boolean     @default(false) // kein Produktionsstart ohne Freigabe (Kap. 5.2/7.2)
   // T-01: Mitarbeiter-Info des Shop-Kontos wird hier vermerkt, erzeugt KEINEN Kunden
@@ -750,6 +751,39 @@ model OpenItem {
   dunningNotices DunningNotice[] // append-only Mahnhistorie (B10)
 
   @@index([dueDate])
+}
+
+// Kasse (B6, Kap. 37.4) — Bar/EC mit TSE (KassenSichV/§146a AO). CashSale ist
+// append-only/WORM: jeder Beleg trägt seine TSE-Signatur und wird nie geändert.
+enum PaymentArt {
+  BAR
+  EC
+}
+
+model CashRegister {
+  id        String     @id @default(cuid())
+  name      String
+  sales     CashSale[]
+  createdAt DateTime   @default(now())
+}
+
+model CashSale {
+  id              String       @id @default(cuid())
+  belegNr         String       @unique // BON-Nummernkreis (F1)
+  registerId      String?
+  register        CashRegister? @relation(fields: [registerId], references: [id])
+  orderId         String?
+  order           Order?       @relation(fields: [orderId], references: [id])
+  betragCents     Int
+  art             PaymentArt
+  kassiertAm      DateTime     @default(now())
+  kassierer       String
+  tseSignatur     String
+  tseSeriennummer String
+  tseTxId         String
+  createdAt       DateTime     @default(now())
+
+  @@index([kassiertAm])
 }
 
 // Mahnbeleg (B10, Kap. 9.5) — append-only Historie je Mahnstufe (G2: kein Update).
