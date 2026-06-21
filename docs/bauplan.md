@@ -76,10 +76,9 @@ Regel je Item (Definition of Done) siehe §7.
 - **Migration:** `StockLevel.qty` → Eröffnungs-`StockMove` je Variante.
 - **Tests:** `stock.test.ts` — Saldo = Σ Moves; getrennter Muster-Lagerbestand. **Gate:** G2 (auditierbar). **Abh.:** B3.
 
-### B3 · Integrations-Testlane (CI) — G6 · **M**
-- CI-Job mit ephemerem Postgres (service container), `DATABASE_URL`, `prisma migrate deploy`, dann alle `*.int.test.ts`; Unit-Lane bleibt DB-frei.
-- **Artefakt:** `.github/workflows/ci.yml` (+ ggf. `docker-compose.test.yml`).
-- **Effekt:** aktiviert die heute 19 übersprungenen Tests. **Abh.:** keine (zuerst, damit F1/B5/… ihre int-Tests sofort laufen).
+### B3 · Integrations-Testlane (CI) — G6 · **M** — ✅ bereits erfüllt
+- **Befund:** `.github/workflows/ci.yml` existiert und leistet genau das: Postgres-16-Service-Container + Redis, `prisma migrate deploy`, Unit-Tests (DB-frei), dann Integrationstests mit `RUN_DB_TESTS=1` für `@texma/api` und `@texma/worker-orchestration`.
+- **Effekt:** neue `*.int.test.ts` (F1 numbering, F4 stock, …) laufen automatisch mit — keine Änderung nötig. **Abh.:** keine.
 
 ### B1 · Verfahrensdokumentation füllen — G4 · **M**
 - `docs/verfahrensdokumentation/README.md`: 6 Abschnitte real befüllen (Allgemein, Anwender, Technik, Betrieb, IKS, Belegarten) + Historie v0.2.
