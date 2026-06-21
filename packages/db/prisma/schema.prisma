@@ -112,6 +112,7 @@ model Company {
   quotes          Quote[]
   orders          Order[]
   invoices        Invoice[]
+  inquiries       Inquiry[] // Anfrage-Funnel (B20)
   sampleLoans     SampleLoan[] // Muster-Leihgut (B5)
   priceTiers      CustomerPriceTier[] // kundenindividuelle Mengenstaffel (B4)
   shopConnectors  ShopConnector[] // T-01: Shops mappen auf die Firma, nicht auf Mitarbeiter
@@ -480,8 +481,42 @@ model Quote {
   verlustgrund String? // Grund bei Ablehnung (B8, Kap. 35.1)
   lines     QuoteLine[]
   order     Order?
+  inquiry   Inquiry? // Ursprungs-Anfrage (B20)
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
+}
+
+// Anfrage-Funnel (B20, Kap. 18.1/35.1) — Vorbild Odoo crm.lead. NEU → IN_BEARBEITUNG
+// → ANGEBOT (konvertiert zu Quote) oder VERWORFEN. ERP-Master des AF-Nummernkreises.
+enum InquirySource {
+  WEB
+  EMAIL
+  SHOP
+  TELEFON
+}
+
+enum InquiryStatus {
+  NEU
+  IN_BEARBEITUNG
+  ANGEBOT
+  VERWORFEN
+}
+
+model Inquiry {
+  id             String        @id @default(cuid())
+  number         String        @unique // AF-Nummernkreis (F1)
+  companyId      String?
+  company        Company?      @relation(fields: [companyId], references: [id])
+  kontaktName    String?
+  quelle         InquirySource
+  status         InquiryStatus @default(NEU)
+  verworfenGrund String?
+  text           String
+  quoteId        String?       @unique
+  quote          Quote?        @relation(fields: [quoteId], references: [id])
+  createdAt      DateTime      @default(now())
+
+  @@index([status])
 }
 
 model QuoteLine {

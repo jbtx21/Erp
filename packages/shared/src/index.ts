@@ -42,3 +42,4 @@ export * from "./sample.js";
 export * from "./continuity.js";
 export * from "./scheduling.js";
 export * from "./privacy.js";
+export * from "./inquiry.js";

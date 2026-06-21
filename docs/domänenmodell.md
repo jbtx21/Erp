@@ -52,6 +52,11 @@ ANGELEGT → IN_BEARBEITUNG → IN_PRODUKTION → VERSANDBEREIT → VERSENDET �
    └──────────┴───────────────┴──────────────┴──▶ STORNIERT
 ```
 
+**InquiryStatus** (`inquiry.ts`, B20) — Anfrage-Funnel vor dem Angebot:
+```
+NEU → IN_BEARBEITUNG → ANGEBOT (→ konvertiert zu Quote) | VERWORFEN
+```
+
 **QuoteStatus** (`quote.ts`) — Angebots-Funnel:
 ```
 ENTWURF → VERSENDET ⇄ NACHFASSEN → ANGENOMMEN | ABGELEHNT
