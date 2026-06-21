@@ -24,6 +24,18 @@ function block(xml: string, local: string): string | undefined {
   return tag(xml, local);
 }
 
+/** Alle Blöcke eines (wiederholbaren) Aggregats per lokalem Namen. */
+function allBlocks(xml: string, local: string): string[] {
+  const re = new RegExp(
+    `<(?:\\w+:)?${local}[^>]*>([\\s\\S]*?)</(?:\\w+:)?${local}>`,
+    "g"
+  );
+  const out: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(xml)) !== null) out.push(m[1] ?? "");
+  return out;
+}
+
 function decToCents(dec: string | undefined): Cents | undefined {
   if (dec == null) return undefined;
   const v = Number.parseFloat(dec);
@@ -60,9 +72,8 @@ export function parseEInvoiceXml(xml: string): ParsedEInvoice {
   const taxCents = decToCents(tag(xml, "TaxTotalAmount"));
   const grossCents = decToCents(tag(xml, "GrandTotalAmount"));
 
-  const lineCount = (
-    xml.match(/<(?:\w+:)?IncludedSupplyChainTradeLineItem[\s>]/g) ?? []
-  ).length;
+  const lineBlocks = allBlocks(xml, "IncludedSupplyChainTradeLineItem");
+  const lineCount = lineBlocks.length;
 
   const parsed: ParsedEInvoice = { lineCount };
   if (invoiceNumber) parsed.invoiceNumber = invoiceNumber;
@@ -73,15 +84,17 @@ export function parseEInvoiceXml(xml: string): ParsedEInvoice {
   if (netCents != null) parsed.netCents = netCents;
   if (taxCents != null) parsed.taxCents = taxCents;
   if (grossCents != null) parsed.grossCents = grossCents;
-  // validateEInvoice prüft lines.length; Kernfelder reichen, Positionsdetails optional.
-  if (lineCount > 0) parsed.lines = new Array(lineCount).fill(null).map((_, i) => ({
-    id: String(i + 1),
-    name: "",
-    qty: 0,
-    unitNetCents: 0,
-    lineNetCents: 0,
-    vatRatePercent: 0,
-  }));
+  // Positionsdetails real extrahieren (EN16931 BR-21/BR-25/BT-129/BR-CO-10).
+  if (lineCount > 0) {
+    parsed.lines = lineBlocks.map((b, i) => ({
+      id: tag(b, "LineID") ?? String(i + 1),
+      name: tag(b, "Name") ?? "",
+      qty: Number(tag(b, "BilledQuantity") ?? "0"),
+      unitNetCents: decToCents(tag(b, "ChargeAmount")) ?? 0,
+      lineNetCents: decToCents(tag(b, "LineTotalAmount")) ?? 0,
+      vatRatePercent: Number(tag(b, "RateApplicablePercent") ?? "0"),
+    }));
+  }
   return parsed;
 }
 

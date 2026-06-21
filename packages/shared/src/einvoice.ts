@@ -125,5 +125,62 @@ export function validateEInvoice(m: Partial<EInvoiceModel>): EInvoiceValidationR
   } else {
     errors.push("BT-106/110/112 Summen unvollständig");
   }
+
+  // Positions-Pflichtangaben + Summenkonsistenz (EN16931-Geschäftsregeln, Stufe 1).
+  if (m.lines && m.lines.length > 0) {
+    m.lines.forEach((l, i) => {
+      const n = i + 1;
+      if (!l.id) errors.push(`BR-21 Positions-ID fehlt (Zeile ${n})`);
+      if (!l.name) errors.push(`BR-25 Artikelname fehlt (Zeile ${n})`);
+      if (!(l.qty > 0)) errors.push(`BT-129 Menge fehlt/≤0 (Zeile ${n})`);
+      if (l.vatRatePercent == null) errors.push(`BR-CO-4 USt-Satz der Position fehlt (Zeile ${n})`);
+    });
+    if (m.netCents != null) {
+      const lineSum = m.lines.reduce((s, l) => s + (l.lineNetCents ?? 0), 0);
+      if (lineSum !== m.netCents) {
+        errors.push("BR-CO-10 Σ Positionsnetto ≠ Rechnungsnetto (BT-106)");
+      }
+    }
+  }
   return { valid: errors.length === 0, errors };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Zweistufige EN16931-Validierung (F3). Stufe 1 ist TS-nativ und Pflicht (schnell,
+// JVM-frei). Stufe 2 = KoSIT-Schematron, optional als Sidecar injiziert — bleibt
+// damit aus dem Normalbetrieb heraus und wird nur bei Zertifizierungsbedarf genutzt.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Optionaler Stufe-2-Validator (z. B. KoSIT-Schematron im Worker-Sidecar). */
+export type SchematronValidator = (xml: string) => Promise<EInvoiceValidationResult>;
+
+export interface TwoStageInput {
+  model: Partial<EInvoiceModel>;
+  /** Roh-XML für die Schematron-Prüfung (Stufe 2). */
+  xml?: string;
+  /** Stufe-2-Validator; fehlt er, bleibt es bei der TS-nativen Stufe 1. */
+  schematron?: SchematronValidator;
+}
+
+export interface TwoStageResult extends EInvoiceValidationResult {
+  stage1: EInvoiceValidationResult;
+  /** `null` = Stufe 2 nicht ausgeführt (kein Validator/XML, oder Stufe 1 schon rot). */
+  stage2: EInvoiceValidationResult | null;
+}
+
+/**
+ * Führt Stufe 1 (immer) und Stufe 2 (nur wenn Validator + XML vorhanden UND Stufe 1
+ * sauber) aus — kein teurer Sidecar-Aufruf für offensichtlich kaputte Belege.
+ */
+export async function validateEInvoiceTwoStage(
+  input: TwoStageInput
+): Promise<TwoStageResult> {
+  const stage1 = validateEInvoice(input.model);
+  let stage2: EInvoiceValidationResult | null = null;
+  if (stage1.valid && input.schematron && input.xml != null) {
+    stage2 = await input.schematron(input.xml);
+  }
+  const valid = stage1.valid && (stage2 === null || stage2.valid);
+  const errors = [...stage1.errors, ...(stage2?.errors ?? [])];
+  return { valid, errors, stage1, stage2 };
 }
