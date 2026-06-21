@@ -87,6 +87,7 @@ model PriceGroup {
   name      String
   companies Company[]
   prices    PriceGroupPrice[]
+  priceTiers PriceGroupPriceTier[]
 }
 
 // Firma = Kunde. KEIN 1:1-Import Firma↔Kontakt (Kap. 8.3).
@@ -109,6 +110,7 @@ model Company {
   quotes          Quote[]
   orders          Order[]
   invoices        Invoice[]
+  priceTiers      CustomerPriceTier[] // kundenindividuelle Mengenstaffel (B4)
   shopConnectors  ShopConnector[] // T-01: Shops mappen auf die Firma, nicht auf Mitarbeiter
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -241,6 +243,8 @@ model Variant {
   goodsReceiptLines  GoodsReceiptLine[]
   stockLevel StockLevel? // Lager/Bestand (T-12) — materialisierter Cache des Ledgers
   stockMoves StockMove[] // Bewegungs-Ledger (F4)
+  priceTiers PriceGroupPriceTier[] // Preisgruppen-Mengenstaffel (B4)
+  customerPriceTiers CustomerPriceTier[] // kundenindividuelle Staffel (B4)
   createdAt  DateTime @default(now())
 
   @@index([articleId])
@@ -267,6 +271,34 @@ model PriceGroupPrice {
   netCents     Int // Geldbeträge in Cent, niemals Float
 
   @@unique([variantId, priceGroupId])
+}
+
+// Basispreis-Mengenstaffel je Preisgruppe (B4, Kap. 4.4). Gilt für alle Kunden der
+// Gruppe. Stufenwahl: größte minMenge ≤ Bestellmenge.
+model PriceGroupPriceTier {
+  id           String     @id @default(cuid())
+  variantId    String
+  variant      Variant    @relation(fields: [variantId], references: [id])
+  priceGroupId String
+  priceGroup   PriceGroup @relation(fields: [priceGroupId], references: [id])
+  minMenge     Int
+  netCents     Int
+
+  @@unique([variantId, priceGroupId, minMenge])
+}
+
+// Kundenindividuelle Basispreis-Staffel (B4). Höchste Präzedenz — sticht vor der
+// Preisgruppen-Staffel und dem Einzelpreis.
+model CustomerPriceTier {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+  variantId String
+  variant   Variant @relation(fields: [variantId], references: [id])
+  minMenge  Int
+  netCents  Int
+
+  @@unique([companyId, variantId, minMenge])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

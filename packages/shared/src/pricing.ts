@@ -66,3 +66,64 @@ export function resolvePrice(
   }
   return hit.netCents;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mengenstaffel (B4, Kap. 4.4 / T-15). EINE Preisfindungs-Pipeline mit klarer
+// Präzedenz — kein paralleler Mechanismus.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Eine Staffelstufe: ab `minMenge` Stück gilt `netCents`. */
+export interface PriceTier {
+  minMenge: number;
+  netCents: Cents;
+}
+
+/**
+ * Wählt die passende Stufe: die mit der größten `minMenge`, die `menge` nicht
+ * überschreitet. Gibt `null`, wenn keine Stufe greift (z. B. Menge unter der
+ * kleinsten `minMenge`).
+ */
+export function selectTier(
+  tiers: ReadonlyArray<PriceTier>,
+  menge: number
+): PriceTier | null {
+  if (menge < 0) throw new Error("menge must be >= 0");
+  let best: PriceTier | null = null;
+  for (const t of tiers) {
+    if (t.minMenge <= menge && (best === null || t.minMenge > best.minMenge)) {
+      best = t;
+    }
+  }
+  return best;
+}
+
+export interface BasePriceSources {
+  /** Kundenindividuelle Staffel — höchste Präzedenz. */
+  customerTiers?: ReadonlyArray<PriceTier>;
+  /** Preisgruppen-Staffel. */
+  groupTiers?: ReadonlyArray<PriceTier>;
+  /** Einzelpreis je Preisgruppe (Fallback, bestehende Pflege). */
+  groupPrices?: ReadonlyArray<VariantPrice>;
+}
+
+/**
+ * Ermittelt den Netto-Basis-VK einer Variante in EINER Pipeline mit Präzedenz (B4):
+ * (1) kundenindividuelle Staffel → (2) Preisgruppen-Staffel → (3) Einzelpreis der
+ * Preisgruppe. Je Staffel-Ebene gilt die Stufe mit der größten `minMenge` ≤ Menge.
+ * Greift keine Staffel, fällt es auf `resolvePrice` zurück (das bei fehlendem Preis
+ * sichtbar wirft — kein stilles Ausweichen, Kap. 3.2 / T-08).
+ * Die multiplikative Veredelungs-Staffel (`markup.ts`) wird separat aufaddiert.
+ */
+export function resolveBasePrice(
+  sources: BasePriceSources,
+  group: PriceGroupKind,
+  menge: number
+): Cents {
+  const customer = selectTier(sources.customerTiers ?? [], menge);
+  if (customer) return customer.netCents;
+
+  const groupTier = selectTier(sources.groupTiers ?? [], menge);
+  if (groupTier) return groupTier.netCents;
+
+  return resolvePrice(sources.groupPrices ?? [], group);
+}
