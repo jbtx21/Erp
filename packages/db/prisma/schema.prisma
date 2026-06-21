@@ -114,6 +114,7 @@ model Company {
   invoices        Invoice[]
   inquiries       Inquiry[] // Anfrage-Funnel (B20)
   lead            Lead? // aus Lead konvertiert (B15)
+  portalUsers     PortalUser[] // Kundenportal-Logins (B13)
   sampleLoans     SampleLoan[] // Muster-Leihgut (B5)
   priceTiers      CustomerPriceTier[] // kundenindividuelle Mengenstaffel (B4)
   shopConnectors  ShopConnector[] // T-01: Shops mappen auf die Firma, nicht auf Mitarbeiter
@@ -501,6 +502,37 @@ enum InquiryStatus {
   IN_BEARBEITUNG
   ANGEBOT
   VERWORFEN
+}
+
+// Kundenportal-Identität (B13, Kap. 36) — VOLLSTÄNDIG getrennt von der Mitarbeiter-
+// `User`-Tabelle (Sicherheits-Isolation). Jeder Portal-Login ist an GENAU eine Firma
+// gebunden; die Mandanten-Isolation der Portal-API leitet sich aus `companyId` ab.
+model PortalUser {
+  id               String          @id @default(cuid())
+  email            String          @unique
+  passwordHash     String
+  companyId        String
+  company          Company         @relation(fields: [companyId], references: [id])
+  active           Boolean         @default(true)
+  failedLoginCount Int             @default(0)
+  lockedUntil      DateTime? // Lockout nach zu vielen Fehlversuchen (Kap. 14)
+  lastLoginAt      DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  sessions         PortalSession[]
+
+  @@index([companyId])
+}
+
+model PortalSession {
+  id           String     @id @default(cuid())
+  tokenHash    String     @unique // SHA-256 des Klartext-Tokens (nur im httpOnly-Cookie)
+  portalUserId String
+  portalUser   PortalUser @relation(fields: [portalUserId], references: [id], onDelete: Cascade)
+  expiresAt    DateTime
+  createdAt    DateTime   @default(now())
+
+  @@index([portalUserId])
 }
 
 // Lead/Interessent (B15, Kap. 18.1) — leichter Prospect vor der Firma. Konvertierung
