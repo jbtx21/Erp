@@ -1,0 +1,26 @@
+# Lokale Entwicklungs-Datenbank (PostgreSQL) für das Durchklicken der Oberfläche.
+# Zugangsdaten passen exakt zu packages/db/.env.example.
+#
+#   docker compose -f docker-compose.dev.yml up -d     # Datenbank starten
+#   docker compose -f docker-compose.dev.yml down       # stoppen (Daten bleiben)
+#   docker compose -f docker-compose.dev.yml down -v    # stoppen + Daten löschen
+services:
+  db:
+    image: postgres:16
+    container_name: texma-dev-db
+    environment:
+      POSTGRES_USER: texma
+      POSTGRES_PASSWORD: texma
+      POSTGRES_DB: texma
+    ports:
+      - "5432:5432"
+    volumes:
+      - texma-dev-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U texma -d texma"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  texma-dev-pgdata:

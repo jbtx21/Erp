@@ -8,6 +8,7 @@
 //   pnpm --filter @texma/api build && node apps/api/dist/scripts/seed.js
 //   node apps/api/dist/scripts/dev-server.js   # API auf :3000
 //   pnpm --filter @texma/web dev               # UI auf :5173
+import "./load-env.js"; // MUSS zuerst stehen: lädt DATABASE_URL aus packages/db/.env
 import { buildServer } from "../server.js";
 
 const server = buildServer({

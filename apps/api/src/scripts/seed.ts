@@ -3,6 +3,7 @@
 // "durchklickbar" ist. Idempotent (feste IDs, upsert) — beliebig oft ausführbar.
 //
 //   pnpm --filter @texma/api build && node apps/api/dist/scripts/seed.js
+import "./load-env.js"; // MUSS zuerst stehen: lädt DATABASE_URL aus packages/db/.env
 import { prisma } from "@texma/db";
 
 const day = 24 * 60 * 60 * 1000;
