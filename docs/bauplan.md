@@ -17,6 +17,7 @@
 | K-01 Addison | naturgemäß extern; Bau liefert nur den normkonformen DATEV/EXTF-Export. |
 | **Fertigungstiefe** | **Reine Veredelung** (Blanks zukaufen) — kein Cut-Make-Trim. Produktion = Veredelungs-Arbeitsplätze/Kapazität; D-PROD/APS bleibt minimal (nur B9-Rückwärtsterminierung). |
 | **Scope-Erweiterung** | Aus dem Domänen-Check (`docs/domaenen-check-textil.md`) nur **D-PIM** aufgenommen (→ **B18**). D-CRM/D-RFQ, D-PROD-APS und D-ACC bleiben dokumentiert, aber **zurückgestellt** (s. §9). |
+| **Berichtswesen** | Finanz-Reporting als **B19** (Sprint 5). Self-Service-BI = **Metabase** auf der B17-Read-Replica (kein eigener Report-Builder). |
 
 ## 1. Architektur-Anleihen aus Open-Source-ERPs
 **Strategie:** Wir übernehmen **Muster und Standard-Bibliotheken**, nicht die Plattform.
@@ -43,7 +44,7 @@ Wir entnehmen gezielt:
 ```
 Sprint 3 (Fundament/Compliance):  F1 · F2 · B3 · B1 · B2
 Sprint 4 (Muss):                  B4 · B18 · B17 · F3 · B5 · B7 · B6
-Sprint 5 (Vorgangskette):         B8 · B9 · B10 · B11 · B12
+Sprint 5 (Vorgangskette):         B8 · B9 · B10 · B11 · B12 · B19
 Sprint 6 (Could/Future):          B16(+F4) · B15 · B13 · B14
 ```
 Regel je Item (Definition of Done) siehe §7.
@@ -167,6 +168,18 @@ Regel je Item (Definition of Done) siehe §7.
 - **Schema:** `gesperrtAm DateTime?`, `anonymisiertAm DateTime?` an `Company`/`Contact`; Audit-Eintrag.
 - **Shared:** `privacy.ts` — Stammdaten-Anonymisierung ohne Belegbezug zu brechen.
 - **Tests:** `privacy.test.ts` — Kontakt anonymisiert, Rechnung unveränderbar. **Gate:** G2 + DSGVO. **Begleitschritt:** Fristenmatrix StB. **Abh.:** B1.
+
+### B19 · Finanz-Reporting (D-RPT-Fin) — Kap. 29 · **S–M**
+- **Befund:** operatives Reporting stark; Finanz-Auswertungen fehlen.
+- **Shared:** `reporting.ts` erweitern (reine Aggregation, IO-frei):
+  - **OP-Aging** — Buckets 0–30 / 31–60 / 61–90 / >90 Tage aus `OpenItem`-Fälligkeit.
+  - **DSO** (Days Sales Outstanding) / Forderungslaufzeit.
+  - **Liquiditätsvorschau** aus `OpenItem`-Fälligkeiten + geplanten `PaymentOrder`.
+  - **Breakdown-Erweiterung:** Dimension um **Artikel/Veredelungsart** + **Deckungsbeitrag/Marge** (nicht nur Umsatz).
+- **API:** `reporting.service.ts` um Finanzberichte ergänzen; in PDF-/KI-Bericht aufnehmen. **RBAC:** Geldfelder nur BÜRO/BUCHHALTUNG/ADMIN.
+- **Self-Service-BI (Betrieb, kein App-Code):** **Metabase** an die B17-Read-Replica (RPO~0) — Dashboards + geplante Berichte; Doku in B1-Abschnitt 4.
+- **Tests:** `reporting.test.ts`/`production-metrics.test.ts`-Stil — Aging-Buckets, DSO, Marge-Breakdown.
+- **Gate:** G1 (Auswertung, keine Buchung) + RBAC. **Abh.:** B17 (Replica als BI-Quelle).
 
 ---
 
