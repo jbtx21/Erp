@@ -31,6 +31,8 @@ if (!dbConfigured) {
       await prisma.productionOrder.deleteMany({ where: { id: PA } });
       await prisma.order.deleteMany({ where: { id: ORD } });
       await prisma.logoVersion.deleteMany({ where: { companyId: CO } });
+      // VariantAttribute referenziert Variant (FK Restrict) → vor der Variante löschen.
+      await prisma.variantAttribute.deleteMany({ where: { variantId: VAR } });
       await prisma.variant.deleteMany({ where: { id: VAR } });
       await prisma.article.deleteMany({ where: { id: ART } });
       await prisma.company.deleteMany({ where: { id: CO } });

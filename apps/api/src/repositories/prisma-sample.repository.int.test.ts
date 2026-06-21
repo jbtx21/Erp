@@ -81,7 +81,7 @@ if (!dbConfigured) {
       const ausgabe = new Date(Date.UTC(2026, 3, 1));
       const loan = await service.issue({ companyId: CO, variantId: VAR, menge: 5, at: ausgabe });
 
-      const before = await service.billOverdue(new Date(Date.UTC(2026, 3, 21))); // genau 21 Tage → fällig
+      const before = await service.billOverdue(new Date(Date.UTC(2026, 3, 22))); // Ausgabe 1.4. + 21 Tage = 22.4. → fällig
       expect(before.billed).toHaveLength(1);
       expect(before.billed[0]).toMatchObject({ loanId: loan.id, netCents: 5000 }); // 5 × 1000
 
