@@ -7,7 +7,7 @@ import { Reporting } from "./Reporting.js";
 import { Differentiators } from "./Differentiators.js";
 import { Banking } from "./Banking.js";
 import {
-  DunningPage, IncomingInvoicesPage, ListPage, ProcurementPage, ProductionReportingPage,
+  CostCentersPage, DunningPage, IncomingInvoicesPage, ListPage, ProcurementPage, ProductionReportingPage,
   ReklamationPage, ReorderPage, ShipmentsPage, SuppliersPage,
 } from "./pages.js";
 import { trpc } from "./trpc.js";
@@ -23,7 +23,8 @@ const NAV: ReadonlyArray<{ group: string; items: ReadonlyArray<{ key: string; la
   { group: "Produktion", items: [{ key: "differentiators", label: "Differenzierer" }, { key: "prodreport", label: "Produktions-Reporting" }] },
   { group: "Logistik & Finanzen", items: [
     { key: "shipments", label: "Versand" }, { key: "dunning", label: "Mahnwesen" },
-    { key: "banking", label: "Banking" }, { key: "reporting", label: "Auswertungen" },
+    { key: "banking", label: "Banking" }, { key: "costcenters", label: "Kostenstellen" },
+    { key: "reporting", label: "Auswertungen" },
   ] },
 ];
 const ALL_KEYS = NAV.flatMap((g) => g.items.map((i) => i.key));
@@ -98,6 +99,7 @@ function Page({ k, role }: { k: string; role: string }): ReactNode {
     case "shipments": return <ShipmentsPage />;
     case "dunning": return <DunningPage />;
     case "banking": return <Banking role={role} />;
+    case "costcenters": return <CostCentersPage />;
     case "reporting": return <Reporting role={role} />;
     default: return <Text>Unbekannter Bereich.</Text>;
   }

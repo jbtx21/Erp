@@ -5,8 +5,16 @@
 import { aggregateByCostCenter, type CostCenterTotal } from "@texma/shared";
 import { buildEntry, type AuditSink } from "@texma/audit";
 
+export interface CostCenterRow {
+  id: string;
+  nummer: string;
+  name: string;
+}
+
 export interface CostCenterRepository {
   create(nummer: string, name: string): Promise<{ id: string; nummer: string }>;
+  list(): Promise<CostCenterRow[]>;
+  remove(id: string): Promise<void>;
   assignInvoice(invoiceId: string, costCenterId: string | null): Promise<void>;
   /** Rechnungs-Nettobeträge mit Kostenstellen-Zuordnung (null = nicht zugeordnet). */
   invoiceAmounts(): Promise<Array<{ costCenterId: string | null; amountCents: number }>>;
@@ -24,6 +32,17 @@ export class CostCenterService {
       buildEntry({ entity: "CostCenter", entityId: cc.id, action: "CREATE", after: { nummer, name } })
     );
     return cc;
+  }
+
+  /** Alle Kostenstellen (Stammdaten). */
+  async list(): Promise<CostCenterRow[]> {
+    return this.repo.list();
+  }
+
+  /** Entfernt eine Kostenstelle; bestehende Zuordnungen werden auf „keine" gesetzt. */
+  async remove(id: string): Promise<void> {
+    await this.repo.remove(id);
+    await this.audit.append(buildEntry({ entity: "CostCenter", entityId: id, action: "UPDATE", after: { deleted: true } }));
   }
 
   /** Ordnet eine Rechnung einer Kostenstelle zu (oder hebt die Zuordnung auf). */

@@ -218,6 +218,44 @@ export const ProductionReportingPage = (): JSX.Element => {
   );
 };
 
+export function CostCentersPage(): JSX.Element {
+  const [rows, setRows] = useState<Row[]>([]);
+  const [nummer, setNummer] = useState("");
+  const [name, setName] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try { setRows((await trpc.costCenters.list.query()) as Row[]); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  return (
+    <>
+      <Title order={3}>Kostenstellen</Title>
+      <Text size="sm" c="dimmed" mt={4}>Stammdaten je Kostenstelle (B7) — Auswertung, keine Buchung (G1).</Text>
+      <Group mt="sm" gap="xs" align="end">
+        <TextInput label="Nummer" value={nummer} onChange={(e) => setNummer(e.currentTarget.value)} w={120} placeholder="1000" />
+        <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Veredelung" />
+        <Button loading={busy} disabled={!nummer.trim() || !name.trim()} onClick={async () => {
+          setBusy(true); setErr(null);
+          try { await trpc.costCenters.create.mutate({ nummer: nummer.trim(), name: name.trim() }); setNummer(""); setName(""); await load(); }
+          catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+        }}>Anlegen</Button>
+      </Group>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      <AutoTable rows={rows} action={(r) => (
+        <Button size="compact-xs" color="red" variant="light" onClick={async () => {
+          if (typeof window !== "undefined" && !window.confirm(`Kostenstelle „${String(r.nummer)}" löschen?`)) return;
+          try { await trpc.costCenters.delete.mutate({ id: String(r.id) }); await load(); }
+          catch (e) { setErr(errMsg(e)); }
+        }}>Löschen</Button>
+      )} />
+    </>
+  );
+}
+
 export const ReklamationPage = (): JSX.Element => {
   const [orderId, setOrderId] = useState("");
   return (

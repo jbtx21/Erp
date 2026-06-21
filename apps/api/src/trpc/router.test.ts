@@ -19,6 +19,8 @@ import { ReklamationService } from "../modules/reklamation/reklamation.service.j
 import { AmpelService } from "../modules/ampel/ampel.service.js";
 import { StickereiService } from "../modules/stickerei/stickerei.service.js";
 import { ReorderService } from "../modules/reorder/reorder.service.js";
+import { CostCenterService } from "../modules/cost-center/cost-center.service.js";
+import { InMemoryCostCenterRepository } from "../repositories/in-memory-cost-center.repository.js";
 import { ProductionSheetService } from "../modules/production-sheet/production-sheet.service.js";
 import { ReportingService } from "../modules/reporting/reporting.service.js";
 import { ProductionReportingService } from "../modules/production-reporting/production-reporting.service.js";
@@ -220,6 +222,7 @@ function setup(user: AuthUser | null = BUERO) {
     productionSheet,
     reporting,
     productionReporting,
+    costCenters: new CostCenterService(new InMemoryCostCenterRepository(), new MemoryAuditSink()),
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -302,6 +305,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       productionSheet: {} as Context["productionSheet"],
       reporting: {} as Context["reporting"],
       productionReporting: {} as Context["productionReporting"],
+      costCenters: {} as Context["costCenters"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",

@@ -118,6 +118,11 @@ async function main(): Promise<void> {
     }).catch(() => {});
   }
 
+  // ── Kostenstellen (B7) ─────────────────────────────────────────────────────
+  for (const [id, nummer, name] of [["cc-1", "1000", "Veredelung"], ["cc-2", "2000", "Vertrieb"]] as const) {
+    await prisma.costCenter.upsert({ where: { id }, update: {}, create: { id, nummer, name } });
+  }
+
   console.log("Seed fertig: Preisgruppen, 2 Firmen, Shop, Artikel+3 Varianten, 2 Lieferanten, 4 Aufträge, 2 Eingangs-/2 Ausgangsrechnungen.");
 }
 

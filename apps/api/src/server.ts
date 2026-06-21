@@ -53,6 +53,8 @@ import { PrismaReorderRepository } from "./repositories/prisma-reorder.repositor
 import { PrismaProductionSheetRepository } from "./repositories/prisma-production-sheet.repository.js";
 import { PrismaReportingRepository } from "./repositories/prisma-reporting.repository.js";
 import { PrismaProductionReportingRepository } from "./repositories/prisma-production-reporting.repository.js";
+import { CostCenterService } from "./modules/cost-center/cost-center.service.js";
+import { PrismaCostCenterRepository } from "./repositories/prisma-cost-center.repository.js";
 import { appRouter } from "./trpc/router.js";
 import type { Context } from "./trpc/trpc.js";
 import { portalAppRouter } from "./trpc/portal-router.js";
@@ -115,6 +117,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   // KI-Reporting nutzt Claude nur, wenn ein API-Schlüssel hinterlegt ist (sonst Heuristik).
   const reporting = new ReportingService(new PrismaReportingRepository(), AnthropicReportClient.fromEnv());
   const productionReporting = new ProductionReportingService(new PrismaProductionReportingRepository());
+  const costCenters = new CostCenterService(new PrismaCostCenterRepository(), new PrismaAuditSink());
   const auth = new AuthService(
     new PrismaUserRepository(),
     new PrismaSessionRepository(),
@@ -200,6 +203,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           productionSheet,
           reporting,
           productionReporting,
+          costCenters,
           auth,
           user,
           sessionToken,

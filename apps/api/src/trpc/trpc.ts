@@ -20,6 +20,7 @@ import type { ReorderService } from "../modules/reorder/reorder.service.js";
 import type { ProductionSheetService } from "../modules/production-sheet/production-sheet.service.js";
 import type { ReportingService } from "../modules/reporting/reporting.service.js";
 import type { ProductionReportingService } from "../modules/production-reporting/production-reporting.service.js";
+import type { CostCenterService } from "../modules/cost-center/cost-center.service.js";
 import type {
   BankingQueryRepository,
   DunningQueryRepository,
@@ -53,6 +54,7 @@ export interface Context {
   productionSheet: ProductionSheetService;
   reporting: ReportingService;
   productionReporting: ProductionReportingService;
+  costCenters: CostCenterService;
   auth: AuthService;
   user: AuthUser | null;
   /** Roh-Token aus dem Cookie (für den 2FA-Zwischenschritt/Logout, wenn user noch null ist). */

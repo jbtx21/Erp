@@ -9,6 +9,18 @@ export class PrismaCostCenterRepository implements CostCenterRepository {
     return cc;
   }
 
+  async list(): Promise<Array<{ id: string; nummer: string; name: string }>> {
+    return prisma.costCenter.findMany({ orderBy: { nummer: "asc" }, select: { id: true, nummer: true, name: true } });
+  }
+
+  async remove(id: string): Promise<void> {
+    // Zuordnungen lösen (Felder sind optional), dann die Kostenstelle entfernen.
+    await prisma.invoice.updateMany({ where: { costCenterId: id }, data: { costCenterId: null } });
+    await prisma.purchaseOrder.updateMany({ where: { costCenterId: id }, data: { costCenterId: null } });
+    await prisma.timeEntry.updateMany({ where: { costCenterId: id }, data: { costCenterId: null } });
+    await prisma.costCenter.deleteMany({ where: { id } });
+  }
+
   async assignInvoice(invoiceId: string, costCenterId: string | null): Promise<void> {
     await prisma.invoice.update({ where: { id: invoiceId }, data: { costCenterId } });
   }

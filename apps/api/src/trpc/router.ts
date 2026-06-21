@@ -623,6 +623,18 @@ export const appRouter = router({
         }
       }),
   }),
+
+  // Kostenstellen (B7): Stammdaten anlegen/auflisten/löschen + Auswertung je Kostenstelle.
+  costCenters: router({
+    list: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.costCenters.list()),
+    report: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.costCenters.invoiceReport()),
+    create: roleProcedure(...supplierRoles)
+      .input(z.object({ nummer: z.string().min(1), name: z.string().min(1) }))
+      .mutation(({ input, ctx }) => ctx.costCenters.create(input.nummer, input.name)),
+    delete: roleProcedure(...supplierRoles)
+      .input(z.object({ id: z.string().min(1) }))
+      .mutation(({ input, ctx }) => ctx.costCenters.remove(input.id)),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

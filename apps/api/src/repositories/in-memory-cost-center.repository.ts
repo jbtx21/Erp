@@ -18,6 +18,15 @@ export class InMemoryCostCenterRepository implements CostCenterRepository {
     return { id, nummer };
   }
 
+  async list(): Promise<Array<{ id: string; nummer: string; name: string }>> {
+    return [...this.centers.values()].map((c) => ({ ...c })).sort((a, b) => a.nummer.localeCompare(b.nummer));
+  }
+
+  async remove(id: string): Promise<void> {
+    this.centers.delete(id);
+    for (const inv of this.invoices.values()) if (inv.costCenterId === id) inv.costCenterId = null;
+  }
+
   async assignInvoice(invoiceId: string, costCenterId: string | null): Promise<void> {
     const inv = this.invoices.get(invoiceId);
     if (inv) inv.costCenterId = costCenterId;
