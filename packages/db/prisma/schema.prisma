@@ -239,7 +239,8 @@ model Variant {
   bomItems   BomItem[]
   purchaseOrderLines PurchaseOrderLine[]
   goodsReceiptLines  GoodsReceiptLine[]
-  stockLevel StockLevel? // Lager/Bestand (T-12)
+  stockLevel StockLevel? // Lager/Bestand (T-12) — materialisierter Cache des Ledgers
+  stockMoves StockMove[] // Bewegungs-Ledger (F4)
   createdAt  DateTime @default(now())
 
   @@index([articleId])
@@ -739,6 +740,38 @@ model StockLevel {
   qty       Int     @default(0)
   minStock  Int     @default(0)
   updatedAt DateTime @updatedAt
+}
+
+// Bestands-Bewegungs-Ledger (F4, Kap. 37.1) — Vorbild Odoo stock.move/quants.
+// Append-only: der Bestand ist die Summe der Bewegungen, niemals direkt gesetzt.
+// `StockLevel` bleibt materialisierter Cache des HAUPT-Lagers; MUSTER-Lager wird
+// getrennt geführt (B5 Muster-Leihgut).
+enum StockMoveReason {
+  EROEFFNUNG // Anfangsbestand bei Ledger-Einführung
+  WARENEINGANG
+  VERBRAUCH
+  INVENTUR // Korrektur aus Inventur (B16)
+  KORREKTUR
+  MUSTER // Ausgabe/Rücknahme Musterware (B5)
+}
+
+enum StockLager {
+  HAUPT
+  MUSTER
+}
+
+model StockMove {
+  id        String          @id @default(cuid())
+  variantId String
+  variant   Variant         @relation(fields: [variantId], references: [id])
+  deltaQty  Int // +Zugang / −Abgang
+  grund     StockMoveReason
+  lager     StockLager      @default(HAUPT)
+  belegRef  String? // Verweis auf auslösenden Beleg (PO/Order/Inventur)
+  createdAt DateTime        @default(now())
+
+  @@index([variantId, lager])
+  @@index([createdAt])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

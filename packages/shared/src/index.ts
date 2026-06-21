@@ -36,3 +36,4 @@ export * from "./numbering.js";
 export * from "./statemachine.js";
 export * from "./order.js";
 export * from "./quote.js";
+export * from "./stock.js";
