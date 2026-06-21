@@ -704,8 +704,22 @@ model OpenItem {
   dueDate     DateTime
   dunningLevel Int     @default(0) // 0..3 (Kap. 9.5)
   payments    PaymentAllocation[]
+  dunningNotices DunningNotice[] // append-only Mahnhistorie (B10)
 
   @@index([dueDate])
+}
+
+// Mahnbeleg (B10, Kap. 9.5) — append-only Historie je Mahnstufe (G2: kein Update).
+model DunningNotice {
+  id          String   @id @default(cuid())
+  openItemId  String
+  openItem    OpenItem @relation(fields: [openItemId], references: [id], onDelete: Cascade)
+  stufe       Int
+  gebuehrCents Int
+  textVorlage String
+  erzeugtAm   DateTime @default(now())
+
+  @@index([openItemId])
 }
 
 model Payment {

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { computeDunning, daysOverdue, type DunnableItem } from "./dunning.js";
+import {
+  buildDunningNotice,
+  computeDunning,
+  daysOverdue,
+  DEFAULT_DUNNING_LEVELS,
+  type DunnableItem,
+} from "./dunning.js";
 
 const today = new Date("2026-06-18T00:00:00Z");
 const due = (offsetDays: number) =>
@@ -49,5 +55,23 @@ describe("Mahnwesen (T-14)", () => {
 
   it("daysOverdue rechnet ganze Tage", () => {
     expect(daysOverdue(due(14), today)).toBe(14);
+  });
+});
+
+describe("Mahnbeleg: Gebühr + Text je Stufe (B10)", () => {
+  it("baut den Beleg mit Gebühr und Textvorlage der Zielstufe", () => {
+    const notice = buildDunningNotice({ itemId: "oi-1", fromLevel: 1, toLevel: 2, daysOverdue: 20 });
+    expect(notice).toMatchObject({ itemId: "oi-1", stufe: 2, gebuehrCents: 500 });
+    expect(notice.textVorlage).toContain("1. Mahnung");
+  });
+
+  it("Stufe 1 ist gebührenfrei, Stufe 3 trägt die höchste Gebühr", () => {
+    expect(buildDunningNotice({ itemId: "x", fromLevel: 0, toLevel: 1, daysOverdue: 1 }).gebuehrCents).toBe(0);
+    expect(buildDunningNotice({ itemId: "x", fromLevel: 2, toLevel: 3, daysOverdue: 40 }).gebuehrCents).toBe(1000);
+  });
+
+  it("wirft bei unbekannter Stufe", () => {
+    expect(() => buildDunningNotice({ itemId: "x", fromLevel: 3, toLevel: 4, daysOverdue: 99 })).toThrow();
+    expect(DEFAULT_DUNNING_LEVELS[4]).toBeUndefined();
   });
 });

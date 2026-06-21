@@ -3,14 +3,21 @@
 // Mahnsperre (am Kunden) verhindert jede Mahnung des Postens. Repository als Interface
 // → testbar ohne DB.
 
-import { computeDunning, DEFAULT_DUNNING, type DunnableItem, type DunningRun } from "@texma/shared";
+import {
+  buildDunningNotice,
+  computeDunning,
+  DEFAULT_DUNNING,
+  type DunnableItem,
+  type DunningNoticeDraft,
+  type DunningRun,
+} from "@texma/shared";
 import { buildEntry, type AuditSink } from "@texma/audit";
 
 export interface DunningRepository {
   /** Offene Posten (> 0) inkl. Fälligkeit, aktueller Mahnstufe und Mahnsperre. */
   listDunnable(): Promise<DunnableItem[]>;
-  /** Hebt die Mahnstufe eines Postens auf `toLevel`. */
-  applyDunningLevel(itemId: string, toLevel: number): Promise<void>;
+  /** Hebt die Mahnstufe an UND schreibt den Mahnbeleg (Historie) — atomar (G2). */
+  applyDunningStep(notice: DunningNoticeDraft): Promise<void>;
 }
 
 export class DunningService {
@@ -25,7 +32,7 @@ export class DunningService {
     const run = computeDunning(items, today, DEFAULT_DUNNING);
 
     for (const p of run.proposals) {
-      await this.repo.applyDunningLevel(p.itemId, p.toLevel);
+      await this.repo.applyDunningStep(buildDunningNotice(p));
     }
 
     await this.audit.append(

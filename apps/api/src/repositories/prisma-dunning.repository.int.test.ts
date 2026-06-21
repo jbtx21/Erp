@@ -30,6 +30,7 @@ if (!dbConfigured) {
     const service = new DunningService(repo, new MemoryAuditSink());
 
     async function cleanup() {
+      await prisma.dunningNotice.deleteMany({ where: { openItemId: { in: [OI, OI_B] } } });
       await prisma.openItem.deleteMany({ where: { id: { in: [OI, OI_B] } } });
       await prisma.invoice.deleteMany({ where: { id: { in: [INV, INV_B] } } });
       await prisma.order.deleteMany({ where: { id: { in: [ORD, ORD_B] } } });
@@ -62,6 +63,13 @@ if (!dbConfigured) {
 
       expect((await prisma.openItem.findUnique({ where: { id: OI } }))?.dunningLevel).toBe(1);
       expect((await prisma.openItem.findUnique({ where: { id: OI_B } }))?.dunningLevel).toBe(0);
+
+      // B10: Mahnbeleg-Historie geschrieben (Stufe 1, gebührenfrei); gesperrter ohne Beleg.
+      const notices = await prisma.dunningNotice.findMany({ where: { openItemId: OI } });
+      expect(notices).toHaveLength(1);
+      expect(notices[0]).toMatchObject({ stufe: 1, gebuehrCents: 0 });
+      expect(notices[0]!.textVorlage).toContain("Zahlungserinnerung");
+      expect(await prisma.dunningNotice.count({ where: { openItemId: OI_B } })).toBe(0);
     });
   });
 }

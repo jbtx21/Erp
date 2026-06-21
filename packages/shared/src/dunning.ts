@@ -88,3 +88,43 @@ export function computeDunning(
 
   return { proposals, blocked };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mahnstufen-Policy: Gebühr + Textvorlage je Stufe; Mahnbeleg (B10, Kap. 9.5).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface DunningLevelPolicy {
+  gebuehrCents: Cents;
+  textVorlage: string;
+}
+
+/** Standard-Mahnstufen: Erinnerung (gebührenfrei) → 1. Mahnung → 2. Mahnung. */
+export const DEFAULT_DUNNING_LEVELS: Record<number, DunningLevelPolicy> = {
+  1: { gebuehrCents: 0, textVorlage: "Zahlungserinnerung — bitte begleichen Sie den offenen Betrag." },
+  2: { gebuehrCents: 500, textVorlage: "1. Mahnung — wir bitten um umgehende Zahlung; Mahngebühr fällig." },
+  3: { gebuehrCents: 1000, textVorlage: "2. Mahnung — letzte Aufforderung vor weiteren Schritten." },
+};
+
+export interface DunningNoticeDraft {
+  itemId: string;
+  stufe: number;
+  gebuehrCents: Cents;
+  textVorlage: string;
+  daysOverdue: number;
+}
+
+/** Baut den Mahnbeleg zu einem Vorschlag — Gebühr + Textvorlage der Zielstufe. */
+export function buildDunningNotice(
+  proposal: DunningProposal,
+  levels: Record<number, DunningLevelPolicy> = DEFAULT_DUNNING_LEVELS
+): DunningNoticeDraft {
+  const policy = levels[proposal.toLevel];
+  if (!policy) throw new Error(`Keine Mahnstufen-Policy für Stufe ${proposal.toLevel}`);
+  return {
+    itemId: proposal.itemId,
+    stufe: proposal.toLevel,
+    gebuehrCents: policy.gebuehrCents,
+    textVorlage: policy.textVorlage,
+    daysOverdue: proposal.daysOverdue,
+  };
+}

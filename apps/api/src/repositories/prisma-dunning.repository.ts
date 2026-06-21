@@ -3,7 +3,7 @@
 // aufgelöst.
 
 import { prisma } from "@texma/db";
-import type { DunnableItem } from "@texma/shared";
+import type { DunnableItem, DunningNoticeDraft } from "@texma/shared";
 import type { DunningRepository } from "../modules/dunning/dunning.service.js";
 import type { DunningOverviewItem, DunningQueryRepository } from "./read.js";
 
@@ -34,8 +34,19 @@ export class PrismaDunningRepository implements DunningRepository, DunningQueryR
     return this.load();
   }
 
-  async applyDunningLevel(itemId: string, toLevel: number): Promise<void> {
-    await prisma.openItem.update({ where: { id: itemId }, data: { dunningLevel: toLevel } });
+  async applyDunningStep(notice: DunningNoticeDraft): Promise<void> {
+    // Stufe hochsetzen und Mahnbeleg (Historie) atomar schreiben (G2: kein Update).
+    await prisma.$transaction([
+      prisma.openItem.update({ where: { id: notice.itemId }, data: { dunningLevel: notice.stufe } }),
+      prisma.dunningNotice.create({
+        data: {
+          openItemId: notice.itemId,
+          stufe: notice.stufe,
+          gebuehrCents: notice.gebuehrCents,
+          textVorlage: notice.textVorlage,
+        },
+      }),
+    ]);
   }
 
   async listDunning(limit: number): Promise<DunningOverviewItem[]> {

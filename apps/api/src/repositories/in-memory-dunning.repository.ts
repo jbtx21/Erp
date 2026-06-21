@@ -1,6 +1,6 @@
 // In-Memory-Implementierung der Mahnwesen-Repositories — für Tests/lokale Durchstiche.
 
-import type { DunnableItem } from "@texma/shared";
+import type { DunnableItem, DunningNoticeDraft } from "@texma/shared";
 import type { DunningRepository } from "../modules/dunning/dunning.service.js";
 import type { DunningOverviewItem, DunningQueryRepository } from "./read.js";
 
@@ -9,6 +9,9 @@ export interface SeedOpenItem extends DunnableItem {
 }
 
 export class InMemoryDunningRepository implements DunningRepository, DunningQueryRepository {
+  /** Append-only Mahnhistorie (B10) — für Testzusicherungen einsehbar. */
+  readonly notices: DunningNoticeDraft[] = [];
+
   constructor(private readonly items: SeedOpenItem[]) {}
 
   async listDunnable(): Promise<DunnableItem[]> {
@@ -21,9 +24,10 @@ export class InMemoryDunningRepository implements DunningRepository, DunningQuer
     }));
   }
 
-  async applyDunningLevel(itemId: string, toLevel: number): Promise<void> {
-    const it = this.items.find((x) => x.id === itemId);
-    if (it) it.dunningLevel = toLevel;
+  async applyDunningStep(notice: DunningNoticeDraft): Promise<void> {
+    const it = this.items.find((x) => x.id === notice.itemId);
+    if (it) it.dunningLevel = notice.stufe;
+    this.notices.push(notice);
   }
 
   async listDunning(limit: number): Promise<DunningOverviewItem[]> {
