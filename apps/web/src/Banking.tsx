@@ -99,6 +99,19 @@ function Connections(): JSX.Element {
     }
   }, [load]);
 
+  const del = useCallback(async (id: string, name: string) => {
+    if (typeof window !== "undefined" && !window.confirm(`Bank-Verbindung „${name}" wirklich löschen?`)) return;
+    setErr("");
+    setStatus("");
+    try {
+      await trpc.banking.connections.delete.mutate({ connectionId: id });
+      setStatus(`Bank-Verbindung „${name}" gelöscht.`);
+      await load();
+    } catch (e) {
+      setErr(errMsg(e));
+    }
+  }, [load]);
+
   const ibanOk = iban === "" || ibanIsValid(iban);
 
   return (
@@ -129,7 +142,10 @@ function Connections(): JSX.Element {
               </Table.Td>
               <Table.Td>{fmtDate(c.lastSyncAt)}</Table.Td>
               <Table.Td ta="right">
-                <Button size="compact-xs" variant="default" onClick={() => void sync(c.id)} disabled={!c.consent.ok}>Auszug abrufen</Button>
+                <Group gap="xs" justify="flex-end" wrap="nowrap">
+                  <Button size="compact-xs" variant="default" onClick={() => void sync(c.id)} disabled={!c.consent.ok}>Auszug abrufen</Button>
+                  <Button size="compact-xs" variant="light" color="red" onClick={() => void del(c.id, c.name)}>Löschen</Button>
+                </Group>
               </Table.Td>
             </Table.Tr>
           ))}

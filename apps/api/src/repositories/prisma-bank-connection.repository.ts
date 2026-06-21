@@ -71,6 +71,12 @@ export class PrismaBankConnectionRepository implements BankConnectionRepository 
     return { ...c, kind: c.kind as BankConnectionKind };
   }
 
+  async deleteConnection(id: string): Promise<void> {
+    // Abhängige Zahlaufträge zuerst entfernen (FK), dann die Verbindung.
+    await prisma.paymentOrder.deleteMany({ where: { connectionId: id } });
+    await prisma.bankConnection.deleteMany({ where: { id } });
+  }
+
   async updateLastSync(id: string, at: Date): Promise<void> {
     await prisma.bankConnection.update({ where: { id }, data: { lastSyncAt: at } });
   }

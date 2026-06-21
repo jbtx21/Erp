@@ -71,6 +71,7 @@ export interface BankConnectionRepository {
   listConnections(): Promise<BankConnectionRow[]>;
   getConnection(id: string): Promise<BankConnectionRow | null>;
   createConnection(input: CreateConnectionInput): Promise<BankConnectionRow>;
+  deleteConnection(id: string): Promise<void>;
   updateLastSync(id: string, at: Date): Promise<void>;
   createPaymentOrder(input: {
     connectionId: string;
@@ -166,6 +167,11 @@ export class BankConnectionService {
         : null;
     const row = await this.repo.createConnection({ ...input, consentValidUntil });
     return this.toConnectionView(row);
+  }
+
+  /** Entfernt eine Bank-Verbindung (z. B. Testeintrag). */
+  async deleteConnection(id: string): Promise<void> {
+    await this.repo.deleteConnection(id);
   }
 
   /** Ruft neue Gutschriften der Verbindung ab und speist sie in die Matching-Pipeline. */

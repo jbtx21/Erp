@@ -51,6 +51,11 @@ export class InMemoryBankConnectionRepository implements BankConnectionRepositor
     return { ...row };
   }
 
+  async deleteConnection(id: string): Promise<void> {
+    const i = this.connections.findIndex((x) => x.id === id);
+    if (i >= 0) this.connections.splice(i, 1);
+  }
+
   async updateLastSync(id: string, at: Date): Promise<void> {
     const c = this.connections.find((x) => x.id === id);
     if (c) c.lastSyncAt = at;

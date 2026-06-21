@@ -195,6 +195,10 @@ export const appRouter = router({
       sync: roleProcedure(...supplierRoles)
         .input(z.object({ connectionId: z.string().min(1) }))
         .mutation(({ input, ctx }) => ctx.bankConnections.sync(input.connectionId)),
+
+      delete: roleProcedure(...supplierRoles)
+        .input(z.object({ connectionId: z.string().min(1) }))
+        .mutation(({ input, ctx }) => ctx.bankConnections.deleteConnection(input.connectionId)),
     }),
 
     /** SEPA-Überweisungen auslösen (PIS, pain.001) über EBICS/PSD2 (Kap. 9). */
