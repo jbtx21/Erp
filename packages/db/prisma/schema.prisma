@@ -257,9 +257,9 @@ enum MediaAssetKind {
 model MediaAsset {
   id        String         @id @default(cuid())
   articleId String?
-  article   Article?       @relation(fields: [articleId], references: [id])
+  article   Article?       @relation(fields: [articleId], references: [id], onDelete: Cascade)
   variantId String?
-  variant   Variant?       @relation(fields: [variantId], references: [id])
+  variant   Variant?       @relation(fields: [variantId], references: [id], onDelete: Cascade)
   url       String
   kind      MediaAssetKind @default(IMAGE)
   sortOrder Int            @default(0)
@@ -279,7 +279,7 @@ enum FinishingMethod {
 model FinishingSpec {
   id         String          @id @default(cuid())
   articleId  String
-  article    Article         @relation(fields: [articleId], references: [id])
+  article    Article         @relation(fields: [articleId], references: [id], onDelete: Cascade)
   method     FinishingMethod
   placement  String // z. B. "Brust links", "Rücken"
   stitchCount Int?
@@ -354,7 +354,7 @@ model PriceGroupPriceTier {
 model CustomerPriceTier {
   id        String  @id @default(cuid())
   companyId String
-  company   Company @relation(fields: [companyId], references: [id])
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   variantId String
   variant   Variant @relation(fields: [variantId], references: [id])
   minMenge  Int
