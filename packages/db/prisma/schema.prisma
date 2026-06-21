@@ -472,6 +472,8 @@ model Quote {
   company   Company     @relation(fields: [companyId], references: [id])
   status    QuoteStatus @default(ENTWURF)
   wiedervorlageAm DateTime? // Nachfass-Termin (Kap. 35.1)
+  gueltigBisAm DateTime? // Angebotsverfall (B8, Kap. 35.1)
+  verlustgrund String? // Grund bei Ablehnung (B8, Kap. 35.1)
   lines     QuoteLine[]
   order     Order?
   createdAt DateTime    @default(now())
