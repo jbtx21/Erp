@@ -10,14 +10,16 @@
 |---|---|
 | **UI-Umfang** | **API-first** — Backend + Domänenlogik + Tests. Keine Web-UI in diesem Bau (eigener späterer Sprint). |
 | **TSE (Kasse)** | **Deutsche Fiskal** (Cloud-TSE), hinter Connector-Abstraktion. |
-| **RPO/RTO** | **RPO ~0 / RTO ≤ 1 h** — kontinuierliche Postgres-Replikation (Streaming/WAL), kein reines Backup. |
+| **RPO/RTO** | **RTO ≤ 1 h**, RPO sekunden-nah — **asynchrone** Streaming-Replikation (kein Sync-Commit-Latenz-Overhead). Managed-HA-Postgres als Betriebsoption. |
 | **Mengenstaffel** | **Global je Preisgruppe + kundenindividuell** (zwei Ebenen, kundenindividuell sticht). |
 | Musterpreis (B5) | = Listenpreis der Variante (Default gesetzt). |
 | Kostenstellen (B7) | generische Tabelle; Schlüssel von TEXMA/StB später befüllbar. |
 | K-01 Addison | naturgemäß extern; Bau liefert nur den normkonformen DATEV/EXTF-Export. |
 | **Fertigungstiefe** | **Reine Veredelung** (Blanks zukaufen) — kein Cut-Make-Trim. Produktion = Veredelungs-Arbeitsplätze/Kapazität; D-PROD/APS bleibt minimal (nur B9-Rückwärtsterminierung). |
-| **Scope-Erweiterung** | Aus dem Domänen-Check (`docs/domaenen-check-textil.md`) nur **D-PIM** aufgenommen (→ **B18**). D-CRM/D-RFQ, D-PROD-APS und D-ACC bleiben dokumentiert, aber **zurückgestellt** (s. §9). |
+| **Scope-Erweiterung** | Aufgenommen: **D-PIM** (→ **B18**) und **D-RFQ/Anfrage-Funnel** (→ **B20**, Sprint 5). D-CRM (volle Lead/Opportunity-Pipeline), D-PROD-APS, D-ACC bleiben **zurückgestellt** (§9). |
 | **Berichtswesen** | Finanz-Reporting als **B19** (Sprint 5). Self-Service-BI = **Metabase** auf der B17-Read-Replica (kein eigener Report-Builder). |
+| **Kasse (B6)** | **zurückgestellt** nach Sprint 6 — kaum Vor-Ort-Barverkauf (B2B auf Rechnung). Spec bleibt vollständig, TSE = Deutsche Fiskal. |
+| **Bestand (F4)** | **vorgezogen** in Sprint 3 (Fundament, vor B5/B16) — Bewegungs-Ledger zuerst, damit Muster-/Inventur-Items kein Doppel-Refactoring brauchen. |
 
 ## 1. Architektur-Anleihen aus Open-Source-ERPs
 **Strategie:** Wir übernehmen **Muster und Standard-Bibliotheken**, nicht die Plattform.
@@ -42,10 +44,10 @@ Wir entnehmen gezielt:
 
 ## 2. Build-Reihenfolge
 ```
-Sprint 3 (Fundament/Compliance):  F1 · F2 · B3 · B1 · B2
-Sprint 4 (Muss):                  B4 · B18 · B17 · F3 · B5 · B7 · B6
-Sprint 5 (Vorgangskette):         B8 · B9 · B10 · B11 · B12 · B19
-Sprint 6 (Could/Future):          B16(+F4) · B15 · B13 · B14
+Sprint 3 (Fundament/Compliance):  F1 · F2 · F4 · B3 · B1 · B2
+Sprint 4 (Muss):                  B4 · B18 · B17 · F3 · B5 · B7
+Sprint 5 (Vorgangskette):         B8 · B9 · B10 · B11 · B12 · B19 · B20
+Sprint 6 (Could/Future):          B16 · B6(Kasse) · B15 · B13 · B14
 ```
 Regel je Item (Definition of Done) siehe §7.
 
@@ -68,6 +70,12 @@ Regel je Item (Definition of Done) siehe §7.
 - **Tests:** `statemachine.test.ts` (erlaubte/verbotene Übergänge); Regressions-Tests Subproduction.
 - **Gate:** G5. **Abh.:** keine. Underpins B8/B9.
 
+### F4 · Bestand als Bewegungs-Ledger — G2/Kap. 37.1 · **M** (vorgezogen)
+- **Refactor (Odoo `stock.move`):** `StockMove { variantId, deltaQty Int, grund [WARENEINGANG|VERBRAUCH|INVENTUR|KORREKTUR|MUSTER], lager [HAUPT|MUSTER], belegRef, createdAt }` **append-only**; aktueller Bestand = Σ moves, `StockLevel` bleibt als materialisierter Cache.
+- **Warum zuerst:** B5 (Muster-Bestand) und B16 (Inventur) bauen darauf — Ledger vor den bestandsberührenden Items vermeidet Doppel-Refactoring.
+- **Migration:** `StockLevel.qty` → Eröffnungs-`StockMove` je Variante.
+- **Tests:** `stock.test.ts` — Saldo = Σ Moves; getrennter Muster-Lagerbestand. **Gate:** G2 (auditierbar). **Abh.:** B3.
+
 ### B3 · Integrations-Testlane (CI) — G6 · **M**
 - CI-Job mit ephemerem Postgres (service container), `DATABASE_URL`, `prisma migrate deploy`, dann alle `*.int.test.ts`; Unit-Lane bleibt DB-frei.
 - **Artefakt:** `.github/workflows/ci.yml` (+ ggf. `docker-compose.test.yml`).
@@ -89,7 +97,7 @@ Regel je Item (Definition of Done) siehe §7.
 - **Schema (zwei Ebenen):**
   - `PriceGroupPriceTier { variantId, priceGroupId, minMenge Int, netCents Int  @@unique([variantId,priceGroupId,minMenge]) }` (global je Preisgruppe).
   - `CustomerPriceTier { companyId, variantId, minMenge Int, netCents Int  @@unique([companyId,variantId,minMenge]) }` (kundenindividuell).
-- **Shared:** `pricing.ts` — Preisfindung: **kundenindividuelle Staffel sticht** vor Preisgruppen-Staffel; Stufenwahl „größte `minMenge` ≤ Bestellmenge"; danach Veredelungs-Markup multiplikativ.
+- **Shared (Bake-in: *eine* Pipeline, klare Präzedenz):** `pricing.ts` — (1) `CustomerPriceTier` → (2) `PriceGroupPriceTier` → (3) Einzelpreis `PriceGroupPrice`, danach (4) `MarkupRule`-Veredelungsstaffel multiplikativ. Stufenwahl je Ebene „größte `minMenge` ≤ Bestellmenge". **Kein vierter paralleler Mechanismus** — alle Staffelquellen laufen durch dieselbe Funktion.
 - **Tests:** `pricing.test.ts` — T-15 generisch (Grenze über-/unterschritten), Vorrang kundenindividuell vor global, Stickerei-Staffel bleibt grün.
 - **Gate:** macht T-15 voll. **Abh.:** F2 nein; B3 (int-test).
 
@@ -109,35 +117,28 @@ Regel je Item (Definition of Done) siehe §7.
 
 ### B17 · Notbetrieb & Resilienz — K-17 · Kap. 27 · **L** (Muss)
 - **Modus A (Internet am Standort weg, Cloud ok):** `modules/continuity` erzeugt **Tages-Offline-Bundle** offener Aufträge — Produktionszettel (vorhandenes `production-sheet-pdf`) + Lieferscheine als PDF/CSV; Produktion arbeitet offline.
-- **Modus B (Cloud/Server-Ausfall):** **kontinuierliche Replikation** (Postgres Streaming-Replica/Hot-Standby, **RPO ~0**), automatischer Failover-Runbook (**RTO ≤ 1 h**). Konfiguration als IaC/Doku, nicht App-Code.
+- **Modus B (Cloud/Server-Ausfall):** **asynchrone Streaming-Replikation** (Postgres Hot-Standby, **RPO sekunden-nah**, keine Commit-Latenz), dokumentierter Failover (**RTO ≤ 1 h**). Managed-HA-Postgres als Betriebsoption. Konfiguration als IaC/Doku, nicht App-Code.
 - **Wiederanlauf:** `OutboxEvent`/`IntegrationLog` liefert Shop-/Versand-Events nach; nacherfasste Produktionsrückmeldungen **idempotent** (Idempotenzschlüssel am Eingang).
 - **Schema:** `idempotencyKey String?` an Rückmeldungs-Eingängen (z. B. `TimeEntry`/Produktionsrückmeldung) + `@@unique`.
 - **Tests:** `continuity.test.ts` — Bundle vollständig (alle Produktions-Pflichtfelder), doppelte Nacherfassung bleibt idempotent.
 - **Doku:** Failover-/Notfall-Runbook in B1-Abschnitt 4. **Abh.:** B1, B3.
 
-### F3 · EN16931-Schematron-Validierung — G3 · **M**
-- **Worker:** `services/workers/connectors/einvoice-validator` ruft **KoSIT-Validator** (Java-CLI als Sidecar) mit den offiziellen XRechnung-/EN16931-Schematron-Regeln.
-- **Shared/API:** `einvoice-inbound` und Ausgangsweg nutzen das Ergebnis; unsere pragmatische Kernvalidierung bleibt als schneller Vorfilter.
-- **Tests:** `einvoice.test.ts` erweitern (valide/invalide Referenzbelege); Worker-Smoke-Test.
+### F3 · EN16931-Validierung (zweistufig, Bake-in) — G3 · **M**
+- **Stufe 1 (TS-nativ, Pflicht):** `einvoice.ts` um die EN16931-**Geschäftsregeln (BR-*)** erweitern — deckt den Großteil **ohne JVM**, schneller Vorfilter für Aus- & Eingang.
+- **Stufe 2 (optional, Zertifizierung):** `services/workers/connectors/einvoice-validator` ruft **KoSIT-Validator** (Java-Sidecar, Schematron) — nur wenn voll-zertifizierte Konformität verlangt wird (hält die JVM aus dem Normalbetrieb).
+- **Tests:** `einvoice.test.ts` erweitern (valide/invalide Referenzbelege, BR-Regeln); Sidecar-Smoke-Test optional.
 - **Gate:** härtet G3 (Aus- & Eingang). **Abh.:** B3.
 
 ### B5 · Muster-Leihgut + 21-Tage-Automatik — Kap. 37.3 · **M**
-- **Schema:** `SampleLoan { companyId, variantId, menge Int, ausgegebenAm, status [VERLIEHEN|ZURUECK|BERECHNET], invoiceId? }`; getrennter Musterbestand (Flag/Lagerort).
+- **Schema:** `SampleLoan { companyId, variantId, menge Int, ausgegebenAm, status [VERLIEHEN|ZURUECK|BERECHNET], invoiceId? }`. **Musterbestand über F4** (`StockMove` mit `lager=MUSTER`) — kein separates mutables Feld.
 - **Wiedervorlage:** `DueItem(entity="SampleLoan", dueDate = ausgegebenAm + 21T)`.
 - **Shared:** `sample.ts` — Fälligkeit; bei Überschreitung Musterrechnung (**Preis = Listenpreis**) via `invoice.ts` + Nummer aus **F1**.
 - **Tests:** `sample.test.ts` — Rückgabe < 21 T → keine Rechnung; > 21 T → Musterrechnung zum Listenpreis.
-- **Gate:** G1. **Abh.:** F1, B3.
+- **Gate:** G1. **Abh.:** F1, **F4**, B3.
 
 ### B7 · Kostenstellen — Kap. 37.1 · **M**
 - **Schema:** `CostCenter { nummer @unique, name }` + `costCenterId?` an `Invoice`/`PurchaseOrder`/`TimeEntry`.
 - **Shared/API:** Zuordnung + Auswertung in `reporting.ts`. **Tests:** `reporting.test.ts` (Auswertung je Kostenstelle). **Gate:** G1 (Auswertung, keine Buchung). **Abh.:** keine.
-
-### B6 · Kasse (Bar/EC) mit Deutsche-Fiskal-TSE — Kap. 37.4 · **L**
-- **Connector:** `services/workers/connectors/tse` kapselt **Deutsche Fiskal** (Signatur, Seriennummer, Transaktions-Start/Finish) hinter Port-Interface.
-- **Schema:** `CashRegister`; `CashSale { orderId?, betragCents, art [BAR|EC], belegNr (F1), kassiertAm, kassierer, tseSignatur, tseSeriennummer, tseTxId }` — **append-only** (`packages/audit`/WORM).
-- **Shared:** `pos.ts` — Beleg/Zahlung, Verknüpfung `OpenItem`/`Payment`; **DSFinV-K-Export**.
-- **Tests:** `pos.test.ts` — Barzahlung → signierter, unveränderbarer Beleg + Posten geschlossen; DSFinV-K-Export valide (Stub-TSE im Test).
-- **Gate:** G2 (WORM) + KassenSichV/§146a AO. **Abh.:** F1, B3. **Begleitschritt (nicht blockierend):** Deutsche-Fiskal-Vertrag/Keys + StB-Gegenzeichnung.
 
 ---
 
@@ -181,14 +182,29 @@ Regel je Item (Definition of Done) siehe §7.
 - **Tests:** `reporting.test.ts`/`production-metrics.test.ts`-Stil — Aging-Buckets, DSO, Marge-Breakdown.
 - **Gate:** G1 (Auswertung, keine Buchung) + RBAC. **Abh.:** B17 (Replica als BI-Quelle).
 
+### B20 · Anfrage/RFQ-Funnel (D-RFQ) — Kap. 18.1/35.1 · **M**
+- **Ziel:** durchgängiger Funnel **Anfrage → Angebot → Auftrag**; Vorbild Odoo `crm.lead` (ohne volle Pipeline).
+- **Schema:** `Inquiry { id, number (F1), companyId?, kontaktName?, quelle [WEB|EMAIL|SHOP|TELEFON], status [NEU|IN_BEARBEITUNG|ANGEBOT|VERWORFEN], verworfenGrund?, text, quoteId?, createdAt }` (+ optional `InquiryLine`).
+- **Shared:** `inquiry.ts` — Status-Funnel über **F2**; Konvertierung `Inquiry → Quote` (übernimmt Positionen/Company).
+- **API:** `modules/inquiry/inquiry.service.ts` (+ in-memory/prisma repo + int-test).
+- **Tests:** `inquiry.test.ts` — Funnel-Übergänge, Konvertierung Inquiry→Quote, Verwerfen mit Grund.
+- **Gate:** G6. **Abh.:** F1, F2, Quote (B8).
+
 ---
 
 ## Sprint 6 — Could/Future
 
-### B16 + F4 · Inventur als Bewegungs-Ledger — Kap. 37.1 · **M–L**
-- **F4-Refactor (Odoo `stock.move`-Muster):** `StockMove { variantId, deltaQty Int, grund [WARENEINGANG|VERBRAUCH|INVENTUR|KORREKTUR], belegRef, createdAt }` **append-only**; aktueller Bestand = Σ moves (materialisiert in `StockLevel` als Cache).
-- **B16:** Inventur erzeugt `StockMove`-Korrekturbelege statt `qty` direkt zu setzen.
-- **Tests:** `stock.test.ts` — Saldo = Summe der Moves; Inventurkorrektur erzeugt Beleg. **Gate:** G2 (auditierbar). **Abh.:** Migration `StockLevel`→Ledger.
+### B16 · Inventur (auf F4-Ledger) — Kap. 37.1 · **M**
+- **Inventur:** erzeugt `StockMove`-Korrekturbelege (`grund=INVENTUR`) statt `qty` direkt zu setzen; F4-Ledger steht bereits aus Sprint 3.
+- **Tests:** `stock.test.ts` — Inventurkorrektur erzeugt Beleg, Saldo stimmt. **Gate:** G2 (auditierbar). **Abh.:** F4.
+
+### B6 · Kasse (Bar/EC) mit Deutsche-Fiskal-TSE — Kap. 37.4 · **L** (zurückgestellt aus Sprint 4)
+- **Warum hier:** kaum Vor-Ort-Barverkauf bei B2B-Lohnveredelung → niedrige Priorität; Spec bleibt vollständig, falls Ladentheke dazukommt.
+- **Connector:** `services/workers/connectors/tse` kapselt **Deutsche Fiskal** hinter Port-Interface.
+- **Schema:** `CashRegister`; `CashSale { orderId?, betragCents, art [BAR|EC], belegNr (F1), kassiertAm, kassierer, tseSignatur, tseSeriennummer, tseTxId }` — **append-only** (WORM).
+- **Shared:** `pos.ts` — Beleg/Zahlung, Verknüpfung `OpenItem`/`Payment`; **DSFinV-K-Export**.
+- **Tests:** `pos.test.ts` — signierter, unveränderbarer Beleg + Posten geschlossen; DSFinV-K valide (Stub-TSE).
+- **Gate:** G2 + KassenSichV/§146a AO. **Abh.:** F1, B3. **Begleitschritt:** Deutsche-Fiskal-Vertrag/Keys + StB.
 
 ### B15 · Lead/Interessent — Kap. 18.1 · **M**
 - Leichter Entitätstyp `Lead` vor `Company`; Konvertierung Lead→Company.
@@ -215,9 +231,9 @@ die parallel zum Bau laufen und die Codeerstellung nicht aufhalten:
 - Bereitstellung Postgres-Replica/Failover-Infra (B17) — IaC/Betrieb.
 
 ## 9. Bewusst zurückgestellt (dokumentiert, nicht im aktiven Plan)
-Aus dem Domänen-Check übernommen ist nur **B18 (D-PIM)**. Folgende Lücken sind analysiert und in
-`docs/domaenen-check-textil.md` festgehalten, aber **per Entscheidung nicht** in diesem Bau:
-- **D-CRM + D-RFQ** — Lead/Opportunity/Activity + `Inquiry`-Funnel (Vorbild Twenty/EspoCRM). Kandidat für einen späteren Vertriebs-Sprint.
+Aus dem Domänen-Check aufgenommen: **B18 (D-PIM)** und **B20 (D-RFQ Anfrage-Funnel)**. Folgende Lücken sind
+analysiert und in `docs/domaenen-check-textil.md` festgehalten, aber **per Entscheidung nicht** in diesem Bau:
+- **D-CRM** — volle Lead/Opportunity/Activity-**Pipeline** (Vorbild Twenty/EspoCRM). Der Anfrage-Funnel ist als **B20** im Plan; die breite Vertriebs-Pipeline bleibt späterer Sprint.
 - **D-PROD/APS** — Workstation/Routing + endliche Kapazitätsplanung (frePPLe-Sidecar). Einstieg bleibt B9 (Rückwärtsterminierung); APS später.
 - **D-ACC** — USt-Sonderfälle (Reverse-Charge/innergemeinschaftlich) + Skonto. Bei Bedarf als kleine Ergänzung nachziehbar.
 - **D-UI** — react-admin/Twenty über die REST-API; eigener UI-Sprint (API-first-Entscheidung).
