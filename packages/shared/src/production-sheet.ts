@@ -50,10 +50,14 @@ function isBlank(v: string | undefined | null): boolean {
 }
 
 /** Liefert die fehlenden Pflichtfelder (leer = vollständig). */
-export function validateProductionSheet(
-  input: ProductionSheetInput,
-  kind: ProductionSheetKind
-): string[] {
+/** Basis-Pflichtfelder jedes Produktionszettels (unabhängig von intern/extern). */
+export type ProductionBaseFields = Pick<
+  ProductionSheetInput,
+  "orderNumber" | "articleName" | "farbe" | "groesse" | "qty" | "logoLabel"
+>;
+
+/** Prüft die Basis-Pflichtfelder; gibt die fehlenden zurück (leer = vollständig). */
+export function validateProductionBase(input: ProductionBaseFields): string[] {
   const missing: string[] = [];
   if (isBlank(input.orderNumber)) missing.push("Auftragsnummer");
   if (isBlank(input.articleName)) missing.push("Artikel");
@@ -61,6 +65,14 @@ export function validateProductionSheet(
   if (isBlank(input.groesse)) missing.push("Größe");
   if (!(input.qty > 0)) missing.push("Menge");
   if (isBlank(input.logoLabel)) missing.push("Logo");
+  return missing;
+}
+
+export function validateProductionSheet(
+  input: ProductionSheetInput,
+  kind: ProductionSheetKind
+): string[] {
+  const missing = validateProductionBase(input);
 
   if (kind === "INTERN") {
     if (isBlank(input.maschine)) missing.push("Maschine");

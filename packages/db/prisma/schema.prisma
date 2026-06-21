@@ -620,6 +620,9 @@ model TimeEntry {
   note         String?
   costCenterId String?
   costCenter   CostCenter? @relation(fields: [costCenterId], references: [id])
+  // Wiederanlauf nach Notbetrieb (B17): idempotente Nacherfassung — derselbe
+  // Schlüssel verhindert Doppelbuchung. @unique lässt mehrere NULL zu.
+  idempotencyKey String? @unique
   createdAt    DateTime @default(now())
 }
 
