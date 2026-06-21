@@ -51,7 +51,9 @@ async function main(): Promise<void> {
         prices: { create: [{ priceGroupId: pgStandard.id, netCents: cents }] },
       },
     });
-    await prisma.stockLevel.upsert({ where: { variantId: id }, update: {}, create: { variantId: id, qty: 120, minStock: 50 } });
+    // var-polo-navy-l bewusst UNTER Mindestbestand → erzeugt Reorder-Vorschlag (T-12).
+    const qty = id === "var-polo-navy-l" ? 10 : 120;
+    await prisma.stockLevel.upsert({ where: { variantId: id }, update: { qty, minStock: 50 }, create: { variantId: id, qty, minStock: 50 } });
   }
 
   // ── Lieferanten + Katalog ──────────────────────────────────────────────────
@@ -68,18 +70,24 @@ async function main(): Promise<void> {
     create: { id: "si-1", supplierId: sup1.id, supplierSku: "FHB-POLO-NAVY-L", variantId: "var-polo-navy-l", ekCents: 640, availableQty: 500 },
   }).catch(() => {});
 
+  // ── Lieferadresse (Pflicht für Versand-Liste) ──────────────────────────────
+  const addrGross = await prisma.deliveryAddress.upsert({
+    where: { id: "addr-gross" }, update: {},
+    create: { id: "addr-gross", companyId: gross.id, label: "Zentrallager", street: "Industriestr. 5", zip: "33602", city: "Bielefeld" },
+  });
+
   // ── Aufträge (verschiedene Status für Liste/Versand) ───────────────────────
-  const orders: Array<[string, string, string, OrderStatusLit, string | null, number]> = [
-    ["ord-1", "AB-2026-0001", muster.id, "IN_PRODUKTION", "WC-5512", 25_800],
-    ["ord-2", "AB-2026-0002", gross.id, "VERSANDBEREIT", "WC-5513", 139_000],
-    ["ord-3", "AB-2026-0003", muster.id, "VERSENDET", null, 11_900],
-    ["ord-4", "AB-2026-0004", gross.id, "ANGELEGT", "WC-5520", 64_500],
+  const orders: Array<[string, string, string, OrderStatusLit, string | null, number, string | null]> = [
+    ["ord-1", "AB-2026-0001", muster.id, "IN_PRODUKTION", "WC-5512", 25_800, null],
+    ["ord-2", "AB-2026-0002", gross.id, "VERSANDBEREIT", "WC-5513", 139_000, addrGross.id],
+    ["ord-3", "AB-2026-0003", muster.id, "VERSENDET", null, 11_900, null],
+    ["ord-4", "AB-2026-0004", gross.id, "ANGELEGT", "WC-5520", 64_500, null],
   ];
-  for (const [id, number, companyId, status, externalNumber, net] of orders) {
+  for (const [id, number, companyId, status, externalNumber, net, deliveryAddressId] of orders) {
     await prisma.order.upsert({
-      where: { id }, update: {},
+      where: { id }, update: { status, deliveryAddressId },
       create: {
-        id, number, companyId, status, externalNumber,
+        id, number, companyId, status, externalNumber, deliveryAddressId,
         employeeNote: externalNumber ? "Shop-Bestellung" : null,
         lines: { create: [{ position: 1, description: "Poloshirt Navy L, bestickt", qty: 20, unitNetCents: Math.round(net / 20) }] },
       },
