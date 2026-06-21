@@ -25,3 +25,19 @@ export const orderStatusMachine = defineMachine<OrderStatus>("OrderStatus", {
   ABGESCHLOSSEN: [],
   STORNIERT: [],
 });
+
+// Ab Versand (und danach) bzw. bei Storno ist die Produktion eines Auftrags
+// abgeschlossen — relevant für Ampel/Wiedervorlage-Tracking. Wichtig: VERSENDET ist
+// KEIN Endzustand der Maschine mehr (Nachkette FAKTURIERT/ABGESCHLOSSEN), daher ein
+// eigenes Prädikat statt `=== "VERSENDET"`.
+const PRODUCTION_DONE_STATES: ReadonlySet<OrderStatus> = new Set([
+  "VERSENDET",
+  "FAKTURIERT",
+  "ABGESCHLOSSEN",
+  "STORNIERT",
+]);
+
+/** Produktion abgeschlossen (versendet/fakturiert/abgeschlossen oder storniert)? */
+export function isProductionDone(status: OrderStatus): boolean {
+  return PRODUCTION_DONE_STATES.has(status);
+}

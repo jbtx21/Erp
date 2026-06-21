@@ -13,7 +13,7 @@ export class PrismaPrivacyRepository implements PrivacyRepository {
     ]);
   }
 
-  async anonymize(companyId: string, at: Date): Promise<{ contactsAnonymized: boolean[] } | null> {
+  async anonymize(companyId: string, at: Date): Promise<{ contactsAnonymized: number } | null> {
     const company = await prisma.company.findUnique({
       where: { id: companyId },
       select: { branche: true, contacts: { select: { id: true, role: true } } },
@@ -35,6 +35,6 @@ export class PrismaPrivacyRepository implements PrivacyRepository {
       }),
     ];
     await prisma.$transaction(ops);
-    return { contactsAnonymized: company.contacts.map(() => true) };
+    return { contactsAnonymized: company.contacts.length };
   }
 }

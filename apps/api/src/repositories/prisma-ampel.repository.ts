@@ -1,9 +1,9 @@
 // Prisma-Implementierung des Ampel-Repositories (Produktionspfad, Kap. 35.4).
 // Terminierte Vorgänge: Angebote mit Wiedervorlage (erledigt = angenommen/abgelehnt)
-// und Produktionsaufträge mit Liefertermin (erledigt = Auftrag versendet).
+// und Produktionsaufträge mit Liefertermin (erledigt = ab Versand, s. isProductionDone).
 
 import { prisma } from "@texma/db";
-import type { TrackedProcess } from "@texma/shared";
+import { isProductionDone, type OrderStatus, type TrackedProcess } from "@texma/shared";
 import type { AmpelRepository } from "../modules/ampel/ampel.service.js";
 
 export class PrismaAmpelRepository implements AmpelRepository {
@@ -32,7 +32,7 @@ export class PrismaAmpelRepository implements AmpelRepository {
       level: "PRODUKTION",
       label: p.number,
       dueDate: p.dueDate as Date,
-      done: p.order.status === "VERSENDET",
+      done: isProductionDone(p.order.status as OrderStatus),
     }));
 
     return [...angebote, ...pas];

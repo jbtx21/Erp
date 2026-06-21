@@ -23,6 +23,11 @@ describe("isQuoteExpired (B8)", () => {
     expect(isQuoteExpired({ status: "ANGENOMMEN", gueltigBisAm: valid }, new Date(Date.UTC(2027, 0, 1)))).toBe(false);
     expect(isQuoteExpired({ status: "ABGELEHNT", gueltigBisAm: valid }, new Date(Date.UTC(2027, 0, 1)))).toBe(false);
   });
+
+  it("ein Entwurf verfällt nicht (nie gesendet); NACHFASSEN verfällt", () => {
+    expect(isQuoteExpired({ status: "ENTWURF", gueltigBisAm: valid }, new Date(Date.UTC(2027, 0, 1)))).toBe(false);
+    expect(isQuoteExpired({ status: "NACHFASSEN", gueltigBisAm: valid }, new Date(Date.UTC(2026, 6, 1)))).toBe(true);
+  });
 });
 
 describe("assertQuoteRejectable (B8)", () => {

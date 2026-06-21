@@ -36,17 +36,23 @@ export class PrismaDunningRepository implements DunningRepository, DunningQueryR
 
   async applyDunningStep(notice: DunningNoticeDraft): Promise<void> {
     // Stufe hochsetzen und Mahnbeleg (Historie) atomar schreiben (G2: kein Update).
-    await prisma.$transaction([
-      prisma.openItem.update({ where: { id: notice.itemId }, data: { dunningLevel: notice.stufe } }),
-      prisma.dunningNotice.create({
+    // Optimistischer Guard auf die Ausgangsstufe: ein paralleler Mahnlauf, der den
+    // Posten bereits erhöht hat, trifft 0 Zeilen -> kein zweiter Beleg derselben Stufe.
+    await prisma.$transaction(async (tx) => {
+      const advanced = await tx.openItem.updateMany({
+        where: { id: notice.itemId, dunningLevel: notice.stufe - 1 },
+        data: { dunningLevel: notice.stufe },
+      });
+      if (advanced.count === 0) return;
+      await tx.dunningNotice.create({
         data: {
           openItemId: notice.itemId,
           stufe: notice.stufe,
           gebuehrCents: notice.gebuehrCents,
           textVorlage: notice.textVorlage,
         },
-      }),
-    ]);
+      });
+    });
   }
 
   async listDunning(limit: number): Promise<DunningOverviewItem[]> {

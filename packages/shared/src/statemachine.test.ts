@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { StateTransitionError, defineMachine } from "./statemachine.js";
-import { orderStatusMachine } from "./order.js";
+import { isProductionDone, orderStatusMachine } from "./order.js";
 import { quoteStatusMachine } from "./quote.js";
 
 type Light = "RED" | "GREEN" | "OFF";
@@ -64,6 +64,15 @@ describe("orderStatusMachine", () => {
   it("STORNIERT ist final; VERSENDET nicht mehr (Nachkette folgt)", () => {
     expect(orderStatusMachine.isFinal("STORNIERT")).toBe(true);
     expect(orderStatusMachine.isFinal("VERSENDET")).toBe(false);
+  });
+
+  it("isProductionDone gilt ab Versand (und bei Storno), nicht davor", () => {
+    expect(isProductionDone("VERSENDET")).toBe(true);
+    expect(isProductionDone("FAKTURIERT")).toBe(true);
+    expect(isProductionDone("ABGESCHLOSSEN")).toBe(true);
+    expect(isProductionDone("STORNIERT")).toBe(true);
+    expect(isProductionDone("IN_PRODUKTION")).toBe(false);
+    expect(isProductionDone("VERSANDBEREIT")).toBe(false);
   });
 });
 

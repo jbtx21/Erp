@@ -36,11 +36,20 @@ export class PrismaInquiryRepository implements InquiryRepository {
 
   async convertToQuote(id: string, input: { quoteNumber: string; companyId: string }): Promise<{ quoteId: string }> {
     return prisma.$transaction(async (tx) => {
+      // Atomarer Gate: nur konvertieren, wenn noch offen. Ein paralleler Zweitlauf
+      // (Doppelklick/Retry) trifft 0 Zeilen und bricht ab -> keine verwaiste Quote.
+      const gate = await tx.inquiry.updateMany({
+        where: { id, status: { in: ["NEU", "IN_BEARBEITUNG"] } },
+        data: { status: "ANGEBOT" },
+      });
+      if (gate.count === 0) {
+        throw new Error(`Anfrage ${id} ist bereits konvertiert oder nicht konvertierbar`);
+      }
       const quote = await tx.quote.create({
         data: { number: input.quoteNumber, companyId: input.companyId, status: "ENTWURF" },
         select: { id: true },
       });
-      await tx.inquiry.update({ where: { id }, data: { status: "ANGEBOT", quoteId: quote.id } });
+      await tx.inquiry.update({ where: { id }, data: { quoteId: quote.id } });
       return { quoteId: quote.id };
     });
   }

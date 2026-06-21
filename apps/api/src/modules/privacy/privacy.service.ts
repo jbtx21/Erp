@@ -9,9 +9,10 @@ export interface PrivacyRepository {
   block(companyId: string, at: Date): Promise<void>;
   /**
    * Überschreibt PII der Firma + Kontakte und setzt anonymisiertAm. Lässt Belege
-   * (Invoice/CreditNote) unangetastet. Gibt die Zahl anonymisierter Kontakte zurück.
+   * (Invoice/CreditNote) unangetastet. Gibt die Zahl anonymisierter Kontakte zurück
+   * (null = Firma nicht gefunden).
    */
-  anonymize(companyId: string, at: Date): Promise<{ contactsAnonymized: boolean[] } | null>;
+  anonymize(companyId: string, at: Date): Promise<{ contactsAnonymized: number } | null>;
 }
 
 export class PrivacyService {
@@ -30,7 +31,7 @@ export class PrivacyService {
   async anonymize(companyId: string, at: Date = new Date()): Promise<number> {
     const res = await this.repo.anonymize(companyId, at);
     if (!res) throw new Error(`Company ${companyId} nicht gefunden`);
-    const count = res.contactsAnonymized.length;
+    const count = res.contactsAnonymized;
     await this.audit.append(
       buildEntry({
         entity: "Company",

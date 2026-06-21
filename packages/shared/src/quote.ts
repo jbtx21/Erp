@@ -24,10 +24,14 @@ export interface QuoteExpiryLike {
   gueltigBisAm?: Date | null;
 }
 
-/** Abgelaufen: noch offen (nicht final) und die Gültigkeit ist überschritten (B8). */
+/**
+ * Abgelaufen (B8): nur ein dem Kunden GESENDETES Angebot kann verfallen
+ * (VERSENDET/NACHFASSEN). Ein Entwurf wurde nie kommuniziert und verfällt nicht;
+ * angenommene/abgelehnte Angebote sind final.
+ */
 export function isQuoteExpired(q: QuoteExpiryLike, now: Date): boolean {
   if (q.gueltigBisAm == null) return false;
-  if (quoteStatusMachine.isFinal(q.status)) return false;
+  if (q.status !== "VERSENDET" && q.status !== "NACHFASSEN") return false;
   return now.getTime() > q.gueltigBisAm.getTime();
 }
 

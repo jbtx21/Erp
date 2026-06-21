@@ -17,7 +17,8 @@ export class PrismaQuoteRepository implements QuoteRepository {
 
   async listExpiredWithoutDueItem(now: Date): Promise<ExpiredQuote[]> {
     const quotes = await prisma.quote.findMany({
-      where: { status: { notIn: ["ANGENOMMEN", "ABGELEHNT"] }, gueltigBisAm: { lt: now } },
+      // Nur gesendete Angebote verfallen — Entwürfe nicht (Kap. 35.1).
+      where: { status: { in: ["VERSENDET", "NACHFASSEN"] }, gueltigBisAm: { lt: now } },
       select: { id: true, gueltigBisAm: true },
     });
     if (quotes.length === 0) return [];

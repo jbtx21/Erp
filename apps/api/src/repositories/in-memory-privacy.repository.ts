@@ -30,14 +30,13 @@ export class InMemoryPrivacyRepository implements PrivacyRepository {
     for (const k of c.contacts) k.gesperrtAm = at;
   }
 
-  async anonymize(companyId: string, at: Date): Promise<{ contactsAnonymized: boolean[] } | null> {
+  async anonymize(companyId: string, at: Date): Promise<{ contactsAnonymized: number } | null> {
     const c = this.companies.get(companyId);
     if (!c) return null;
     const anon = anonymizeCompany({ name: c.name, branche: c.branche });
     c.name = anon.name;
     c.branche = anon.branche ?? null;
     c.anonymisiertAm = at;
-    const flags: boolean[] = [];
     for (const k of c.contacts) {
       const a = anonymizeContact(k);
       k.firstName = a.firstName;
@@ -45,8 +44,7 @@ export class InMemoryPrivacyRepository implements PrivacyRepository {
       k.email = a.email;
       k.phone = a.phone;
       k.anonymisiertAm = at;
-      flags.push(true);
     }
-    return { contactsAnonymized: flags };
+    return { contactsAnonymized: c.contacts.length };
   }
 }
