@@ -48,18 +48,22 @@ GoBD-Pflichtdokument (Kap. 10.5). Versioniert in Git, wächst mit der Implementi
 ## 4. Betriebsdokumentation
 - **Datensicherung / Wiederanlauf (Kap. 27):** **asynchrone Streaming-Replikation** des
   PostgreSQL-Primary auf einen Hot-Standby — Ziel **RPO sekunden-nah / RTO ≤ 1 h**. Die Replica
-  dient zugleich als Quelle für Auswertungen/BI (Metabase, B19). *[offen: Bereitstellung der
-  Replica/Failover-Infra als IaC + dokumentierter Failover-Test (B17/Betrieb).]*
+  dient zugleich als Quelle für Auswertungen/BI (Metabase, B19). Bereitstellung als IaC:
+  `infra/replication/` (Primary + Hot-Standby, Compose) inkl. Replikations-**Smoke-Test**
+  (`smoke-test.sh`: Streaming, RPO-Lag, Read-only). Im Betrieb alternativ Managed-HA-Postgres.
+  *[verbleibend extern: gemessener RPO/RTO-Failover-Drill auf echter Infrastruktur.]*
 - **Notbetrieb (K-17, B17):** Bei Internet-Ausfall am Standort stellt das `continuity`-Modul ein
   **Tages-Offline-Bundle** der offenen Aufträge zusammen (Basis-Produktionsfelder, druck-/CSV-fähig,
   Vollständigkeitsprüfung); die Produktion arbeitet damit offline weiter. Beim **Wiederanlauf** werden
   Produktionsrückmeldungen **idempotent** nacherfasst (eindeutiger `idempotencyKey` an `TimeEntry` →
   keine Doppelbuchung), und das Outbox-/IntegrationLog-Muster liefert ausstehende Shop-/Versand-Events
-  idempotent nach. *[offen: ausformuliertes Schritt-für-Schritt-Notfall-Runbook + Failover-Test.]*
+  idempotent nach. **Schritt-für-Schritt-Failover** (Modus A + Modus B inkl. Promotion):
+  `docs/verfahrensdokumentation/notfall-runbook.md`; der Failover-Drill ist halbjährlich zu üben.
 - **Zugriffsschutz (Kap. 14):** 2FA, Session-/Lockout-Policy, Zugriffs-Logging (`AccessLog`).
 - **Betriebsfußabdruck:** zu betreiben/patchen sind Postgres (+ Replica), Worker/Connectoren,
-  optionale Sidecars (E-Rechnungs-Validierung KoSIT nur bei Zertifizierungsbedarf). Verantwortliche
-  Rolle dokumentieren. *[offen: Betreiber/Patch-Zuständigkeit benennen.]*
+  optionale Sidecars (E-Rechnungs-Validierung KoSIT nur bei Zertifizierungsbedarf). **Zuständigkeit:**
+  Rolle **Betreiber** (Infra/DevOps-Verantwortlicher) inkl. Stellvertretung — Aufgaben/Failover-
+  Verantwortung im Notfall-Runbook (Rollentabelle). *[offen: konkrete Person je Rolle benennen.]*
 
 ## 5. Internes Kontrollsystem (IKS)
 - **Unveränderbarkeit/WORM:** finalisierte Belege sind unveränderbar; Korrektur nur via Storno/
