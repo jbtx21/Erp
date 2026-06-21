@@ -72,14 +72,19 @@ export class PrismaContinuityRepository implements ContinuityRepository {
         select: { id: true },
       });
       return { id: created.id, created: true };
-    } catch {
-      // Unique-Race: derselbe Schlüssel kam parallel an → vorhandenen Eintrag nutzen.
-      const again = await prisma.timeEntry.findUnique({
-        where: { idempotencyKey: fb.idempotencyKey },
-        select: { id: true },
-      });
-      if (again) return { id: again.id, created: false };
-      throw new Error(`recordFeedback fehlgeschlagen für ${fb.idempotencyKey}`);
+    } catch (e) {
+      // Nur die Unique-Verletzung (P2002) ist der erwartete Idempotenz-Race —
+      // derselbe Schlüssel kam parallel an. Andere Fehler (z. B. FK P2003,
+      // Verbindungsabbruch) NICHT verschlucken, sonst werden sie als Idempotenz-
+      // problem fehldiagnostiziert.
+      if ((e as { code?: string }).code === "P2002") {
+        const again = await prisma.timeEntry.findUnique({
+          where: { idempotencyKey: fb.idempotencyKey },
+          select: { id: true },
+        });
+        if (again) return { id: again.id, created: false };
+      }
+      throw e;
     }
   }
 }

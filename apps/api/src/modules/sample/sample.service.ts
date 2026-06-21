@@ -50,6 +50,17 @@ export interface BilledSample {
   netCents: number;
 }
 
+export interface FailedSample {
+  loanId: string;
+  reason: string;
+}
+
+export interface BillingRunResult {
+  billed: BilledSample[];
+  /** Leihen, die in diesem Lauf nicht berechnet werden konnten (z. B. fehlender Preis). */
+  failed: FailedSample[];
+}
+
 export class SampleLoanService {
   constructor(
     private readonly repo: SampleLoanRepository,
@@ -95,25 +106,33 @@ export class SampleLoanService {
   }
 
   /** Berechnet alle überfälligen Muster zum Listenpreis (21-Tage-Automatik). */
-  async billOverdue(now: Date = new Date()): Promise<BilledSample[]> {
+  async billOverdue(now: Date = new Date()): Promise<BillingRunResult> {
     const due = await this.repo.listDueForBilling(now);
     const billed: BilledSample[] = [];
+    const failed: FailedSample[] = [];
     for (const loan of due) {
-      const netCents = await this.repo.listPriceCents(loan.companyId, loan.variantId, loan.menge);
-      const number = await this.numbering.next("INVOICE", now);
-      const taxCents = taxOnNet(netCents, VAT_RATE);
-      const grossCents = netCents + taxCents;
-      const { invoiceId } = await this.repo.bill(loan.id, { number, netCents, taxCents, grossCents });
-      await this.audit.append(
-        buildEntry({
-          entity: "Invoice",
-          entityId: invoiceId,
-          action: "CREATE",
-          after: { number, netCents, grossCents, grund: "Musterrechnung", sampleLoanId: loan.id },
-        })
-      );
-      billed.push({ loanId: loan.id, invoiceNumber: number, netCents });
+      try {
+        // Preis ZUERST ermitteln — schlägt das fehl (fehlende Preispflege), wird KEINE
+        // Belegnummer verbraucht (Nummernkreis bleibt lückenlos, F1).
+        const netCents = await this.repo.listPriceCents(loan.companyId, loan.variantId, loan.menge);
+        const number = await this.numbering.next("INVOICE", now);
+        const taxCents = taxOnNet(netCents, VAT_RATE);
+        const grossCents = netCents + taxCents;
+        const { invoiceId } = await this.repo.bill(loan.id, { number, netCents, taxCents, grossCents });
+        await this.audit.append(
+          buildEntry({
+            entity: "Invoice",
+            entityId: invoiceId,
+            action: "CREATE",
+            after: { number, netCents, grossCents, grund: "Musterrechnung", sampleLoanId: loan.id },
+          })
+        );
+        billed.push({ loanId: loan.id, invoiceNumber: number, netCents });
+      } catch (e) {
+        // Eine fehlerhafte Leihe darf den Gesamtlauf nicht abbrechen.
+        failed.push({ loanId: loan.id, reason: e instanceof Error ? e.message : String(e) });
+      }
     }
-    return billed;
+    return { billed, failed };
   }
 }
