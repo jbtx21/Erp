@@ -55,8 +55,15 @@ import { PrismaReportingRepository } from "./repositories/prisma-reporting.repos
 import { PrismaProductionReportingRepository } from "./repositories/prisma-production-reporting.repository.js";
 import { appRouter } from "./trpc/router.js";
 import type { Context } from "./trpc/trpc.js";
+import { portalAppRouter } from "./trpc/portal-router.js";
+import type { PortalContext } from "./trpc/portal-trpc.js";
+import { PortalAuthService } from "./modules/portal/portal-auth.service.js";
+import { CustomerPortalService } from "./modules/portal/portal.service.js";
+import { PrismaPortalUserRepository, PrismaPortalSessionRepository } from "./repositories/prisma-portal-auth.repository.js";
+import { PrismaPortalRepository } from "./repositories/prisma-portal.repository.js";
 
 const COOKIE_NAME = "sid";
+const PORTAL_COOKIE_NAME = "portal_sid";
 const secure = process.env.NODE_ENV === "production";
 
 export interface ServerOptions {
@@ -115,6 +122,15 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
     new Argon2Hasher(),
     new OtpauthTotpService()
   );
+  // Kundenportal (B13): EIGENER Auth-Pfad/Service, getrennt vom Mitarbeiter-`auth`.
+  const portalAuth = new PortalAuthService(
+    new PrismaPortalUserRepository(),
+    new PrismaPortalSessionRepository(),
+    new Argon2Hasher(),
+    new PrismaAuditSink()
+  );
+  const portal = new CustomerPortalService(new PrismaPortalRepository());
+
   // Sicherheits-Maxime (Leitplanke 2): primär externe OIDC-Identität, wenn konfiguriert.
   // Der selbstgebaute Session-Pfad bleibt nur als Fallback (Dev/Übergang) bestehen.
   const oidc = opts.identityVerifier !== undefined ? opts.identityVerifier : JoseOidcVerifier.fromEnv();
@@ -198,6 +214,35 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           clearSessionCookie: () => void res.clearCookie(COOKIE_NAME, { path: "/" }),
           // Demo/Durchstich: ausgewählte Services überschreiben (In-Memory statt Prisma).
           ...(opts.contextOverrides ?? {}),
+        };
+      },
+    },
+  });
+
+  // Kundenportal-API: isolierter Router unter /portal/trpc mit eigenem Cookie
+  // (Pfad /portal → wird nicht an die Mitarbeiter-App gesendet). Principal/companyId
+  // ausschließlich aus der Portal-Session.
+  void server.register(fastifyTRPCPlugin, {
+    prefix: "/portal/trpc",
+    trpcOptions: {
+      router: portalAppRouter,
+      createContext: async ({ req, res }: CreateFastifyContextOptions): Promise<PortalContext> => {
+        const sessionToken = req.cookies[PORTAL_COOKIE_NAME] ?? null;
+        const principal = sessionToken ? await portalAuth.resolve(sessionToken) : null;
+        return {
+          portalAuth,
+          portal,
+          principal,
+          sessionToken,
+          setSessionCookie: (token, maxAgeSeconds) =>
+            void res.setCookie(PORTAL_COOKIE_NAME, token, {
+              httpOnly: true,
+              sameSite: "lax",
+              secure,
+              path: "/portal",
+              maxAge: maxAgeSeconds,
+            }),
+          clearSessionCookie: () => void res.clearCookie(PORTAL_COOKIE_NAME, { path: "/portal" }),
         };
       },
     },
