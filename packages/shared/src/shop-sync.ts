@@ -5,6 +5,7 @@
 import type { Cents } from "./money.js";
 import type { PriceGroupKind, VariantPrice } from "./pricing.js";
 import { resolvePrice } from "./pricing.js";
+import type { OrderStatus } from "./order.js";
 
 // ── Preis-Push (T-08): ERP ist Preis-Master, Shop zeigt nur an ──────────────
 
@@ -42,14 +43,8 @@ export function buildShopPricePush(
 
 // ── Status-/Tracking-Push (T-09): ERP-Auftragsstatus → Shop-Bestellstatus ───
 
-/** ERP-Auftragsstatus (muss zu OrderStatus im Datenmodell passen). */
-export type OrderStatus =
-  | "ANGELEGT"
-  | "IN_BEARBEITUNG"
-  | "IN_PRODUKTION"
-  | "VERSANDBEREIT"
-  | "VERSENDET"
-  | "STORNIERT";
+// ERP-Auftragsstatus `OrderStatus` ist in order.ts definiert (F2, kanonische
+// Heimat mit Zustandsmaschine) und wird hier auf den Shop-Status abgebildet.
 
 /** WooCommerce-Bestellstatus, an den abgebildet wird. */
 export type WooStatus = "processing" | "on-hold" | "completed" | "cancelled";

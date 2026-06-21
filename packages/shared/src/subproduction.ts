@@ -4,6 +4,8 @@
 // der Rücklauf gebucht. Stufen laufen sequenziell: Stufe n+1 startet erst, wenn der
 // Rücklauf von Stufe n da ist.
 
+import { defineMachine } from "./statemachine.js";
+
 export type SubProductionStatus =
   | "OFFEN"
   | "BEISTELLUNG_VERSANDT"
@@ -34,19 +36,22 @@ export class SubProductionTransitionError extends Error {
   }
 }
 
-const ALLOWED: Record<SubProductionStatus, SubProductionStatus[]> = {
+// Zustandsmaschine der Stufe — nutzt den gemeinsamen Helfer (F2). Übergänge
+// unverändert: sequenziell OFFEN → BEISTELLUNG_VERSANDT → RUECKLAUF_ERHALTEN →
+// ABGESCHLOSSEN.
+const subProductionMachine = defineMachine<SubProductionStatus>("SubProduction", {
   OFFEN: ["BEISTELLUNG_VERSANDT"],
   BEISTELLUNG_VERSANDT: ["RUECKLAUF_ERHALTEN"],
   RUECKLAUF_ERHALTEN: ["ABGESCHLOSSEN"],
   ABGESCHLOSSEN: [],
-};
+});
 
 /** Prüft, ob ein Statuswechsel fachlich erlaubt ist. */
 export function canTransition(
   from: SubProductionStatus,
   to: SubProductionStatus
 ): boolean {
-  return ALLOWED[from].includes(to);
+  return subProductionMachine.can(from, to);
 }
 
 /**
