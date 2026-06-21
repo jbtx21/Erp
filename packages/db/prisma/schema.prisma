@@ -110,6 +110,7 @@ model Company {
   quotes          Quote[]
   orders          Order[]
   invoices        Invoice[]
+  sampleLoans     SampleLoan[] // Muster-Leihgut (B5)
   priceTiers      CustomerPriceTier[] // kundenindividuelle Mengenstaffel (B4)
   shopConnectors  ShopConnector[] // T-01: Shops mappen auf die Firma, nicht auf Mitarbeiter
   createdAt       DateTime  @default(now())
@@ -307,6 +308,7 @@ model Variant {
   gtin        String? // EAN/GTIN-13 (B18)
   weightGrams Int? // B18
   mediaAssets MediaAsset[] // B18
+  sampleLoans SampleLoan[] // Muster-Leihgut (B5)
   createdAt  DateTime @default(now())
 
   @@index([articleId])
@@ -628,8 +630,9 @@ model TimeEntry {
 model Invoice {
   id          String   @id @default(cuid())
   number      String   @unique // ERP = Rechnungsnummern-Master (Kap. 19)
-  orderId     String   @unique
-  order       Order    @relation(fields: [orderId], references: [id])
+  // Optional: Musterrechnung (B5) hängt an keinem Auftrag. @unique erlaubt mehrere NULL.
+  orderId     String?  @unique
+  order       Order?   @relation(fields: [orderId], references: [id])
   companyId   String
   company     Company  @relation(fields: [companyId], references: [id])
   netCents    Int
@@ -639,12 +642,39 @@ model Invoice {
   eInvoiceXml String? // XRechnung/ZUGFeRD (Kap. 19)
   openItem    OpenItem?
   creditNotes CreditNote[] // Gutschriften (Kap. 20)
+  sampleLoan  SampleLoan? // Muster-Leihgut-Berechnung (B5)
   // GoBD: finalisierte Rechnung unveränderbar; Korrektur nur via Storno/Gutschrift
   finalized   Boolean  @default(false)
   costCenterId String?
   costCenter   CostCenter? @relation(fields: [costCenterId], references: [id])
 
   @@index([companyId])
+}
+
+// Muster-Leihgut (B5, Kap. 37.3). Muster werden verliehen; nach 21 Tagen ohne
+// Rückgabe automatisch zum Listenpreis berechnet. Musterbestand läuft über das
+// F4-Ledger (StockMove lager=MUSTER); die Frist als DueItem-Wiedervorlage.
+enum SampleLoanStatus {
+  VERLIEHEN
+  ZURUECK
+  BERECHNET
+}
+
+model SampleLoan {
+  id           String           @id @default(cuid())
+  companyId    String
+  company      Company          @relation(fields: [companyId], references: [id])
+  variantId    String
+  variant      Variant          @relation(fields: [variantId], references: [id])
+  menge        Int
+  ausgegebenAm DateTime         @default(now())
+  status       SampleLoanStatus @default(VERLIEHEN)
+  invoiceId    String?          @unique
+  invoice      Invoice?         @relation(fields: [invoiceId], references: [id])
+  createdAt    DateTime         @default(now())
+
+  @@index([companyId])
+  @@index([status])
 }
 
 // Kostenstelle (B7, Kap. 37.1) — generische Tabelle; Nummern von TEXMA/StB

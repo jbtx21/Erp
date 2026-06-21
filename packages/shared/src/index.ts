@@ -38,3 +38,4 @@ export * from "./order.js";
 export * from "./quote.js";
 export * from "./stock.js";
 export * from "./pim.js";
+export * from "./sample.js";

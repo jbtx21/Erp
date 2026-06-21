@@ -33,7 +33,8 @@ export class PrismaReportingRepository implements ReportingRepository {
       select: { netCents: true, issuedAt: true, order: { select: { shopConnector: { select: { id: true, name: true } } } } },
     });
     return invoices.map((i) => {
-      const shop = i.order.shopConnector;
+      // Musterrechnung (B5) hängt an keinem Auftrag → kein Herkunfts-Shop.
+      const shop = i.order?.shopConnector;
       return { at: i.issuedAt, label: shop?.id ?? "manual", name: shop?.name ?? "Manuell", netCents: i.netCents };
     });
   }
