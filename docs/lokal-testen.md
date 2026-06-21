@@ -49,9 +49,10 @@ Copy-Item packages\db\.env.example packages\db\.env
 docker compose -f docker-compose.dev.yml up -d
 ```
 
-**b) Abhängigkeiten + Datenbank einrichten + Demo-Daten** (einmalig, dauert ein paar Minuten):
+**b) Abhängigkeiten installieren + alles bauen + Datenbank einrichten** (einmalig, dauert ein paar Minuten):
 ```powershell
 pnpm install
+pnpm build
 pnpm db:setup
 ```
 
