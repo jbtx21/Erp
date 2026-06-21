@@ -60,18 +60,28 @@
 - **Gate:** G1 (Faktura, kein Hauptbuch). **Abh.:** B3 (int-test). **Klärung:** Musterpreis = Listenpreis?
 
 ### B6 · Bar-/EC-Kasse (Vor-Ort-Zahlung) — Kap. 37.4 · **L**
-- **Schema:** `CashSale`/`PosPayment` (orderId?, betragCents, art [BAR|EC], beleg, kassiertAm, kassierer).
-- **Shared:** `pos.ts` — Beleg/Zahlungserfassung, Verknüpfung mit `OpenItem`/`Payment`.
-- **API:** `modules/pos/pos.service.ts`.
-- **Tests:** `pos.test.ts` — Barzahlung erzeugt Zahlungsbeleg + schließt offenen Posten.
-- **⚠️ Klärung (blockierend):** **TSE/DSFinV-K-Pflicht mit Steuerberater** klären, bevor gebaut wird — kann Umfang/Architektur stark ändern. Bis dahin geparkt.
-- **Abh.:** StB-Entscheid. **Gate:** GoBD/Kassensicherung.
+- **Entscheidung:** **rechtskonform = TSE-pflichtig** (KassenSichV/§146a AO + DSFinV-K). Wird von Anfang an mit zertifizierter TSE (Cloud-TSE) und unveränderbarem Kassenjournal gebaut — nicht als einfache Zahlungsmaske.
+- **Schema:** `CashRegister`, `CashSale` (orderId?, betragCents, art [BAR|EC], belegNr, kassiertAm, kassierer, tseSignatur, tseSeriennummer) — append-only (GoBD/WORM, `packages/audit`).
+- **Shared:** `pos.ts` — Beleg/Zahlungserfassung, TSE-Signatur-Anbindung, Verknüpfung mit `OpenItem`/`Payment`; **DSFinV-K-Export**.
+- **API:** `modules/pos/pos.service.ts` (+ in-memory/prisma repo + int-test) + TSE-Connector unter `services/workers/connectors/tse` (Anbieter hinter Abstraktion, analog Banking).
+- **Tests:** `pos.test.ts` — Barzahlung → signierter, unveränderbarer Kassenbeleg + schließt offenen Posten; DSFinV-K-Export valide.
+- **Abh.:** B3. **Gate:** G2 (WORM) + KassenSichV. **Begleitschritt (nicht blockierend):** TSE-Anbieterwahl (Procurement) + StB-Gegenzeichnung.
 
 ### B7 · Kostenstellen — Kap. 37.1 · **M**
 - **Schema:** `CostCenter` (nummer, name) + `costCenterId?` an `Invoice`/`PurchaseOrder`/`TimeEntry`.
 - **Shared/API:** Zuordnung + Auswertung in `reporting.ts`/`postcalc`.
 - **Tests:** `reporting.test.ts` — Auswertung je Kostenstelle.
 - **Gate:** G1-konform (Auswertung, keine Buchung). **Abh.:** keine. **Klärung:** Kostenstellen-Schlüssel mit StB/Addison abstimmen.
+
+### B17 · Notbetrieb & Resilienz (Server-/Internet-Ausfall) — K-17 · Kap. 27 · **L · Muss (hochpriorisiert)**
+- **Ziel:** Der kritische Pfad **Produktion + Versand** läuft bei (a) Internet-Ausfall am Standort und (b) Cloud-/Server-Ausfall weiter; nach Wiederanlauf saubere Nacherfassung.
+- **Failure-Modus A — Internet am Standort weg, Cloud erreichbar:** Produktionszettel + Lieferscheine als PDF **vorab generiert/gedruckt** (vorhanden: `production-sheet-pdf`); **täglicher Offline-Export** offener Aufträge (PDF/CSV-Bundle) → Produktion arbeitet ohne Netz, Rückmeldungen werden nacherfasst.
+- **Failure-Modus B — Cloud/Server-Ausfall:** definierte **RPO/RTO-Ziele**, automatisiertes Backup (Postgres PITR), dokumentierte **Restore-Prozedur** + Notfall-Runbook.
+- **Wiederanlauf/Reconciliation:** vorhandene **Outbox/IntegrationLog** liefert ausstehende Shop-/Versand-Events nach; nacherfasste Produktionsrückmeldungen werden **idempotent** eingespielt (Idempotenzschlüssel).
+- **Schema/Code:** `modules/continuity/continuity.service.ts` (Offline-Export-Bundle, idempotente Nacherfassung); Idempotenzschlüssel an Rückmeldungs-Eingängen.
+- **Doku:** Notfall-Runbook in `docs/verfahrensdokumentation/` Abschnitt 4 (Betrieb) — **füllt K-17**.
+- **Tests:** `continuity.test.ts` — Offline-Bundle enthält alle produktionsrelevanten Pflichtfelder; doppelte Nacherfassung bleibt idempotent.
+- **Abh.:** B1 (Runbook), B3. **Gate:** Kap. 27 Betrieb. **Entscheidung (Default vorgeschlagen):** RPO ≤ 1 h / RTO ≤ 4 h — TEXMA bestätigt Zielwerte.
 
 ---
 
@@ -86,11 +96,12 @@
 - **Abh.:** keine.
 
 ### B9 · Auftrag: zugesagter Liefertermin + Rückwärtsterminierung — Kap. 35.2 · **M**
-- **Befund:** `Order` ohne Termin; `OrderStatus` ohne FAKTURIERT/ABGESCHLOSSEN (K-26).
-- **Schema:** `zugesagterLiefertermin DateTime?` an `Order`; ggf. OrderStatus-Erweiterung (K-26 bestätigen).
+- **Befund:** `Order` ohne Termin; `OrderStatus` endet bei `VERSENDET`.
+- **Entscheidung K-26 = ja:** `OrderStatus` um **`FAKTURIERT`** und **`ABGESCHLOSSEN`** erweitern (Vorgangskette bis Faktura/Abschluss vollständig). Statusautomat in `docs/domänenmodell.md` (B2) nachziehen.
+- **Schema:** `zugesagterLiefertermin DateTime?` an `Order`; OrderStatus-Erweiterung (s. o.).
 - **Shared:** `scheduling.ts` — Rückwärtsterminierung aus Liefertermin − Durchlaufzeiten (`FinishingTargetTime`).
-- **Tests:** `scheduling.test.ts` — Starttermin korrekt zurückgerechnet.
-- **Abh.:** K-26 (Statusmodell). 
+- **Tests:** `scheduling.test.ts` — Starttermin korrekt zurückgerechnet; Statusübergänge bis ABGESCHLOSSEN.
+- **Abh.:** B2 (Statusmodell dokumentieren). 
 
 ### B10 · Mahnwesen: Mahntext/Mahngebühr/Mahnhistorie — Kap. 9.5 · **M**
 - **Befund:** `dunning.ts` (T-14) erzeugt Stufen, aber keine Persistenz/Gebühr/Text.
@@ -110,7 +121,8 @@
 - **Schema:** `gesperrtAm`/`anonymisiertAm` an `Company`/`Contact`; Audit-Eintrag.
 - **Shared:** `privacy.ts` — Anonymisierung von Stammdaten ohne Belegintegrität zu brechen.
 - **Tests:** `privacy.test.ts` — Kontakt anonymisiert, Rechnung bleibt unveränderbar.
-- **Abh.:** B1 (Doku-Abschnitt IKS). **Gate:** G2 (WORM) + DSGVO. **Klärung:** Fristenmatrix mit StB.
+- **Entscheidung:** Richtung **Sperren/Anonymisieren statt Löschen** ist gesetzt (rechtskonform). Fristenmatrix als Begleitschritt mit StB gegenzeichnen — **nicht blockierend**.
+- **Abh.:** B1 (Doku-Abschnitt IKS). **Gate:** G2 (WORM) + DSGVO.
 
 ---
 
@@ -129,18 +141,19 @@
 ## Abhängigkeits- & Sequenzlogik
 - **B3 zuerst** (Test-Lane) — danach laufen alle neuen `int.test.ts` automatisch grün-geprüft.
 - **B1/B2** parallel möglich (reine Doku), idealerweise vor Sprint 4, damit Doku mit jedem Feature mitwächst.
-- **B6 (Kasse) blockiert** durch StB-/TSE-Entscheid → nicht vor Klärung einplanen.
-- **B9** wartet auf **K-26** (Statusmodell-Erweiterung) — vorab mit Fachbereich bestätigen.
+- **B6 (Kasse)** ist **nicht mehr geblockt** — wird TSE-/DSFinV-K-konform gebaut; offen bleibt nur die TSE-Anbieterwahl (parallel beschaffbar).
+- **B9** ist durch **K-26 = ja** entschieden — OrderStatus wird um FAKTURIERT/ABGESCHLOSSEN erweitert.
+- **B17 (Notbetrieb)** ist hochpriorisiert in Sprint 4; Default RPO/RTO vorgeschlagen, läuft sonst ungeblockt.
 - Alle übrigen Items sind unabhängig und nach fachlicher Priorität schiebbar.
 
-## Offene Klärungen (Register)
-| Ref | Frage | Adressat | Blockt |
+## Klärungen (Register) — Stand 2026-06-21
+| Ref | Frage | Entscheidung | Status |
 |---|---|---|---|
-| K-01 | AddisonOne-Import des DATEV-Exports (T-07 End-to-End) | Steuerberater | T-07-Abnahme |
-| K-17 | Notbetrieb bei Cloud-Ausfall (RPO/RTO) | TEXMA/Hosting | B1-Abschnitt 4 |
-| K-26 | OrderStatus FAKTURIERT/ABGESCHLOSSEN nötig? | Fachbereich | B9 |
-| TSE | Kassensicherungs-/DSFinV-K-Pflicht | Steuerberater | B6 |
-| DSGVO | Aufbewahrungs-/Löschfristenmatrix | Steuerberater | B12 |
+| **K-26** | OrderStatus FAKTURIERT/ABGESCHLOSSEN nötig? | **Ja** — beide Status ergänzen (B9) | ✅ entschieden |
+| **TSE** | Kassensicherungs-/DSFinV-K-Pflicht | **rechtskonform = pflichtig** — TSE/DSFinV-K von Anfang an (B6) | ✅ entschieden; Anbieterwahl offen |
+| **DSGVO** | Lösch-/Sperrkonzept | **rechtskonform = Sperren/Anonymisieren statt Löschen** (B12) | ✅ entschieden; Fristenmatrix mit StB |
+| **K-17** | Notbetrieb Server-/Internet-Ausfall | **wichtig** → eigenes Muss-Item **B17** | ✅ eingeplant; RPO/RTO-Zielwerte bestätigen |
+| K-01 | AddisonOne-Import des DATEV-Exports (T-07 End-to-End) | extern, nicht in-repo testbar | ⏳ StB / extern |
 
 ## Definition of Done (je Item)
 1. Unit-Tests grün (Shared + Service) · 2. Integrationstest grün (DB-Lane, B3) · 3. `typecheck` + `build` sauber ·
