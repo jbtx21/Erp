@@ -61,6 +61,14 @@ TEXMA = **Lohnveredelung** (Stick/Druck/Transfer auf zugekauften Blank-Textilien
 - **OSS-Anleihe:** **react-admin** (für langlebige B2B/ERP-SPAs, 50+ REST-Adapter, backend-agnostisch — bestes Fit für unsere API; spart 50–70 % UI-Zeit); **Refine.dev** (headless, Ant/MUI/Mantine); **Twenty** als CRM-UI-Vorbild/Direktnutzung; shadcn/ui + Tremor für Dashboards.
 - **Empfehlung (D-UI):** Im UI-Sprint **react-admin** über die bestehende API. **Jetzt schon:** API-Endpunkte react-admin-freundlich (Filter/Sort/**Pagination**-Konventionen) bauen — kleine Vorkehrung, große spätere Beschleunigung.
 
+### 9. Berichtswesen/Reporting — *operativ stark, Finanz-Reporting & Self-Service offen*
+- **Ist (stark, Kap. 29):** Umsatz-/Auftrags-KPIs + **Periodenvergleich** (Tag/Woche/Monat/Jahr, %-Change), **Breakdown** nach Shop/Kundengruppe, **Durchlaufzeit** (Lead Time), **Reklamationsquote** (defectsByCause), **Deckungsbeitrag/Marge** (`pricing.ts` + `postcalc` Soll/Ist mit Abweichungszerlegung), **PDF-Export** (pdf-lib), **KI-Erzählung** (Claude `opus-4-8`, nur Aggregate, keine PII), **RBAC-getrennt** (PRODUKTION ohne Geldfelder).
+- **Lücke:** **OP-Aging/DSO/Forderungslaufzeit**, OP-Liste nach Fälligkeit, **Liquiditäts-/Cashflow-Vorschau**, Außenstände; DB/Marge nur je Auftrag, **nicht aggregiert** je Kunde/Artikel/Veredelungsart; Bestandsbewertung/Lagerreichweite; ABC/Renner-Penner; **Ad-hoc/Self-Service-BI**.
+- **OSS-Anleihe:** **Metabase** (40k★) / **Apache Superset** (70k★) direkt auf die **B17-Read-Replica** (RPO~0) → Self-Service-Dashboards + geplante Berichte **ohne Last auf Primary** und **ohne eigenen Report-Builder**; **Cube.js** als semantischer Layer (Metriken einmal definieren, via API für react-admin/embedded).
+- **Empfehlung:**
+  - **B19 (D-RPT-Fin):** OP-Aging-Buckets (0–30/31–60/61–90/>90), **DSO**, Liquiditätsvorschau aus `OpenItem`-Fälligkeiten + `PaymentOrder`; Breakdown-Dimensionen um **Artikel/Veredelungsart + Deckungsbeitrag** erweitern. Reine Aggregation im `reporting.ts`-Stil. **S–M.**
+  - **Self-Service-BI:** **Metabase/Superset auf die Replica** — Betrieb/IaC, kein App-Code. Direkte Synergie mit B17 (die RPO~0-Replica ist zugleich die BI-Quelle).
+
 ---
 
 ## Verdichtung: was ist *neu* (über den bisherigen Bauplan hinaus)
