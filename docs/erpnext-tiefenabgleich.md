@@ -134,7 +134,7 @@ aber abbildbar sein" (Z. 150–152).
 
 | Domäne / Entität | Lastenheft (B) | ERPNext-Referenz (A, Pfad) | IST im Bau (C) | Bewertung |
 |---|---|---|---|---|
-| **Beistellung→Rücklauf (T-04)** | Rücklauf buchbar, mehrstufig abbildbar | `subcontracting_order_supplied_item`: `required/supplied/consumed/returned_qty` je RM | `SubProductionOrder.beistellMenge/ruecklaufMenge` **aggregiert am Kopf** (702–720); kein RM-Detail, kein `consumed`/Schwund | **Lücke / Muster vorhanden** (Should) |
+| **Beistellung→Rücklauf (T-04)** | Rücklauf buchbar, mehrstufig abbildbar; **Beistellung = ganze eingekaufte Textilien, kein Rohmaterial** (Festlegung TEXMA) | `subcontracting_order_supplied_item`: `required/supplied/consumed/returned_qty` je RM (für Stücklisten-Verbrauch) | `SubProductionOrder.beistellMenge/ruecklaufMenge` aggregiert am Kopf (702–720); Schwund = `beistellMenge − ruecklaufMenge` ableitbar | **bewusst weglassen** (RM-Granularität = Überbau); offen nur Textil-Variant-Link + Bestandsbewegung (Could) |
 | Mehrstufigkeit (PA-a/-b) | selten, muss abbildbar | Kette via PO→SCO | `SubProductionOrder.sequence` (709) | **✓ Bau deckt ab** |
 | Lohn/Service-Kosten je Stufe | Nachkalkulation (T-10) | `subcontracting_order_item.service_cost_per_qty`, `subcontracting_bom.service_item` | `SubProductionOrder.lohnCents` (Kopf) (719) | **✓ Bau deckt ab** (grob) |
 | T-01 Firmenkunde-Mapping | kritisch | `customer.portal_users` (Table), `customer_primary_contact` | `ShopConnector.companyId` (443) + `PortalUser.companyId` (510) isoliert | **✓ Bau deckt ab** |
@@ -156,22 +156,20 @@ aber abbildbar sein" (Z. 150–152).
 
 ### 5.1 Echte Lücken, priorisiert (MoSCoW)
 
-**Should have**
-1. **Beistell-Mengen auf Rohmaterial-Ebene (T-04-Vertiefung).** Heute nur `beistellMenge`/
-   `ruecklaufMenge` am `SubProductionOrder`-Kopf. ERPNext-Blaupause
-   (`subcontracting_order_supplied_item`) zeigt die Trennung `required/supplied/consumed/returned`
-   **je beigestelltem Rohmaterial** — damit wird **Schwund/Ausschuss** beim Veredler abgleichbar
-   (`supplied = consumed + returned + Schwund`). Empfehlung: eigene Tabelle
-   `SubProductionSuppliedItem(subOrderId, variantId, requiredQty, suppliedQty, consumedQty, returnedQty)`
-   als **eigene** Modellierung (Konzept aus ERPNext, kein Code). **Offene Frage:** Braucht TEXMA die
-   RM-Granularität wirklich, oder genügt der Kopf-Aggregat für „selten mehrstufig"? → entscheidet
-   Should vs. Could.
-2. **Beistell-/Rücklauf-Bewegung im Bestands-Ledger.** `StockMove.grund` um `BEISTELLUNG`/
-   `RUECKLAUF` erweitern, damit beigestelltes Material das Lager korrekt verlässt/zurückkommt
-   (heute nicht abgebildet). Klein, schließt die Lücke zu T-04/Materiallager.
+> **F1 entfällt (Festlegung TEXMA, 2026-06):** Es wird **kein Rohmaterial** an die Veredler
+> beigestellt, sondern ausschließlich die **fertig eingekauften Textilien** (= bestehende `Variant`s).
+> Damit ist ERPNexts Rohmaterial-Granularität (`required/consumed_qty` über Stücklisten) **Überbau** —
+> der Kopf-Aggregat `beistellMenge`/`ruecklaufMenge` ist fachlich korrekt, und **Schwund/Ausschuss**
+> ist als Differenz `beistellMenge − ruecklaufMenge` bereits ableitbar. Die vormals als *Should*
+> geführte „RM-Vertiefung" ist damit **gestrichen** (siehe 5.2).
 
-**Could have**
-3. **Attribut-Stammdaten** (`ItemAttribute`/`AttributeValue` mit Kürzel) statt freier Strings in
+**Could have (klein, optional — Nutzen vor Aufwand prüfen)**
+1. **Textil-Variant-Link + Bestandsbewegung der Beistellung.** `SubProductionOrder` hält heute keine
+   Referenz, **welche** Textil-`Variant` (und wie viel je Variante) zum Veredler geht; die physische
+   Bewegung Hauptlager → Veredler → zurück steht nicht im Ledger. Optional: `variantId`/schlanke
+   Beistellzeile + `StockMove.grund` `BEISTELLUNG`/`RUECKLAUF`, damit der Bestand stimmt, solange Ware
+   beim Veredler liegt. Bei 1:1-Beistellung ganzer Textilien oft verzichtbar.
+2. **Attribut-Stammdaten** (`ItemAttribute`/`AttributeValue` mit Kürzel) statt freier Strings in
    `VariantAttribute` — verhindert „Blau" vs. „blau"-Mappingfehler (härtet T-02) und ermöglicht
    SKU-Kürzel. Blaupause: `item_attribute`/`item_attribute_value`.
 
@@ -185,6 +183,9 @@ aber abbildbar sein" (Z. 150–152).
   komplett; Prozent-Tracking wäre Überbau.
 - **`pricing_rule`-Vollmaschine** (mixed/cumulative/Gratisartikel/Coupons): der Bau löst Staffel mit
   einer schlanken, dedizierten Tier-Tabelle — bewusst einfacher.
+- **Beistell-Rohmaterial-Granularität** (`required/consumed_qty` je RM, Stücklisten-Verbrauch):
+  Überbau, da TEXMA **keine Rohmaterialien**, sondern **ganze eingekaufte Textilien** beistellt
+  (1:1 raus/rein). Kopf-Aggregat + ableitbarer Schwund genügen.
 
 ### 5.3 Konflikte (Bau ↔ Lastenheft)
 - **Keine inhaltlichen Konflikte** gefunden. Der einzige „Widerspruch" ist gegenüber **ERPNext**
@@ -195,10 +196,11 @@ aber abbildbar sein" (Z. 150–152).
   bei Kapazitätsknappheit gegen Kern-Lücken (5.1) abwägen.
 
 ### 5.4 Offene Fragen / Annahmen
-- **F1 (treibt Prio):** Reicht TEXMA die Kopf-Aggregation der Beistellmengen, oder ist die
-  RM-Zeilen-Granularität (Schwund/Ausschuss-Abgleich) im realen Veredler-Prozess nötig?
-- **F2:** Soll der beigestellte Materialfluss überhaupt im `StockMove`-Ledger erscheinen
-  (Inventur-Genauigkeit) oder bleibt Beistellung bewusst außerhalb der Bestandsführung?
+- **F1 — GEKLÄRT (TEXMA, 2026-06):** Beigestellt werden **keine Rohmaterialien**, sondern die
+  **fertig eingekauften Textilien**. RM-Granularität ist damit Überbau; Kopf-Aggregat genügt.
+- **F2 (offen, Could):** Soll der Textilfluss zum/vom Veredler im `StockMove`-Ledger erscheinen
+  (Inventur-Genauigkeit, solange Ware draußen liegt) — inkl. Link auf die beigestellte `Variant` —
+  oder bleibt Beistellung bewusst außerhalb der Bestandsführung?
 - **F3:** Ist ein kontrolliertes Attribut-Vokabular (Farben/Größen-Stammdaten) gewünscht, oder ist
   die heutige Freitext-Variantenpflege ausreichend?
 - **Annahme:** „Stickerei-Partnerlogik (Angebot vs. Direkt)" ist TEXMA-spezifisch; ERPNext liefert
