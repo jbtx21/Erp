@@ -21,8 +21,12 @@ und vom Steuerberater gegenzeichnen zu lassen (Kap. 10.3).
 ## 5. Internes Kontrollsystem (IKS)
 - Belegsicherung, Unveränderbarkeit/WORM, Audit-Trail (`packages/audit`), Aufbewahrungsfristen
   (10 J. Buchungsbelege / 6 J. Geschäftsbriefe), Löschkonzept vs. Aufbewahrung (Kap. 28).
+- **Lückenloser Belegnummernkreis** je Belegart und Jahr (`NumberSequence`): die laufende
+  Nummer wird atomar und kollisionsfrei vergeben (UPSERT mit RETURNING), erst bei der
+  Finalisierung eines Belegs — keine Lücken durch verworfene Entwürfe (F1, Kap. 10/19).
 
 ## 6. Änderungshistorie
 | Version | Datum | Autor | Änderung |
 |---------|-------|-------|----------|
 | 0.1 | 2026-06-18 | TEXMA | Gerüst angelegt |
+| 0.2 | 2026-06-21 | TEXMA | IKS: lückenloser Belegnummernkreis (F1) ergänzt |

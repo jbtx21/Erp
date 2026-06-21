@@ -657,6 +657,18 @@ model AuditLog {
   @@index([createdAt])
 }
 
+// Lückenloser Belegnummernkreis je Belegart und Jahr (GoBD, Kap. 10/19).
+// ERP ist Master. Atomare, lückenlose Vergabe via UPSERT+RETURNING in der Repo-
+// Schicht (Vorbild: Odoo ir.sequence / ERPNext naming series). `next` = zuletzt
+// vergebene laufende Nummer; die erste Vergabe eines Jahres liefert 1.
+model NumberSequence {
+  key  String // SequenceKey: INVOICE | CREDIT_NOTE | ORDER | QUOTE | INQUIRY | ...
+  year Int
+  next Int    @default(0)
+
+  @@id([key, year])
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Beschaffung — Bestellung / Wareneingang — Kap. 6, 5.6. Testfälle T-05, T-12.
 // ─────────────────────────────────────────────────────────────────────────────

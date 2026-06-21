@@ -32,3 +32,4 @@ export * from "./reorder.js";
 export * from "./production-sheet.js";
 export * from "./reporting.js";
 export * from "./production-metrics.js";
+export * from "./numbering.js";
