@@ -1,0 +1,439 @@
+// Reporting / Auswertungen — Kap. 29. Reine, IO-freie Aggregationslogik für die
+// Umsatz- und Auftragsübersicht sowie den Periodenvergleich (Tag/Woche/Monat/Jahr).
+// Beträge in Cent (Integer); Datums-Bucketing in UTC, damit Tests deterministisch sind.
+// Die KI-Erzählung (claude-api) und die Persistenz liegen in apps/api — hier nur Mathe.
+
+import type { Cents } from "./money.js";
+
+/** Zeitliche Granularität für Buckets und Periodenvergleiche (Kap. 29). */
+export type Granularity = "DAY" | "WEEK" | "MONTH" | "YEAR";
+
+/** Ein einzelner umsatzrelevanter Datenpunkt (z. B. eine Rechnung). */
+export interface RevenuePoint {
+  /** Zeitpunkt der Wirksamkeit (Rechnungsdatum). */
+  at: Date;
+  netCents: Cents;
+}
+
+/** Ein einzelner auftragsrelevanter Datenpunkt (z. B. ein Auftrag). */
+export interface OrderPoint {
+  /** Zeitpunkt der Entstehung (Auftragsdatum). */
+  at: Date;
+  netCents: Cents;
+}
+
+/** Aggregierter Eimer einer Periode. */
+export interface RevenueBucket {
+  /** Stabiler Periodenschlüssel, z. B. "2026-06-19" / "2026-W25" / "2026-06" / "2026". */
+  key: string;
+  /** Inklusiver Periodenbeginn (UTC). */
+  start: Date;
+  count: number;
+  netCents: Cents;
+}
+
+/** Ergebnis eines Periodenvergleichs (aktuell vs. vorhergehend). */
+export interface PeriodComparison {
+  granularity: Granularity;
+  current: RevenueBucket;
+  previous: RevenueBucket | null;
+  /** Absolute Veränderung der Nettoumsätze in Cent (current − previous). */
+  deltaCents: Cents;
+  /**
+   * Relative Veränderung in Prozent (0..100-skaliert, kaufmännisch gerundet).
+   * `null`, wenn die Vorperiode 0 war (Division nicht definiert).
+   */
+  deltaPercent: number | null;
+}
+
+const DAY_MS = 86_400_000;
+
+/** UTC-Mitternacht des Tages von `d`. */
+function startOfDayUtc(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
+/** ISO-8601-Woche (Montag-basiert): Beginn der Woche als UTC-Mitternacht. */
+function startOfIsoWeekUtc(d: Date): Date {
+  const day = startOfDayUtc(d);
+  // getUTCDay(): 0 = So … 6 = Sa. Montag = 1; auf Montag zurückrechnen.
+  const dow = (day.getUTCDay() + 6) % 7; // 0 = Montag … 6 = Sonntag
+  return new Date(day.getTime() - dow * DAY_MS);
+}
+
+/** ISO-Wochennummer + zugehöriges Wochenjahr (KW kann am Jahreswechsel abweichen). */
+function isoWeekParts(d: Date): { year: number; week: number } {
+  // Donnerstag der laufenden Woche bestimmt Jahr und Wochennummer (ISO 8601).
+  const monday = startOfIsoWeekUtc(d);
+  const thursday = new Date(monday.getTime() + 3 * DAY_MS);
+  const year = thursday.getUTCFullYear();
+  const firstThursday = (() => {
+    const jan4 = new Date(Date.UTC(year, 0, 4));
+    return new Date(startOfIsoWeekUtc(jan4).getTime() + 3 * DAY_MS);
+  })();
+  const week = 1 + Math.round((thursday.getTime() - firstThursday.getTime()) / (7 * DAY_MS));
+  return { year, week };
+}
+
+function pad2(n: number): string {
+  return n < 10 ? `0${n}` : String(n);
+}
+
+/** Periodenbeginn (UTC) für `at` bei gegebener Granularität. */
+export function bucketStart(at: Date, g: Granularity): Date {
+  switch (g) {
+    case "DAY":
+      return startOfDayUtc(at);
+    case "WEEK":
+      return startOfIsoWeekUtc(at);
+    case "MONTH":
+      return new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), 1));
+    case "YEAR":
+      return new Date(Date.UTC(at.getUTCFullYear(), 0, 1));
+  }
+}
+
+/** Stabiler, sortierbarer Periodenschlüssel für `at` bei gegebener Granularität. */
+export function bucketKey(at: Date, g: Granularity): string {
+  switch (g) {
+    case "DAY": {
+      const s = startOfDayUtc(at);
+      return `${s.getUTCFullYear()}-${pad2(s.getUTCMonth() + 1)}-${pad2(s.getUTCDate())}`;
+    }
+    case "WEEK": {
+      const { year, week } = isoWeekParts(at);
+      return `${year}-W${pad2(week)}`;
+    }
+    case "MONTH":
+      return `${at.getUTCFullYear()}-${pad2(at.getUTCMonth() + 1)}`;
+    case "YEAR":
+      return String(at.getUTCFullYear());
+  }
+}
+
+/** Beginn der unmittelbar vorhergehenden Periode (für den Periodenvergleich). */
+export function previousBucketStart(start: Date, g: Granularity): Date {
+  switch (g) {
+    case "DAY":
+      return new Date(start.getTime() - DAY_MS);
+    case "WEEK":
+      return new Date(start.getTime() - 7 * DAY_MS);
+    case "MONTH":
+      return new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() - 1, 1));
+    case "YEAR":
+      return new Date(Date.UTC(start.getUTCFullYear() - 1, 0, 1));
+  }
+}
+
+/**
+ * Aggregiert Datenpunkte zu nach Periodenschlüssel aufsteigend sortierten Eimern
+ * (Umsatz- bzw. Auftragsübersicht, Kap. 29). Leere Perioden werden NICHT aufgefüllt —
+ * nur Perioden mit Datenpunkten erscheinen.
+ */
+export function bucketRevenue(
+  points: ReadonlyArray<RevenuePoint>,
+  g: Granularity
+): RevenueBucket[] {
+  const byKey = new Map<string, RevenueBucket>();
+  for (const p of points) {
+    const key = bucketKey(p.at, g);
+    const existing = byKey.get(key);
+    if (existing) {
+      existing.count += 1;
+      existing.netCents += p.netCents;
+    } else {
+      byKey.set(key, { key, start: bucketStart(p.at, g), count: 1, netCents: p.netCents });
+    }
+  }
+  return [...byKey.values()].sort((a, b) => a.start.getTime() - b.start.getTime());
+}
+
+/** Veränderung in Prozent (kaufmännisch gerundet); `null`, wenn Basis 0. */
+export function percentChange(current: Cents, previous: Cents): number | null {
+  if (previous === 0) return null;
+  return Math.round(((current - previous) / Math.abs(previous)) * 100);
+}
+
+/**
+ * Vergleicht die Periode, die `reference` enthält, mit der unmittelbar vorhergehenden
+ * Periode (Tag/Woche/Monat/Jahr, Kap. 29 „Vergleichen der verschiedenen Tage/Wochen/…").
+ * Fehlende Perioden zählen als 0.
+ */
+export function comparePeriods(
+  points: ReadonlyArray<RevenuePoint>,
+  g: Granularity,
+  reference: Date
+): PeriodComparison {
+  const curStart = bucketStart(reference, g);
+  const prevStart = previousBucketStart(curStart, g);
+  const buckets = bucketRevenue(points, g);
+  const byKey = new Map(buckets.map((b) => [b.key, b] as const));
+
+  const curKey = bucketKey(reference, g);
+  const prevKey = bucketKey(prevStart, g);
+
+  const current: RevenueBucket =
+    byKey.get(curKey) ?? { key: curKey, start: curStart, count: 0, netCents: 0 };
+  const previous: RevenueBucket | null = byKey.get(prevKey) ?? null;
+  const prevNet = previous?.netCents ?? 0;
+
+  return {
+    granularity: g,
+    current,
+    previous,
+    deltaCents: current.netCents - prevNet,
+    deltaPercent: percentChange(current.netCents, prevNet),
+  };
+}
+
+/** Gesamtsumme über alle Datenpunkte (Kennzahl der Übersicht). */
+export function totalRevenueCents(points: ReadonlyArray<RevenuePoint>): Cents {
+  return points.reduce((sum, p) => sum + p.netCents, 0);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Zeitraum-Filter (von–bis) — Kap. 29.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Optionaler Auswertungszeitraum (inklusive Grenzen). */
+export interface DateRange {
+  from?: Date;
+  to?: Date;
+}
+
+/** Ob `at` im (optionalen) Zeitraum liegt (Grenzen inklusiv). */
+export function inRange(at: Date, range?: DateRange): boolean {
+  if (!range) return true;
+  if (range.from && at.getTime() < range.from.getTime()) return false;
+  if (range.to && at.getTime() > range.to.getTime()) return false;
+  return true;
+}
+
+/** Filtert datierte Datenpunkte auf den Zeitraum (ohne Range: unverändert). */
+export function filterByRange<T extends { at: Date }>(
+  points: ReadonlyArray<T>,
+  range?: DateRange
+): T[] {
+  return range ? points.filter((p) => inRange(p.at, range)) : [...points];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Aufschlüsselung nach Dimension (Shop, Kundengruppe …) — Kap. 29.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Umsatzpunkt mit Dimensionsmerkmal (z. B. Shop-Id/Preisgruppen-Kind). */
+export interface LabeledRevenuePoint {
+  /** Bezugszeitpunkt (für den optionalen Zeitraum-Filter). */
+  at: Date;
+  /** Stabiler Schlüssel der Dimension (z. B. shopConnectorId oder PriceGroupKind). */
+  label: string;
+  /** Anzeigename der Dimension (Shop-Name, Preisgruppen-Name). */
+  name: string;
+  netCents: Cents;
+}
+
+export interface RevenueBreakdownItem {
+  label: string;
+  name: string;
+  count: number;
+  netCents: Cents;
+  /** Anteil am Gesamtumsatz in Prozent (kaufmännisch gerundet); null, wenn Gesamt 0. */
+  sharePercent: number | null;
+}
+
+/**
+ * Schlüsselt den Umsatz nach einer Dimension auf (Umsatz nach Shop/Kundengruppe,
+ * Kap. 29) — absteigend nach Umsatz sortiert, mit Anteil am Gesamtumsatz.
+ */
+export function breakdownRevenue(
+  points: ReadonlyArray<LabeledRevenuePoint>
+): RevenueBreakdownItem[] {
+  const total = points.reduce((s, p) => s + p.netCents, 0);
+  const byLabel = new Map<string, { name: string; count: number; netCents: Cents }>();
+  for (const p of points) {
+    const e = byLabel.get(p.label);
+    if (e) {
+      e.count += 1;
+      e.netCents += p.netCents;
+    } else {
+      byLabel.set(p.label, { name: p.name, count: 1, netCents: p.netCents });
+    }
+  }
+  return [...byLabel.entries()]
+    .map(([label, e]) => ({
+      label,
+      name: e.name,
+      count: e.count,
+      netCents: e.netCents,
+      sharePercent: total === 0 ? null : Math.round((e.netCents / total) * 100),
+    }))
+    .sort((a, b) => b.netCents - a.netCents);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Kostenstellen-Auswertung (B7, Kap. 37.1). Reine Aggregation — KEINE Buchung (G1).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface CostCenterAmount {
+  /** Kostenstellen-Id; `null` = nicht zugeordnet. */
+  costCenterId: string | null;
+  amountCents: Cents;
+}
+
+export interface CostCenterTotal {
+  costCenterId: string | null;
+  totalCents: Cents;
+  count: number;
+}
+
+/**
+ * Summiert Beträge je Kostenstelle (B7). Nicht zugeordnete Belege landen unter
+ * `costCenterId = null`. Stabile Sortierung nach Kostenstellen-Id (null zuletzt).
+ */
+export function aggregateByCostCenter(
+  items: ReadonlyArray<CostCenterAmount>
+): CostCenterTotal[] {
+  const byCc = new Map<string | null, CostCenterTotal>();
+  for (const it of items) {
+    const cur = byCc.get(it.costCenterId);
+    if (cur) {
+      cur.totalCents += it.amountCents;
+      cur.count += 1;
+    } else {
+      byCc.set(it.costCenterId, {
+        costCenterId: it.costCenterId,
+        totalCents: it.amountCents,
+        count: 1,
+      });
+    }
+  }
+  return [...byCc.values()].sort((a, b) => {
+    if (a.costCenterId === null) return 1;
+    if (b.costCenterId === null) return -1;
+    return a.costCenterId.localeCompare(b.costCenterId);
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Finanz-Reporting (B19, Kap. 29). Reine Aggregation — keine Buchung (G1). Geldfelder
+// sind über RBAC auf BÜRO/BUCHHALTUNG/ADMIN beschränkt (Durchsetzung in der API).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AgingItem {
+  openCents: Cents;
+  dueDate: Date;
+}
+
+export interface AgingReport {
+  notDue: Cents; // noch nicht fällig
+  d0_30: Cents; // 0–30 Tage überfällig
+  d31_60: Cents;
+  d61_90: Cents;
+  d90plus: Cents; // > 90 Tage
+  total: Cents;
+}
+
+/** OP-Aging: offene Posten nach Überfälligkeit zum Stichtag (Buckets, Kap. 29). */
+export function opAging(items: ReadonlyArray<AgingItem>, asOf: Date): AgingReport {
+  const r: AgingReport = { notDue: 0, d0_30: 0, d31_60: 0, d61_90: 0, d90plus: 0, total: 0 };
+  for (const it of items) {
+    if (it.openCents <= 0) continue; // bezahlt
+    const overdue = Math.floor((asOf.getTime() - it.dueDate.getTime()) / 86_400_000);
+    r.total += it.openCents;
+    if (overdue < 0) r.notDue += it.openCents;
+    else if (overdue <= 30) r.d0_30 += it.openCents;
+    else if (overdue <= 60) r.d31_60 += it.openCents;
+    else if (overdue <= 90) r.d61_90 += it.openCents;
+    else r.d90plus += it.openCents;
+  }
+  return r;
+}
+
+/** Days Sales Outstanding / Forderungslaufzeit (Kap. 29). */
+export function dso(
+  openReceivableCents: Cents,
+  periodRevenueCents: Cents,
+  periodDays: number
+): number {
+  if (periodRevenueCents <= 0 || periodDays <= 0) return 0;
+  return (openReceivableCents / periodRevenueCents) * periodDays;
+}
+
+export interface MarginPoint {
+  label: string;
+  name: string;
+  netCents: Cents;
+  costCents: Cents;
+}
+
+export interface MarginBreakdownItem {
+  label: string;
+  name: string;
+  netCents: Cents;
+  costCents: Cents;
+  dbCents: Cents; // Deckungsbeitrag
+  margePercent: number | null;
+}
+
+/** Deckungsbeitrag/Marge je Dimension (Artikel/Veredelungsart), absteigend nach DB. */
+export function breakdownMargin(
+  points: ReadonlyArray<MarginPoint>
+): MarginBreakdownItem[] {
+  const byLabel = new Map<string, { name: string; netCents: Cents; costCents: Cents }>();
+  for (const p of points) {
+    const e = byLabel.get(p.label);
+    if (e) {
+      e.netCents += p.netCents;
+      e.costCents += p.costCents;
+    } else {
+      byLabel.set(p.label, { name: p.name, netCents: p.netCents, costCents: p.costCents });
+    }
+  }
+  return [...byLabel.entries()]
+    .map(([label, e]) => {
+      const dbCents = e.netCents - e.costCents;
+      return {
+        label,
+        name: e.name,
+        netCents: e.netCents,
+        costCents: e.costCents,
+        dbCents,
+        margePercent: e.netCents > 0 ? Math.round((dbCents / e.netCents) * 100) : null,
+      };
+    })
+    .sort((a, b) => b.dbCents - a.dbCents);
+}
+
+export interface CashflowEvent {
+  at: Date;
+  /** + Zufluss (OP-Fälligkeit) / − Abfluss (geplante Zahlung). */
+  amountCents: Cents;
+}
+
+export interface LiquidityBucket {
+  periodStart: Date;
+  netCents: Cents;
+  cumulativeCents: Cents;
+}
+
+/** Liquiditätsvorschau: Netto je Periode + laufender Saldo ab Anfangsbestand. */
+export function liquidityForecast(
+  events: ReadonlyArray<CashflowEvent>,
+  g: Granularity,
+  openingCents: Cents = 0
+): LiquidityBucket[] {
+  const byKey = new Map<string, { start: Date; net: Cents }>();
+  for (const e of events) {
+    const key = bucketKey(e.at, g);
+    const cur = byKey.get(key);
+    if (cur) cur.net += e.amountCents;
+    else byKey.set(key, { start: bucketStart(e.at, g), net: e.amountCents });
+  }
+  let cum = openingCents;
+  return [...byKey.values()]
+    .sort((a, b) => a.start.getTime() - b.start.getTime())
+    .map((s) => {
+      cum += s.net;
+      return { periodStart: s.start, netCents: s.net, cumulativeCents: cum };
+    });
+}

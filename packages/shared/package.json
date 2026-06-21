@@ -1,0 +1,38 @@
+{
+  "name": "@texma/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./stickerei": {
+      "types": "./dist/stickerei.d.ts",
+      "import": "./dist/stickerei.js"
+    },
+    "./markup": {
+      "types": "./dist/markup.d.ts",
+      "import": "./dist/markup.js"
+    },
+    "./pain001": {
+      "types": "./dist/pain001.d.ts",
+      "import": "./dist/pain001.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}

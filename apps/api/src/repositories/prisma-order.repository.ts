@@ -1,0 +1,98 @@
+// Prisma-Implementierung der Auftrags-Repositories (Produktionspfad).
+// Persistiert Shop-Aufträge gegen die Firma (T-01) inkl. Positionen; bei
+// Policy FREIE_EINGABE wird die übernommene Lieferadresse angelegt (K-08).
+
+import { prisma } from "@texma/db";
+import type { MappedOrder } from "@texma/shared";
+import type {
+  CreatedOrder,
+  OrderRepository,
+} from "../modules/shop-import/order-import.service.js";
+import type { OrderListItem, OrderQueryRepository } from "./read.js";
+
+export class PrismaOrderRepository
+  implements OrderRepository, OrderQueryRepository
+{
+  async findByExternalNumber(
+    shopConnectorId: string,
+    externalNumber: string
+  ): Promise<CreatedOrder | null> {
+    const o = await prisma.order.findFirst({
+      where: { shopConnectorId, externalNumber },
+      select: { id: true, number: true, companyId: true },
+    });
+    return o ?? null;
+  }
+
+  async createFromShop(mapped: MappedOrder): Promise<CreatedOrder> {
+    let deliveryAddressId: string | undefined;
+    if (mapped.delivery.policy === "FREIE_EINGABE" && mapped.delivery.address) {
+      const a = mapped.delivery.address;
+      const da = await prisma.deliveryAddress.create({
+        data: {
+          companyId: mapped.companyId,
+          label: "Shop-Lieferadresse",
+          street: a.street,
+          zip: a.zip,
+          city: a.city,
+          country: a.country,
+        },
+      });
+      deliveryAddressId = da.id;
+    }
+
+    const order = await prisma.order.create({
+      data: {
+        number: `WC-${mapped.shopConnectorId.slice(0, 6)}-${mapped.externalNumber}`,
+        externalNumber: mapped.externalNumber,
+        employeeNote: mapped.employeeNote,
+        company: { connect: { id: mapped.companyId } },
+        shopConnector: { connect: { id: mapped.shopConnectorId } },
+        ...(deliveryAddressId
+          ? { deliveryAddress: { connect: { id: deliveryAddressId } } }
+          : {}),
+        lines: {
+          create: mapped.lines.map((l) => ({
+            position: l.position,
+            description: l.description,
+            qty: l.qty,
+            unitNetCents: l.unitNetCents,
+            // rawPayload ist JSONB; unknown → InputJsonValue
+            rawPayload: l.rawPayload as object,
+          })),
+        },
+      },
+      select: { id: true, number: true, companyId: true },
+    });
+    return order;
+  }
+
+  async countCompanies(): Promise<number> {
+    return prisma.company.count();
+  }
+
+  async listRecent(limit: number): Promise<OrderListItem[]> {
+    const rows = await prisma.order.findMany({
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      select: {
+        id: true,
+        number: true,
+        companyId: true,
+        externalNumber: true,
+        employeeNote: true,
+        createdAt: true,
+        lines: { select: { qty: true, unitNetCents: true } },
+      },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      number: r.number,
+      companyId: r.companyId,
+      externalNumber: r.externalNumber,
+      employeeNote: r.employeeNote,
+      totalNetCents: r.lines.reduce((sum, l) => sum + l.qty * l.unitNetCents, 0),
+      createdAt: r.createdAt,
+    }));
+  }
+}

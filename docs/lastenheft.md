@@ -1,64 +1,17 @@
-# Lastenheft ERP-Migration TEXMA Textilveredelung (v2.4)
-
-TEXMA Textilveredelung — Lastenheft ERP-Migration
-
-**Lastenheft ERP-Migration**
+# Lastenheft ERP-Migration TEXMA Textilveredelung (v3.2)
 
 Ablösung von CDH Office
-
-TEXMA Textilveredelung
 
 | | |
 |---|---|
 | **Unternehmen** | TEXMA Textilveredelung GmbH, Herrenberg |
 | **Dokument** | Lastenheft für ERP-Beratung und -Umsetzung (Make-or-Buy) |
-| **Version** | 2.4 — zusätzlich Terminmanagement und Statusverwaltung über Angebots-, Auftrags- und Produktionsebene (ohne Budget) |
+| **Version** | 3.4 — Kap. 38.1 um Darstellungs- und Konsistenzanforderungen ergänzt (kompakte Listenansichten, einheitliche Status-/Ampeldarstellung, konsistente Bedienmuster); zuvor Staffelpreise (Kap. 4.4/31, T-15) (ohne Budget) |
 | **Funktionaler Maßstab** | Xentral (State of the Art / Benchmark) — Zielsystem offen, Make-or-Buy zu prüfen |
 | **Altsystem** | CDH Office (lokal) |
 | **Status** | Zur Angebotsanfrage freigegeben |
 
-> **Bewertungsauftrag an die Beratung:** Xentral wird in diesem Lastenheft als State of the Art / funktionaler Maßstab verwendet — es beschreibt, was ein gutes Zielsystem leisten muss. Das Zielsystem selbst ist offen. Kernauftrag der Beratung ist die Make-or-Buy-Bewertung: Lässt sich die beschriebene Funktionalität wirtschaftlich und dauerhaft betreibbar durch ein Standardsystem (Kauf/SaaS) abdecken, oder durch eine Eigenentwicklung bzw. einen Eigenbetrieb? Details in Kapitel 24.
-
-## Inhaltsverzeichnis
-
-1. [Unternehmens- und Projektprofil](#1-unternehmens--und-projektprofil)
-2. [Ziele des Systemwechsels](#2-ziele-des-systemwechsels)
-3. [Shopstruktur & WooCommerce-Anbindung](#3-shopstruktur--woocommerce-anbindung)
-4. [Auftragsabwicklung & Workflows](#4-auftragsabwicklung--workflows)
-5. [Produktionssteuerung](#5-produktionssteuerung)
-6. [Beschaffung & Lieferanten](#6-beschaffung--lieferanten)
-7. [Dateimanagement & Druckdaten](#7-dateimanagement--druckdaten)
-8. [Kundenstamm & CRM](#8-kundenstamm--crm)
-9. [Finanzbuchhaltung & Controlling](#9-finanzbuchhaltung--controlling)
-10. [Archivierung & GoBD-Konformität](#10-archivierung--gobd-konformität)
-11. [Stammdaten-Migration](#11-stammdaten-migration)
-12. [Benutzer, Rollen & Freigaben](#12-benutzer-rollen--freigaben)
-13. [Lieferanten-API-Strategie](#13-lieferanten-api-strategie)
-14. [Technische Rahmenbedingungen](#14-technische-rahmenbedingungen)
-15. [Pflicht-Testfälle (Abnahmeprotokoll)](#15-pflicht-testfälle-abnahmeprotokoll)
-16. [Offene Klärungspunkte vor Vertragsabschluss](#16-offene-klärungspunkte-vor-vertragsabschluss)
-17. [Projektrahmen & Erwartungen an Beratung und Umsetzungspartner](#17-projektrahmen--erwartungen-an-beratung-und-umsetzungspartner)
-18. [Ergänzende Vertriebskanäle: Anfrageshop und öffentlicher Sammelbestell-Shop](#18-ergänzende-vertriebskanäle-anfrageshop-und-öffentlicher-sammelbestell-shop)
-19. [E-Rechnung und gesetzliche Compliance](#19-e-rechnung-und-gesetzliche-compliance)
-20. [Reklamation und Nacharbeit (Workflow C)](#20-reklamation-und-nacharbeit-workflow-c)
-21. [Geschäftliche Erfolgskriterien und KPIs](#21-geschäftliche-erfolgskriterien-und-kpis)
-22. [KI- und Automatisierungspotenziale (Ausblick für die Beratung)](#22-ki--und-automatisierungspotenziale-ausblick-für-die-beratung)
-23. [Ergänzende offene Klärungspunkte](#23-ergänzende-offene-klärungspunkte)
-24. [Make-or-Buy: Bewertungsauftrag an die Beratung](#24-make-or-buy-bewertungsauftrag-an-die-beratung)
-25. [Anforderungspriorisierung (MoSCoW)](#25-anforderungspriorisierung-moscow)
-26. [Messbare Abnahmekriterien](#26-messbare-abnahmekriterien)
-27. [Nichtfunktionale Anforderungen](#27-nichtfunktionale-anforderungen)
-28. [Datenschutz und DSGVO](#28-datenschutz-und-dsgvo)
-29. [Reporting und Kennzahlen (operativer Betrieb)](#29-reporting-und-kennzahlen-operativer-betrieb)
-30. [Make-or-Buy — gewichtete Bewertungsmatrix](#30-make-or-buy--gewichtete-bewertungsmatrix)
-31. [Funktionsabdeckungs-Matrix (Maßstab Xentral)](#31-funktionsabdeckungs-matrix-maßstab-xentral)
-32. [Integrationsarchitektur](#32-integrationsarchitektur)
-33. [Produktionssteuerung — Vertiefung](#33-produktionssteuerung--vertiefung)
-34. [Projektorganisation und kritische Risiken](#34-projektorganisation-und-kritische-risiken)
-35. [Terminmanagement und Statusverwaltung](#35-terminmanagement-und-statusverwaltung)
-36. [Neue Klärungspunkte (Ergänzung zu Kapitel 16 und 23)](#36-neue-klärungspunkte-ergänzung-zu-kapitel-16-und-23)
-
----
+> **Xentral wird in diesem Lastenheft als State of the Art / funktionaler Maßstab verwendet** — es beschreibt, was ein gutes Zielsystem leisten muss. Das Zielsystem selbst ist offen. Kernauftrag der Beratung ist die Make-or-Buy-Bewertung: Lässt sich die beschriebene Funktionalität wirtschaftlich und dauerhaft betreibbar durch ein Standardsystem (Kauf/SaaS) abdecken, oder durch eine Eigenentwicklung bzw. einen Eigenbetrieb? Details in Kapitel 24.
 
 # 1. Unternehmens- und Projektprofil
 
@@ -71,7 +24,7 @@ TEXMA Textilveredelung
 | Geschäftsmodell | Make-to-Order, kein Warenlager (Ausnahme: vorgefertigte Transferdrucke) |
 | Veredelungsverfahren | DTF/Transferdruck (intern), Flex/Flock (intern), Silberreflex (intern), Plastisol-Transfer (extern bestellt, intern gepresst), Siebdruck (Fremdvergabe), Stickerei (Fremdvergabe, Ziel 2027 intern) |
 | Mitarbeitershops | 10–12 aktiv, Ziel 30 in 3 Jahren |
-| Aktive Artikel | über 5.000 |
+| Aktive Artikel | über 5.000 + Varianten |
 | Aktive Lieferanten | ca. 20 |
 
 # 2. Ziele des Systemwechsels
@@ -80,17 +33,18 @@ TEXMA Textilveredelung
 
 - **Variantenstruktur:** CDH kann keine echten Varianten (Farbe × Größe) — führt zu Artikelduplikaten und Datenchaos
 - **Preisgruppenlogik:** in CDH nicht ausreichend abbildbar — manuelle Überschreibungen und Fehler entstehen
+- **Prozessautomatiserung:** Von Anfrage bis Versand
 - **Shopautomatisierung:** Ziel 30 Mitarbeitershops erfordert API-fähige ERP-Architektur
-- **Technologische Modernisierung:** CDH ist lokal installiert, kein Cloud-Zugang, begrenzte API-Fähigkeit
+- **Technologische Modernisierung:** CDH ist lokal installiert, kein Cloud-Zugang, keine API-Fähigkeit, veraltete Software
 
 ## 2.2 Zielbild nach erfolgreichem Go-Live
 
 - Vollständig digitaler Make-to-Order-Workflow ohne Excel-Parallelsysteme
 - Automatischer Auftragsimport aus WooCommerce-Shops
 - Strukturierte Produktionsaufträge mit Stücklisten je Veredelungsart
-- Deckungsbeitrag je Auftrag in Echtzeit sichtbar
+- Deckungsbeitrag je Auftrag und Artikel in Echtzeit sichtbar
 - Nachkalkulation (Soll vs. Ist) eingeführt
-- Lieferanten-API-Anbindung für Stammdaten und Bestellungen
+- Lieferanten-API-Anbindung (wo vorhanden) für Stammdaten und Bestellungen
 - Skalierung auf 30 Shops ohne proportionalen Büroaufwand
 
 # 3. Shopstruktur & WooCommerce-Anbindung
@@ -99,9 +53,9 @@ TEXMA Textilveredelung
 
 | **Parameter** | **Spezifikation** |
 |---|---|
-| Shoparchitektur | Separate WordPress-Installationen je Kunde (eigene Domain/Subdomain) |
+| Shoparchitektur | Separate WordPress-Installationen je Kunde (eigene Domain/Subdomain – Multisites); offen für flexiblere Modelle; Shopify Multistore |
 | Anzahl Shops heute | 10–12 Installationen |
-| Anzahl Shops Ziel | 30 (in 3 Jahren) |
+| Anzahl Shops Ziel | 30 + x |
 | Produktstruktur | Standard WooCommerce Variable Products (Attribut: Farbe × Größe) |
 | Preisanzeige | Nur nach Login sichtbar (login-geschützt) |
 | Mitarbeiter-Login | Jeder Mitarbeiter hat eigenes WooCommerce-Kundenkonto |
@@ -119,7 +73,7 @@ TEXMA Textilveredelung
 - Statusrückmeldung Shop ← Xentral: mindestens „In Produktion“, „Versandbereit“, „Versendet“ mit Trackingnummer
 - Xentral ist Preis-Master — kein manueller Preispflegeaufwand im Shop
 
-> **Kritische Architektur-Anforderung:** Der WooCommerce-Connector muss so konfiguriert sein, dass WooCommerce-Mitarbeiterkonten auf den Xentral-Firmenkunden-Satz mappen. Falscher Aufbau = Hunderte Phantom-Kundensätze. Muss als Testfall #1 im Abnahmeprotokoll stehen.
+**Kritische Architektur-Anforderung: Der WooCommerce-Connector muss so konfiguriert sein, dass WooCommerce-Mitarbeiterkonten auf den Xentral-Firmenkunden-Satz mappen. Falscher Aufbau = Hunderte Phantom-Kundensätze. Muss als Testfall #1 im Abnahmeprotokoll stehen.**
 
 # 4. Auftragsabwicklung & Workflows
 
@@ -134,32 +88,33 @@ TEXMA Textilveredelung
 
 ## 4.2 Workflow A — Shop-Bestellung (standardisiert)
 
-- WooCommerce-Bestellung eingeht → automatischer Xentral-Auftrag
-- Druckdaten-Link am Auftrag (bei Shops: immer vordefiniert, kein Upload nötig)
-- Produktionsauftrag automatisch aus Auftrag generiert
-- Tägliche Sammelbestellung Lieferanten (aus Xentral-Bestellvorschlag)
-- Wareneingang → Produktionsfreigabe
-- Produktion → Status „Abgeschlossen“
-- Faktura automatisch bei Versandabschluss
-- DPD-Label aus Xentral → Trackingnummer zurück an Shop
+1. WooCommerce-Bestellung eingeht → automatischer Xentral-Auftrag
+2. Druckdaten-Link am Auftrag (bei Shops: immer vordefiniert, kein Upload nötig)
+3. Produktionsauftrag automatisch aus Auftrag generiert
+4. Tägliche Sammelbestellung Lieferanten (aus Xentral-Bestellvorschlag)
+5. Wareneingang → Produktionsfreigabe
+6. Produktion → Status „Abgeschlossen“
+7. Faktura automatisch bei Versandabschluss
+8. DPD-Label aus Xentral → Trackingnummer zurück an Shop
 
 ## 4.3 Workflow B — Projektauftrag (individuell)
 
-- Briefing / Anfrage → Projekt anlegen in Xentral
-- Angebot mit flexibler Stückliste (Textil + Veredelungspositionen variabel)
-- Digitale Darstellung / Mockup → als Anhang am Auftrag ablegen → per Mail aus Xentral versenden
-- Auftragserteilung per Mail / Telefon / persönlich → Freigabe als Kommentar am Auftrag dokumentieren
-- Bei Erstauftrag: Logo-Freigabe per Mail (PDF) mit Versionsstempel am Auftrag archivieren (Pflichtfeld)
-- Produktionsauftrag generieren → Stückliste final
-- Lieferanten bestellen → Produktion → QS
-- Faktura mit Versand / Abholung
-- Nachkalkulation: Soll-DB vs. Ist-DB (Zeitbuchung + Materialbuchung)
+1. Briefing / Anfrage → Projekt anlegen in Xentral
+2. Angebot mit flexibler Stückliste (Textil + Veredelungspositionen variabel)
+3. Digitale Darstellung / Mockup → als Anhang am Auftrag ablegen → per Mail aus Xentral versenden
+4. Auftragserteilung per Mail / Telefon / persönlich → Freigabe als Kommentar am Auftrag dokumentieren
+5. Bei Erstauftrag: Logo-Freigabe per Mail (PDF) mit Versionsstempel am Auftrag archivieren (Pflichtfeld)
+6. Produktionsauftrag generieren → Stückliste final
+7. Lieferanten bestellen → Produktion → QS
+8. Faktura mit Versand / Abholung
+9. Nachkalkulation: Soll-DB vs. Ist-DB (Zeitbuchung + Materialbuchung)
 
 ## 4.4 Angebotskalkulation
 
 - Jede Veredelungsposition als separate Angebotszeile (nie Pauschalpreis)
 - DB-Kalkulation bereits im Angebot sichtbar
 - Stick-EK: manuell eintragen nach Dienstleister-Rückmeldung → Xentral berechnet VK über hinterlegten Aufschlagsfaktor (1,88)
+- Mengenstaffeln (Staffelpreise): mengenabhängige Stückpreise je Position, die mit der Bestellmenge degressiv sinken. Besonders relevant bei der Veredelung, da sich die fixen Einrichtungskosten (Sieb, Stickdatei, DTF-/Transfer-Setup) auf die Stückzahl verteilen. Die Staffel ist je Artikel bzw. je Veredelungsart hinterlegbar und wirkt zusätzlich zur Preisgruppe des Kunden — Annahme: multiplikativ über dem Preisgruppen-Preis, von TEXMA zu bestätigen. Bei Mengenänderung im Angebot oder Auftrag wird der zutreffende Staffelpreis automatisch gezogen.
 - Auftragsänderungen nach Status „In Bearbeitung“: nur über Storno + Neuanlage erlaubt
 
 # 5. Produktionssteuerung
@@ -205,7 +160,7 @@ Siebdruck läuft über 1 festen Partner. Bei Stickerei (3 Partner) gilt eine zwe
 - **Neukunde / neues Logo:** Angebotsanfrage an alle 3 Stickereien → Entscheidung nach Preis/Kapazität/Termin → Zuweisung; Sticker + Stickdatei werden danach am Kundensatz gespeichert
 - **Bestandskunde mit bestehendem Logo:** immer gleicher Sticker, kein Angebotsverfahren; Stickdatei liegt bereits beim Partner
 
-Umsetzung in Xentral: Kundensatz-Felder „Stickerei-Partner“ + „Stickdatei hinterlegt (Ja/Nein + Referenz)“. Befuellt = Direktbestellung; leer = Angebotsprozess.
+Umsetzung in Xentral: Kundensatz-Felder „Stickerei-Partner“ + „Stickdatei hinterlegt (Ja/Nein + Referenz)“. Befüllt = Direktbestellung; leer = Angebotsprozess.
 
 ## 5.5 Warenkommissionierung
 
@@ -299,15 +254,15 @@ Es gibt Aufträge, bei denen Textilien von mehreren Lieferanten (z. B. FHB + Sta
 
 ## 9.2 Buchhaltungsübergabe
 
-> **Kritischer Klärungspunkt:** TEXMA nutzt AddisonOne Click. Xentral hat keine native AddisonOne-Schnittstelle, bietet aber DATEV-Export an. Vor Vertragsunterzeichnung muss geprüft werden, ob AddisonOne den Xentral-DATEV-Export importieren kann. Klärung mit Steuerberater + Addison ist zwingend erforderlich.
+**Kritischer Klärungspunkt: TEXMA nutzt AddisonOne Click. Xentral hat keine native AddisonOne-Schnittstelle, bietet aber DATEV-Export an. Vor Vertragsunterzeichnung muss geprüft werden, ob AddisonOne den Xentral-DATEV-Export importieren kann. Klärung mit Steuerberater + Addison ist zwingend erforderlich.**
 
 Fallback-Optionen:
 
-- AddisonOne akzeptiert DATEV-kompatiblen Export aus Xentral → kein Problem
-- Steuerberater stellt Addison auf DATEV-Workflow um
-- Xentral-Fibu vollständig nutzen → Addison nur für Jahresabschluss
+1. AddisonOne akzeptiert DATEV-kompatiblen Export aus Xentral → kein Problem
+2. Steuerberater stellt Addison auf DATEV-Workflow um
+3. Xentral-Fibu vollständig nutzen → Addison nur für Jahresabschluss
 
-> **Verbindliche Festlegung des Buchhaltungs-Scopes:** Das ERP führt die operative Buchhaltung — Ausgangs- und Eingangsrechnungen, Offene-Posten-Verwaltung, Banking-Abgleich und Mahnwesen — und übergibt die buchungsrelevanten Daten im DATEV-Format an den Steuerberater. Jahresabschluss, Umsatzsteuer-Voranmeldung und Anlagenbuchhaltung verbleiben beim Steuerberater. Eine zertifizierte Vollbuchhaltung (z. B. IDW PS 880) ist im ERP nicht gefordert. Diese Grenze ist für jeden Anbieter verbindlich und bestimmt zugleich die GoBD-Anforderung in Kapitel 10.
+**Verbindliche Festlegung des Buchhaltungs-Scopes: Das ERP führt die operative Buchhaltung — Ausgangs- und Eingangsrechnungen, Offene-Posten-Verwaltung, Banking-Abgleich und Mahnwesen — und übergibt die buchungsrelevanten Daten im DATEV-Format an den Steuerberater. Jahresabschluss, Umsatzsteuer-Voranmeldung und Anlagenbuchhaltung verbleiben beim Steuerberater. Eine zertifizierte Vollbuchhaltung (z. B. IDW PS 880) ist im ERP nicht gefordert. Diese Grenze ist für jeden Anbieter verbindlich und bestimmt zugleich die GoBD-Anforderung in Kapitel 10.**
 
 ## 9.3 Controlling-Anforderungen
 
@@ -319,7 +274,7 @@ Fallback-Optionen:
 
 ## 9.4 Rechnungskontrolle & Banking-Abgleich (Option A: Xentral als Master)
 
-> **Grundsatzentscheidung:** Xentral ist Master für den operativen Zahlungsverkehr (Offene-Posten-Führung, Banking-Abgleich, Mahnwesen). AddisonOne bleibt für Jahresabschluss zuständig (DATEV-Export). Damit wird die Klärung K-01 zur Grundvoraussetzung — ohne funktionierenden DATEV-Export keine saubere Trennung.
+**Grundsatzentscheidung: Xentral ist Master für den operativen Zahlungsverkehr (Offene-Posten-Führung, Banking-Abgleich, Mahnwesen). AddisonOne bleibt für Jahresabschluss zuständig (DATEV-Export). Damit wird die Klärung K-01 zur Grundvoraussetzung — ohne funktionierenden DATEV-Export keine saubere Trennung.**
 
 - Automatischer Bankkontoabruf via FinTS/HBCI oder Import CAMT.053 / MT940 (Hauptbank: Volksbank)
 - Automatischer Abgleich Zahlungseingang → offener Posten: Rechnung wird automatisch als bezahlt markiert (Matching über Verwendungszweck/Betrag/Rechnungsnummer)
@@ -346,7 +301,7 @@ Fallback-Optionen:
 
 # 10. Archivierung & GoBD-Konformität
 
-> **Kritischer Hinweis:** Xentral ist kein zertifiziertes Archivsystem. Es speichert Belege, erfüllt allein aber nicht automatisch alle GoBD-Anforderungen an Unveränderbarkeit und revisionssichere Langzeitarchivierung. Die Archivierungslösung ist daher eigenständig zu konzipieren und mit dem Steuerberater abzustimmen.
+**Kritischer Hinweis: Xentral ist kein zertifiziertes Archivsystem. Es speichert Belege, erfüllt allein aber nicht automatisch alle GoBD-Anforderungen an Unveränderbarkeit und revisionssichere Langzeitarchivierung. Die Archivierungslösung ist daher eigenständig zu konzipieren und mit dem Steuerberater abzustimmen.**
 
 ## 10.1 GoBD-Kernanforderungen
 
@@ -385,7 +340,7 @@ Die folgenden Optionen sind im Implementierungsprojekt gemeinsam mit dem Steuerb
 
 ## 10.5 Verfahrensdokumentation (Pflicht, unabhängig von der Option)
 
-> **Eine schriftliche Verfahrensdokumentation ist GoBD-Pflicht und wird bei jeder Betriebsprüfung zuerst verlangt. Ihr Fehlen ist der häufigste GoBD-Mangel bei KMU.**
+**Eine schriftliche Verfahrensdokumentation ist GoBD-Pflicht und wird bei jeder Betriebsprüfung zuerst verlangt. Ihr Fehlen ist der häufigste GoBD-Mangel bei KMU.**
 
 - Beschreibung des gesamten Archivierungsprozesses: Wer archiviert was, wann, wie und wo
 - Technische Systembeschreibung (Xentral, Archiv, Mail, Schnittstellen)
@@ -431,7 +386,7 @@ Die folgenden Optionen sind im Implementierungsprojekt gemeinsam mit dem Steuerb
 | Phase 2 | FHB | ORDERS, DESADV, INVOIC, Verfügbarkeiten (EDI via nexmart) |
 | Phase 3 | ERIMA, hummel, ENGEL, Greiff | Produktdaten, Lager, Bestellungen (EDI / Feed) |
 
-> **Middleware-Architektur:** Zwischen Lieferanten-API und Xentral-API wird eine Middleware-Schicht benötigt (Mapping, Retry-Logik, Delta-Sync, Logging). Die Middleware-Lösung ist Teil des Implementierungsangebots.
+**Middleware-Architektur: Zwischen Lieferanten-API und Xentral-API wird eine Middleware-Schicht benötigt (Mapping, Retry-Logik, Delta-Sync, Logging). Die Middleware-Lösung ist Teil des Implementierungsangebots.**
 
 # 14. Technische Rahmenbedingungen
 
@@ -468,6 +423,7 @@ Die folgenden Testfälle müssen vor Go-Live vollständig bestanden sein. Das Ab
 | T-12 | Transferdruck-Mindestlager unterschritten | Bestellvorschlag automatisch erzeugt | Mittel |
 | T-13 | Banking-Abgleich: Zahlungseingang → offener Posten automatisch ausgeglichen | Rechnung automatisch als bezahlt markiert; nicht zuordenbare Zahlung in Klärungsliste | Hoch |
 | T-14 | Mahnlauf: überfällige Rechnung → automatische Mahnung Stufe 1 | Mahnung korrekt generiert und versendet; Mahnsperre wird respektiert | Hoch |
+| T-15 | Staffelpreis: Bestellmenge überschreitet eine hinterlegte Staffelgrenze | System zieht automatisch den Stückpreis der zutreffenden Mengenstufe; Einrichtungskosten korrekt auf die Menge verteilt; Preisgruppe bleibt kombiniert wirksam | Hoch |
 
 # 16. Offene Klärungspunkte vor Vertragsabschluss
 
@@ -476,7 +432,7 @@ Die folgenden Testfälle müssen vor Go-Live vollständig bestanden sein. Das Ab
 | K-01 | AddisonOne-Kompatibilität mit Xentral-DATEV-Export prüfen — GRUNDVORAUSSETZUNG für Option A (Xentral als Zahlungsverkehr-Master, Addison nur Jahresabschluss) | Steuerberater + Addison + Xentral |
 | K-02 | Anzahl WooCommerce-Connectoren je Paket + Skalierung auf 30 Shops | Xentral Vertrieb |
 | K-03 | Preismodell schriftlich fixieren (Änderungs-/Paketwechsel) | Xentral Vertrieb |
-| K-04 | Referenzkunde mit ähnlichem Setup benennen | Xentral / Partner |
+| K-04 | Referenzkunde mit ähnlichem Setup benennen. Geklärt: Mr.Tex GmbH, Wolfsburg — Textilveredler/Unternehmensausstatter (seit 2007, GF Jan Worm), produktiver Xentral-Anwender mit öffentlicher Case Study (xentral.com/de/kunden/mr-tex). Als unabhängiger Referenz- und Gesprächskontakt nutzen, um die Eignung von Xentral für die Veredelungsprozesse empirisch zu prüfen. | Xentral / Partner |
 | K-05 | PoC: kundenspezifische Stückliste demonstrieren (T-03) | Implementierungspartner |
 | K-06 | Angebot für Sonderkonfiguration variable Stücklisten + Connector | Implementierungspartner |
 | K-07 | Stichtag Go-Live definieren + Rollback-Plan für CDH | Intern + Partner |
@@ -503,7 +459,7 @@ Die folgenden Testfälle müssen vor Go-Live vollständig bestanden sein. Das Ab
 - Benannter Projektverantwortlicher mit direkter Erreichbarkeit
 - Hyper-Care-Phase nach Go-Live: mindestens 4 Wochen intensiv
 - Schulung auf echten TEXMA-Daten und TEXMA-Prozessen (nicht auf Demodaten)
-- Abnahmeprotokoll mit den 14 definierten Testfällen als Vertragsbestandteil
+- Abnahmeprotokoll mit den 15 definierten Testfällen als Vertragsbestandteil
 
 ## 17.3 Go-Live-Strategie
 
@@ -512,8 +468,6 @@ Die folgenden Testfälle müssen vor Go-Live vollständig bestanden sein. Das Ab
 - Rollback-Plan für die ersten 2 Wochen schriftlich dokumentiert
 - Übergangsregelung für laufende mehrstufige Aufträge: Auftrags-Einfrierfenster vor dem Stichtag — ab einem definierten Datum keine Neuaufträge mehr im Altsystem; zum Go-Live werden die noch offenen Aufträge mit ihrem Reststatus (Bestand, Veredelungsstand, Liefertermin) manuell ins neue System überführt.
 - Stichtag bewusst in eine auftragsschwache Phase legen, um die Zahl der zum Cut-Over laufenden mehrstufigen Aufträge (Durchlaufzeit 1–4 Wochen) zu minimieren. Klärt den bisher offenen Punkt aus Kapitel 11.
-
----
 
 # Ergänzungen und kritische Prüfung (Version 2.2)
 
@@ -525,10 +479,11 @@ Kapitel 3 behandelt die geschlossenen WooCommerce-Mitarbeitershops. TEXMA betrei
 
 ## 18.1 Anfrageshop (B2B-Katalog ohne Checkout)
 
-Eigenständiger B2B-Katalog auf separater Subdomain (andere Technologie als WooCommerce, kein Warenkorb/Checkout). Er erzeugt Anfragen, keine Bestellungen.
+Eigenständiger B2B-Katalog unter der Domain anfrage.texma-gmbh.de (andere Technologie als WooCommerce, kein Warenkorb/Checkout). Er erzeugt Anfragen, keine Bestellungen. Der Shop ist bereits in Betrieb, derzeit noch unter der vorläufigen Adresse texma-shop.pages.dev; der Umzug auf die Zieldomain anfrage.texma-gmbh.de steht aus. Es handelt sich um ein bestehendes, eigenständig betriebenes System, das nicht Gegenstand der ERP-Beschaffung ist — relevant ist die Schnittstelle zwischen Anfrageshop und ERP: Anfrageeingang und, im Idealfall, Versorgung des Shops mit Artikeldaten (siehe unten).
 
 - Anforderung: Anfrage/Lead aus dem Anfrageshop wird als Interessent bzw. Angebotsvorgang ins ERP übernommen (Kontaktanlage plus Vorgang), idealerweise automatisiert über Webhook/Middleware (z. B. n8n).
-- Kein Bestands- oder Preis-Sync erforderlich (kein Verkauf) — nur Kontakt- und Anfragedaten.
+- Im Idealfall (umgekehrte Richtung) bezieht der Anfrageshop seine Artikel- und Katalogdaten (Produktstamm, Varianten Farbe × Größe, Kategorien, Bilder, Beschreibungen) aus dem ERP über eine Schnittstelle (API/Feed). So wird der Katalog nicht doppelt gepflegt — das ERP ist Artikelstamm-Master („eine Quelle der Wahrheit“). Anforderung ans ERP: Bereitstellung dieser Artikeldaten über eine maschinelle Schnittstelle.
+- Ein Bestands-Sync ist nicht erforderlich (Make-to-Order, kein Lager). Preise sind im Anfragekanal nicht kundenindividuell; ob Richt- oder Listenpreise angezeigt werden, ist Teil der Umfangsklärung (K-12).
 
 ## 18.2 Öffentlicher Sammelbestell-Shop (Schul-/Vereinsshop)
 
@@ -537,18 +492,18 @@ Eigenständiger B2B-Katalog auf separater Subdomain (andere Technologie als WooC
 - Anbindung grundsätzlich wie Mitarbeitershops über WooCommerce-Connector, jedoch mit abweichender Logik: Einzelbestellungen werden über ein Bestellfenster gesammelt und als Sammelauftrag in Produktion gegeben.
 - Zu klären: ein Connector mit Sammelauftragslogik oder gesonderte Behandlung; Verarbeitung der Einzelbesteller (analog Mitarbeiter-Mapping aus Kapitel 8).
 
-> **Klärungsbedarf:** Anfrageshop und Sammelbestell-Shop sind im Phasenplan (Kapitel 17.1) nicht enthalten. Umfang und Phase der Anbindung sind festzulegen (siehe K-12).
+**Klärungsbedarf: Anfrageshop und Sammelbestell-Shop sind im Phasenplan (Kapitel 17.1) nicht enthalten. Umfang und Phase der Anbindung sind festzulegen (siehe K-12).**
 
 # 19. E-Rechnung und gesetzliche Compliance
 
-> **Kritischer Hinweis:** Die E-Rechnung fehlt im bisherigen Lastenheft vollständig. Für ein ERP-Projekt 2026 ist sie zwingend und teils bereits heute gesetzliche Pflicht.
+**Kritischer Hinweis: Die E-Rechnung fehlt im bisherigen Lastenheft vollständig. Für ein ERP-Projekt 2026 ist sie zwingend und teils bereits heute gesetzliche Pflicht.**
 
 - Empfangspflicht (gilt bereits): Seit 01.01.2025 müssen inländische Unternehmen B2B-E-Rechnungen empfangen und verarbeiten können — unabhängig vom ERP-Wechsel. Das aktuell aktive System (CDH) bzw. das künftige ERP muss strukturierte E-Rechnungen (XRechnung, ZUGFeRD) entgegennehmen können.
 - Versandpflicht (gestaffelt): ab 2027 für größere Umsätze, ab 2028 grundsätzlich für alle inländischen B2B-Umsätze. Das ERP muss Ausgangsrechnungen als XRechnung und ZUGFeRD erzeugen.
 - Anforderung ans ERP: Erstellung (XRechnung + ZUGFeRD/hybrides PDF), Empfang und Validierung eingehender E-Rechnungen, Übergabe der buchungsrelevanten Daten an den Steuerberater (DATEV-Format).
 - Abgrenzung zum Steuerberater-Portal: Das ADDISON-Portal (Nachfolger von ADDISON OneClick, Rollout ab Juli 2026) kann ebenfalls Rechnungen in XRechnung/ZUGFeRD erzeugen. Ist das ERP Rechnungs-Master, ist das Rechnungsmodul des Portals redundant — doppelte Rechnungsquellen und Nummernkreise sind zu vermeiden.
 
-> **Festlegung:** Das ERP ist die einzige Quelle für Ausgangsrechnungen und der Master für Rechnungsnummern (siehe K-13).
+**Festlegung: Das ERP ist die einzige Quelle für Ausgangsrechnungen und der Master für Rechnungsnummern (siehe K-13).**
 
 # 20. Reklamation und Nacharbeit (Workflow C)
 
@@ -564,7 +519,7 @@ Der Reklamationsfall ist je nach Ursache vierstufig: Lieferantenreklamation (Mat
 - Reklamationskosten dem Verursacher zuordenbar (für Lieferantenbewertung und Deckungsbeitrags-Korrektur).
 - Reklamationshistorie je Kunde und je Lieferant auswertbar.
 
-> **Empfehlung:** Vor Go-Live als verbindlichen Workflow definieren (siehe K-14).
+**Empfehlung: Vor Go-Live als verbindlichen Workflow definieren (siehe K-14).**
 
 # 21. Geschäftliche Erfolgskriterien und KPIs
 
@@ -579,13 +534,13 @@ Vorschlag für zu vereinbarende Zielgrößen (konkrete Zielwerte intern festzule
 - Forderungslaufzeit/Zahlungseingangsdauer — Wirkung des automatisierten Mahnwesens (Kapitel 9.5) auf den Forderungsbestand.
 - Datenqualität: Reduktion der Artikel-Duplikate durch echte Variantenstruktur.
 
-> **Voraussetzung:** Die Ist-Ausgangswerte müssen vor Go-Live erhoben werden, sonst ist die Wirkung später nicht belegbar (siehe K-15).
+**Voraussetzung: Die Ist-Ausgangswerte müssen vor Go-Live erhoben werden, sonst ist die Wirkung später nicht belegbar (siehe K-15).**
 
 # 22. KI- und Automatisierungspotenziale (Ausblick für die Beratung)
 
 Da dieses Dokument Grundlage einer Beratung mit ERP- und KI-Fokus ist, benennt dieses Kapitel die Ansatzpunkte für Automatisierung und KI. Sie sind bewusst als Ausblick formuliert, nicht als Pflichtanforderung an das ERP.
 
-> **Grundsatz (Reihenfolge beachten):** zuerst Prozesse strukturieren und ins ERP heben, dann regelbasierte Automatisierung (Middleware/n8n/Webhooks), erst darauf KI. Der Großteil der heutigen Schmerzpunkte — Excel-Terminsteuerung, manuelle Auftragsanlage, unstrukturierte Reklamation — ist primär ein Struktur- und ERP-Thema, kein KI-Thema. KI auf einen unstrukturierten Prozess anzuwenden erzeugt Kosten ohne Nutzen. KI-First-Vorschläge sind kritisch zu prüfen.
+**Grundsatz (Reihenfolge beachten): zuerst Prozesse strukturieren und ins ERP heben, dann regelbasierte Automatisierung (Middleware/n8n/Webhooks), erst darauf KI. Der Großteil der heutigen Schmerzpunkte — Excel-Terminsteuerung, manuelle Auftragsanlage, unstrukturierte Reklamation — ist primär ein Struktur- und ERP-Thema, kein KI-Thema. KI auf einen unstrukturierten Prozess anzuwenden erzeugt Kosten ohne Nutzen. KI-First-Vorschläge sind kritisch zu prüfen.**
 
 ## 22.1 Automatisierung (regelbasiert, kurzfristig, hoher Hebel)
 
@@ -631,7 +586,7 @@ Xentral dient in diesem Lastenheft als State of the Art / funktionaler Maßstab.
 
 - Buy — Standardsystem als SaaS (z. B. Xentral) mit Implementierungspartner: geringste Eigenleistung, laufende Lizenzkosten, Abhängigkeit vom Anbieter.
 - Make — Eigenentwicklung von Grund auf: maximale Passgenauigkeit, aber höchster Aufwand und höchstes Risiko, besonders in Buchhaltung, GoBD und E-Rechnung.
-- Hybrid — Open-Source-ERP-Basis selbst betreiben und anpassen (z. B. OpenXE als freier Xentral-Fork, Metasfresh, Odoo): erfüllt potenziell beide Kriterien („Xentral-nah” und „eigenständig”), verlagert den Aufwand auf Anpassung, Betrieb und Updates statt auf Lizenz.
+- Hybrid — Open-Source-ERP-Basis selbst betreiben und anpassen (z. B. OpenXE als freier Xentral-Fork, Metasfresh, Odoo): erfüllt potenziell beide Kriterien („Xentral-nah" und „eigenständig"), verlagert den Aufwand auf Anpassung, Betrieb und Updates statt auf Lizenz.
 - Teil-Make — Standardsystem als Kern, Eigenleistung nur an den Spezial-Stellen (Veredelungs-Tools, Anfrageshop-Anbindung, Middleware). Make-or-Buy muss keine Alles-oder-nichts-Entscheidung sein.
 
 ## 24.2 Bewertungskriterien (je Option)
@@ -644,7 +599,7 @@ Xentral dient in diesem Lastenheft als State of the Art / funktionaler Maßstab.
 - Betreibbarkeit mit dem vorhandenen Team (6 Mitarbeitende) ohne dauerhaften externen Bedarf.
 - Abhängigkeit: vom Anbieter (Buy) gegen Abhängigkeit von internem Know-how (Make/Hybrid).
 
-> **Schlüsselfrage bei „eigenständig umsetzbar“:** Die entscheidende Frage ist nicht „können wir es bauen”, sondern „können wir es über Jahre betreiben, warten, gesetzeskonform halten und bei Personalausfall am Laufen halten“. Bei 6 Mitarbeitenden mit voraussichtlich einem technischen Kopf ist das Klumpenrisiko (Bus-Faktor) das zentrale Risiko der Make- und Hybrid-Option. Ein selbst betriebenes ERP, das das gesamte operative Geschäft trägt, darf nicht an einer einzelnen Person hängen. Dieses Risiko ist Teil der Bewertung — nicht nur die technische Machbarkeit.
+**Schlüsselfrage bei „eigenständig umsetzbar": Die entscheidende Frage ist nicht „können wir es bauen", sondern „können wir es über Jahre betreiben, warten, gesetzeskonform halten und bei Personalausfall am Laufen halten". Bei 6 Mitarbeitenden mit voraussichtlich einem technischen Kopf ist das Klumpenrisiko (Bus-Faktor) das zentrale Risiko der Make- und Hybrid-Option. Ein selbst betriebenes ERP, das das gesamte operative Geschäft trägt, darf nicht an einer einzelnen Person hängen. Dieses Risiko ist Teil der Bewertung — nicht nur die technische Machbarkeit.**
 
 ## 24.3 Erwartetes Ergebnis der Beratung
 
@@ -653,13 +608,11 @@ Xentral dient in diesem Lastenheft als State of the Art / funktionaler Maßstab.
 - Vorschlag zur Abgrenzung Standard vs. Eigenleistung, falls ein Teil-Make sinnvoll ist.
 - Aussage zum Hosting- und Betriebsmodell je Option (Cloud/SaaS, eigener VPS, On-Premise) — verzahnt mit K-17 (Ausfallsicherheit).
 
----
-
 # Ergänzungen aus externem Review (Version 2.3)
 
 Dieser Teil arbeitet die Empfehlungen eines externen Dokumentenreviews vom 18.06.2026 ein und erhöht die Ausschreibungsreife: Anforderungspriorisierung, messbare Abnahmekriterien, nichtfunktionale und datenschutzrechtliche Anforderungen, eine formalisierte Make-or-Buy-Bewertung mit Funktionsabdeckungs-Matrix sowie die Projektorganisation. Die Kapitelnummerierung setzt den bisherigen Teil fort; inhaltlich ist nichts gestrichen.
 
-> **Hinweis zur Einarbeitung:** Drei Review-Empfehlungen waren bereits in Version 2.2 enthalten und werden hier nur referenziert statt dupliziert — der Kundenreklamations-Workflow (Kapitel 20), die Zeiterfassung/Betriebsdatenerfassung der Produktion (Kapitel 5.2) und die Make-or-Buy-Optionen (Kapitel 24). Mehrere quantitative Zielwerte in diesem Teil sind Vorschläge und vor Veröffentlichung der Ausschreibung durch TEXMA zu bestätigen (neue Klärungspunkte K-21 bis K-25).
+**Hinweis zur Einarbeitung: Drei Review-Empfehlungen waren bereits in Version 2.2 enthalten und werden hier nur referenziert statt dupliziert — der Kundenreklamations-Workflow (Kapitel 20), die Zeiterfassung/Betriebsdatenerfassung der Produktion (Kapitel 5.2) und die Make-or-Buy-Optionen (Kapitel 24). Mehrere quantitative Zielwerte in diesem Teil sind Vorschläge und vor Veröffentlichung der Ausschreibung durch TEXMA zu bestätigen (neue Klärungspunkte K-21 bis K-25).**
 
 # 25. Anforderungspriorisierung (MoSCoW)
 
@@ -689,6 +642,7 @@ Zur besseren Vergleichbarkeit der Angebote werden die Anforderungen nach MoSCoW 
 - KI-gestützte Erfassung aus Freitext (Kapitel 22.2)
 - Regelbasierte Workflow-Automatisierung über Middleware/n8n
 - Anbindung Anfrageshop und Sammelbestell-Shop (Kapitel 18)
+- Kundenportal / Self-Service-Kundenkonto (Kapitel 36) — Umsetzung als Add-on nach Go-Live
 
 ## Future — spätere Projektphasen
 
@@ -707,7 +661,7 @@ Die Pflicht-Testfälle in Kapitel 15 prüfen die fachliche Funktion (bestanden /
 - Belegzugriff: ein archivierter Beleg ist über die Suche innerhalb von 3 Sekunden auffindbar und anzeigbar.
 - Datenqualität nach Migration: 100 % der aktiven Kunden und Lieferanten, 100 % der offenen Posten und mindestens 98 % der aktiven Artikel fehlerfrei übernommen (Stichprobenprüfung im Abnahmeprotokoll).
 
-> Diese Werte ersetzen nicht die Testfälle, sondern ergänzen sie um eine quantitative Dimension. Sie sollten als gemeinsam vereinbarte Service-Level in den Implementierungsvertrag aufgenommen werden — nicht als einseitig gesetzte Vorgabe.
+**Diese Werte ersetzen nicht die Testfälle, sondern ergänzen sie um eine quantitative Dimension. Sie sollten als gemeinsam vereinbarte Service-Level in den Implementierungsvertrag aufgenommen werden — nicht als einseitig gesetzte Vorgabe.**
 
 # 27. Nichtfunktionale Anforderungen
 
@@ -778,7 +732,7 @@ Kapitel 21 definiert die Projekt-Erfolgs-KPIs, an denen die Wirkung der ERP-Einf
 - Reklamationsquote je Kunde und je Lieferant (verzahnt mit Kapitel 20)
 - Liefertermintreue
 
-> Voraussetzung für aussagekräftige Kennzahlen ist die vollständige EK-Pflege (Deckungsbeitrag) und die konsequente Zeit- und Materialbuchung (Nachkalkulation). Ohne diese Datendisziplin liefern die Reports keine belastbaren Werte.
+**Voraussetzung für aussagekräftige Kennzahlen ist die vollständige EK-Pflege (Deckungsbeitrag) und die konsequente Zeit- und Materialbuchung (Nachkalkulation). Ohne diese Datendisziplin liefern die Reports keine belastbaren Werte.**
 
 # 30. Make-or-Buy — gewichtete Bewertungsmatrix
 
@@ -794,7 +748,9 @@ Kapitel 24 benennt die Optionen (Buy / Make / Hybrid / Teil-Make) und die Bewert
 | Herstellerabhängigkeit | 10 % |
 | Projektdauer bis Produktivbetrieb | 5 % |
 
-> Das Betriebsrisiko (15 %) bildet bei einem 6-Personen-Betrieb das in Kapitel 24.2 beschriebene Klumpenrisiko ab: Ein selbst betriebenes oder stark angepasstes System darf nicht an einer einzelnen Person hängen. Bei Make- und Hybrid-Optionen ist dieses Kriterium besonders kritisch zu prüfen.
+**Das Betriebsrisiko (15 %) bildet bei einem 6-Personen-Betrieb das in Kapitel 24.2 beschriebene Klumpenrisiko ab: Ein selbst betriebenes oder stark angepasstes System darf nicht an einer einzelnen Person hängen. Bei Make- und Hybrid-Optionen ist dieses Kriterium besonders kritisch zu prüfen.**
+
+Konkret stehen derzeit drei Buy-Kandidaten zur Bewertung: Xentral, reybex und orgaMAX. Die Punktevergabe je Kriterium erfolgt erst nach Live-Demo und Angebot, nicht auf Basis von Hersteller-Websites. Maßgeblich ist, wie jeder Kandidat die TEXMA-differenzierenden Prozesse (Kapitel 31) an einem echten Auftrag abbildet — nicht der Funktionsumfang auf dem Papier. Ein Kandidatenvergleich findet sich in Kapitel 31.1.
 
 # 31. Funktionsabdeckungs-Matrix (Maßstab Xentral)
 
@@ -804,6 +760,7 @@ Diese Matrix übersetzt die Kriterien aus Kapitel 30 in eine konkrete Prüfung g
 |---|---|
 | Belegkette Angebot→Auftrag→Rechnung, Faktura bei Versand | nativ |
 | Variantenartikel (Farbe × Größe) | nativ |
+| Mengenstaffeln / Staffelpreise (mengenabhängiger Stück-VK) | nativ |
 | Stücklisten und mehrstufige Unterproduktionen | nativ |
 | E-Rechnung Empfang + Versand (XRechnung/ZUGFeRD) | nativ |
 | Banking-Zahlungsabgleich + mehrstufiges Mahnwesen | nativ |
@@ -817,7 +774,23 @@ Diese Matrix übersetzt die Kriterien aus Kapitel 30 in eine konkrete Prüfung g
 | DATEV → ADDISON-Übergabe | Fremdsystem-Brücke (DATEV-Dateiformat; nicht nativ — K-01) |
 | Revisionssichere GoBD-Langzeitarchivierung | Fremdsystem / Zusatzkomponente (Kapitel 10) |
 
-> **Kernaussage für die Entscheidung:** Der generische Standard-Block (obere Zeilen) ist abgedeckt und in keinem Szenario wirtschaftlich selbst zu bauen — hier ist „Buy“ überlegen. Die TEXMA-differenzierenden Prozesse (untere Zeilen) sind in jedem Szenario Custom. Das spricht für eine starke Standard-Basis mit gezieltem Custom an den Veredelungs-Stellen („Teil-Make“, Kapitel 24.1). Jeder Anbieter sollte diese Matrix für sein eigenes System ausfüllen.
+**Kernaussage für die Entscheidung: Der generische Standard-Block (obere Zeilen) ist abgedeckt und in keinem Szenario wirtschaftlich selbst zu bauen — hier ist „Buy“ überlegen. Die TEXMA-differenzierenden Prozesse (untere Zeilen) sind in jedem Szenario Custom. Das spricht für eine starke Standard-Basis mit gezieltem Custom an den Veredelungs-Stellen („Teil-Make“, Kapitel 24.1). Jeder Anbieter sollte diese Matrix für sein eigenes System ausfüllen.**
+
+## 31.1 Kandidatenvergleich (Buy-Optionen)
+
+Die folgende Übersicht stellt die drei aktuellen Buy-Kandidaten gegenüber. Wichtig zur Einordnung: Die Spalte Xentral beruht auf der Recherche im Xentral Help Center und einem realen Branchen-Beleg (Mr.Tex, Kapitel 16/K-04). Die Spalten reybex (EDIT Systems GmbH, Essen) und orgaMAX (deltra Business Software, Detmold) beruhen ausschließlich auf öffentlichen Hersteller-Angaben (Website-Recherche Juni 2026) und sind daher als Ersteinschätzung zu lesen. Alle mit „Demo“ markierten Felder sind vor einer Entscheidung am echten TEXMA-Fall zu verifizieren (PoC: T-01, T-04, T-05).
+
+| **Dimension** | **Xentral** | **reybex** | **orgaMAX** |
+|---|---|---|---|
+| WooCommerce-Multishop | nativ | nativ | E-Commerce-Modul; WooCommerce: Demo |
+| Make-to-Order / Stücklisten | nativ | nativ (alle Fertigungsarten) | schwach: Demo |
+| Mehrstufige Lohnveredelung (Beistellung→Rücklauf) | Custom (kein dediziertes Modul) | „verlängerte Werkbank“ vorhanden; Tiefe: Demo | nicht erkennbar: Demo |
+| Varianten (Farbe × Größe) | nativ | nativ | Demo |
+| FiBu / E-Rechnung / DATEV / Banking / Mahnwesen | nativ | nativ | nativ |
+| Offene API / Headless (Anfrageshop-Anbindung) | API vorhanden | API-First / Headless (Stärke) | begrenzt: Demo |
+| Cloud / Hosting in DE | Cloud (EU) | Cloud, IONOS DE | Cloud oder lokal (Windows) |
+| Branchen-Beleg Textilveredelung | ja (Mr.Tex, K-04) | keiner bekannt: Demo | keiner bekannt: Demo |
+| TEXMA-Custom (T-01-Mapping, Stickerei-Partnerlogik) | Custom | Custom: Demo | Custom: Demo |
 
 # 32. Integrationsarchitektur
 
@@ -827,7 +800,7 @@ Zur Reduktion von Interpretationsspielraum beschreibt dieses Kapitel die Zielarc
 
 - **ERP (zentrales System, Maßstab Xentral)** — Stammdaten-, Auftrags-, Produktions- und Buchhaltungs-Master.
 - **WooCommerce-Shops (10–12, Ziel 30)** — Bestelleingang, Status- und Tracking-Rückmeldung.
-- **Anfrageshop und Sammelbestell-Shop (Kapitel 18)** — Lead- bzw. Sammelauftragseingang.
+- **Anfrageshop (anfrage.texma-gmbh.de) und Sammelbestell-Shop (Kapitel 18)** — Lead- bzw. Sammelauftragseingang.
 - **Steuerberater-Software ADDISON** — Empfang buchungsrelevanter Daten (DATEV-Format).
 - **Banking (Volksbank)** — Kontoauszüge für den Zahlungsabgleich.
 - **Lieferanten-APIs / EDI** — ID Identity, Stanley/Stella, HAKRO, FHB u. a.: Stammdaten und Bestellungen.
@@ -843,7 +816,7 @@ Zur Reduktion von Interpretationsspielraum beschreibt dieses Kapitel die Zielarc
 - ERP → Bank/Versand/E-Mail: Zahlungen, Labels, Belege; Bank → ERP: Kontoumsätze.
 - ERP → ADDISON: Buchungsdaten (DATEV-Format); ERP/Mail → Archiv: Belege.
 
-> Die Middleware ist der architektonische Schlüssel für die Skalierung: Sie entkoppelt die heterogenen Lieferanten-APIs und den Anfrageshop vom ERP und ist Voraussetzung für das 30-Shop-Ziel ohne proportionalen Aufwand.
+**Die Middleware ist der architektonische Schlüssel für die Skalierung: Sie entkoppelt die heterogenen Lieferanten-APIs und den Anfrageshop vom ERP und ist Voraussetzung für das 30-Shop-Ziel ohne proportionalen Aufwand.**
 
 # 33. Produktionssteuerung — Vertiefung
 
@@ -854,7 +827,7 @@ Ergänzung zu Kapitel 5. Der Produktionsbereich ist geschäftskritisch; die folg
 - Produktionsübersicht mit Ampelstatus je Liefertermin (bereits Kapitel 5.2) als Kern der Terminsteuerung — ersetzt die Excel-Liste.
 - Priorisierung von Aufträgen bei Fixterminen (bereits Kapitel 5.1).
 
-> **Bewusste Abgrenzung:** Eine echte Maschinenbelegungs-/Feinplanung (APS) ist für einen Produktionsbereich mit zwei Mitarbeitenden und überschaubarem Maschinenpark voraussichtlich überdimensioniert und würde mehr Pflegeaufwand erzeugen als Nutzen stiften. Sie wird als „Future“ eingestuft (Kapitel 25) und erst bei deutlichem Wachstum oder Inhouse-Stickerei erneut bewertet. Die Ampel-Terminliste deckt den aktuellen Bedarf.
+**Bewusste Abgrenzung: Eine echte Maschinenbelegungs-/Feinplanung (APS) ist für einen Produktionsbereich mit zwei Mitarbeitenden und überschaubarem Maschinenpark voraussichtlich überdimensioniert und würde mehr Pflegeaufwand erzeugen als Nutzen stiften. Sie wird als „Future“ eingestuft (Kapitel 25) und erst bei deutlichem Wachstum oder Inhouse-Stickerei erneut bewertet. Die Ampel-Terminliste deckt den aktuellen Bedarf.**
 
 ## Qualitätsmanagement
 
@@ -884,7 +857,7 @@ Vor Vertragsabschluss sind die kritischen Prozesse in einem verpflichtenden Fach
 - Nachkalkulation von Produktionsaufträgen (T-10).
 - Datenmigration aus CDH (Pilot mit einem Lieferanten / Teilbestand empfohlen).
 
-> Reklamationsmanagement war eine Review-Empfehlung; es ist bereits als Workflow C in Kapitel 20 vollständig beschrieben und daher hier nicht erneut aufgeführt.
+**Reklamationsmanagement war eine Review-Empfehlung; es ist bereits als Workflow C in Kapitel 20 vollständig beschrieben und daher hier nicht erneut aufgeführt.**
 
 # 35. Terminmanagement und Statusverwaltung
 
@@ -923,11 +896,124 @@ Auf dieser Ebene ist der Kern bereits beschrieben (Kapitel 5) und wird hier nur 
 - Durchgängige Vorgangshistorie über die Stufen (Angebot → Auftrag → Produktion), sodass der Status nachvollziehbar mitwandert.
 - Abgrenzung: Zahlungstermine und -status sind im Mahnwesen (Kapitel 9.5) abgedeckt, Reklamationstermine im Workflow C (Kapitel 20) — beide gehören konzeptionell zum Terminmanagement, sind aber bereits geregelt.
 
-> Die Status-Modelle sind bewusst schlank zu halten, und Statuswechsel sollten möglichst automatisch aus Aktionen abgeleitet werden (z. B. „Fakturiert“ bei Versandbuchung, „In Produktion“ bei Produktionsstart). Bei rund 2.000 kleinteiligen Aufträgen pro Jahr und sechs Mitarbeitenden würde manuelle Statuspflege sonst zum neuen Aufwand — und ersetzte die Excel-Liste nur durch Klick-Arbeit.
+**Die Status-Modelle sind bewusst schlank zu halten, und Statuswechsel sollten möglichst automatisch aus Aktionen abgeleitet werden (z. B. „Fakturiert“ bei Versandbuchung, „In Produktion“ bei Produktionsstart). Bei rund 2.000 kleinteiligen Aufträgen pro Jahr und sechs Mitarbeitenden würde manuelle Statuspflege sonst zum neuen Aufwand — und ersetzte die Excel-Liste nur durch Klick-Arbeit.**
 
-> **Make-or-Buy-Bezug:** Auftrags- und Produktionsstatus samt Belegkette und Liefertermin-Ampel sind Standardfunktion (nativ, vgl. Kapitel 31). Die Angebots-Nachverfolgung mit Wiedervorlage ist CRM-nahe Funktionalität, im Standard meist begrenzt (ggf. über Aufgaben/Wiedervorlagen oder Custom). Die zentrale ebenenübergreifende Terminübersicht ist teils Reporting, teils Custom. Diese drei Punkte sind in der Funktionsabdeckungs-Matrix (Kapitel 31) je Anbieter zu bewerten.
+**Make-or-Buy-Bezug: Auftrags- und Produktionsstatus samt Belegkette und Liefertermin-Ampel sind Standardfunktion (nativ, vgl. Kapitel 31). Die Angebots-Nachverfolgung mit Wiedervorlage ist CRM-nahe Funktionalität, im Standard meist begrenzt (ggf. über Aufgaben/Wiedervorlagen oder Custom). Die zentrale ebenenübergreifende Terminübersicht ist teils Reporting, teils Custom. Diese drei Punkte sind in der Funktionsabdeckungs-Matrix (Kapitel 31) je Anbieter zu bewerten.**
 
-# 36. Neue Klärungspunkte (Ergänzung zu Kapitel 16 und 23)
+# 36. Kundenportal (Self-Service-Kundenkonto)
+
+Zusätzlich zu den drei bestehenden Shop-Welten (Mitarbeitershops Kapitel 3, Anfrageshop und Sammelbestell-Shop Kapitel 18) soll es ein Self-Service-Kundenkonto geben — bewusst kein weiterer Verkaufs-Shop mit eigenem Sortiment, sondern ein geschützter Bereich, in dem ein Kunde direkt auf seine eigenen Daten im System zugreift. Ziel ist die Entlastung des Innendienstes: Routineanfragen (Adressänderung, „schickt mir nochmal die Rechnung“, „bitte das Gleiche wie letztes Mal“) erledigt der Kunde selbst. Das unterstützt die zentrale Wirtschaftlichkeitsannahme — Skalierung ohne proportionalen Personalaufbau (Kapitel 21).
+
+**Festlegung: Das Portal richtet sich an alle Kunden — mit und ohne eigenen Mitarbeitershop.**
+
+## 36.1 Funktionsumfang
+
+- **Stammdaten-Self-Service:** Rechnungsanschrift ändern, Lieferadressen anlegen, ändern und auswählen.
+- **Beleg- und Historieneinsicht:** alte Angebote und Aufträge einsehen, dazu Rechnungen, Lieferscheine sowie Auftrags- und Lieferstatus mit Trackingnummer.
+- **Nachbestellung:** keine direkte Nachbestellung, sondern aus einem früheren Auftrag oder einer Rechnung heraus eine neue Anfrage auslösen, die der Innendienst bearbeitet (gleiches Textil, gleiche Veredelung bzw. gleiches Logo).
+
+## 36.2 Anforderungen ans System
+
+- Login je Kundenkontakt; ein Rechtekonzept regelt, welche Kontakte einer Firma was sehen und ändern dürfen.
+- Alle Daten kommen live aus dem zentralen System (eine Quelle der Wahrheit) — keine Doppelpflege.
+- Self-Service-Änderungen (Adressen) werden ins System zurückgeschrieben; geänderte Rechnungsadressen mit Validierung bzw. optionaler Freigabe durch den Innendienst (steuerliche Relevanz).
+- Nachbestellung erzeugt einen Vorgang im System mit Bezug auf den Ursprungsauftrag inklusive Veredelung/Logo.
+- Datenschutz: jeder Kunde sieht ausschließlich seine eigenen Daten; Änderungen werden protokolliert (verzahnt mit Kapitel 28).
+
+## 36.3 Kritischer Designpunkt — Nachbestellung
+
+Festlegung: Wegen der kundenindividuellen Veredelungspreise gibt es keine verbindliche Nachbestellung mit Bezahlung. Stattdessen löst der Kunde aus einem früheren Auftrag oder einer Rechnung eine neue Anfrage aus; der Innendienst bestätigt sie mit aktuellem Preis und Termin und wandelt sie in einen Auftrag. So bleibt die Preishoheit beim Innendienst.
+
+## 36.4 Einordnung (Maßstab Xentral)
+
+Ein Self-Service-Kundenportal ist keine native Xentral-Funktion. Es wird über ein angebundenes Drittanbieter-Portal (per Schnittstelle, am Markt verfügbar — teils etabliert, teils noch in Erprobung) oder als kundenindividuelle Entwicklung realisiert; perspektivisch kann es Baustein der geplanten späteren Commerce-Schicht sein. Der anspruchsvollste Teil ist die Self-Service-Stammdatenpflege (Kunde ändert eigene Adressen), die am wenigsten standardisiert ist.
+
+**In der Logik der Funktionsabdeckungs-Matrix (Kapitel 31) ist das Kundenportal als „Fremdsystem/Add-on oder Custom“ einzuordnen — nicht als Standard. Festlegung: Priorität Could (Kapitel 25), nicht Go-Live-relevant. Die Umsetzung erfolgt bewusst als Add-on, nachdem das Kernsystem steht. Es blockiert den Kernbetrieb nicht, ist aber ein starker Entlastungshebel für den Innendienst.**
+
+# 37. Funktionsumfang im Überblick (Muss / Kann)
+
+Dieser Überblick fasst zusammen, welche Funktionen das ERP für TEXMA abdecken muss und welche wünschenswert sind. Er dient Anbietern als schnelle Scope-Orientierung; die Details stehen in den jeweiligen Fachkapiteln. Maßstab ist das Geschäftsmodell: B2B-Auftragsfertigung (Make-to-Order) mit Textilveredelung, sechs Mitarbeitende, kein Fertigwarenlager.
+
+## 37.1 Muss
+
+- **Plattform:** deutschsprachige, einfach bedienbare Oberfläche; Benutzerrollen und Rechte (Produktion ohne Preis- und Kundenzugriff) mit 2-Faktor-Anmeldung; API-Zugriff; individuelle Automatisierung/Workflows; revisionssicheres GoBD-Archiv.
+- **Stammdaten / PIM:** Artikel, Varianten (Farbe × Größe), Bilder, Beschreibungen und Preise zentral und automatisch in die Shops; CRM für Kunden und Lieferanten; Logo- und Druckdaten-Verwaltung mit Freigabe-Nachweis.
+- **Verkauf / Auftrag:** Anfrage → Angebot → Auftrag; automatischer Eingang aus mehreren WooCommerce-Shops; Liefertermine mit Ampel.
+- **Einkauf:** Bestellvorschlag, Engpasserkennung, tägliche Sammelbestellung je Lieferant, Wareneingang, 3-Way-Match.
+- **Produktion (Kern):** interne und externe Veredelung, mehrstufige Fremdvergabe (Beistellung → Rücklauf), Stickerei-Partnerlogik, grobe Zeiterfassung, Nachkalkulation.
+- **Finanzen:** Rechnungen und Gutschriften, E-Rechnung (Versand und Empfang), Mahnwesen, Bank- und SEPA-Zahlungsabgleich, Kostenstellen, DATEV-/Addison-Übergabe, Belegerfassung per Foto.
+- **Lager (leicht):** schlanke Bestandsführung für Roh-/Blankoware und Showroom samt Inventurfunktion.
+- **Versand:** Versandlabel und Tracking-Rückmeldung.
+- **Reklamation:** strukturierte Abwicklung (Workflow C, Kapitel 20).
+- **Reporting:** Kennzahlen inklusive Deckungsbeitrag je Auftrag.
+- **Muster-Leihgut:** Ausgabe und Rückführung von Mustern (Details 37.3).
+- **Bar-/EC-Kasse:** Vor-Ort-Zahlung von B2B-Bestellungen (Details 37.4).
+
+## 37.2 Kann (wünschenswert, nicht Go-Live-kritisch)
+
+- Kundenportal / Self-Service-Kundenkonto (Kapitel 36, als Add-on nach Go-Live).
+- KI-gestützte Belegerfassung und Reporting.
+- Erweiterte BI-Analysen über SQL- bzw. BI-Tool-Anbindung.
+- Mobile Statusrückmeldung aus der Produktion.
+
+## 37.3 Muster-Leihgut (Ausgabe und Rückführung)
+
+Muster (Blankoware, Veredelungsmuster) werden an Kunden und Interessenten als Leihgut ausgegeben, nicht verkauft. Das ERP muss diesen Vorgang abbilden:
+
+- Eigener Musterbestand bzw. eigenes Musterlager, getrennt vom Verkaufsbestand.
+- Vorgangstyp „Musterausgabe“ als Warenausgang ohne Rechnung (Leihschein), mit Erfassung von Kunde, Artikel, Menge und Ausgabedatum.
+- Rückbuchung bei Rückgabe und Wiedereinlagerung in den Musterbestand.
+- Fristüberwachung: 21 Tage nach Ausgabe. Erfolgt bis dahin keine Rückgabe, wird automatisch eine „Musterrechnung“ fällig — der Leihvorgang wird in einen berechneten Verkauf umgewandelt.
+- Inventurfähigkeit des Musterbestands.
+
+**Diese Leihgut-Logik ist in Standard-ERPs selten als fertiges Modul vorhanden; sie wird über einen eigenen Bestandstyp, einen Warenausgang ohne Faktura und einen fristgesteuerten Folgebeleg abgebildet. Jeder Anbieter sollte zeigen, wie er den 21-Tage-Automatismus zur Musterrechnung umsetzt (Demo-Prüfpunkt).**
+
+## 37.4 Bar-/EC-Kasse für Vor-Ort-Zahlungen
+
+Ein Teil der B2B-Bestellungen wird vor Ort bar oder per EC-Karte bezahlt. Benötigt wird eine schlanke Kassenfunktion für diese Vor-Ort-Zahlungen — kein vollwertiges Einzelhandels-Kassensystem.
+
+- Erfassung von Bar- und EC-Zahlungen mit direkter Verbuchung auf den zugehörigen Auftrag bzw. die Rechnung.
+- Beleg-/Bonausgabe.
+
+**Rechtlicher Hinweis: Sobald Zahlungen über ein elektronisches Kassensystem erfasst werden, greift die Kassensicherungsverordnung — dann sind eine zertifizierte technische Sicherheitseinrichtung (TSE), Belegausgabe und ein DSFinV-K-Export Pflicht. Ob die Kasse als elektronisches System (mit TSE) oder als offene Ladenkasse geführt wird, ist mit dem Steuerberater zu klären; jeder Anbieter ist zu fragen, ob seine Kassenfunktion TSE-zertifiziert ist (Demo-Prüfpunkt).**
+
+# 38. UI/UX und Bedienbarkeit
+
+Das ERP ist ein internes Werkzeug für sechs Mitarbeitende. Maßstab ist nicht die Optik, sondern Effizienz und Akzeptanz im täglichen Betrieb. Bei dieser Teamgröße ist Akzeptanz erfolgskritisch — ein einziger Nutzer, der das System ablehnt, blockiert ein Sechstel des Betriebs. Die folgenden Anforderungen sind bewusst prüfbar formuliert, damit Bedienbarkeit ein Auswahl- und Abnahmekriterium wird (verzahnt mit Kapitel 26).
+
+## 38.1 Grundanforderungen
+
+- Durchgängig deutschsprachige Oberfläche mit Begriffen aus der TEXMA-Praxis (z. B. Veredelung, Mappennummer).
+- Rollenspezifische Ansichten: Innendienst sieht die volle Abwicklung; die Produktion sieht eine reduzierte Ansicht mit großen Bedienelementen für Status- und Zeiterfassung, ohne Preis- und Kundendaten (verzahnt mit Kapitel 12). Die Produktionsansicht ist tablet-/touchtauglich für die Werkstatt.
+- Nicht genutzte Module und Felder lassen sich ausblenden (Scope gemäß Kapitel 37).
+- Globale, fehlertolerante Suche über Belege und Stammdaten; Belegsuche unter 3 Sekunden (Kapitel 26).
+- Listen- und Tabellenansichten stellen viele Datensätze kompakt und übersichtlich dar; relevante Spalten sind je Nutzer ein- und ausblendbar, Sortier- und Filterfunktionen ohne Umwege erreichbar.
+- Status und Termin-Ampel (Kapitel 35) sind auf einen Blick erfassbar und über alle Ansichten einheitlich dargestellt. Die Signalwirkung beruht nicht allein auf Farbe (zusätzlich Symbol oder Text), damit sie auch bei Farbfehlsichtigkeit und im Werkstattlicht eindeutig bleibt.
+- Die Bedienmuster sind im gesamten System konsistent: gleichartige Aufgaben werden gleich bedient (Wiedererkennbarkeit verkürzt die Einarbeitung und senkt die Fehlerquote).
+- Die häufig genutzten Erfassungsmasken (insbesondere Auftragserfassung) sind vollständig tastaturbedienbar; Barcode-/Scan-Eingabe, wo sinnvoll.
+- Fehlervermeidung durch Pflichtfelder und Plausibilitätsprüfungen; eine ausdrückliche Bestätigung wird nur bei kritischen, schwer umkehrbaren Aktionen verlangt (Storno, Freigabe — Kapitel 12.1/K-26).
+
+## 38.2 Effizienz der Kernabläufe
+
+Die täglich häufigsten Abläufe müssen mit minimaler Klick- und Wegezahl bedienbar sein. Folgende Kernabläufe dienen als Effizienz-Maßstab:
+
+- Auftrag erfassen (aus Anfrage/Angebot übernommen oder neu angelegt).
+- Auftrags- bzw. Produktionsstatus setzen.
+- Tägliche Sammelbestellung je Lieferant auslösen.
+- Rechnung erzeugen und versenden.
+- Mustervorgang erfassen (Ausgabe bzw. Rückgabe, Kapitel 37.3).
+
+Jeder dieser Abläufe soll ohne Umwege und in wenigen, klar geführten Schritten möglich sein. Statt einer willkürlich gesetzten Klickzahl weist jeder Anbieter die tatsächliche Schrittzahl je Ablauf in der Demo nach; der Vergleich zwischen den Anbietern wird Teil der Bewertung.
+
+## 38.3 Bedienbarkeit als Auswahl- und Abnahmekriterium
+
+Bedienbarkeit wird nicht über Screenshots oder Hersteller-Vorführungen bewertet, sondern über einen praktischen Test: Mitarbeitende des Innendienstes und der Produktion führen in der Demo ihre häufigsten Aufgaben eigenständig und ohne Anleitung durch.
+
+**Maßgeblich ist die Bedienung durch die echten Nutzer an echten TEXMA-Aufgaben, nicht eine Vorführung durch den Anbieter. Kriterium: Die Aufgaben werden in angemessener Zeit und ohne Rückfragen bewältigt, und die Produktionsansicht ist auch für nicht IT-affine Nutzer unmittelbar verständlich. Dieser Nutzer-Usability-Test ist Bestandteil der Anbieterauswahl und der Abnahme (Kapitel 26).**
+
+**Das Bild aus Kapitel 31 bestätigt sich: Den kaufmännischen Standard-Block decken alle drei ab. Den Unterschied macht die Tiefe bei der mehrstufigen Veredelung — dort hat nur Xentral bislang einen realen Branchen-Beleg, reybex eine plausible, aber zu prüfende Funktionsbasis (Stärke: API-First/Headless für die Anfrageshop-Anbindung), und orgaMAX die schwächste Abdeckung. Entscheidend ist die Demo am echten Auftrag, nicht der Funktionsumfang auf der Website.**
+
+# 39. Neue Klärungspunkte (Ergänzung zu Kapitel 16 und 23)
 
 - **K-21:** MoSCoW-Priorisierung (Kapitel 25) bestätigen — insbesondere, was zwingend zum Go-Live gehört.
 - **K-22:** Messbare Abnahmekriterien / Service-Level (Kapitel 26) festlegen und in den Vertrag aufnehmen.
@@ -935,7 +1021,5 @@ Auf dieser Ebene ist der Kern bereits beschrieben (Kapitel 5) und wird hier nur 
 - **K-24:** Gewichtung der Make-or-Buy-Bewertungsmatrix (Kapitel 30) bestätigen.
 - **K-25:** Personelle Besetzung der Projektrollen (Kapitel 34) benennen.
 - **K-26:** Status-Modelle je Ebene (Kapitel 35) bestätigen oder anpassen; Grad der Automatisierung der Statuswechsel festlegen.
-
----
 
 *Dokumentstatus: Dieses Lastenheft basiert auf einer vollständigen Prozessanalyse von TEXMA Textilveredelung und beschreibt die Anforderungen an ein künftiges ERP. Xentral dient als funktionaler Maßstab (State of the Art); die Make-or-Buy-Entscheidung — Standardsystem beschaffen oder eigenständig umsetzen — ist ausdrücklich Gegenstand der Beratung (Kapitel 24). Budget- und Kostenangaben sind in dieser Version bewusst nicht enthalten.*

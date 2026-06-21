@@ -1,0 +1,24 @@
+{
+  "name": "texma-erp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TEXMA Textilveredelung ERP — Greenfield (TypeScript, modular monolith). Ablösung CDH Office. Siehe docs/lastenheft.md.",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "db:generate": "pnpm --filter @texma/db generate",
+    "db:migrate": "pnpm --filter @texma/db migrate"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "turbo": "^2.5.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}

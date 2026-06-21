@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: texma
+          POSTGRES_PASSWORD: texma
+          POSTGRES_DB: texma
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://texma:texma@localhost:5432/texma?schema=public
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Prisma generate
+        run: pnpm --filter @texma/db generate
+
+      - name: Prisma validate (Schema/GoBD-Datenmodell)
+        working-directory: packages/db
+        run: pnpm exec prisma validate
+
+      - name: Build (turbo, Abhängigkeitsreihenfolge)
+        run: pnpm build
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test (Unit, inkl. Abnahme T-01)
+        run: pnpm test
+
+      - name: Migration auf Postgres anwenden
+        working-directory: packages/db
+        run: pnpm exec prisma migrate deploy
+
+      - name: Integrationstests (T-01 gegen echtes Postgres)
+        env:
+          RUN_DB_TESTS: "1"
+        run: pnpm --filter @texma/api test
+
+      - name: Integrationstests Orchestrierung (Outbox/Postgres + BullMQ/Redis)
+        env:
+          RUN_DB_TESTS: "1"
+          RUN_REDIS_TESTS: "1"
+          REDIS_HOST: localhost
+          REDIS_PORT: "6379"
+        run: pnpm --filter @texma/worker-orchestration test

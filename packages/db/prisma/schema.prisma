@@ -1,0 +1,1259 @@
+// TEXMA ERP — Kerndatenmodell (modularer Monolith)
+// Quelle: docs/lastenheft.md. Kapitelbezüge als // (Kap. x) annotiert.
+// Make-or-break: echte Varianten (Kap. 2.1/T-02), ShopConnector→Company (Kap. 3.2/T-01).
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Identity & Access — Kap. 12 (Rollen), Kap. 14 (2FA), Kap. 28 (Zugriffs-Logging)
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  BUERO // Vertrieb/Auftrag/Faktura
+  PRODUKTION // kein Preis-/Kundenzugriff (Kap. 12)
+  BUCHHALTUNG
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String
+  role         Role
+  totpSecret   String? // TOTP-2FA Pflicht für alle (Kap. 14)
+  totpEnabled  Boolean   @default(false)
+  active       Boolean   @default(true)
+  failedLoginCount Int   @default(0) // Lockout-Zähler (Kap. 14)
+  lockedUntil  DateTime? // gesperrt bis (nach zu vielen Fehlversuchen)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  sessions     Session[]
+  auditEntries AuditLog[]
+  accessLogs   AccessLog[]
+}
+
+// Server-seitige Session (Kap. 14). tokenHash = SHA-256 des Cookie-Tokens — der
+// Klartext-Token liegt nur im httpOnly-Cookie, nie in der DB.
+model Session {
+  id          String   @id @default(cuid())
+  tokenHash   String   @unique
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  expiresAt   DateTime
+  pendingTotp Boolean  @default(false) // Passwort ok, 2FA noch ausstehend
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
+// Zugriffs-Logging auf personenbezogene Daten (Kap. 28)
+model AccessLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  entity    String
+  entityId  String
+  action    String // VIEW | EXPORT
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Stammdaten — Kunden/CRM — Kap. 8 (Firma 1:n Kontakte/Lieferadressen), 7.2, 5.4
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum PriceGroupKind {
+  STANDARD
+  TOP
+  PREMIUM
+  WIEDERVERKAEUFER
+  AGENTUR
+}
+
+model PriceGroup {
+  id        String          @id @default(cuid())
+  kind      PriceGroupKind  @unique
+  name      String
+  companies Company[]
+  prices    PriceGroupPrice[]
+  priceTiers PriceGroupPriceTier[]
+}
+
+// Firma = Kunde. KEIN 1:1-Import Firma↔Kontakt (Kap. 8.3).
+model Company {
+  id           String        @id @default(cuid())
+  name         String
+  branche      String?
+  gesperrtAm     DateTime?   // DSGVO-Sperre (B12, Kap. 28)
+  anonymisiertAm DateTime?   // DSGVO-Anonymisierung (B12)
+  zahlungszielTage Int        @default(14)
+  mahnsperre   Boolean       @default(false) // Kap. 9.5
+  priceGroupId String
+  priceGroup   PriceGroup    @relation(fields: [priceGroupId], references: [id])
+  // Stickerei-Partnerlogik (Kap. 5.4 / Custom): Partner + Stickdatei steuern Direkt- vs. Angebotsprozess
+  stickereiPartnerId String?
+  stickereiPartner   Supplier? @relation("StickereiPartner", fields: [stickereiPartnerId], references: [id])
+  hatStickdatei      Boolean   @default(false)
+
+  contacts        Contact[]
+  deliveryAddresses DeliveryAddress[]
+  logoVersions    LogoVersion[]
+  quotes          Quote[]
+  orders          Order[]
+  invoices        Invoice[]
+  inquiries       Inquiry[] // Anfrage-Funnel (B20)
+  lead            Lead? // aus Lead konvertiert (B15)
+  portalUsers     PortalUser[] // Kundenportal-Logins (B13)
+  sampleLoans     SampleLoan[] // Muster-Leihgut (B5)
+  priceTiers      CustomerPriceTier[] // kundenindividuelle Mengenstaffel (B4)
+  shopConnectors  ShopConnector[] // T-01: Shops mappen auf die Firma, nicht auf Mitarbeiter
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([name])
+}
+
+model Contact {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+  firstName String
+  lastName  String
+  email     String?
+  phone     String?
+  role      String? // Funktion im Unternehmen
+  gesperrtAm     DateTime? // DSGVO-Sperre (B12, Kap. 28)
+  anonymisiertAm DateTime? // DSGVO-Anonymisierung (B12)
+  createdAt DateTime @default(now())
+
+  @@index([companyId])
+}
+
+model DeliveryAddress {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+  label     String
+  street    String
+  zip       String
+  city      String
+  country   String  @default("DE")
+  orders    Order[]
+
+  @@index([companyId])
+}
+
+// Logo-Versionen versioniert; genau eine aktiv (Kap. 7.2)
+model LogoVersion {
+  id         String   @id @default(cuid())
+  companyId  String
+  company    Company  @relation(fields: [companyId], references: [id])
+  version    Int
+  fileRef    String // Verweis auf externen Speicher (Kap. 7.1)
+  active     Boolean  @default(false)
+  replacedAt DateTime?
+  createdAt  DateTime @default(now())
+  // Optionaler Aufschlagsfaktor-Override je Logo (gewinnt über die globalen Regeln, Kap. 4.4).
+  markupFactor Float?
+  // Hochgeladene Stickdatei (beliebiges Format, Kap. 7.1) — inline in der DB gespeichert.
+  fileName   String?
+  mimeType   String?
+  fileSize   Int?
+  fileData   Bytes?
+
+  stickereiStaffeln StickereiStaffel[]
+
+  @@unique([companyId, version])
+  @@index([companyId, active])
+}
+
+// Konfigurierbarer Aufschlagsfaktor (Kap. 4.4) — „jederzeit neu definierbar": EIN globaler
+// Standardfaktor (Singleton-Zeile id=GLOBAL), durch MarkupRule je Parameter überschreibbar.
+model MarkupConfig {
+  id            String   @id @default("GLOBAL")
+  defaultFactor Float    @default(1.88)
+  updatedAt     DateTime @updatedAt
+}
+
+// Eine Aufschlags-Regel: Faktor unter optionalen, UND-verknüpften Bedingungen
+// (Kundengruppe/Veredelungsart/Mengen- und EK-Wertbereich). Spezifischere Regel gewinnt.
+model MarkupRule {
+  id            String   @id @default(cuid())
+  factor        Float
+  label         String?
+  priceGroupId  String? // Kundengruppe (Preisgruppe)
+  finishingType String? // Veredelungsart (STICKEREI/DRUCK/TRANSFER)
+  minMenge      Int?
+  maxMenge      Int?
+  minEkCents    Int?
+  maxEkCents    Int?
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// Variable Mengenstaffeln je Logo (Kap. 4.4 / T-15): die Stickerei gibt uns nur ihren VK
+// (= unseren Stick-EK) je Stück gestaffelt nach Bestellmenge; Staffelgrenzen frei wählbar
+// und je Logo abweichend. Gespeichert wird nur der manuell erfasste Stick-EK — unser
+// VK = EK × 1,88 (Aufschlagsfaktor) wird berechnet, nicht persistiert.
+model StickereiStaffel {
+  id            String      @id @default(cuid())
+  logoVersionId String
+  logoVersion   LogoVersion @relation(fields: [logoVersionId], references: [id], onDelete: Cascade)
+  minMenge      Int // untere Staffelgrenze in Stück (1, 10, 25, 50, 100, 250 …)
+  ekCents       Int // Stick-EK je Stück in Cent (VK der Stickerei an uns), manuell erfasst
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([logoVersionId, minMenge])
+  @@index([logoVersionId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Stammdaten — Artikel & echte Varianten — Kap. 2.1, 8, 11, 27 (15k Artikel)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Article {
+  id          String    @id @default(cuid())
+  sku         String    @unique
+  name        String
+  description String?
+  isVeredelung Boolean  @default(false) // Transfer/Siebdruck/Stick (Kap. 11)
+  // Textil-PIM (B18). Faserzusammensetzung ist EU-Pflicht (VO 1007/2011).
+  materialComposition String? // z. B. "100% Baumwolle"
+  careInstructions    String?
+  brand               String?
+  hsCode              String? // Zolltarifnummer
+  originCountry       String?
+  collectionId String?
+  collection   Collection? @relation(fields: [collectionId], references: [id])
+  variants    Variant[]
+  mediaAssets   MediaAsset[]
+  finishingSpecs FinishingSpec[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([name])
+}
+
+// Saison/Kollektion (B18, Kap. 3).
+model Collection {
+  id       String    @id @default(cuid())
+  name     String
+  season   String? // z. B. "FS26"
+  articles Article[]
+}
+
+// Digital Asset Management (B18) — Bilder, Druckvorlagen, Stickdateien.
+enum MediaAssetKind {
+  IMAGE
+  PRINT_TEMPLATE
+  EMBROIDERY_FILE
+}
+
+model MediaAsset {
+  id        String         @id @default(cuid())
+  articleId String?
+  article   Article?       @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  variantId String?
+  variant   Variant?       @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  url       String
+  kind      MediaAssetKind @default(IMAGE)
+  sortOrder Int            @default(0)
+  createdAt DateTime       @default(now())
+
+  @@index([articleId])
+  @@index([variantId])
+}
+
+// Veredelungs-Metadaten je Artikel (B18) — Platzierung/Stichzahl/Farben.
+enum FinishingMethod {
+  STICK
+  DRUCK
+  TRANSFER
+}
+
+model FinishingSpec {
+  id         String          @id @default(cuid())
+  articleId  String
+  article    Article         @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  method     FinishingMethod
+  placement  String // z. B. "Brust links", "Rücken"
+  stitchCount Int?
+  colorCount  Int?
+
+  @@index([articleId])
+}
+
+model Variant {
+  id         String  @id @default(cuid())
+  articleId  String
+  article    Article @relation(fields: [articleId], references: [id])
+  sku        String  @unique
+  // Echte Variantenstruktur: Attributnamen exakt "Farbe"/"Größe" (Kap. 3.2 / T-02)
+  attributes VariantAttribute[]
+  prices     PriceGroupPrice[]
+  supplierItems SupplierItem[]
+  bomItems   BomItem[]
+  purchaseOrderLines PurchaseOrderLine[]
+  goodsReceiptLines  GoodsReceiptLine[]
+  stockLevel StockLevel? // Lager/Bestand (T-12) — materialisierter Cache des Ledgers
+  stockMoves StockMove[] // Bewegungs-Ledger (F4)
+  priceTiers PriceGroupPriceTier[] // Preisgruppen-Mengenstaffel (B4)
+  customerPriceTiers CustomerPriceTier[] // kundenindividuelle Staffel (B4)
+  gtin        String? // EAN/GTIN-13 (B18)
+  weightGrams Int? // B18
+  mediaAssets MediaAsset[] // B18
+  sampleLoans SampleLoan[] // Muster-Leihgut (B5)
+  createdAt  DateTime @default(now())
+
+  @@index([articleId])
+}
+
+model VariantAttribute {
+  id        String  @id @default(cuid())
+  variantId String
+  variant   Variant @relation(fields: [variantId], references: [id])
+  name      String // "Farbe" | "Größe"
+  value     String
+
+  @@unique([variantId, name])
+  @@index([name, value])
+}
+
+// VK je Preisgruppe (Kap. 4.4/8.2). ERP = Preis-Master (Kap. 3.2 / T-08).
+model PriceGroupPrice {
+  id           String     @id @default(cuid())
+  variantId    String
+  variant      Variant    @relation(fields: [variantId], references: [id])
+  priceGroupId String
+  priceGroup   PriceGroup @relation(fields: [priceGroupId], references: [id])
+  netCents     Int // Geldbeträge in Cent, niemals Float
+
+  @@unique([variantId, priceGroupId])
+}
+
+// Basispreis-Mengenstaffel je Preisgruppe (B4, Kap. 4.4). Gilt für alle Kunden der
+// Gruppe. Stufenwahl: größte minMenge ≤ Bestellmenge.
+model PriceGroupPriceTier {
+  id           String     @id @default(cuid())
+  variantId    String
+  variant      Variant    @relation(fields: [variantId], references: [id])
+  priceGroupId String
+  priceGroup   PriceGroup @relation(fields: [priceGroupId], references: [id])
+  minMenge     Int
+  netCents     Int
+
+  @@unique([variantId, priceGroupId, minMenge])
+}
+
+// Kundenindividuelle Basispreis-Staffel (B4). Höchste Präzedenz — sticht vor der
+// Preisgruppen-Staffel und dem Einzelpreis.
+model CustomerPriceTier {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  variantId String
+  variant   Variant @relation(fields: [variantId], references: [id])
+  minMenge  Int
+  netCents  Int
+
+  @@unique([companyId, variantId, minMenge])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Beschaffung / Lieferanten — Kap. 6, 13, 5.6 (Multi-Lieferant)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Lieferanten-Connector-Art (C3). Generischer Inbound-Connector je kind (Kap. 6/32).
+enum SupplierKind {
+  ID_IDENTITY
+  STANLEY_STELLA
+  HAKRO
+  FHB_NEXMART
+  MANUAL // kein Connector, manuelle Pflege
+}
+
+model Supplier {
+  id              String   @id @default(cuid())
+  name            String
+  vatId           String? // USt-IdNr. — Auflösung eingehender E-Rechnungen (Kap. 19/C4)
+  iban            String? // Gläubiger-IBAN für SEPA-Überweisungen (PIS, Kap. 9)
+  bic             String?
+  // Inbound-Connector (C3): Katalog/Lager/EK eingehend synchronisieren.
+  kind            SupplierKind @default(MANUAL)
+  baseUrl         String? // REST-Basis-URL des Lieferantensystems
+  consumerKey     String? // Identifier (Klartext)
+  consumerSecretEnc String? // Secret, AES-256-GCM verschlüsselt (DSGVO/Kap. 28)
+  syncCursor      String? // Delta-Sync-Cursor (Kap. 13)
+  active          Boolean  @default(true)
+  supplierItems   SupplierItem[]
+  subProductions  SubProductionOrder[]
+  stickereiKunden Company[] @relation("StickereiPartner")
+  purchaseOrders  PurchaseOrder[]
+  incomingInvoices IncomingInvoice[]
+  createdAt       DateTime @default(now())
+}
+
+model SupplierItem {
+  id          String   @id @default(cuid())
+  supplierId  String
+  supplier    Supplier @relation(fields: [supplierId], references: [id])
+  variantId   String
+  variant     Variant  @relation(fields: [variantId], references: [id])
+  supplierSku String? // Lieferanten-Artikelnummer (Nachvollziehbarkeit, C3)
+  ekCents     Int // Einkaufspreis in Cent
+  availableQty Int? // Lieferanten-Verfügbarkeit (Lagerbestand, C3)
+  priority    Int      @default(1) // 1 = Hauptlieferant, 2 = Alt-Lieferant (Kap. 6)
+  minStock    Int? // Mindestbestand-Reorder (Kap. 6.3 / T-12)
+
+  @@unique([supplierId, variantId])
+  @@index([variantId, priority])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Integration — ShopConnector — Kap. 3, 18, 32. T-01 Firmenkunde-Mapping.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum ShopKind {
+  WOOCOMMERCE
+  ANFRAGESHOP // Kap. 18.1
+  SAMMELBESTELLUNG // Kap. 18.2
+}
+
+// Lieferadress-Regelung je Shop (K-08, Kap. 8.2)
+enum DeliveryAddressPolicy {
+  FEST // feste Firmen-Lieferadresse
+  FREIE_EINGABE // Mitarbeiter gibt Adresse im Shop ein
+  AUSWAHL // Büro wählt aus hinterlegten Firmen-Lieferadressen
+}
+
+// Ein Shop = eine Firma. companyId zeigt IMMER auf die Firma, nie auf Mitarbeiter (T-01).
+model ShopConnector {
+  id        String   @id @default(cuid())
+  name      String
+  kind      ShopKind @default(WOOCOMMERCE)
+  baseUrl   String
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  bomTemplateId String? // variable Stücklisten je Shop (Kap. 5.2/T-03, Extended Kap. 31)
+  bomTemplate   BomTemplate? @relation(fields: [bomTemplateId], references: [id])
+  active    Boolean  @default(true)
+  deliveryAddressPolicy DeliveryAddressPolicy @default(FEST) // K-08
+  syncCursor String? // Delta-Sync (Kap. 13)
+  consumerKey      String? // WooCommerce REST consumer key (Identifier)
+  consumerSecretEnc String? // consumer secret, AES-256-GCM verschlüsselt (DSGVO/Kap. 28)
+  orders    Order[]
+  createdAt DateTime @default(now())
+
+  @@index([companyId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sales — Angebot → Auftrag — Kap. 4, 35.1/35.2
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum QuoteStatus {
+  ENTWURF
+  VERSENDET
+  NACHFASSEN // Wiedervorlage (Kap. 35.1)
+  ANGENOMMEN
+  ABGELEHNT
+}
+
+model Quote {
+  id        String      @id @default(cuid())
+  number    String      @unique
+  companyId String
+  company   Company     @relation(fields: [companyId], references: [id])
+  status    QuoteStatus @default(ENTWURF)
+  wiedervorlageAm DateTime? // Nachfass-Termin (Kap. 35.1)
+  gueltigBisAm DateTime? // Angebotsverfall (B8, Kap. 35.1)
+  verlustgrund String? // Grund bei Ablehnung (B8, Kap. 35.1)
+  lines     QuoteLine[]
+  order     Order?
+  inquiry   Inquiry? // Ursprungs-Anfrage (B20)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+}
+
+// Anfrage-Funnel (B20, Kap. 18.1/35.1) — Vorbild Odoo crm.lead. NEU → IN_BEARBEITUNG
+// → ANGEBOT (konvertiert zu Quote) oder VERWORFEN. ERP-Master des AF-Nummernkreises.
+enum InquirySource {
+  WEB
+  EMAIL
+  SHOP
+  TELEFON
+}
+
+enum InquiryStatus {
+  NEU
+  IN_BEARBEITUNG
+  ANGEBOT
+  VERWORFEN
+}
+
+// Kundenportal-Identität (B13, Kap. 36) — VOLLSTÄNDIG getrennt von der Mitarbeiter-
+// `User`-Tabelle (Sicherheits-Isolation). Jeder Portal-Login ist an GENAU eine Firma
+// gebunden; die Mandanten-Isolation der Portal-API leitet sich aus `companyId` ab.
+model PortalUser {
+  id               String          @id @default(cuid())
+  email            String          @unique
+  passwordHash     String
+  companyId        String
+  company          Company         @relation(fields: [companyId], references: [id])
+  active           Boolean         @default(true)
+  failedLoginCount Int             @default(0)
+  lockedUntil      DateTime? // Lockout nach zu vielen Fehlversuchen (Kap. 14)
+  lastLoginAt      DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  sessions         PortalSession[]
+
+  @@index([companyId])
+}
+
+model PortalSession {
+  id           String     @id @default(cuid())
+  tokenHash    String     @unique // SHA-256 des Klartext-Tokens (nur im httpOnly-Cookie)
+  portalUserId String
+  portalUser   PortalUser @relation(fields: [portalUserId], references: [id], onDelete: Cascade)
+  expiresAt    DateTime
+  createdAt    DateTime   @default(now())
+
+  @@index([portalUserId])
+}
+
+// Lead/Interessent (B15, Kap. 18.1) — leichter Prospect vor der Firma. Konvertierung
+// erzeugt eine Company und verknüpft sie hier (convertedCompany).
+enum LeadStatus {
+  NEU
+  KONTAKTIERT
+  QUALIFIZIERT
+  KONVERTIERT
+  VERWORFEN
+}
+
+model Lead {
+  id                 String        @id @default(cuid())
+  name               String
+  email              String?
+  phone              String?
+  quelle             InquirySource
+  status             LeadStatus    @default(NEU)
+  note               String?
+  verworfenGrund     String?
+  convertedCompanyId String?       @unique
+  convertedCompany   Company?      @relation(fields: [convertedCompanyId], references: [id])
+  createdAt          DateTime      @default(now())
+
+  @@index([status])
+}
+
+model Inquiry {
+  id             String        @id @default(cuid())
+  number         String        @unique // AF-Nummernkreis (F1)
+  companyId      String?
+  company        Company?      @relation(fields: [companyId], references: [id])
+  kontaktName    String?
+  quelle         InquirySource
+  status         InquiryStatus @default(NEU)
+  verworfenGrund String?
+  text           String
+  quoteId        String?       @unique
+  quote          Quote?        @relation(fields: [quoteId], references: [id])
+  createdAt      DateTime      @default(now())
+
+  @@index([status])
+}
+
+model QuoteLine {
+  id          String  @id @default(cuid())
+  quoteId     String
+  quote       Quote   @relation(fields: [quoteId], references: [id])
+  position    Int
+  description String
+  qty         Int
+  unitNetCents Int // jede Veredelung als eigene Position, kein Pauschalpreis (Kap. 4.4)
+  dbCents     Int? // Deckungsbeitrag bereits im Angebot sichtbar (Kap. 4.4)
+}
+
+enum OrderStatus {
+  ANGELEGT
+  IN_BEARBEITUNG // ab hier Änderung nur via Storno+Neuanlage (Kap. 4.4/12.1)
+  IN_PRODUKTION
+  VERSANDBEREIT
+  VERSENDET
+  FAKTURIERT // B9/K-26 (Kap. 35.2)
+  ABGESCHLOSSEN // B9/K-26
+  STORNIERT
+}
+
+model Order {
+  id          String      @id @default(cuid())
+  number      String      @unique
+  companyId   String
+  company     Company     @relation(fields: [companyId], references: [id])
+  deliveryAddressId String?
+  deliveryAddress   DeliveryAddress? @relation(fields: [deliveryAddressId], references: [id])
+  shopConnectorId String? // Herkunft Shop (null = manuell)
+  shopConnector   ShopConnector? @relation(fields: [shopConnectorId], references: [id])
+  status      OrderStatus @default(ANGELEGT)
+  zugesagterLiefertermin DateTime? // Rückwärtsterminierung (B9, Kap. 35.2)
+  quoteId     String?     @unique
+  quote       Quote?      @relation(fields: [quoteId], references: [id])
+  // Nachproduktion aus Reklamation (B11): Verweis auf den Ursprungsauftrag.
+  nachproduktionVonId String?
+  nachproduktionVon   Order?  @relation("Nachproduktion", fields: [nachproduktionVonId], references: [id])
+  nachproduktionen    Order[] @relation("Nachproduktion")
+  cashSales   CashSale[] // Barverkäufe (B6)
+  fileLink    String? // Druckdaten-Verweis, Pflicht vor Produktion (Kap. 7.1)
+  freigegeben Boolean     @default(false) // kein Produktionsstart ohne Freigabe (Kap. 5.2/7.2)
+  // T-01: Mitarbeiter-Info des Shop-Kontos wird hier vermerkt, erzeugt KEINEN Kunden
+  employeeNote String?
+  externalNumber String? // Shop-Bestellnummer (Idempotenz beim Import, T-01)
+  trackingNumber String? // DPD (Kap. 4.2/T-06)
+  lines       OrderLine[]
+  production  ProductionOrder?
+  invoice     Invoice?
+  deliveryNotes DeliveryNote[]
+  complaints  Complaint[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([shopConnectorId, externalNumber])
+  @@index([companyId])
+  @@index([status])
+}
+
+model OrderLine {
+  id          String  @id @default(cuid())
+  orderId     String
+  order       Order   @relation(fields: [orderId], references: [id])
+  position    Int
+  description String
+  qty         Int
+  unitNetCents Int
+  rawPayload  Json? // Roh-Shopzeile für Replay/Traceability (Kap. 3)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Produktion — Kap. 5, 33. 1 Auftrag = 1 PA (Kap. 5.2).
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum AmpelStatus {
+  GRUEN
+  GELB
+  ROT
+}
+
+model BomTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  items     BomTemplateItem[]
+  shops     ShopConnector[]
+  createdAt DateTime @default(now())
+}
+
+model BomTemplateItem {
+  id            String      @id @default(cuid())
+  templateId    String
+  template      BomTemplate @relation(fields: [templateId], references: [id])
+  description   String
+  defaultQty    Int         @default(1)
+}
+
+model ProductionOrder {
+  id          String   @id @default(cuid())
+  number      String   @unique // PA-xxxx
+  orderId     String   @unique
+  order       Order    @relation(fields: [orderId], references: [id])
+  ampel       AmpelStatus @default(GRUEN) // ersetzt Excel-Terminliste (Kap. 5.2/35.4)
+  dueDate     DateTime?
+  bomItems    BomItem[]
+  subOrders   SubProductionOrder[]
+  timeEntries TimeEntry[]
+  purchaseOrders PurchaseOrder[] // Beschaffung je PA (Multi-Lieferant, T-05)
+  createdAt   DateTime @default(now())
+}
+
+model BomItem {
+  id            String  @id @default(cuid())
+  productionId  String
+  production    ProductionOrder @relation(fields: [productionId], references: [id])
+  variantId     String?
+  variant       Variant? @relation(fields: [variantId], references: [id])
+  description   String
+  qty           Int
+}
+
+// Mehrstufige Fremdvergabe mit Beistellung + Rücklauf (Kap. 5.3 / T-04, Custom Kap. 31)
+model SubProductionOrder {
+  id            String   @id @default(cuid())
+  number        String   @unique // PA-xxxx-a / -b
+  productionId  String
+  production    ProductionOrder @relation(fields: [productionId], references: [id])
+  sequence      Int      @default(1) // Reihenfolge der Fremdvergabe-Stufe (T-04)
+  supplierId    String // Veredler
+  supplier      Supplier @relation(fields: [supplierId], references: [id])
+  beistellungVersandtAm DateTime? // Material an Veredler geschickt
+  ruecklaufErhaltenAm   DateTime? // Rücklauf gebucht
+  status        String   @default("OFFEN")
+  // Tiefe T-04: Mengenfluss (Schwund/Ausbeute), Termin, Lohnkosten je Stufe
+  beistellMenge  Int? // beigestellte Menge
+  ruecklaufMenge Int? // zurückerhaltene Menge (<= Beistellmenge)
+  dueDate        DateTime? // zugesagter Rücklauftermin der Stufe
+  lohnCents      Int? // Lohnkosten dieser Veredelungsstufe (Nachkalkulation)
+
+  @@index([productionId])
+}
+
+model TimeEntry {
+  id           String   @id @default(cuid())
+  productionId String
+  production   ProductionOrder @relation(fields: [productionId], references: [id])
+  userId       String
+  minutes      Int // Stechuhr (Kap. 5.2) — Basis Soll-Ist/Nachkalkulation (T-10)
+  note         String?
+  costCenterId String?
+  costCenter   CostCenter? @relation(fields: [costCenterId], references: [id])
+  // Wiederanlauf nach Notbetrieb (B17): idempotente Nacherfassung — derselbe
+  // Schlüssel verhindert Doppelbuchung. @unique lässt mehrere NULL zu.
+  idempotencyKey String? @unique
+  createdAt    DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Finanzen / Fibu — Kap. 9, 19
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Invoice {
+  id          String   @id @default(cuid())
+  number      String   @unique // ERP = Rechnungsnummern-Master (Kap. 19)
+  // Optional: Musterrechnung (B5) hängt an keinem Auftrag. @unique erlaubt mehrere NULL.
+  orderId     String?  @unique
+  order       Order?   @relation(fields: [orderId], references: [id])
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id])
+  netCents    Int
+  taxCents    Int
+  grossCents  Int
+  issuedAt    DateTime @default(now())
+  eInvoiceXml String? // XRechnung/ZUGFeRD (Kap. 19)
+  openItem    OpenItem?
+  creditNotes CreditNote[] // Gutschriften (Kap. 20)
+  sampleLoan  SampleLoan? // Muster-Leihgut-Berechnung (B5)
+  // GoBD: finalisierte Rechnung unveränderbar; Korrektur nur via Storno/Gutschrift
+  finalized   Boolean  @default(false)
+  costCenterId String?
+  costCenter   CostCenter? @relation(fields: [costCenterId], references: [id])
+
+  @@index([companyId])
+}
+
+// Muster-Leihgut (B5, Kap. 37.3). Muster werden verliehen; nach 21 Tagen ohne
+// Rückgabe automatisch zum Listenpreis berechnet. Musterbestand läuft über das
+// F4-Ledger (StockMove lager=MUSTER); die Frist als DueItem-Wiedervorlage.
+enum SampleLoanStatus {
+  VERLIEHEN
+  ZURUECK
+  BERECHNET
+}
+
+model SampleLoan {
+  id           String           @id @default(cuid())
+  companyId    String
+  company      Company          @relation(fields: [companyId], references: [id])
+  variantId    String
+  variant      Variant          @relation(fields: [variantId], references: [id])
+  menge        Int
+  ausgegebenAm DateTime         @default(now())
+  status       SampleLoanStatus @default(VERLIEHEN)
+  invoiceId    String?          @unique
+  invoice      Invoice?         @relation(fields: [invoiceId], references: [id])
+  createdAt    DateTime         @default(now())
+
+  @@index([companyId])
+  @@index([status])
+}
+
+// Kostenstelle (B7, Kap. 37.1) — generische Tabelle; Nummern von TEXMA/StB
+// befüllbar. Dient der Auswertung, NICHT der Buchung (Gate G1).
+model CostCenter {
+  id     String @id @default(cuid())
+  nummer String @unique
+  name   String
+  invoices       Invoice[]
+  purchaseOrders PurchaseOrder[]
+  timeEntries    TimeEntry[]
+}
+
+model OpenItem {
+  id          String   @id @default(cuid())
+  invoiceId   String   @unique
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id])
+  openCents   Int
+  dueDate     DateTime
+  dunningLevel Int     @default(0) // 0..3 (Kap. 9.5)
+  payments    PaymentAllocation[]
+  dunningNotices DunningNotice[] // append-only Mahnhistorie (B10)
+
+  @@index([dueDate])
+}
+
+// Kasse (B6, Kap. 37.4) — Bar/EC mit TSE (KassenSichV/§146a AO). CashSale ist
+// append-only/WORM: jeder Beleg trägt seine TSE-Signatur und wird nie geändert.
+enum PaymentArt {
+  BAR
+  EC
+}
+
+model CashRegister {
+  id        String     @id @default(cuid())
+  name      String
+  sales     CashSale[]
+  createdAt DateTime   @default(now())
+}
+
+model CashSale {
+  id              String       @id @default(cuid())
+  belegNr         String       @unique // BON-Nummernkreis (F1)
+  registerId      String?
+  register        CashRegister? @relation(fields: [registerId], references: [id])
+  orderId         String?
+  order           Order?       @relation(fields: [orderId], references: [id])
+  betragCents     Int
+  art             PaymentArt
+  kassiertAm      DateTime     @default(now())
+  kassierer       String
+  tseSignatur     String
+  tseSeriennummer String
+  tseTxId         String
+  createdAt       DateTime     @default(now())
+
+  @@index([kassiertAm])
+}
+
+// Mahnbeleg (B10, Kap. 9.5) — append-only Historie je Mahnstufe (G2: kein Update).
+model DunningNotice {
+  id          String   @id @default(cuid())
+  openItemId  String
+  openItem    OpenItem @relation(fields: [openItemId], references: [id], onDelete: Cascade)
+  stufe       Int
+  gebuehrCents Int
+  textVorlage String
+  erzeugtAm   DateTime @default(now())
+
+  @@index([openItemId])
+}
+
+model Payment {
+  id           String   @id @default(cuid())
+  externalRef  String?  @unique // Bank-Transaktionsreferenz (CAMT AcctSvcrRef) — idempotenter Import (T-13)
+  amountCents  Int
+  bookedAt     DateTime @default(now())
+  reference    String? // Verwendungszweck (Banking-Abgleich Kap. 9.4/T-13)
+  matched      Boolean  @default(false)
+  allocations  PaymentAllocation[]
+}
+
+model PaymentAllocation {
+  id         String   @id @default(cuid())
+  paymentId  String
+  payment    Payment  @relation(fields: [paymentId], references: [id])
+  openItemId String
+  openItem   OpenItem @relation(fields: [openItemId], references: [id])
+  amountCents Int // Teilzahlung/Überzahlung (Kap. 9.4)
+
+  @@unique([paymentId, openItemId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bank-Anbindung — Kap. 9. Zwei Wege (EBICS / PSD2) hinter einer Abstraktion:
+// Kontoauszüge abrufen (AIS → Matching-Pipeline) + SEPA-Überweisungen auslösen (PIS).
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum BankConnectionKind {
+  EBICS // zertifikatsbasiert, CAMT.053 + pain.001, keine 90-Tage-Re-Auth
+  PSD2 // XS2A-API, 90-Tage-SCA-Zustimmung
+}
+
+enum PaymentOrderStatus {
+  DRAFT // erfasst, noch nicht eingereicht
+  SUBMITTED // an den Bank-Provider übergeben
+  EXECUTED // vom Provider zur Ausführung angenommen
+  REJECTED // vom Provider abgelehnt
+}
+
+model BankConnection {
+  id                String             @id @default(cuid())
+  name              String
+  kind              BankConnectionKind
+  iban              String // eigenes Konto (Auftraggeber)
+  bic               String?
+  debtorName        String
+  consentValidUntil DateTime? // PSD2: Ablauf der SCA-Zustimmung; EBICS: null
+  lastSyncAt        DateTime?
+  createdAt         DateTime           @default(now())
+  paymentOrders     PaymentOrder[]
+}
+
+model PaymentOrder {
+  id                     String             @id @default(cuid())
+  connectionId           String
+  connection             BankConnection     @relation(fields: [connectionId], references: [id])
+  messageId              String             @unique // pain.001 MsgId
+  status                 PaymentOrderStatus @default(DRAFT)
+  totalCents             Int
+  requestedExecutionDate String // YYYY-MM-DD
+  providerRef            String? // Referenz der Bank/des Providers nach Einreichung
+  submittedAt            DateTime?
+  createdAt              DateTime           @default(now())
+  transfers              PaymentTransfer[]
+
+  @@index([connectionId, status])
+}
+
+model PaymentTransfer {
+  id           String       @id @default(cuid())
+  orderId      String
+  order        PaymentOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  creditorName String
+  creditorIban String
+  creditorBic  String?
+  amountCents  Int
+  remittance   String
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Archiv / GoBD — Kap. 10. Append-only Audit-Trail.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  entity    String
+  entityId  String
+  action    String // CREATE | UPDATE | FINALIZE | STORNO
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+}
+
+// Lückenloser Belegnummernkreis je Belegart und Jahr (GoBD, Kap. 10/19).
+// ERP ist Master. Atomare, lückenlose Vergabe via UPSERT+RETURNING in der Repo-
+// Schicht (Vorbild: Odoo ir.sequence / ERPNext naming series). `next` = zuletzt
+// vergebene laufende Nummer; die erste Vergabe eines Jahres liefert 1.
+model NumberSequence {
+  key  String // SequenceKey: INVOICE | CREDIT_NOTE | ORDER | QUOTE | INQUIRY | ...
+  year Int
+  next Int    @default(0)
+
+  @@id([key, year])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Beschaffung — Bestellung / Wareneingang — Kap. 6, 5.6. Testfälle T-05, T-12.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum PurchaseOrderStatus {
+  ENTWURF
+  BESTELLT
+  TEILWEISE_ERHALTEN
+  ERHALTEN
+}
+
+model PurchaseOrder {
+  id          String   @id @default(cuid())
+  number      String   @unique
+  supplierId  String
+  supplier    Supplier @relation(fields: [supplierId], references: [id])
+  // Beschaffung für einen Produktionsauftrag (Multi-Lieferant-Gate, Kap. 5.6/T-05)
+  productionId String?
+  production   ProductionOrder? @relation(fields: [productionId], references: [id])
+  status      PurchaseOrderStatus @default(ENTWURF)
+  lines       PurchaseOrderLine[]
+  goodsReceipts GoodsReceipt[]
+  incomingInvoices IncomingInvoice[] // 3-Way-Match (Kap. 9.6)
+  costCenterId String?
+  costCenter   CostCenter? @relation(fields: [costCenterId], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([supplierId])
+  @@index([productionId])
+}
+
+model PurchaseOrderLine {
+  id              String  @id @default(cuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  variantId       String
+  variant         Variant @relation(fields: [variantId], references: [id])
+  qty             Int
+  ekCents         Int
+
+  @@index([purchaseOrderId])
+}
+
+model GoodsReceipt {
+  id              String  @id @default(cuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  receivedAt      DateTime @default(now())
+  lines           GoodsReceiptLine[]
+
+  @@index([purchaseOrderId])
+}
+
+model GoodsReceiptLine {
+  id             String  @id @default(cuid())
+  goodsReceiptId String
+  goodsReceipt   GoodsReceipt @relation(fields: [goodsReceiptId], references: [id])
+  variantId      String
+  variant        Variant @relation(fields: [variantId], references: [id])
+  receivedQty    Int
+
+  @@index([goodsReceiptId])
+}
+
+// Lagerbestand je Variante; Mindestbestand-Reorder Transferdrucke (Kap. 6.3 / T-12)
+model StockLevel {
+  id        String  @id @default(cuid())
+  variantId String  @unique
+  variant   Variant @relation(fields: [variantId], references: [id])
+  qty       Int     @default(0)
+  minStock  Int     @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+// Bestands-Bewegungs-Ledger (F4, Kap. 37.1) — Vorbild Odoo stock.move/quants.
+// Append-only: der Bestand ist die Summe der Bewegungen, niemals direkt gesetzt.
+// `StockLevel` bleibt materialisierter Cache des HAUPT-Lagers; MUSTER-Lager wird
+// getrennt geführt (B5 Muster-Leihgut).
+enum StockMoveReason {
+  EROEFFNUNG // Anfangsbestand bei Ledger-Einführung
+  WARENEINGANG
+  VERBRAUCH
+  INVENTUR // Korrektur aus Inventur (B16)
+  KORREKTUR
+  MUSTER // Ausgabe/Rücknahme Musterware (B5)
+}
+
+enum StockLager {
+  HAUPT
+  MUSTER
+}
+
+model StockMove {
+  id        String          @id @default(cuid())
+  variantId String
+  variant   Variant         @relation(fields: [variantId], references: [id])
+  deltaQty  Int // +Zugang / −Abgang
+  grund     StockMoveReason
+  lager     StockLager      @default(HAUPT)
+  belegRef  String? // Verweis auf auslösenden Beleg (PO/Order/Inventur)
+  createdAt DateTime        @default(now())
+
+  @@index([variantId, lager])
+  @@index([createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Eingangsrechnung + 3-Way-Match — Kap. 9.6
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum IncomingInvoiceStatus {
+  ERFASST
+  GEPRUEFT // 3-Way-Match ok
+  GESPERRT // Abweichung
+  BEZAHLT
+}
+
+model IncomingInvoice {
+  id          String   @id @default(cuid())
+  number      String
+  supplierId  String
+  supplier    Supplier @relation(fields: [supplierId], references: [id])
+  // Bezug zur Bestellung für den 3-Way-Match (Kap. 9.6)
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  netCents    Int
+  taxCents    Int
+  grossCents  Int
+  status      IncomingInvoiceStatus @default(ERFASST)
+  receivedAt  DateTime @default(now())
+
+  @@unique([supplierId, number])
+  @@index([status])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Lieferschein / Gutschrift — Kap. 20 + xentral-alignment Lücken
+// ─────────────────────────────────────────────────────────────────────────────
+
+model DeliveryNote {
+  id        String   @id @default(cuid())
+  number    String   @unique
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+}
+
+model CreditNote {
+  id        String   @id @default(cuid())
+  number    String   @unique // eigener Nummernkreis, ERP = Master (Kap. 19)
+  invoiceId String
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id])
+  amountCents Int
+  reason    String
+  createdAt DateTime @default(now())
+
+  @@index([invoiceId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reklamation / Workflow C — Kap. 20
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum ComplaintCause {
+  LIEFERANT
+  INTERN
+  EXTERN_VEREDLER
+}
+
+enum FollowUpType {
+  NACHPRODUKTION
+  EXPRESS_NACHPRODUKTION
+  GUTSCHRIFT
+  KEINE
+}
+
+model Complaint {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id])
+  orderLineId String
+  cause       ComplaintCause
+  followUp    FollowUpType @default(KEINE)
+  costCents   Int      @default(0)
+  costBearer  String // LIEFERANT | VEREDLER | TEXMA (abgeleitet aus cause)
+  createdAt   DateTime @default(now())
+
+  @@index([orderId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Wiedervorlage / Termin — Kap. 35.1
+// ─────────────────────────────────────────────────────────────────────────────
+
+model DueItem {
+  id        String   @id @default(cuid())
+  entity    String // Quote | Order | SubProductionOrder | ...
+  entityId  String
+  dueDate   DateTime
+  note      String?
+  done      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([dueDate, done])
+  @@index([entity, entityId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Konfiguration — Sollzeiten (K-09) + Freigabeschwellen (K-10)
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum FinishingKind {
+  TRANSFER
+  SIEBDRUCK_EINRICHTUNG
+  SIEBDRUCK_DRUCK
+  STICK
+}
+
+// Sollzeit je Veredelungsart; grobe Startwerte per Seed, im Betrieb pflegbar (K-09)
+model FinishingTargetTime {
+  id            String        @id @default(cuid())
+  kind          FinishingKind @unique
+  targetMinutes Float
+  basis         String // STUECK | EINRICHTUNG | PRO_1000_STICHE
+  updatedAt     DateTime      @updatedAt
+}
+
+// Einzeiler-Settings; Schwellen erst im GL-Workshop gesetzt → nullable (K-10)
+model ApprovalThreshold {
+  id                 String   @id @default(cuid())
+  maxDiscountPct     Float? // null = nicht definiert
+  maxOrderValueCents Int? // null = nicht definiert
+  updatedAt          DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Worker-Orchestrierung — Transaktionaler Outbox + Integrations-Log — Kap. 13/32
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum OutboxStatus {
+  PENDING // wartet auf Versand
+  SENT // erfolgreich zugestellt
+  FAILED // Zwischenfehler, wird erneut versucht
+  DEAD // max. Versuche erschöpft (Klärung)
+}
+
+enum IntegrationDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum IntegrationStatus {
+  SUCCESS
+  FAILURE
+}
+
+// Transaktionaler Outbox: Seiteneffekte (Shop-Push, Label, …) durabel + idempotent retrybar.
+model OutboxEvent {
+  id            String       @id @default(cuid())
+  type          String // z. B. "shop.price.push" (Kap. 32)
+  aggregateType String?
+  aggregateId   String?
+  payload       Json
+  status        OutboxStatus @default(PENDING)
+  attempts      Int          @default(0)
+  nextAttemptAt DateTime     @default(now())
+  lastError     String?
+  createdAt     DateTime     @default(now())
+  sentAt        DateTime?
+
+  @@index([status, nextAttemptAt])
+}
+
+// Lückenloses Protokoll jeder externen Integration (Connector-Pull/-Push, Outbox-Dispatch).
+model IntegrationLog {
+  id              String               @id @default(cuid())
+  connector       String // "woocommerce" | "outbox" | …
+  direction       IntegrationDirection
+  operation       String
+  status          IntegrationStatus
+  attempt         Int                  @default(1)
+  shopConnectorId String?
+  error           String?
+  durationMs      Int?
+  createdAt       DateTime             @default(now())
+
+  @@index([connector, createdAt])
+}

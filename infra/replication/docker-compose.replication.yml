@@ -1,0 +1,73 @@
+# B17 Modus B (Kap. 27): PostgreSQL Streaming-Replikation — Primary + Hot-Standby.
+# Asynchron (kein synchronous_standby_names → keine Commit-Latenz auf dem Primary),
+# Ziel RPO sekunden-nah / RTO ≤ 1 h. Lauffähig lokal zur Validierung des Failover-
+# Verfahrens; im Betrieb ersetzt durch Managed-HA-Postgres ODER dieselbe Topologie
+# auf zwei Hosts. Smoke-Test: ./smoke-test.sh — Failover: ../../docs/verfahrensdokumentation/notfall-runbook.md
+#
+# Start:   docker compose -f docker-compose.replication.yml up -d
+# Test:    ./smoke-test.sh
+# Stop:    docker compose -f docker-compose.replication.yml down -v
+
+services:
+  primary:
+    image: postgres:16-alpine
+    container_name: texma-pg-primary
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-texma}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-texma}
+      POSTGRES_DB: ${POSTGRES_DB:-texma}
+      REPLICATION_USER: ${REPLICATION_USER:-replicator}
+      REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator}
+    volumes:
+      - primary-data:/var/lib/postgresql/data
+      - ./primary/init-replication.sh:/docker-entrypoint-initdb.d/10-init-replication.sh:ro
+    # Replikations-GUCs als Flags — wal_level=replica + WAL-Sender + Slot-Reserve.
+    # synchronous_standby_names bleibt LEER → asynchrone Replikation (keine Commit-Latenz).
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - max_wal_senders=10
+      - -c
+      - max_replication_slots=10
+      - -c
+      - wal_keep_size=512MB
+      - -c
+      - hot_standby=on
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-texma} -d $${POSTGRES_DB:-texma}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    ports:
+      - "${PRIMARY_PORT:-5433}:5432"
+
+  standby:
+    image: postgres:16-alpine
+    container_name: texma-pg-standby
+    depends_on:
+      primary:
+        condition: service_healthy
+    environment:
+      REPLICATION_USER: ${REPLICATION_USER:-replicator}
+      REPLICATION_PASSWORD: ${REPLICATION_PASSWORD:-replicator}
+      PRIMARY_HOST: primary
+      PGDATA: /var/lib/postgresql/data
+    volumes:
+      - standby-data:/var/lib/postgresql/data
+      - ./standby/entrypoint.sh:/usr/local/bin/standby-entrypoint.sh:ro
+    # Eigener Entrypoint: bei leerem Datenverzeichnis pg_basebackup vom Primary
+    # (mit -R → standby.signal + primary_conninfo), danach Start als Hot-Standby.
+    entrypoint: ["/usr/local/bin/standby-entrypoint.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${REPLICATION_USER:-replicator}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    ports:
+      - "${STANDBY_PORT:-5434}:5432"
+
+volumes:
+  primary-data:
+  standby-data:
