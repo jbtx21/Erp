@@ -15,6 +15,8 @@
 | Musterpreis (B5) | = Listenpreis der Variante (Default gesetzt). |
 | Kostenstellen (B7) | generische Tabelle; Schlüssel von TEXMA/StB später befüllbar. |
 | K-01 Addison | naturgemäß extern; Bau liefert nur den normkonformen DATEV/EXTF-Export. |
+| **Fertigungstiefe** | **Reine Veredelung** (Blanks zukaufen) — kein Cut-Make-Trim. Produktion = Veredelungs-Arbeitsplätze/Kapazität; D-PROD/APS bleibt minimal (nur B9-Rückwärtsterminierung). |
+| **Scope-Erweiterung** | Aus dem Domänen-Check (`docs/domaenen-check-textil.md`) nur **D-PIM** aufgenommen (→ **B18**). D-CRM/D-RFQ, D-PROD-APS und D-ACC bleiben dokumentiert, aber **zurückgestellt** (s. §9). |
 
 ## 1. Architektur-Anleihen aus Open-Source-ERPs
 **Strategie:** Wir übernehmen **Muster und Standard-Bibliotheken**, nicht die Plattform.
@@ -40,7 +42,7 @@ Wir entnehmen gezielt:
 ## 2. Build-Reihenfolge
 ```
 Sprint 3 (Fundament/Compliance):  F1 · F2 · B3 · B1 · B2
-Sprint 4 (Muss):                  B4 · B17 · F3 · B5 · B7 · B6
+Sprint 4 (Muss):                  B4 · B18 · B17 · F3 · B5 · B7 · B6
 Sprint 5 (Vorgangskette):         B8 · B9 · B10 · B11 · B12
 Sprint 6 (Could/Future):          B16(+F4) · B15 · B13 · B14
 ```
@@ -89,6 +91,20 @@ Regel je Item (Definition of Done) siehe §7.
 - **Shared:** `pricing.ts` — Preisfindung: **kundenindividuelle Staffel sticht** vor Preisgruppen-Staffel; Stufenwahl „größte `minMenge` ≤ Bestellmenge"; danach Veredelungs-Markup multiplikativ.
 - **Tests:** `pricing.test.ts` — T-15 generisch (Grenze über-/unterschritten), Vorrang kundenindividuell vor global, Stickerei-Staffel bleibt grün.
 - **Gate:** macht T-15 voll. **Abh.:** F2 nein; B3 (int-test).
+
+### B18 · Textil-PIM-Erweiterung (D-PIM) — Kap. 3 · EU-VO 1007/2011 · **M–L**
+- **Ziel:** PIM textilreif & rechtskonform; Vorbild **Akeneo** (typisierte Pflichtattribute je Warengruppe) + **Pimcore** (DAM).
+- **Schema:**
+  - `Article`: `materialComposition String?` (**Faserzusammensetzung — Kennzeichnungspflicht**), `careInstructions String?`, `brand String?`, `hsCode String?` (Zolltarif), `originCountry String?`, `collectionId String?`.
+  - `Variant`: `gtin String?` (EAN/GTIN-13), `weightGrams Int?`.
+  - `Collection { id, name, season }`.
+  - `MediaAsset { id, articleId?, variantId?, url, kind [IMAGE|PRINT_TEMPLATE|EMBROIDERY_FILE], sortOrder }` (DAM).
+  - `FinishingSpec { id, articleId, method [STICK|DRUCK|TRANSFER], placement, stitchCount?, colorCount? }` (Veredelungs-Metadaten).
+- **Shared:** `pim.ts` — **GTIN-13-Prüfziffer**, Pflicht-Materialangabe vor Verkaufsfreigabe erzwingen.
+- **API:** PIM-Modul erweitern (+ in-memory/prisma repo + int-test).
+- **Tests:** `pim.test.ts` — GTIN-Checksum gültig/ungültig, fehlende Materialangabe blockiert Freigabe, Media/Collection-Zuordnung.
+- **Gate:** rechtskonform (Textilkennzeichnung) + G6. **Abh.:** B3.
+- *Hinweis:* Full-EAV-„Family-Engine" (frei definierbare Attribute) bewusst **nicht** jetzt — konkrete typisierte Felder reichen; Generalisierung bei wachsender Attributvielfalt nachrüstbar.
 
 ### B17 · Notbetrieb & Resilienz — K-17 · Kap. 27 · **L** (Muss)
 - **Modus A (Internet am Standort weg, Cloud ok):** `modules/continuity` erzeugt **Tages-Offline-Bundle** offener Aufträge — Produktionszettel (vorhandenes `production-sheet-pdf`) + Lieferscheine als PDF/CSV; Produktion arbeitet offline.
@@ -184,3 +200,11 @@ die parallel zum Bau laufen und die Codeerstellung nicht aufhalten:
 - StB-Gegenzeichnung Verfahrensdoku/DSGVO-Fristenmatrix (B1/B12).
 - AddisonOne-Import-Abnahme (K-01) — externe Software, Bau liefert normkonformen Export.
 - Bereitstellung Postgres-Replica/Failover-Infra (B17) — IaC/Betrieb.
+
+## 9. Bewusst zurückgestellt (dokumentiert, nicht im aktiven Plan)
+Aus dem Domänen-Check übernommen ist nur **B18 (D-PIM)**. Folgende Lücken sind analysiert und in
+`docs/domaenen-check-textil.md` festgehalten, aber **per Entscheidung nicht** in diesem Bau:
+- **D-CRM + D-RFQ** — Lead/Opportunity/Activity + `Inquiry`-Funnel (Vorbild Twenty/EspoCRM). Kandidat für einen späteren Vertriebs-Sprint.
+- **D-PROD/APS** — Workstation/Routing + endliche Kapazitätsplanung (frePPLe-Sidecar). Einstieg bleibt B9 (Rückwärtsterminierung); APS später.
+- **D-ACC** — USt-Sonderfälle (Reverse-Charge/innergemeinschaftlich) + Skonto. Bei Bedarf als kleine Ergänzung nachziehbar.
+- **D-UI** — react-admin/Twenty über die REST-API; eigener UI-Sprint (API-first-Entscheidung).
