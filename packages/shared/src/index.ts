@@ -44,3 +44,4 @@ export * from "./scheduling.js";
 export * from "./privacy.js";
 export * from "./inquiry.js";
 export * from "./pos.js";
+export * from "./lead.js";

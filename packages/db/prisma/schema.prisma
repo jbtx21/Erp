@@ -113,6 +113,7 @@ model Company {
   orders          Order[]
   invoices        Invoice[]
   inquiries       Inquiry[] // Anfrage-Funnel (B20)
+  lead            Lead? // aus Lead konvertiert (B15)
   sampleLoans     SampleLoan[] // Muster-Leihgut (B5)
   priceTiers      CustomerPriceTier[] // kundenindividuelle Mengenstaffel (B4)
   shopConnectors  ShopConnector[] // T-01: Shops mappen auf die Firma, nicht auf Mitarbeiter
@@ -500,6 +501,32 @@ enum InquiryStatus {
   IN_BEARBEITUNG
   ANGEBOT
   VERWORFEN
+}
+
+// Lead/Interessent (B15, Kap. 18.1) — leichter Prospect vor der Firma. Konvertierung
+// erzeugt eine Company und verknüpft sie hier (convertedCompany).
+enum LeadStatus {
+  NEU
+  KONTAKTIERT
+  QUALIFIZIERT
+  KONVERTIERT
+  VERWORFEN
+}
+
+model Lead {
+  id                 String        @id @default(cuid())
+  name               String
+  email              String?
+  phone              String?
+  quelle             InquirySource
+  status             LeadStatus    @default(NEU)
+  note               String?
+  verworfenGrund     String?
+  convertedCompanyId String?       @unique
+  convertedCompany   Company?      @relation(fields: [convertedCompanyId], references: [id])
+  createdAt          DateTime      @default(now())
+
+  @@index([status])
 }
 
 model Inquiry {
