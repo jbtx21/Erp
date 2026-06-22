@@ -108,6 +108,19 @@ async function main(): Promise<void> {
     }).catch(() => {});
   }
 
+  // ── Mehrstufige Fremdvergabe / Lohnveredelung (T-04, Kap. 5.3) ─────────────
+  // Zwei Stufen an pa-1: Stufe 1 (Siebdruck) zurück inkl. Schwund, Stufe 2 (Stickerei)
+  // dadurch handlungsfähig. Zeigt sequenzielles Gate, Schwund/Ausbeute, Lohnkosten.
+  for (const s of [
+    { id: "sub-1", number: "PA-2026-0001-a", productionId: "pa-1", sequence: 1, supplierId: "sup-fhb",
+      status: "RUECKLAUF_ERHALTEN", beistellMenge: 200, ruecklaufMenge: 195, lohnCents: 30_000,
+      beistellungVersandtAm: at(-6), ruecklaufErhaltenAm: at(-2), dueDate: at(-3) },
+    { id: "sub-2", number: "PA-2026-0001-b", productionId: "pa-1", sequence: 2, supplierId: "sup-stanley",
+      status: "OFFEN", lohnCents: 25_000, dueDate: at(2) },
+  ] as const) {
+    await prisma.subProductionOrder.upsert({ where: { id: s.id }, update: {}, create: { ...s } }).catch(() => {});
+  }
+
   // ── Angebote mit Wiedervorlage (Ampel-Ebene ANGEBOT, Kap. 35.1/35.4) ───────
   for (const [id, number, companyId, status, wvOffset] of [
     ["qt-1", "AN-2026-0001", muster.id, "ENTWURF", -1],  // Nachfass überfällig → ROT
@@ -172,7 +185,7 @@ async function main(): Promise<void> {
     await prisma.costCenter.upsert({ where: { id }, update: {}, create: { id, nummer, name } });
   }
 
-  console.log("Seed fertig: Preisgruppen, 2 Firmen, Shop, Artikel+3 Varianten, 2 Lieferanten, 4 Aufträge, 3 Produktionsaufträge + 2 Angebote (Ampel), 2 Eingangs-/2 Ausgangsrechnungen.");
+  console.log("Seed fertig: Preisgruppen, 2 Firmen, Shop, Artikel+3 Varianten, 2 Lieferanten, 4 Aufträge, 3 Produktionsaufträge + 2 Fremdvergabe-Stufen + 2 Angebote (Ampel), 2 Eingangs-/2 Ausgangsrechnungen.");
 }
 
 type OrderStatusLit = "ANGELEGT" | "IN_BEARBEITUNG" | "IN_PRODUKTION" | "VERSANDBEREIT" | "VERSENDET" | "FAKTURIERT" | "ABGESCHLOSSEN" | "STORNIERT";

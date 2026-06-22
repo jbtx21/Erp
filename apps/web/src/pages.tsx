@@ -729,3 +729,115 @@ export const ReklamationPage = (): JSX.Element => {
     </>
   );
 };
+
+// ── Fertigung: mehrstufige Fremdvergabe / Lohnveredelung (T-04, Kap. 5.3) ─────
+type SubStatus = "OFFEN" | "BEISTELLUNG_VERSANDT" | "RUECKLAUF_ERHALTEN" | "ABGESCHLOSSEN";
+interface SubStage { id: string; sequence: number; supplierId: string; status: SubStatus; beistellMenge: number | null; ruecklaufMenge: number | null; dueDate: string | null; lohnCents: number | null; }
+interface SubPlan {
+  nextActionable: SubStage | null; blocked: SubStage[]; overdue: SubStage[];
+  totalScrap: number; totalLohnCents: number; progressPercent: number; yieldPercent: number | null; allReturned: boolean;
+}
+
+export function SubproductionPage(): JSX.Element {
+  const [productionId, setProductionId] = useState("pa-1");
+  const [applied, setApplied] = useState("pa-1");
+  const [stages, setStages] = useState<SubStage[]>([]);
+  const [plan, setPlan] = useState<SubPlan | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async (pid: string) => {
+    setLoading(true); setErr(null);
+    try {
+      const [st, pl] = await Promise.all([
+        trpc.subproduction.list.query({ productionId: pid }) as Promise<{ stages: SubStage[] }>,
+        trpc.subproduction.plan.query({ productionId: pid }) as Promise<SubPlan>,
+      ]);
+      setStages(st.stages); setPlan(pl);
+    } catch (e) { setErr(errMsg(e)); setStages([]); setPlan(null); } finally { setLoading(false); }
+  }, []);
+  useEffect(() => { void load(applied); }, [load, applied]);
+
+  // Mengenfluss: beim Versand Beistellmenge, beim Rücklauf Rücklaufmenge abfragen (T-04).
+  const advance = async (sub: SubStage, to: "BEISTELLUNG_VERSANDT" | "RUECKLAUF_ERHALTEN" | "ABGESCHLOSSEN") => {
+    setErr(null);
+    let menge: number | undefined;
+    if (to === "BEISTELLUNG_VERSANDT" || to === "RUECKLAUF_ERHALTEN") {
+      const def = to === "RUECKLAUF_ERHALTEN" ? sub.beistellMenge ?? 0 : 0;
+      const ans = typeof window !== "undefined" ? window.prompt(`${to === "RUECKLAUF_ERHALTEN" ? "Rücklauf" : "Beistell"}menge?`, String(def)) : null;
+      if (ans === null) return;
+      menge = Number(ans) || 0;
+    }
+    try { await trpc.subproduction.advance.mutate({ subProductionId: sub.id, to, menge }); await load(applied); }
+    catch (e) { setErr(errMsg(e)); }
+  };
+
+  const actionsFor = (s: SubStage): ReactNode => {
+    const blocked = plan?.blocked.some((b) => b.sequence === s.sequence) ?? false;
+    if (s.status === "OFFEN") return blocked
+      ? <Text size="xs" c="dimmed">wartet auf Vorstufe</Text>
+      : <Button size="compact-xs" variant="default" onClick={() => void advance(s, "BEISTELLUNG_VERSANDT")}>Beistellung versenden</Button>;
+    if (s.status === "BEISTELLUNG_VERSANDT") return <Button size="compact-xs" color="green" onClick={() => void advance(s, "RUECKLAUF_ERHALTEN")}>Rücklauf buchen</Button>;
+    if (s.status === "RUECKLAUF_ERHALTEN") return <Button size="compact-xs" variant="light" onClick={() => void advance(s, "ABGESCHLOSSEN")}>Abschließen</Button>;
+    return <Text size="xs" c="dimmed">—</Text>;
+  };
+
+  return (
+    <>
+      <Title order={3}>Fremdvergabe (Lohnveredelung)</Title>
+      <Text size="sm" c="dimmed" mt={4}>Mehrstufig &amp; sequenziell: Stufe n+1 startet erst, wenn der Rücklauf von Stufe n da ist (T-04, Kap. 5.3).</Text>
+      <Group mt="sm" gap="xs" align="end">
+        <TextInput label="Produktions-ID" value={productionId} onChange={(e) => setProductionId(e.currentTarget.value)} w={160} />
+        <Button variant="default" onClick={() => setApplied(productionId)}>Anzeigen</Button>
+      </Group>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+
+      {plan && (
+        <Group mt="md" gap="lg" wrap="wrap">
+          <PlanStat label="Fortschritt" value={`${plan.progressPercent} %`} />
+          <PlanStat label="Ausbeute" value={plan.yieldPercent == null ? "—" : `${plan.yieldPercent} %`} color={plan.yieldPercent != null && plan.yieldPercent < 100 ? "amber.7" : undefined} />
+          <PlanStat label="Schwund" value={`${plan.totalScrap} Stk`} color={plan.totalScrap > 0 ? "amber.7" : undefined} />
+          <PlanStat label="Lohnkosten" value={euro(plan.totalLohnCents)} />
+          <PlanStat label="Nächste Stufe" value={plan.nextActionable ? `#${plan.nextActionable.sequence}` : (plan.allReturned ? "alle zurück" : "—")} />
+          <PlanStat label="Überfällig" value={String(plan.overdue.length)} color={plan.overdue.length ? "red.7" : undefined} />
+        </Group>
+      )}
+      {plan?.allReturned && <Alert color="teal" variant="light" mt="sm" title="Fremdvergabe komplett">Alle Stufen zurück — interne Weiterverarbeitung freigegeben.</Alert>}
+
+      {loading ? <Group mt="sm" gap="xs"><Loader size="sm" /><Text size="sm">lädt…</Text></Group> : (
+        stages.length === 0 ? <Text c="dimmed" mt="sm">Keine Fremdvergabe-Stufen zu „{applied}".</Text> : (
+          <Table striped highlightOnHover withTableBorder mt="md" verticalSpacing="xs" fz="sm">
+            <Table.Thead><Table.Tr>
+              <Table.Th>Stufe</Table.Th><Table.Th>Veredler</Table.Th><Table.Th>Status</Table.Th>
+              <Table.Th ta="right">Beistellung</Table.Th><Table.Th ta="right">Rücklauf</Table.Th>
+              <Table.Th ta="right">Lohn</Table.Th><Table.Th>Termin</Table.Th><Table.Th />
+            </Table.Tr></Table.Thead>
+            <Table.Tbody>
+              {stages.map((s) => (
+                <Table.Tr key={s.id}>
+                  <Table.Td>#{s.sequence}</Table.Td>
+                  <Table.Td>{s.supplierId}</Table.Td>
+                  <Table.Td><Badge color={statusMantineColor[s.status] ?? "gray"} variant="light">{s.status}</Badge></Table.Td>
+                  <Table.Td style={numTd}>{s.beistellMenge ?? "—"}</Table.Td>
+                  <Table.Td style={numTd}>{s.ruecklaufMenge ?? "—"}</Table.Td>
+                  <Table.Td style={numTd}>{euro(s.lohnCents)}</Table.Td>
+                  <Table.Td>{s.dueDate ? new Date(s.dueDate).toLocaleDateString("de-DE") : "—"}</Table.Td>
+                  <Table.Td>{actionsFor(s)}</Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        )
+      )}
+    </>
+  );
+}
+
+function PlanStat({ label, value, color }: { label: string; value: string; color?: string }): JSX.Element {
+  return (
+    <div>
+      <Text size="xs" c="dimmed" tt="uppercase" fw={700} style={{ letterSpacing: 0.4 }}>{label}</Text>
+      <Text fz={20} fw={700} c={color} style={{ fontVariantNumeric: "tabular-nums" }}>{value}</Text>
+    </div>
+  );
+}
