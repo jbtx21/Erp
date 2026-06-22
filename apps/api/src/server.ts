@@ -76,6 +76,8 @@ import { SearchService } from "./modules/search/search.service.js";
 import { PrismaSearchRepository } from "./repositories/prisma-search.repository.js";
 import { NotificationService, EmailTemplateService } from "./modules/notification/notification.service.js";
 import { PrismaNotificationRepository, PrismaEmailTemplateRepository } from "./repositories/prisma-notification.repository.js";
+import { DashboardService } from "./modules/dashboard/dashboard.service.js";
+import { PrismaDashboardRepository, PrismaMetricRepository } from "./repositories/prisma-dashboard.repository.js";
 import { appRouter } from "./trpc/router.js";
 import type { Context } from "./trpc/trpc.js";
 import { portalAppRouter } from "./trpc/portal-router.js";
@@ -163,6 +165,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const search = new SearchService(new PrismaSearchRepository());
   const notifications = new NotificationService(new PrismaNotificationRepository());
   const emailTemplates = new EmailTemplateService(new PrismaEmailTemplateRepository());
+  const dashboards = new DashboardService(new PrismaDashboardRepository(), new PrismaMetricRepository());
   const auth = new AuthService(
     new PrismaUserRepository(),
     new PrismaSessionRepository(),
@@ -261,6 +264,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           search,
           notifications,
           emailTemplates,
+          dashboards,
           auth,
           user,
           sessionToken,

@@ -47,7 +47,7 @@
 | Grundfunktion | TEXMA-Stand | Status |
 |---|---|---|
 | Dashboard-Startseite | `Dashboard.tsx` + Termin-Ampel | ◐ fest verdrahtet |
-| **Charts + KPI-Kacheln als wiederverwendbare Entitäten** (mehreren Dashboards zuordenbar, eigene Filter je Chart) | nicht als Entität | ○ Option |
+| **Charts + KPI-Kacheln als wiederverwendbare Entitäten** (mehreren Dashboards zuordenbar) | `dashboard`-Modul (G-7): DashboardChart/NumberCard/Dashboard/DashboardItem über festem Metrik-Katalog + DashboardsPage | ✓ (bounded Katalog statt unbegrenztem Aggregator) |
 | Berichte mit Filtern/Granularität | `reporting.ts`, KI-Report, Finanzberichte | ✓ |
 
 ## E. CRM-Tiefe (aus ERPNext-Lead/Opportunity)

@@ -9,14 +9,14 @@ import { Differentiators } from "./Differentiators.js";
 import { Banking } from "./Banking.js";
 import {
   CompaniesPage, CostCentersPage, DunningPage, InquiriesPage, IncomingInvoicesPage, LeadsPage, OrdersPage, ProcurementPage, ProductionReportingPage,
-  ProductsPage, PricingPage, EmailTemplatesPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
+  ProductsPage, PricingPage, EmailTemplatesPage, DashboardsPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
 } from "./pages.js";
 import { trpc } from "./trpc.js";
 
 interface AuthUser { id: string; email: string; name: string; role: string; totpEnabled: boolean; }
 
 const NAV: ReadonlyArray<{ group: string; items: ReadonlyArray<{ key: string; label: string }> }> = [
-  { group: "Übersicht", items: [{ key: "dashboard", label: "Dashboard" }] },
+  { group: "Übersicht", items: [{ key: "dashboard", label: "Dashboard" }, { key: "dashboards", label: "Dashboards (G-7)" }] },
   { group: "Vertrieb", items: [{ key: "companies", label: "Firmen/Kunden" }, { key: "leads", label: "Leads" }, { key: "inquiries", label: "Anfragen" }, { key: "quotes", label: "Angebote" }, { key: "orders", label: "Aufträge" }, { key: "reklamation", label: "Reklamation" }] },
   { group: "Beschaffung", items: [
     { key: "suppliers", label: "Lieferanten" }, { key: "incoming", label: "Eingangsrechnungen" },
@@ -177,6 +177,7 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<voi
 function Page({ k, role }: { k: string; role: string }): ReactNode {
   switch (k) {
     case "dashboard": return <Dashboard />;
+    case "dashboards": return <DashboardsPage />;
     case "orders": return <OrdersPage role={role} />;
     case "companies": return <CompaniesPage />;
     case "leads": return <LeadsPage />;

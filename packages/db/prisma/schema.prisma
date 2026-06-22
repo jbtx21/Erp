@@ -1337,3 +1337,58 @@ model EmailTemplate {
   body      String
   updatedAt DateTime @updatedAt
 }
+
+// Generisches Dashboard (ERP-Grundfunktion / G-7): Charts + KPI-Kacheln als
+// WIEDERVERWENDBARE Entitäten, die mehreren Dashboards zugeordnet werden können.
+// Jede referenziert einen Metrik-Schlüssel aus einem festen Katalog (kein unbegrenzter
+// Aggregations-Generator — bewusst bounded, G1-konform).
+enum ChartType {
+  BAR
+  LINE
+  DONUT
+}
+
+enum DashboardWidgetKind {
+  CHART
+  CARD
+}
+
+enum WidgetWidth {
+  FULL
+  HALF
+}
+
+model DashboardChart {
+  id        String    @id @default(cuid())
+  name      String
+  chartType ChartType @default(BAR)
+  metricKey String // Schlüssel aus dem Metrik-Katalog
+  createdAt DateTime  @default(now())
+}
+
+model NumberCard {
+  id        String   @id @default(cuid())
+  name      String
+  metricKey String
+  createdAt DateTime @default(now())
+}
+
+model Dashboard {
+  id        String          @id @default(cuid())
+  name      String          @unique
+  isDefault Boolean         @default(false)
+  items     DashboardItem[]
+  createdAt DateTime        @default(now())
+}
+
+model DashboardItem {
+  id          String              @id @default(cuid())
+  dashboardId String
+  dashboard   Dashboard           @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  kind        DashboardWidgetKind
+  refId       String // FK auf DashboardChart oder NumberCard (je nach kind)
+  width       WidgetWidth         @default(HALF)
+  position    Int                 @default(0)
+
+  @@index([dashboardId])
+}

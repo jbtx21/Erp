@@ -769,6 +769,42 @@ export const appRouter = router({
       }),
   }),
 
+  // Generisches Dashboard (ERP-Grundfunktion / G-7): Charts/KPI-Kacheln als
+  // wiederverwendbare Entitäten über einem festen Metrik-Katalog.
+  dashboards: router({
+    metrics: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.dashboards.listMetrics()),
+    listCharts: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.dashboards.listCharts()),
+    listCards: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.dashboards.listCards()),
+    list: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.dashboards.listDashboards()),
+    resolved: roleProcedure(...supplierRoles)
+      .input(z.object({ id: z.string().min(1) }))
+      .query(async ({ input, ctx }) => {
+        try { return await ctx.dashboards.getResolved(input.id); }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
+      }),
+    createChart: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ name: z.string().min(1), chartType: z.enum(["BAR", "LINE", "DONUT"]).default("BAR"), metricKey: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.dashboards.createChart(input.name, input.chartType, input.metricKey); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    createCard: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ name: z.string().min(1), metricKey: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.dashboards.createCard(input.name, input.metricKey); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    createDashboard: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ name: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.dashboards.createDashboard(input.name); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    addItem: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ dashboardId: z.string().min(1), kind: z.enum(["CHART", "CARD"]), refId: z.string().min(1), width: z.enum(["FULL", "HALF"]).default("HALF") }))
+      .mutation(({ input, ctx }) => ctx.dashboards.addItem(input.dashboardId, input.kind, input.refId, input.width)),
+  }),
+
   // Benachrichtigungen (ERP-Grundfunktion / G-5): In-App-Feed je angemeldete:r Nutzer:in.
   notifications: router({
     list: protectedProcedure

@@ -3,7 +3,7 @@
 // Bereiche mit wenig Code anbindbar sind. Interaktive Aktionen (Versand bestätigen,
 // Mahnlauf, Reorder→Bestellungen) sind je Seite ergänzt.
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Alert, Badge, Button, Checkbox, Group, Loader, NumberInput, Select, Table, Text, Textarea, TextInput, Title } from "@mantine/core";
+import { Alert, Badge, Box, Button, Checkbox, Group, Loader, NumberInput, Select, Table, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { trpc } from "./trpc.js";
 import { euro, numTd, statusMantineColor } from "./theme.js";
@@ -752,6 +752,106 @@ export function CostCentersPage(): JSX.Element {
           catch (e) { setErr(errMsg(e)); }
         }}>Löschen</Button>
       )} />
+    </>
+  );
+}
+
+// Generisches Dashboard (G-7): Charts/KPI-Kacheln als wiederverwendbare Entitäten über
+// einem festen Metrik-Katalog; zu Dashboards zusammenstellbar und aufgelöst angezeigt.
+function MiniBars({ series }: { series: { label: string; value: number }[] }): JSX.Element {
+  const max = Math.max(1, ...series.map((s) => s.value));
+  return (
+    <>
+      {series.map((s, i) => (
+        <Group key={i} gap="xs" mt={3} wrap="nowrap">
+          <Text size="xs" w={150} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.label}</Text>
+          <Box style={{ flex: 1, background: "var(--erp-surface)", borderRadius: 4 }}>
+            <Box style={{ width: `${String((s.value / max) * 100)}%`, minWidth: 2, height: 14, background: "var(--erp-focus)", borderRadius: 4 }} />
+          </Box>
+          <Text size="xs" w={40} ta="right">{s.value}</Text>
+        </Group>
+      ))}
+    </>
+  );
+}
+
+export function DashboardsPage(): JSX.Element {
+  const [dashboards, setDashboards] = useState<Row[]>([]);
+  const [metrics, setMetrics] = useState<{ key: string; label: string; kind: string }[]>([]);
+  const [charts, setCharts] = useState<Row[]>([]);
+  const [cards, setCards] = useState<Row[]>([]);
+  const [sel, setSel] = useState<string | null>(null);
+  const [resolved, setResolved] = useState<Awaited<ReturnType<typeof trpc.dashboards.resolved.query>> | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [chartName, setChartName] = useState(""); const [chartMetric, setChartMetric] = useState<string | null>(null);
+  const [cardName, setCardName] = useState(""); const [cardMetric, setCardMetric] = useState<string | null>(null);
+  const [dashName, setDashName] = useState("");
+  const [addKind, setAddKind] = useState<string>("CARD"); const [addRef, setAddRef] = useState<string | null>(null);
+
+  const loadAll = useCallback(async () => {
+    try {
+      setDashboards((await trpc.dashboards.list.query()) as Row[]);
+      setMetrics(await trpc.dashboards.metrics.query());
+      setCharts((await trpc.dashboards.listCharts.query()) as Row[]);
+      setCards((await trpc.dashboards.listCards.query()) as Row[]);
+      setErr(null);
+    } catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void loadAll(); }, [loadAll]);
+  useEffect(() => {
+    if (!sel) { setResolved(null); return; }
+    void trpc.dashboards.resolved.query({ id: sel }).then(setResolved).catch((e: unknown) => setErr(errMsg(e)));
+  }, [sel]);
+
+  const metricOpts = metrics.map((m) => ({ value: m.key, label: `${m.label} · ${m.kind}` }));
+  const refOpts = addKind === "CARD"
+    ? cards.map((c) => ({ value: String(c.id), label: String(c.name) }))
+    : charts.map((c) => ({ value: String(c.id), label: String(c.name) }));
+
+  return (
+    <>
+      <Title order={3}>Dashboards</Title>
+      <Text size="sm" c="dimmed" mt={4}>Charts + KPI-Kacheln als wiederverwendbare Entitäten über einem festen Metrik-Katalog (G-7).</Text>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+
+      <Select label="Dashboard" placeholder="wählen" w={260} mt="sm" data={dashboards.map((d) => ({ value: String(d.id), label: String(d.name) }))} value={sel} onChange={setSel} />
+
+      {resolved && (
+        <Group align="stretch" mt="md" gap="md" wrap="wrap">
+          {resolved.widgets.map((w, i) => (
+            <Box key={i} p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, width: w.width === "FULL" ? "100%" : "calc(50% - 8px)" }}>
+              <Text size="sm" fw={600}>{w.title}</Text>
+              {w.kind === "CARD"
+                ? <Text fz={32} fw={700} mt={4}>{w.value ?? "—"}</Text>
+                : w.series && w.series.length > 0 ? <MiniBars series={w.series} /> : <Text size="sm" c="dimmed" mt={4}>Keine Daten.</Text>}
+            </Box>
+          ))}
+          {resolved.widgets.length === 0 && <Text size="sm" c="dimmed">Noch keine Kacheln — unten hinzufügen.</Text>}
+        </Group>
+      )}
+
+      <Title order={4} mt="xl">Bausteine anlegen</Title>
+      <Group align="flex-end" gap="sm" mt="xs" wrap="wrap">
+        <TextInput label="KPI-Kachel: Name" value={cardName} onChange={(e) => setCardName(e.currentTarget.value)} w={180} />
+        <Select label="Metrik" w={240} data={metricOpts.filter((m) => m.label.endsWith("NUMBER"))} value={cardMetric} onChange={setCardMetric} />
+        <Button variant="light" disabled={!cardName.trim() || !cardMetric} onClick={async () => { setErr(null); try { await trpc.dashboards.createCard.mutate({ name: cardName, metricKey: cardMetric! }); setCardName(""); await loadAll(); } catch (e) { setErr(errMsg(e)); } }}>+ Kachel</Button>
+      </Group>
+      <Group align="flex-end" gap="sm" mt="xs" wrap="wrap">
+        <TextInput label="Chart: Name" value={chartName} onChange={(e) => setChartName(e.currentTarget.value)} w={180} />
+        <Select label="Metrik" w={240} data={metricOpts.filter((m) => m.label.endsWith("SERIES"))} value={chartMetric} onChange={setChartMetric} />
+        <Button variant="light" disabled={!chartName.trim() || !chartMetric} onClick={async () => { setErr(null); try { await trpc.dashboards.createChart.mutate({ name: chartName, chartType: "BAR", metricKey: chartMetric! }); setChartName(""); await loadAll(); } catch (e) { setErr(errMsg(e)); } }}>+ Chart</Button>
+      </Group>
+
+      <Title order={4} mt="xl">Dashboard zusammenstellen</Title>
+      <Group align="flex-end" gap="sm" mt="xs" wrap="wrap">
+        <TextInput label="Neues Dashboard" value={dashName} onChange={(e) => setDashName(e.currentTarget.value)} w={200} />
+        <Button variant="light" disabled={!dashName.trim()} onClick={async () => { setErr(null); try { const d = await trpc.dashboards.createDashboard.mutate({ name: dashName }); setDashName(""); await loadAll(); setSel(d.id); } catch (e) { setErr(errMsg(e)); } }}>+ Dashboard</Button>
+      </Group>
+      <Group align="flex-end" gap="sm" mt="xs" wrap="wrap">
+        <Select label="Typ" w={120} data={[{ value: "CARD", label: "Kachel" }, { value: "CHART", label: "Chart" }]} value={addKind} onChange={(v) => { if (v) { setAddKind(v); setAddRef(null); } }} />
+        <Select label="Baustein" w={240} data={refOpts} value={addRef} onChange={setAddRef} />
+        <Button disabled={!sel || !addRef} onClick={async () => { setErr(null); try { await trpc.dashboards.addItem.mutate({ dashboardId: sel!, kind: addKind as "CARD" | "CHART", refId: addRef!, width: addKind === "CHART" ? "FULL" : "HALF" }); if (sel) setResolved(await trpc.dashboards.resolved.query({ id: sel })); } catch (e) { setErr(errMsg(e)); } }}>Zum gewählten Dashboard hinzufügen</Button>
+      </Group>
     </>
   );
 }
