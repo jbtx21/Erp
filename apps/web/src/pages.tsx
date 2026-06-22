@@ -296,6 +296,71 @@ export function SampleLoansPage(): JSX.Element {
   );
 }
 
+export function ProductsPage(): JSX.Element {
+  const [articles, setArticles] = useState<Row[]>([]);
+  const [sku, setSku] = useState("");
+  const [name, setName] = useState("");
+  const [sel, setSel] = useState<string | null>(null);
+  const [variants, setVariants] = useState<Row[]>([]);
+  const [vsku, setVsku] = useState("");
+  const [farbe, setFarbe] = useState("");
+  const [groesse, setGroesse] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+
+  const loadArticles = useCallback(async () => {
+    try { setArticles((await trpc.products.listArticles.query()) as Row[]); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void loadArticles(); }, [loadArticles]);
+
+  const loadVariants = useCallback(async (articleId: string) => {
+    setSel(articleId);
+    try { setVariants((await trpc.products.listVariants.query({ articleId })) as Row[]); }
+    catch (e) { setErr(errMsg(e)); }
+  }, []);
+
+  return (
+    <>
+      <Title order={3}>Artikel &amp; Varianten</Title>
+      <Text size="sm" c="dimmed" mt={4}>Stammdaten (B16): Artikel + Farbe×Größe-Varianten.</Text>
+      <Group mt="sm" gap="xs" align="end">
+        <TextInput label="Artikel-SKU" value={sku} onChange={(e) => setSku(e.currentTarget.value)} placeholder="POLO-PREMIUM" w={160} />
+        <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Premium-Poloshirt" />
+        <Button disabled={!sku.trim() || !name.trim()} onClick={async () => {
+          setErr(null);
+          try { await trpc.products.createArticle.mutate({ sku: sku.trim(), name: name.trim() }); setSku(""); setName(""); await loadArticles(); }
+          catch (e) { setErr(errMsg(e)); }
+        }}>Artikel anlegen</Button>
+      </Group>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      <AutoTable rows={articles} action={(r) => (
+        <Button size="compact-xs" variant="default" onClick={() => void loadVariants(String(r.id))}>Varianten</Button>
+      )} />
+
+      {sel && (
+        <>
+          <Title order={4} mt="lg">Varianten · {sel}</Title>
+          <Group mt="xs" gap="xs" align="end">
+            <TextInput label="Varianten-SKU" value={vsku} onChange={(e) => setVsku(e.currentTarget.value)} placeholder="POLO-PREM-NAVY-L" w={180} />
+            <TextInput label="Farbe" value={farbe} onChange={(e) => setFarbe(e.currentTarget.value)} w={110} />
+            <TextInput label="Größe" value={groesse} onChange={(e) => setGroesse(e.currentTarget.value)} w={90} />
+            <Button disabled={!vsku.trim()} onClick={async () => {
+              setErr(null);
+              const attributes = [
+                ...(farbe ? [{ name: "Farbe", value: farbe }] : []),
+                ...(groesse ? [{ name: "Größe", value: groesse }] : []),
+              ];
+              try { await trpc.products.createVariant.mutate({ articleId: sel, sku: vsku.trim(), attributes }); setVsku(""); setFarbe(""); setGroesse(""); await loadVariants(sel); await loadArticles(); }
+              catch (e) { setErr(errMsg(e)); }
+            }}>Variante anlegen</Button>
+          </Group>
+          <AutoTable rows={variants} />
+        </>
+      )}
+    </>
+  );
+}
+
 export function CompaniesPage(): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [name, setName] = useState("");

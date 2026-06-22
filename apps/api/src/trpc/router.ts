@@ -637,6 +637,28 @@ export const appRouter = router({
       }),
   }),
 
+  // Artikel/Varianten-Stammdaten (B16): anlegen/auflisten (Farbe×Größe).
+  products: router({
+    listArticles: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.products.listArticles()),
+    listVariants: roleProcedure(...supplierRoles)
+      .input(z.object({ articleId: z.string().min(1) }))
+      .query(({ input, ctx }) => ctx.products.listVariants(input.articleId)),
+    createArticle: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ sku: z.string().min(1), name: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.products.createArticle(input.sku, input.name); } catch (e) { throw toTrpcError(e); }
+      }),
+    createVariant: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({
+        articleId: z.string().min(1),
+        sku: z.string().min(1),
+        attributes: z.array(z.object({ name: z.string().min(1), value: z.string().min(1) })).default([]),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.products.createVariant(input); } catch (e) { throw toTrpcError(e); }
+      }),
+  }),
+
   // Firmen/Kunden-Stammdaten (B3): anlegen/auflisten/bearbeiten.
   companies: router({
     list: roleProcedure("ADMIN", "BUERO", "BUCHHALTUNG").query(({ ctx }) => ctx.companies.list()),
