@@ -14,6 +14,7 @@ interface StoredOrder {
   number: string;
   companyId: string;
   status: string;
+  zugesagterLiefertermin: Date | null;
   shopConnectorId: string;
   externalNumber: string;
   employeeNote: string;
@@ -48,6 +49,7 @@ export class InMemoryOrderRepository
       number,
       companyId: mapped.companyId,
       status: "ANGELEGT",
+      zugesagterLiefertermin: null,
       shopConnectorId: mapped.shopConnectorId,
       externalNumber: mapped.externalNumber,
       employeeNote: mapped.employeeNote,
@@ -75,6 +77,11 @@ export class InMemoryOrderRepository
     if (o) o.status = status;
   }
 
+  async setDeliveryDate(orderId: string, date: Date | null): Promise<void> {
+    const o = this.orders.find((x) => x.id === orderId);
+    if (o) o.zugesagterLiefertermin = date;
+  }
+
   async listRecent(limit: number): Promise<OrderListItem[]> {
     return this.orders
       .slice(-limit)
@@ -84,6 +91,7 @@ export class InMemoryOrderRepository
         number: o.number,
         companyId: o.companyId,
         status: o.status,
+        zugesagterLiefertermin: o.zugesagterLiefertermin,
         externalNumber: o.externalNumber,
         employeeNote: o.employeeNote,
         totalNetCents: o.totalNetCents,

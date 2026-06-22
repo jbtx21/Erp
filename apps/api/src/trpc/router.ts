@@ -1,6 +1,6 @@
 // tRPC-AppRouter: Auth (Login/2FA/RBAC) + Shop-Order-Ingest/Liste.
 import { TRPCError } from "@trpc/server";
-import { ProductionSheetIncompleteError, redactOrderForRole, SubProductionTransitionError } from "@texma/shared";
+import { ProductionSheetIncompleteError, redactOrderForRole, SubProductionTransitionError, scheduleBackward, backwardStart, type LeadStage } from "@texma/shared";
 import { ReklamationValidationError } from "../modules/reklamation/reklamation.service.js";
 import { z } from "zod";
 import { AuthError, SESSION_TTL_SECONDS } from "../modules/auth/auth.service.js";
@@ -129,6 +129,43 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         try { return await ctx.orderWorkflow.transition(input.orderId, input.to); }
         catch (e) { throw new TRPCError({ code: "CONFLICT", message: (e as Error).message }); }
+      }),
+
+    /** Zugesagten Liefertermin setzen/entfernen (B9, Kap. 35.2). Auditiert. */
+    setLiefertermin: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ orderId: z.string().min(1), deliveryDate: z.string().datetime().nullable() }))
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await ctx.orderWorkflow.setDeliveryDate(
+            input.orderId,
+            input.deliveryDate ? new Date(input.deliveryDate) : null
+          );
+        } catch (e) { throw new TRPCError({ code: "CONFLICT", message: (e as Error).message }); }
+      }),
+  }),
+
+  // Rückwärtsterminierung (B9, Kap. 35.2). preview ist rein (keine Persistenz): aus
+  // Liefertermin + sequenziellen Durchlaufzeiten der spätestmögliche Starttermin je Stufe.
+  scheduling: router({
+    preview: protectedProcedure
+      .input(z.object({
+        deliveryDate: z.string().datetime(),
+        stages: z.array(z.object({ label: z.string().min(1), durationDays: z.number().nonnegative() })).min(1),
+      }))
+      .query(({ input }) => {
+        const delivery = new Date(input.deliveryDate);
+        const stages: LeadStage[] = input.stages;
+        const scheduled = scheduleBackward(delivery, stages);
+        return {
+          start: backwardStart(delivery, stages).toISOString(),
+          deliveryDate: delivery.toISOString(),
+          stages: scheduled.map((s) => ({
+            label: s.label,
+            durationDays: s.durationDays,
+            start: s.start.toISOString(),
+            end: s.end.toISOString(),
+          })),
+        };
       }),
   }),
 

@@ -8,6 +8,8 @@ import { buildEntry, type AuditSink } from "@texma/audit";
 export interface OrderWorkflowRepository {
   getStatus(orderId: string): Promise<string | null>;
   setStatus(orderId: string, status: string): Promise<void>;
+  /** Setzt (oder löscht) den zugesagten Liefertermin (B9, Kap. 35.2). null = entfernen. */
+  setDeliveryDate(orderId: string, date: Date | null): Promise<void>;
 }
 
 export class OrderWorkflowError extends Error {}
@@ -28,5 +30,20 @@ export class OrderWorkflowService {
       buildEntry({ entity: "Order", entityId: orderId, action: "UPDATE", after: { status: to, from: current } })
     );
     return { status: to };
+  }
+
+  /**
+   * Setzt den zugesagten Liefertermin (B9, Kap. 35.2). Reine Termin-Zusage; die
+   * Rückwärtsterminierung daraus erfolgt separat (scheduling.preview, ohne Persistenz).
+   * GoBD: Terminänderung wird auditiert (kein stiller Überschreiber).
+   */
+  async setDeliveryDate(orderId: string, date: Date | null): Promise<{ zugesagterLiefertermin: Date | null }> {
+    const current = await this.repo.getStatus(orderId);
+    if (!current) throw new OrderWorkflowError(`Auftrag ${orderId} nicht gefunden.`);
+    await this.repo.setDeliveryDate(orderId, date);
+    await this.audit.append(
+      buildEntry({ entity: "Order", entityId: orderId, action: "UPDATE", after: { zugesagterLiefertermin: date } })
+    );
+    return { zugesagterLiefertermin: date };
   }
 }

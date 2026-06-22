@@ -22,7 +22,7 @@ const COL_LABELS: Record<string, string> = {
   qty: "Menge", menge: "Menge", position: "Pos.", description: "Beschreibung", sku: "SKU",
   supplierSku: "Lief.-SKU", availableQty: "Verfügbar", variantCount: "Varianten",
   createdAt: "Erstellt", updatedAt: "Geändert", ausgegebenAm: "Ausgegeben", dueDate: "Fällig",
-  gueltigBisAm: "Gültig bis", externalNumber: "Shop-Nr.", employeeNote: "Vermerk",
+  gueltigBisAm: "Gültig bis", zugesagterLiefertermin: "Liefertermin", externalNumber: "Shop-Nr.", employeeNote: "Vermerk",
   trackingNumber: "Tracking", invoiceId: "Rechnung", kontaktName: "Kontakt", note: "Notiz",
   verworfenGrund: "Grund", finalized: "Final", lastSyncAt: "Letzter Sync", dunningLevel: "Mahnstufe",
 };
@@ -439,9 +439,30 @@ export function QuotesPage(): JSX.Element {
   );
 }
 
+// Standard-Veredelungskette mit Platzhalter-Durchlaufzeiten (Kalendertage) für die
+// Rückwärtsterminierung-Vorschau (B9). Die echten Stufendauern sind ein K-Punkt
+// (FinishingTargetTime ist Bearbeitungs-Minuten, nicht Kalendertage) → von TEXMA zu bestätigen.
+const DEFAULT_LEAD_STAGES: ReadonlyArray<{ label: string; durationDays: number }> = [
+  { label: "Beschaffung Textil", durationDays: 5 },
+  { label: "Fremdvergabe Siebdruck", durationDays: 4 },
+  { label: "Stickerei", durationDays: 4 },
+  { label: "Endkontrolle / Versandvorbereitung", durationDays: 1 },
+];
+
+interface SchedulePlan {
+  start: string;
+  deliveryDate: string;
+  stages: { label: string; durationDays: number; start: string; end: string }[];
+}
+const deDate = (iso: string): string => new Date(iso).toLocaleDateString("de-DE");
+
 export function OrdersPage({ role }: { role: string }): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  // Terminierungs-Panel (B9): Auftrag + zugesagter Liefertermin + Rückwärts-Vorschau.
+  const [termOrder, setTermOrder] = useState<string | null>(null);
+  const [dateStr, setDateStr] = useState<string>("");
+  const [plan, setPlan] = useState<SchedulePlan | null>(null);
 
   const load = useCallback(async () => {
     try { setRows((await trpc.shopOrders.list.query({ limit: 100 })) as Row[]); setErr(null); }
@@ -474,6 +495,65 @@ export function OrdersPage({ role }: { role: string }): JSX.Element {
           </Group>
         );
       }} />
+
+      {canAct && (
+        <>
+          <Title order={4} mt="xl">Liefertermin &amp; Rückwärtsterminierung (Kap. 35.2)</Title>
+          <Text size="sm" c="dimmed" mt={4}>
+            Zugesagten Liefertermin setzen; die Vorschau rechnet den spätesten Starttermin je Stufe zurück.
+          </Text>
+          <Group align="flex-end" gap="sm" mt="sm" wrap="wrap">
+            <Select label="Auftrag" placeholder="wählen" w={220} searchable
+              data={rows.map((r) => ({ value: String(r.id), label: String(r.number ?? r.id) }))}
+              value={termOrder} onChange={setTermOrder} />
+            <TextInput type="date" label="Zugesagter Liefertermin" value={dateStr}
+              onChange={(e) => setDateStr(e.currentTarget.value)} />
+            <Button disabled={!termOrder || !dateStr}
+              onClick={async () => {
+                setErr(null);
+                try {
+                  await trpc.shopOrders.setLiefertermin.mutate({ orderId: termOrder!, deliveryDate: new Date(dateStr).toISOString() });
+                  await load();
+                } catch (e) { setErr(errMsg(e)); }
+              }}>Termin setzen</Button>
+            <Button variant="light" disabled={!dateStr}
+              onClick={async () => {
+                setErr(null); setPlan(null);
+                try {
+                  const p = await trpc.scheduling.preview.query({ deliveryDate: new Date(dateStr).toISOString(), stages: [...DEFAULT_LEAD_STAGES] });
+                  setPlan(p as SchedulePlan);
+                } catch (e) { setErr(errMsg(e)); }
+              }}>Terminierung anzeigen</Button>
+          </Group>
+
+          {plan && (
+            <>
+              <Text size="sm" mt="md">
+                Spätester <b>Produktionsstart: {deDate(plan.start)}</b> — Liefertermin {deDate(plan.deliveryDate)}.
+              </Text>
+              <Table mt="xs" withTableBorder withColumnBorders striped>
+                <Table.Thead><Table.Tr>
+                  <Table.Th>Stufe</Table.Th><Table.Th ta="right">Dauer (T)</Table.Th>
+                  <Table.Th>Start</Table.Th><Table.Th>Ende</Table.Th>
+                </Table.Tr></Table.Thead>
+                <Table.Tbody>
+                  {plan.stages.map((s, i) => (
+                    <Table.Tr key={i}>
+                      <Table.Td>{s.label}</Table.Td>
+                      <Table.Td ta="right">{s.durationDays}</Table.Td>
+                      <Table.Td>{deDate(s.start)}</Table.Td>
+                      <Table.Td>{deDate(s.end)}</Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+              <Text size="xs" c="dimmed" mt={4}>
+                Stufendauern sind Standardwerte (Platzhalter, K-Punkt) — auftragsspezifische Durchlaufzeiten folgen.
+              </Text>
+            </>
+          )}
+        </>
+      )}
     </>
   );
 }

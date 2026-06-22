@@ -80,6 +80,7 @@ export class PrismaOrderRepository
         number: true,
         companyId: true,
         status: true,
+        zugesagterLiefertermin: true,
         externalNumber: true,
         employeeNote: true,
         createdAt: true,
@@ -91,6 +92,7 @@ export class PrismaOrderRepository
       number: r.number,
       companyId: r.companyId,
       status: r.status,
+      zugesagterLiefertermin: r.zugesagterLiefertermin,
       externalNumber: r.externalNumber,
       employeeNote: r.employeeNote,
       totalNetCents: r.lines.reduce((sum, l) => sum + l.qty * l.unitNetCents, 0),
@@ -105,6 +107,10 @@ export class PrismaOrderRepository
 
   async setStatus(orderId: string, status: string): Promise<void> {
     await prisma.order.update({ where: { id: orderId }, data: { status: status as never } });
+  }
+
+  async setDeliveryDate(orderId: string, date: Date | null): Promise<void> {
+    await prisma.order.update({ where: { id: orderId }, data: { zugesagterLiefertermin: date } });
   }
 
   async orderLines(orderId: string): Promise<OrderLineItem[]> {
