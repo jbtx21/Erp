@@ -95,6 +95,33 @@ async function main(): Promise<void> {
     });
   }
 
+  // ── Produktionsaufträge mit Liefertermin (Ampel/Dashboard, Kap. 35.4) ──────
+  // Mischung ROT/GELB/GRÜN für die Termin-Ampel: überfällig, knapp, im Plan.
+  for (const [id, number, orderId, dueOffset] of [
+    ["pa-1", "PA-2026-0001", "ord-1", -2], // überfällig → ROT
+    ["pa-2", "PA-2026-0002", "ord-4", 2],  // in 2 Tagen → GELB
+    ["pa-3", "PA-2026-0003", "ord-2", 12], // im Plan → GRÜN
+  ] as const) {
+    await prisma.productionOrder.upsert({
+      where: { id }, update: { dueDate: at(dueOffset) },
+      create: { id, number, orderId, dueDate: at(dueOffset) },
+    }).catch(() => {});
+  }
+
+  // ── Angebote mit Wiedervorlage (Ampel-Ebene ANGEBOT, Kap. 35.1/35.4) ───────
+  for (const [id, number, companyId, status, wvOffset] of [
+    ["qt-1", "AN-2026-0001", muster.id, "ENTWURF", -1],  // Nachfass überfällig → ROT
+    ["qt-2", "AN-2026-0002", gross.id, "VERSENDET", 1],  // Nachfass morgen → GELB
+  ] as const) {
+    await prisma.quote.upsert({
+      where: { id }, update: { wiedervorlageAm: at(wvOffset) },
+      create: {
+        id, number, companyId, status, wiedervorlageAm: at(wvOffset),
+        lines: { create: [{ position: 1, description: "Poloshirt Navy L, bestickt", qty: 50, unitNetCents: 1290 }] },
+      },
+    }).catch(() => {});
+  }
+
   // ── Eingangsrechnungen ─────────────────────────────────────────────────────
   for (const [id, number, net] of [["ii-1", "ER-5001", 38_000], ["ii-2", "ER-5002", 15_126]] as const) {
     await prisma.incomingInvoice.upsert({
@@ -145,7 +172,7 @@ async function main(): Promise<void> {
     await prisma.costCenter.upsert({ where: { id }, update: {}, create: { id, nummer, name } });
   }
 
-  console.log("Seed fertig: Preisgruppen, 2 Firmen, Shop, Artikel+3 Varianten, 2 Lieferanten, 4 Aufträge, 2 Eingangs-/2 Ausgangsrechnungen.");
+  console.log("Seed fertig: Preisgruppen, 2 Firmen, Shop, Artikel+3 Varianten, 2 Lieferanten, 4 Aufträge, 3 Produktionsaufträge + 2 Angebote (Ampel), 2 Eingangs-/2 Ausgangsrechnungen.");
 }
 
 type OrderStatusLit = "ANGELEGT" | "IN_BEARBEITUNG" | "IN_PRODUKTION" | "VERSANDBEREIT" | "VERSENDET" | "FAKTURIERT" | "ABGESCHLOSSEN" | "STORNIERT";

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { AppShell, Badge, Box, Button, Group, Loader, NavLink, ScrollArea, Text, Title } from "@mantine/core";
 import { Login } from "./Login.js";
+import { Dashboard } from "./Dashboard.js";
 import { Reporting } from "./Reporting.js";
 import { Differentiators } from "./Differentiators.js";
 import { Banking } from "./Banking.js";
@@ -15,6 +16,7 @@ import { trpc } from "./trpc.js";
 interface AuthUser { id: string; email: string; name: string; role: string; totpEnabled: boolean; }
 
 const NAV: ReadonlyArray<{ group: string; items: ReadonlyArray<{ key: string; label: string }> }> = [
+  { group: "Übersicht", items: [{ key: "dashboard", label: "Dashboard" }] },
   { group: "Vertrieb", items: [{ key: "companies", label: "Firmen/Kunden" }, { key: "leads", label: "Leads" }, { key: "inquiries", label: "Anfragen" }, { key: "quotes", label: "Angebote" }, { key: "orders", label: "Aufträge" }, { key: "reklamation", label: "Reklamation" }] },
   { group: "Beschaffung", items: [
     { key: "suppliers", label: "Lieferanten" }, { key: "incoming", label: "Eingangsrechnungen" },
@@ -32,7 +34,7 @@ const NAV: ReadonlyArray<{ group: string; items: ReadonlyArray<{ key: string; la
 const ALL_KEYS = NAV.flatMap((g) => g.items.map((i) => i.key));
 const hashKey = (): string => {
   const h = typeof location !== "undefined" ? location.hash.replace("#", "") : "";
-  return ALL_KEYS.includes(h) ? h : "orders";
+  return ALL_KEYS.includes(h) ? h : "dashboard";
 };
 
 export function App(): JSX.Element {
@@ -100,6 +102,7 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<voi
 
 function Page({ k, role }: { k: string; role: string }): ReactNode {
   switch (k) {
+    case "dashboard": return <Dashboard />;
     case "orders": return <OrdersPage role={role} />;
     case "companies": return <CompaniesPage />;
     case "leads": return <LeadsPage />;
