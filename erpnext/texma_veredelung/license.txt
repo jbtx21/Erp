@@ -1,0 +1,8 @@
+MIT License
+
+Copyright (c) 2026 TEXMA Textilveredelung GmbH
+
+Eigenleistung. Diese App enthält KEINEN ERPNext-Code (ERPNext ist GPLv3). ERPNext-
+DocType-Strukturen wurden nur als Referenz gelesen (siehe docs/erpnext-tiefenabgleich.md),
+nicht übernommen. Eine Frappe-Custom-App ist der vorgesehene Erweiterungsweg und darf
+unter eigener Lizenz stehen.

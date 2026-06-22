@@ -1,0 +1,42 @@
+{
+ "doctype": "DocType",
+ "name": "Logo Version",
+ "module": "Texma Veredelung",
+ "engine": "InnoDB",
+ "istable": 1,
+ "field_order": [
+  "version",
+  "stichzahl",
+  "datei",
+  "aktiv"
+ ],
+ "fields": [
+  {
+   "fieldname": "version",
+   "label": "Version",
+   "fieldtype": "Int",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "stichzahl",
+   "label": "Stichzahl",
+   "fieldtype": "Int",
+   "description": "Basis für die Stick-Kalkulation (Veredelungspreis).",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "datei",
+   "label": "Datei",
+   "fieldtype": "Attach",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "aktiv",
+   "label": "Genehmigt/Aktiv",
+   "fieldtype": "Check",
+   "in_list_view": 1
+  }
+ ],
+ "permissions": []
+}

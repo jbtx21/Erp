@@ -1,0 +1,62 @@
+{
+ "doctype": "DocType",
+ "name": "Logo",
+ "module": "Texma Veredelung",
+ "engine": "InnoDB",
+ "autoname": "format:LOGO-{#####}",
+ "title_field": "logo_name",
+ "track_changes": 1,
+ "field_order": [
+  "logo_name",
+  "customer",
+  "ist_wiederholer",
+  "aktive_version",
+  "versions"
+ ],
+ "fields": [
+  {
+   "fieldname": "logo_name",
+   "label": "Logo-Name",
+   "fieldtype": "Data",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "customer",
+   "label": "Kunde",
+   "fieldtype": "Link",
+   "options": "Customer",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "ist_wiederholer",
+   "label": "Wiederholer",
+   "fieldtype": "Check",
+   "read_only": 1,
+   "description": "Automatisch gesetzt, wenn eine genehmigte Vorversion existiert (Direktauftrag statt Ausschreibung).",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "aktive_version",
+   "label": "Aktive Version",
+   "fieldtype": "Int",
+   "read_only": 1
+  },
+  {
+   "fieldname": "versions",
+   "label": "Versionen",
+   "fieldtype": "Table",
+   "options": "Logo Version"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1, "write": 1, "create": 1, "delete": 1
+  },
+  {
+   "role": "Sales Manager",
+   "read": 1, "write": 1, "create": 1
+  }
+ ]
+}

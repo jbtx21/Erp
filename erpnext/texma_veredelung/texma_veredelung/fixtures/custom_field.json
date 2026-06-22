@@ -1,0 +1,43 @@
+[
+ {
+  "doctype": "Custom Field",
+  "name": "Customer-texma_shop_id",
+  "dt": "Customer",
+  "fieldname": "texma_shop_id",
+  "label": "TEXMA Shop-ID",
+  "fieldtype": "Data",
+  "insert_after": "customer_group",
+  "description": "WooCommerce-Shop, dessen Bestellungen diesem Firmenkunden gehören (T-01)."
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Customer-texma_mahnsperre",
+  "dt": "Customer",
+  "fieldname": "texma_mahnsperre",
+  "label": "Mahnsperre",
+  "fieldtype": "Check",
+  "insert_after": "texma_shop_id",
+  "description": "Kunde vom Mahnlauf ausnehmen (T-14)."
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Item-texma_default_bom",
+  "dt": "Item",
+  "fieldname": "texma_default_bom",
+  "label": "TEXMA Standard-Stückliste",
+  "fieldtype": "Link",
+  "options": "BOM",
+  "insert_after": "default_bom",
+  "description": "Kundenspezifische Standard-Stückliste für diesen Artikel (T-03)."
+ },
+ {
+  "doctype": "Custom Field",
+  "name": "Supplier-texma_ist_veredler",
+  "dt": "Supplier",
+  "fieldname": "texma_ist_veredler",
+  "label": "Ist Veredler",
+  "fieldtype": "Check",
+  "insert_after": "supplier_group",
+  "description": "Lieferant ist ein Lohnveredler (Subcontracting/Stickerei-Routing)."
+ }
+]

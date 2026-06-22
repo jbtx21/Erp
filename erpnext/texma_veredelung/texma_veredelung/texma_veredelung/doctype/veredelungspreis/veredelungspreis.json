@@ -1,0 +1,75 @@
+{
+ "doctype": "DocType",
+ "name": "Veredelungspreis",
+ "module": "Texma Veredelung",
+ "engine": "InnoDB",
+ "autoname": "format:VP-{#####}",
+ "title_field": "finishing_type",
+ "track_changes": 1,
+ "field_order": [
+  "customer",
+  "finishing_type",
+  "min_menge",
+  "ek",
+  "vk",
+  "valid_from",
+  "valid_upto"
+ ],
+ "fields": [
+  {
+   "fieldname": "customer",
+   "label": "Kunde",
+   "fieldtype": "Link",
+   "options": "Customer",
+   "description": "Leer = Standardpreis. Gesetzt = kundenindividuell (schlägt Standard, Preishoheit innen).",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "finishing_type",
+   "label": "Veredelungsart",
+   "fieldtype": "Select",
+   "options": "Transfer\nSiebdruck\nStickerei\nFlex/Flock\nDigitaldruck",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "min_menge",
+   "label": "Mindestmenge (Staffel)",
+   "fieldtype": "Int",
+   "default": "1",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "ek",
+   "label": "EK",
+   "fieldtype": "Currency",
+   "description": "Dienstleister-Einkaufspreis. VK wird per Aufschlag 1,88 berechnet, wenn leer."
+  },
+  {
+   "fieldname": "vk",
+   "label": "VK",
+   "fieldtype": "Currency",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "valid_from",
+   "label": "Gültig ab",
+   "fieldtype": "Date"
+  },
+  {
+   "fieldname": "valid_upto",
+   "label": "Gültig bis",
+   "fieldtype": "Date"
+  }
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1, "write": 1, "create": 1, "delete": 1
+  },
+  {
+   "role": "Sales Manager",
+   "read": 1, "write": 1, "create": 1
+  }
+ ]
+}
