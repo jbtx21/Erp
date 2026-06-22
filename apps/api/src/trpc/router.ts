@@ -845,6 +845,17 @@ export const appRouter = router({
       .mutation(({ input, ctx }) => ctx.dashboards.setDefault(input.dashboardId, ctx.user.email)),
   }),
 
+  // Verknüpfte Belege („Connections"): alle mit einem Auftrag verbundenen Dokumente.
+  // Finanzbelege werden für PRODUKTION ausgeblendet (canViewFinancials, Kap. 12).
+  links: router({
+    forOrder: roleProcedure(...allRoles)
+      .input(z.object({ orderId: z.string().min(1) }))
+      .query(async ({ input, ctx }) => {
+        try { return await ctx.links.forOrder(input.orderId, canViewFinancials(ctx.user.role)); }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
+      }),
+  }),
+
   // Benachrichtigungen (ERP-Grundfunktion / G-5): In-App-Feed je angemeldete:r Nutzer:in.
   notifications: router({
     list: protectedProcedure

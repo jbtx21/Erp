@@ -34,6 +34,7 @@ import type { SearchService } from "../modules/search/search.service.js";
 import type { NotificationService, EmailTemplateService } from "../modules/notification/notification.service.js";
 import type { DashboardService } from "../modules/dashboard/dashboard.service.js";
 import type { DeliveryService } from "../modules/delivery/delivery.service.js";
+import type { LinksService } from "../modules/links/links.service.js";
 import type {
   BankingQueryRepository,
   DunningQueryRepository,
@@ -82,6 +83,7 @@ export interface Context {
   emailTemplates: EmailTemplateService;
   dashboards: DashboardService;
   deliveries: DeliveryService;
+  links: LinksService;
   auth: AuthService;
   user: AuthUser | null;
   /** Roh-Token aus dem Cookie (für den 2FA-Zwischenschritt/Logout, wenn user noch null ist). */

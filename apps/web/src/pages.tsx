@@ -457,6 +457,29 @@ interface SchedulePlan {
 const deDate = (iso: string): string => new Date(iso).toLocaleDateString("de-DE");
 
 // Mehrfach-Teillieferung: Restmengen je Position erfassen → (Teil-)Lieferschein.
+// Verknüpfte Belege („Connections"): alle mit dem Auftrag verbundenen Dokumente.
+function LinksPanel({ orderId }: { orderId: string }): JSX.Element {
+  const [data, setData] = useState<Awaited<ReturnType<typeof trpc.links.forOrder.query>> | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    void trpc.links.forOrder.query({ orderId }).then(setData).catch((e: unknown) => setErr(errMsg(e)));
+  }, [orderId]);
+  return (
+    <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+      <Text size="sm" fw={600}>Verknüpfte Belege</Text>
+      {err && <Alert color="red" mt="xs">{err}</Alert>}
+      {data && data.links.length === 0 && <Text size="sm" c="dimmed" mt={4}>Noch keine verknüpften Belege.</Text>}
+      <Group gap="xs" mt="xs" wrap="wrap">
+        {data?.links.map((l, i) => (
+          <Badge key={i} variant="light" color={l.financial ? "teal" : "gray"} title={l.type}>
+            {l.type}: {l.label}
+          </Badge>
+        ))}
+      </Group>
+    </Box>
+  );
+}
+
 function DeliveryPanel({ orderId, onChanged }: { orderId: string; onChanged: () => void }): JSX.Element {
   const [lines, setLines] = useState<Awaited<ReturnType<typeof trpc.deliveries.remaining.query>>>([]);
   const [notes, setNotes] = useState<Awaited<ReturnType<typeof trpc.deliveries.list.query>>>([]);
@@ -616,6 +639,7 @@ export function OrdersPage({ role }: { role: string }): JSX.Element {
               </Text>
             </>
           )}
+          {termOrder && <LinksPanel orderId={termOrder} />}
           {termOrder && <DeliveryPanel orderId={termOrder} onChanged={() => void load()} />}
           {termOrder && <RecordPanel entity="Order" entityId={termOrder} />}
         </>

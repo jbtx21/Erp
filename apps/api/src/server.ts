@@ -80,6 +80,8 @@ import { DashboardService } from "./modules/dashboard/dashboard.service.js";
 import { PrismaDashboardRepository, PrismaMetricRepository } from "./repositories/prisma-dashboard.repository.js";
 import { DeliveryService } from "./modules/delivery/delivery.service.js";
 import { PrismaDeliveryRepository } from "./repositories/prisma-delivery.repository.js";
+import { LinksService } from "./modules/links/links.service.js";
+import { PrismaLinksRepository } from "./repositories/prisma-links.repository.js";
 import { appRouter } from "./trpc/router.js";
 import type { Context } from "./trpc/trpc.js";
 import { portalAppRouter } from "./trpc/portal-router.js";
@@ -169,6 +171,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const emailTemplates = new EmailTemplateService(new PrismaEmailTemplateRepository());
   const dashboards = new DashboardService(new PrismaDashboardRepository(), new PrismaMetricRepository());
   const deliveries = new DeliveryService(new PrismaDeliveryRepository(), new PrismaAuditSink());
+  const links = new LinksService(new PrismaLinksRepository());
   const auth = new AuthService(
     new PrismaUserRepository(),
     new PrismaSessionRepository(),
@@ -269,6 +272,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           emailTemplates,
           dashboards,
           deliveries,
+          links,
           auth,
           user,
           sessionToken,
