@@ -72,6 +72,8 @@ import { PricingService } from "./modules/pricing/pricing.service.js";
 import { PrismaPricingRepository } from "./repositories/prisma-pricing.repository.js";
 import { CollaborationService } from "./modules/collaboration/collaboration.service.js";
 import { PrismaCollaborationRepository } from "./repositories/prisma-collaboration.repository.js";
+import { SearchService } from "./modules/search/search.service.js";
+import { PrismaSearchRepository } from "./repositories/prisma-search.repository.js";
 import { appRouter } from "./trpc/router.js";
 import type { Context } from "./trpc/trpc.js";
 import { portalAppRouter } from "./trpc/portal-router.js";
@@ -156,6 +158,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   );
   const pricing = new PricingService(new PrismaPricingRepository(), new PrismaAuditSink());
   const collaboration = new CollaborationService(new PrismaCollaborationRepository(), new PrismaAuditSink());
+  const search = new SearchService(new PrismaSearchRepository());
   const auth = new AuthService(
     new PrismaUserRepository(),
     new PrismaSessionRepository(),
@@ -251,6 +254,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           quotes,
           pricing,
           collaboration,
+          search,
           auth,
           user,
           sessionToken,

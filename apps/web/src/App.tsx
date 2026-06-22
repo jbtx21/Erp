@@ -1,7 +1,7 @@
 // Navigations-Gerüst: Auth-Gate + AppShell mit gruppierter Sidebar über ALLE Module
 // (alles durchklickbar). Jede Sektion ist eine Seite gegen die echten tRPC-Endpunkte.
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { AppShell, Badge, Box, Button, Group, Loader, NavLink, ScrollArea, Text, Title } from "@mantine/core";
+import { AppShell, Badge, Box, Button, Group, Loader, NavLink, Paper, ScrollArea, Text, TextInput, Title } from "@mantine/core";
 import { Login } from "./Login.js";
 import { Dashboard } from "./Dashboard.js";
 import { Reporting } from "./Reporting.js";
@@ -51,6 +51,38 @@ export function App(): JSX.Element {
 
 const activeLabel = (k: string): string => NAV.flatMap((g) => g.items).find((i) => i.key === k)?.label ?? "";
 
+// Globale Suche (G-6): entitätsübergreifende Suchbox im Header; Treffer navigieren
+// zum jeweiligen Modul (navKey). Ab 2 Zeichen.
+function GlobalSearch({ onNavigate }: { onNavigate: (k: string) => void }): JSX.Element {
+  const [q, setQ] = useState("");
+  const [hits, setHits] = useState<Awaited<ReturnType<typeof trpc.search.global.query>>>([]);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (q.trim().length < 2) { setHits([]); return; }
+    let cancelled = false;
+    void trpc.search.global.query({ query: q }).then((r) => { if (!cancelled) { setHits(r); setOpen(true); } }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [q]);
+  return (
+    <Box style={{ position: "relative", width: 340 }}>
+      <TextInput size="xs" placeholder="Suche: Firma, Auftrag, Artikel, Lead…" value={q}
+        onChange={(e) => setQ(e.currentTarget.value)} onFocus={() => hits.length > 0 && setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)} />
+      {open && hits.length > 0 && (
+        <Paper shadow="md" withBorder style={{ position: "absolute", top: 32, left: 0, right: 0, zIndex: 300, maxHeight: 340, overflowY: "auto" }}>
+          {hits.map((h) => (
+            <Box key={`${h.entity}-${h.id}`} px="sm" py={6} style={{ cursor: "pointer" }}
+              onMouseDown={(e) => { e.preventDefault(); onNavigate(h.navKey); setOpen(false); setQ(""); }}>
+              <Text size="sm"><Badge size="xs" variant="light" mr={6}>{h.entity}</Badge>{h.label}
+                {h.sub ? <Text span c="dimmed" size="xs"> · {h.sub}</Text> : null}</Text>
+            </Box>
+          ))}
+        </Paper>
+      )}
+    </Box>
+  );
+}
+
 function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<void> }): JSX.Element {
   const [active, setActiveState] = useState<string>(hashKey);
   const setActive = useCallback((k: string) => {
@@ -72,6 +104,7 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<voi
             <Title order={4}>TEXMA&nbsp;ERP</Title>
             <Badge size="sm" color="amber">Demo</Badge>
           </Group>
+          <GlobalSearch onNavigate={setActive} />
           <Group gap="sm">
             <Text size="sm" c="dimmed">{user.name} · {user.role}</Text>
             <Button variant="default" size="xs" onClick={() => void onLogout()}>Abmelden</Button>

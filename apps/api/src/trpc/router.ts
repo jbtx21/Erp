@@ -765,6 +765,13 @@ export const appRouter = router({
       }),
   }),
 
+  // Globale Suche (ERP-Grundfunktion / G-6): entitätsübergreifend, ab 2 Zeichen.
+  search: router({
+    global: protectedProcedure
+      .input(z.object({ query: z.string(), limit: z.number().int().positive().max(50).optional() }))
+      .query(({ input, ctx }) => ctx.search.global(input.query, input.limit ?? 20)),
+  }),
+
   // Generischer Datensatz-Querschnitt (ERP-Grundfunktion): Kommentare, Aktivitäten
   // ("was ist als Nächstes") und Anhänge an JEDEM Beleg/Stammsatz (entity, entityId).
   collab: router({

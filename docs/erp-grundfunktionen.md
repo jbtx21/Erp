@@ -30,7 +30,7 @@
 | **Aktivitäten** (offene Tasks/Termine „was ist als Nächstes") | `RecordActivity` (TASK/EVENT, abhakbar) (Stufe 1) | ✓ |
 | **Verknüpfte Belege („Connections")** generisch sichtbar | Kette existiert, keine generische Ansicht | ◐ |
 | **Benachrichtigungen** (in-app) + **E-Mail-Vorlagen** | nicht vorhanden | ○ **Lücke** |
-| **Globale Suche / Volltext** | nicht vorhanden | ○ **Lücke** |
+| **Globale Suche / Volltext** | `search`-Modul (G-6): entitätsübergreifend (Firma/Lieferant/Auftrag/Artikel/Lead) + Header-Suchbox | ✓ |
 | Rollen/Rechte (feldgenau) | `rbac.ts` (inkl. Feld-Redaktion) | ✓ |
 | Druck/PDF je Belegtyp | `production-sheet-pdf`, `report-pdf` | ◐ gezielt |
 | Listen: Filter/Sort | `AutoTable`/`ListPage` | ◐ ohne gespeicherte Filter/Spaltenwahl |
