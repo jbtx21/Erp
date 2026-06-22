@@ -324,8 +324,45 @@ export function SampleLoansPage(): JSX.Element {
   );
 }
 
+// PIM-Felder für die Schnell-/Massenbearbeitung (Schlüssel = API-Feld, Label = deutsch).
+const PIM_COLS: ReadonlyArray<{ key: "name" | "brand" | "materialComposition" | "careInstructions" | "hsCode" | "originCountry"; label: string; w: number }> = [
+  { key: "name", label: "Name", w: 150 },
+  { key: "brand", label: "Marke", w: 110 },
+  { key: "materialComposition", label: "Material", w: 130 },
+  { key: "careInstructions", label: "Pflege", w: 120 },
+  { key: "hsCode", label: "Zolltarif", w: 100 },
+  { key: "originCountry", label: "Ursprung", w: 90 },
+];
+
+// Eine editierbare Artikelzeile (Schnellbearbeitung): lokaler Entwurf + Speichern.
+type ArticleData = Row & { completeness?: { percent: number; missing: string[] } };
+function ArticleRowEdit({ a, onSaved, onVariants }: { a: ArticleData; onSaved: () => void; onVariants: () => void }): JSX.Element {
+  const [draft, setDraft] = useState<Record<string, string>>(() => Object.fromEntries(PIM_COLS.map((c) => [c.key, String(a[c.key] ?? "")])));
+  const [busy, setBusy] = useState(false);
+  const dirty = PIM_COLS.some((c) => draft[c.key] !== String(a[c.key] ?? ""));
+  const pct = (a.completeness?.percent ?? 0);
+  return (
+    <Table.Tr>
+      <Table.Td><Text size="sm" fw={600}>{String(a.sku)}</Text></Table.Td>
+      {PIM_COLS.map((c) => (
+        <Table.Td key={c.key}><TextInput size="xs" w={c.w} value={draft[c.key] ?? ""} onChange={(e) => setDraft((d) => ({ ...d, [c.key]: e.currentTarget.value }))} /></Table.Td>
+      ))}
+      <Table.Td><Badge color={pct === 100 ? "green" : pct >= 50 ? "yellow" : "red"} variant="light">{pct}%</Badge></Table.Td>
+      <Table.Td>
+        <Group gap={4} wrap="nowrap">
+          <Button size="compact-xs" disabled={!dirty} loading={busy} onClick={async () => {
+            setBusy(true);
+            try { await trpc.products.updateArticle.mutate({ id: String(a.id), patch: draft }); onSaved(); } finally { setBusy(false); }
+          }}>Speichern</Button>
+          <Button size="compact-xs" variant="default" onClick={onVariants}>Varianten</Button>
+        </Group>
+      </Table.Td>
+    </Table.Tr>
+  );
+}
+
 export function ProductsPage(): JSX.Element {
-  const [articles, setArticles] = useState<Row[]>([]);
+  const [articles, setArticles] = useState<ArticleData[]>([]);
   const [sku, setSku] = useState("");
   const [name, setName] = useState("");
   const [sel, setSel] = useState<string | null>(null);
@@ -334,9 +371,13 @@ export function ProductsPage(): JSX.Element {
   const [farbe, setFarbe] = useState("");
   const [groesse, setGroesse] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  // Massenbearbeitung
+  const [bulkSkus, setBulkSkus] = useState("");
+  const [bulkField, setBulkField] = useState<string>("brand");
+  const [bulkValue, setBulkValue] = useState("");
 
   const loadArticles = useCallback(async () => {
-    try { setArticles((await trpc.products.listArticles.query()) as Row[]); setErr(null); }
+    try { setArticles((await trpc.products.listArticles.query()) as ArticleData[]); setErr(null); }
     catch (e) { setErr(errMsg(e)); }
   }, []);
   useEffect(() => { void loadArticles(); }, [loadArticles]);
@@ -349,8 +390,8 @@ export function ProductsPage(): JSX.Element {
 
   return (
     <>
-      <Title order={3}>Artikel &amp; Varianten</Title>
-      <Text size="sm" c="dimmed" mt={4}>Stammdaten (B16): Artikel + Farbe×Größe-Varianten.</Text>
+      <Title order={3}>Artikel &amp; Varianten (PIM)</Title>
+      <Text size="sm" c="dimmed" mt={4}>Stammdaten (B16): Artikel direkt in der Tabelle bearbeiten (Schnellbearbeitung), Vollständigkeit je Artikel, Massenbearbeitung über mehrere SKUs, Farbe×Größe-Varianten.</Text>
       <Group mt="sm" gap="xs" align="end">
         <TextInput label="Artikel-SKU" value={sku} onChange={(e) => setSku(e.currentTarget.value)} placeholder="POLO-PREMIUM" w={160} />
         <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Premium-Poloshirt" />
@@ -361,9 +402,38 @@ export function ProductsPage(): JSX.Element {
         }}>Artikel anlegen</Button>
       </Group>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
-      <AutoTable rows={articles} action={(r) => (
-        <Button size="compact-xs" variant="default" onClick={() => void loadVariants(String(r.id))}>Varianten</Button>
-      )} />
+
+      <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+        <Text size="sm" fw={600}>Massenbearbeitung</Text>
+        <Group gap="xs" align="end" mt="xs">
+          <TextInput label="SKUs (kommagetrennt)" value={bulkSkus} onChange={(e) => setBulkSkus(e.currentTarget.value)} placeholder="A-1, A-2" w={220} />
+          <Select label="Feld" w={160} value={bulkField} onChange={(v) => v && setBulkField(v)}
+            data={[{ value: "brand", label: "Marke" }, { value: "materialComposition", label: "Material" }, { value: "careInstructions", label: "Pflege" }, { value: "hsCode", label: "Zolltarif" }, { value: "originCountry", label: "Ursprung" }]} />
+          <TextInput label="Wert" value={bulkValue} onChange={(e) => setBulkValue(e.currentTarget.value)} w={160} />
+          <Button disabled={!bulkSkus.trim()} onClick={async () => {
+            setErr(null);
+            try {
+              const skus = bulkSkus.split(",").map((s) => s.trim()).filter(Boolean);
+              const r = await trpc.products.bulkUpdateArticles.mutate({ skus, patch: { [bulkField]: bulkValue } });
+              window.alert(`${r.updated} Artikel aktualisiert.`);
+              setBulkValue(""); await loadArticles();
+            } catch (e) { setErr(errMsg(e)); }
+          }}>Anwenden</Button>
+        </Group>
+      </Box>
+
+      <Table mt="md" withTableBorder withColumnBorders highlightOnHover>
+        <Table.Thead><Table.Tr>
+          <Table.Th>SKU</Table.Th>
+          {PIM_COLS.map((c) => <Table.Th key={c.key}>{c.label}</Table.Th>)}
+          <Table.Th>Vollst.</Table.Th><Table.Th>Aktion</Table.Th>
+        </Table.Tr></Table.Thead>
+        <Table.Tbody>
+          {articles.map((a) => (
+            <ArticleRowEdit key={String(a.id)} a={a} onSaved={() => void loadArticles()} onVariants={() => void loadVariants(String(a.id))} />
+          ))}
+        </Table.Tbody>
+      </Table>
 
       {sel && (
         <>

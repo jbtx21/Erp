@@ -43,3 +43,22 @@ describe("Textilkennzeichnung (EU-VO 1007/2011)", () => {
     expect(() => assertSellable({})).toThrow(LabelingIncompleteError);
   });
 });
+
+import { articleCompleteness, PIM_FIELDS } from "./pim.js";
+
+describe("PIM-Vollständigkeit", () => {
+  it("0% bei leerem Artikel, listet alle fehlenden Felder", () => {
+    const c = articleCompleteness({});
+    expect(c.percent).toBe(0);
+    expect(c.missing).toHaveLength(PIM_FIELDS.length);
+  });
+  it("zählt gefüllte Felder und ignoriert Leerstrings", () => {
+    const c = articleCompleteness({ brand: "TEXMA", description: "  ", materialComposition: "Baumwolle" });
+    expect(c.filled).toBe(2);
+    expect(c.missing).toContain("Beschreibung");
+  });
+  it("100% wenn alle Felder gefüllt", () => {
+    const full = Object.fromEntries(PIM_FIELDS.map((f) => [f.key, "x"]));
+    expect(articleCompleteness(full).percent).toBe(100);
+  });
+});

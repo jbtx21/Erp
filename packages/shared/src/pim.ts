@@ -60,3 +60,48 @@ export function assertGtin13(gtin: string): string {
   if (!isValidGtin13(gtin)) throw new InvalidGtinError(gtin);
   return gtin;
 }
+
+// ── PIM-Vollständigkeit (Datenqualität vor Kanal-Veröffentlichung) ────────────
+
+export interface ArticlePimFields {
+  description: string;
+  brand: string;
+  materialComposition: string;
+  careInstructions: string;
+  hsCode: string;
+  originCountry: string;
+}
+
+export interface PimFieldDef {
+  key: keyof ArticlePimFields;
+  label: string;
+}
+
+export const PIM_FIELDS: ReadonlyArray<PimFieldDef> = [
+  { key: "description", label: "Beschreibung" },
+  { key: "brand", label: "Marke" },
+  { key: "materialComposition", label: "Material" },
+  { key: "careInstructions", label: "Pflegehinweis" },
+  { key: "hsCode", label: "Zolltarifnummer" },
+  { key: "originCountry", label: "Ursprungsland" },
+];
+
+export interface PimCompleteness {
+  filled: number;
+  total: number;
+  percent: number;
+  missing: string[];
+}
+
+/** Bewertet die Vollständigkeit der PIM-Felder eines Artikels (welche fehlen). */
+export function articleCompleteness(fields: Partial<ArticlePimFields>): PimCompleteness {
+  const missing: string[] = [];
+  let filled = 0;
+  for (const f of PIM_FIELDS) {
+    const v = fields[f.key];
+    if (v && String(v).trim() !== "") filled++;
+    else missing.push(f.label);
+  }
+  const total = PIM_FIELDS.length;
+  return { filled, total, percent: Math.round((filled / total) * 100), missing };
+}

@@ -2,13 +2,25 @@
 // Artikeln und ihren Farbe×Größe-Varianten. Reine Stammdaten (keine Preise/Buchung).
 
 import { buildEntry, type AuditSink } from "@texma/audit";
+import { articleCompleteness, type ArticlePimFields, type PimCompleteness } from "@texma/shared";
 
 export interface ArticleRow {
   id: string;
   sku: string;
   name: string;
   variantCount: number;
+  description: string;
+  brand: string;
+  materialComposition: string;
+  careInstructions: string;
+  hsCode: string;
+  originCountry: string;
+  /** PIM-Vollständigkeit (abgeleitet, nicht persistiert). */
+  completeness: PimCompleteness;
 }
+
+/** Editierbare Stammfelder (Name + PIM); leere Strings = Feld leeren. */
+export type ArticlePatch = Partial<{ name: string } & ArticlePimFields>;
 
 export interface VariantRow {
   id: string;
@@ -23,13 +35,27 @@ export interface CreateVariantInput {
 }
 
 export interface ProductRepository {
-  listArticles(): Promise<ArticleRow[]>;
+  listArticles(): Promise<Omit<ArticleRow, "completeness">[]>;
   createArticle(sku: string, name: string): Promise<{ id: string }>;
   listVariants(articleId: string): Promise<VariantRow[]>;
   createVariant(input: CreateVariantInput): Promise<{ id: string }>;
+  /** Aktualisiert die angegebenen Felder eines Artikels; @returns false wenn unbekannt. */
+  updateArticle(id: string, patch: ArticlePatch): Promise<boolean>;
+  /** Massenupdate über SKUs; @returns Anzahl aktualisierter Artikel. */
+  updateArticlesBySku(skus: string[], patch: ArticlePatch): Promise<number>;
 }
 
 export class ProductError extends Error {}
+
+/** Entfernt undefinierte Felder und trimmt Strings (leerer String = Feld leeren). */
+function normalizePatch(patch: ArticlePatch): ArticlePatch {
+  const out: ArticlePatch = {};
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === undefined) continue;
+    (out as Record<string, string>)[k] = typeof v === "string" ? v.trim() : v;
+  }
+  return out;
+}
 
 export class ProductService {
   constructor(
@@ -38,7 +64,26 @@ export class ProductService {
   ) {}
 
   async listArticles(): Promise<ArticleRow[]> {
-    return this.repo.listArticles();
+    const rows = await this.repo.listArticles();
+    return rows.map((r) => ({ ...r, completeness: articleCompleteness(r) }));
+  }
+
+  /** Schnellbearbeitung: ein Artikel, beliebige Stammfelder. */
+  async updateArticle(id: string, patch: ArticlePatch): Promise<void> {
+    if (patch.name !== undefined && !patch.name.trim()) throw new ProductError("Name darf nicht leer sein.");
+    const ok = await this.repo.updateArticle(id, normalizePatch(patch));
+    if (!ok) throw new ProductError(`Artikel ${id} nicht gefunden.`);
+    await this.audit.append(buildEntry({ entity: "Article", entityId: id, action: "UPDATE", after: patch }));
+  }
+
+  /** Massenbearbeitung: ein Feld-Patch auf viele Artikel (per SKU). */
+  async bulkUpdateArticles(skus: string[], patch: ArticlePatch): Promise<{ updated: number }> {
+    const cleaned = skus.map((s) => s.trim()).filter(Boolean);
+    if (cleaned.length === 0) throw new ProductError("Keine Artikel ausgewählt.");
+    if (Object.keys(normalizePatch(patch)).length === 0) throw new ProductError("Kein Feld zum Ändern angegeben.");
+    const updated = await this.repo.updateArticlesBySku(cleaned, normalizePatch(patch));
+    await this.audit.append(buildEntry({ entity: "Article", entityId: "BULK", action: "UPDATE", after: { skus: cleaned, patch, updated } }));
+    return { updated };
   }
 
   async createArticle(sku: string, name: string): Promise<{ id: string }> {

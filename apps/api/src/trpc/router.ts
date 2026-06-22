@@ -720,6 +720,31 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         try { return await ctx.products.createVariant(input); } catch (e) { throw toTrpcError(e); }
       }),
+    // Schnellbearbeitung: ein Artikel, beliebige PIM-/Stammfelder.
+    updateArticle: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({
+        id: z.string().min(1),
+        patch: z.object({
+          name: z.string().optional(), description: z.string().optional(), brand: z.string().optional(),
+          materialComposition: z.string().optional(), careInstructions: z.string().optional(),
+          hsCode: z.string().optional(), originCountry: z.string().optional(),
+        }),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.products.updateArticle(input.id, input.patch); return { ok: true as const }; } catch (e) { throw toTrpcError(e); }
+      }),
+    // Massenbearbeitung: ein Feld-Patch auf viele Artikel (per SKU).
+    bulkUpdateArticles: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({
+        skus: z.array(z.string().min(1)).min(1),
+        patch: z.object({
+          brand: z.string().optional(), materialComposition: z.string().optional(),
+          careInstructions: z.string().optional(), hsCode: z.string().optional(), originCountry: z.string().optional(),
+        }),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.products.bulkUpdateArticles(input.skus, input.patch); } catch (e) { throw toTrpcError(e); }
+      }),
   }),
 
   // Angebote (B8): auflisten + Entwurf anlegen + Status weiterschalten + ablehnen.

@@ -2,23 +2,41 @@
 
 import { prisma } from "@texma/db";
 import type {
+  ArticlePatch,
   ArticleRow,
   CreateVariantInput,
   ProductRepository,
   VariantRow,
 } from "../modules/product/product.service.js";
 
+const PIM_SELECT = { description: true, brand: true, materialComposition: true, careInstructions: true, hsCode: true, originCountry: true } as const;
+const s = (v: string | null | undefined): string => v ?? "";
+
 export class PrismaProductRepository implements ProductRepository {
-  async listArticles(): Promise<ArticleRow[]> {
+  async listArticles(): Promise<Omit<ArticleRow, "completeness">[]> {
     const rows = await prisma.article.findMany({
       orderBy: { sku: "asc" },
-      select: { id: true, sku: true, name: true, _count: { select: { variants: true } } },
+      select: { id: true, sku: true, name: true, ...PIM_SELECT, _count: { select: { variants: true } } },
     });
-    return rows.map((a) => ({ id: a.id, sku: a.sku, name: a.name, variantCount: a._count.variants }));
+    return rows.map((a) => ({
+      id: a.id, sku: a.sku, name: a.name, variantCount: a._count.variants,
+      description: s(a.description), brand: s(a.brand), materialComposition: s(a.materialComposition),
+      careInstructions: s(a.careInstructions), hsCode: s(a.hsCode), originCountry: s(a.originCountry),
+    }));
   }
 
   async createArticle(sku: string, name: string): Promise<{ id: string }> {
     return prisma.article.create({ data: { sku, name }, select: { id: true } });
+  }
+
+  async updateArticle(id: string, patch: ArticlePatch): Promise<boolean> {
+    const res = await prisma.article.updateMany({ where: { id }, data: patch });
+    return res.count > 0;
+  }
+
+  async updateArticlesBySku(skus: string[], patch: ArticlePatch): Promise<number> {
+    const res = await prisma.article.updateMany({ where: { sku: { in: skus } }, data: patch });
+    return res.count;
   }
 
   async listVariants(articleId: string): Promise<VariantRow[]> {
