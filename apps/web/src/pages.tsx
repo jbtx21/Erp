@@ -1597,3 +1597,79 @@ export function NewsletterPage(): JSX.Element {
     </>
   );
 }
+
+// Verkaufschancen / Pipeline (komplexes CRM): gewichteter Forecast + Phasen.
+const OPP_STAGES = [
+  { value: "QUALIFIZIERUNG", label: "Qualifizierung" },
+  { value: "ANGEBOT", label: "Angebot" },
+  { value: "VERHANDLUNG", label: "Verhandlung" },
+  { value: "ABSCHLUSS", label: "Abschluss" },
+] as const;
+
+export function OpportunitiesPage(): JSX.Element {
+  const [items, setItems] = useState<Row[]>([]);
+  const [pipeline, setPipeline] = useState<Awaited<ReturnType<typeof trpc.opportunities.pipeline.query>> | null>(null);
+  const [title, setTitle] = useState("");
+  const [company, setCompany] = useState("");
+  const [stage, setStage] = useState<string>("QUALIFIZIERUNG");
+  const [euro, setEuro] = useState(0);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try { setItems((await trpc.opportunities.list.query()) as Row[]); setPipeline(await trpc.opportunities.pipeline.query()); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  const act = async (fn: () => Promise<unknown>): Promise<void> => { setErr(null); try { await fn(); await load(); } catch (e) { setErr(errMsg(e)); } };
+
+  return (
+    <>
+      <Title order={3}>Verkaufschancen (CRM-Pipeline)</Title>
+      <Text size="sm" c="dimmed" mt={4}>Gewichteter Forecast = Wert × Wahrscheinlichkeit der offenen Chancen. Hubspot-Spiegelung optional (HUBSPOT_TOKEN).</Text>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+
+      {pipeline && (
+        <Group mt="md" gap="md" wrap="wrap">
+          {pipeline.buckets.map((b) => (
+            <Box key={b.stage} p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, minWidth: 160 }}>
+              <Text size="xs" c="dimmed" tt="uppercase" fw={700}>{b.label}</Text>
+              <Text fz={22} fw={700}>{(b.weightedCents / 100).toLocaleString("de-DE", { style: "currency", currency: "EUR" })}</Text>
+              <Text size="xs" c="dimmed">{b.count} offen · brutto {(b.valueCents / 100).toLocaleString("de-DE", { style: "currency", currency: "EUR" })}</Text>
+            </Box>
+          ))}
+          <Box p="md" style={{ border: "2px solid var(--mantine-color-blue-4)", borderRadius: 8, minWidth: 180 }}>
+            <Text size="xs" c="dimmed" tt="uppercase" fw={700}>Forecast (gewichtet)</Text>
+            <Text fz={24} fw={800} c="blue">{(pipeline.forecastCents / 100).toLocaleString("de-DE", { style: "currency", currency: "EUR" })}</Text>
+            <Text size="xs" c="dimmed">{pipeline.openCount} offene Chancen</Text>
+          </Box>
+        </Group>
+      )}
+
+      <Title order={4} mt="xl">Neue Chance</Title>
+      <Group gap="xs" align="end" mt="xs">
+        <TextInput label="Titel" value={title} onChange={(e) => setTitle(e.currentTarget.value)} w={220} />
+        <TextInput label="Firmen-ID (optional)" value={company} onChange={(e) => setCompany(e.currentTarget.value)} w={150} />
+        <Select label="Phase" value={stage} onChange={(v) => v && setStage(v)} data={OPP_STAGES.map((s) => ({ value: s.value, label: s.label }))} w={150} />
+        <NumberInput label="Wert (€)" value={euro} onChange={(v) => setEuro(Number(v) || 0)} min={0} w={120} />
+        <Button disabled={!title.trim()} onClick={() => void act(async () => {
+          await trpc.opportunities.create.mutate({ title, companyId: company || undefined, stage: stage as "QUALIFIZIERUNG", valueCents: Math.round(euro * 100) });
+          setTitle(""); setCompany(""); setEuro(0);
+        })}>Anlegen</Button>
+      </Group>
+
+      <Title order={4} mt="xl">Chancen</Title>
+      <AutoTable rows={items} action={(r) => {
+        const id = String(r.id); const status = String(r.status);
+        if (status !== "OFFEN") return <Text size="xs" c="dimmed">{status === "GEWONNEN" ? "✓ gewonnen" : "✗ verloren"}</Text>;
+        return (
+          <Group gap={4} justify="flex-end" wrap="nowrap">
+            <Select size="xs" w={140} value={String(r.stage)} onChange={(v) => v && void act(() => trpc.opportunities.advanceStage.mutate({ id, stage: v as "ANGEBOT" }))} data={OPP_STAGES.map((s) => ({ value: s.value, label: s.label }))} />
+            <Button size="compact-xs" color="green" onClick={() => void act(() => trpc.opportunities.markWon.mutate({ id }))}>Gewonnen</Button>
+            <Button size="compact-xs" color="red" variant="light" onClick={() => { const g = window.prompt("Verlustgrund?"); if (g) void act(() => trpc.opportunities.markLost.mutate({ id, reason: g })); }}>Verloren</Button>
+          </Group>
+        );
+      }} />
+    </>
+  );
+}

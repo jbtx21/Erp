@@ -118,6 +118,7 @@ model Company {
   sampleLoans     SampleLoan[] // Muster-Leihgut (B5)
   priceTiers      CustomerPriceTier[] // kundenindividuelle Mengenstaffel (B4)
   shopConnectors  ShopConnector[] // T-01: Shops mappen auf die Firma, nicht auf Mitarbeiter
+  opportunities   Opportunity[] // Verkaufschancen (CRM)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -1439,4 +1440,38 @@ model NewsletterCampaign {
 enum NewsletterStatus {
   ENTWURF
   GESENDET
+}
+
+// Verkaufschance/Opportunity (komplexes CRM): gewichtete Pipeline. stage = Phase,
+// probability = Abschlusswahrscheinlichkeit (%), value = erwarteter Auftragswert.
+// Gewichteter Forecast = Summe(value × probability) der offenen Chancen.
+model Opportunity {
+  id                String            @id @default(cuid())
+  title             String
+  companyId         String?
+  company           Company?          @relation(fields: [companyId], references: [id])
+  stage             OpportunityStage  @default(QUALIFIZIERUNG)
+  valueCents        Int               @default(0)
+  probability       Int               @default(10) // 0..100
+  expectedCloseDate DateTime?
+  status            OpportunityStatus @default(OFFEN)
+  lostReason        String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([status])
+  @@index([companyId])
+}
+
+enum OpportunityStage {
+  QUALIFIZIERUNG
+  ANGEBOT
+  VERHANDLUNG
+  ABSCHLUSS
+}
+
+enum OpportunityStatus {
+  OFFEN
+  GEWONNEN
+  VERLOREN
 }

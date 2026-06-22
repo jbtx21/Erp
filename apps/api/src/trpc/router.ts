@@ -881,6 +881,31 @@ export const appRouter = router({
       .mutation(({ input, ctx }) => ctx.dataIo.importCsv(input.kind, input.csv)),
   }),
 
+  // Verkaufschancen / Pipeline (komplexes CRM): gewichteter Forecast, Gewinn/Verlust.
+  // Vertriebsdaten → kein PRODUKTION-Zugriff (Kap. 12).
+  opportunities: router({
+    list: roleProcedure("ADMIN", "BUERO").query(({ ctx }) => ctx.opportunities.list()),
+    pipeline: roleProcedure("ADMIN", "BUERO").query(({ ctx }) => ctx.opportunities.pipeline()),
+    create: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({
+        title: z.string().min(1), companyId: z.string().optional(),
+        stage: z.enum(["QUALIFIZIERUNG", "ANGEBOT", "VERHANDLUNG", "ABSCHLUSS"]).optional(),
+        valueCents: z.number().int().min(0).optional(), probability: z.number().int().min(0).max(100).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.opportunities.create(input); } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    advanceStage: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ id: z.string().min(1), stage: z.enum(["QUALIFIZIERUNG", "ANGEBOT", "VERHANDLUNG", "ABSCHLUSS"]) }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.opportunities.advanceStage(input.id, input.stage); return { ok: true as const }; } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    markWon: roleProcedure("ADMIN", "BUERO").input(z.object({ id: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => { try { await ctx.opportunities.markWon(input.id); return { ok: true as const }; } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); } }),
+    markLost: roleProcedure("ADMIN", "BUERO").input(z.object({ id: z.string().min(1), reason: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => { try { await ctx.opportunities.markLost(input.id, input.reason); return { ok: true as const }; } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); } }),
+  }),
+
   // Newsletter (Brevo): Kampagnen anlegen + an Opt-in-Kontakte versenden (DSGVO).
   // Kundendaten/Marketing → kein PRODUKTION-Zugriff (Kap. 12).
   newsletter: router({

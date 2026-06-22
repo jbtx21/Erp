@@ -94,6 +94,9 @@ import { ImapMailFetcher } from "./modules/mail/imap-fetcher.js";
 import { NewsletterService, StubNewsletterProvider } from "./modules/newsletter/newsletter.service.js";
 import { BrevoNewsletterProvider } from "./modules/newsletter/brevo-provider.js";
 import { PrismaNewsletterRepository } from "./repositories/prisma-newsletter.repository.js";
+import { OpportunityService, StubCrmProvider } from "./modules/opportunity/opportunity.service.js";
+import { HubspotCrmProvider } from "./modules/opportunity/hubspot-provider.js";
+import { PrismaOpportunityRepository } from "./repositories/prisma-opportunity.repository.js";
 import { appRouter } from "./trpc/router.js";
 import type { Context } from "./trpc/trpc.js";
 import { portalAppRouter } from "./trpc/portal-router.js";
@@ -192,6 +195,8 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
     ? new BrevoNewsletterProvider(process.env.BREVO_API_KEY, { name: process.env.BREVO_SENDER_NAME ?? "TEXMA", email: process.env.BREVO_SENDER_EMAIL ?? "info@texma-gmbh.de" })
     : new StubNewsletterProvider();
   const newsletter = new NewsletterService(new PrismaNewsletterRepository(), newsletterProvider, new PrismaAuditSink());
+  const crmProvider = process.env.HUBSPOT_TOKEN ? new HubspotCrmProvider(process.env.HUBSPOT_TOKEN) : new StubCrmProvider();
+  const opportunities = new OpportunityService(new PrismaOpportunityRepository(), new PrismaAuditSink(), crmProvider);
   const auth = new AuthService(
     new PrismaUserRepository(),
     new PrismaSessionRepository(),
@@ -298,6 +303,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           salesOrders,
           mailIntake,
           newsletter,
+          opportunities,
           auth,
           user,
           sessionToken,

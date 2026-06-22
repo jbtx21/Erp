@@ -40,6 +40,7 @@ import type { PrintService } from "../modules/print/print.service.js";
 import type { SalesOrderService } from "../modules/sales/sales-order.service.js";
 import type { MailIntakeService } from "../modules/mail/mail.service.js";
 import type { NewsletterService } from "../modules/newsletter/newsletter.service.js";
+import type { OpportunityService } from "../modules/opportunity/opportunity.service.js";
 import type {
   BankingQueryRepository,
   DunningQueryRepository,
@@ -94,6 +95,7 @@ export interface Context {
   salesOrders: SalesOrderService;
   mailIntake: MailIntakeService;
   newsletter: NewsletterService;
+  opportunities: OpportunityService;
   auth: AuthService;
   user: AuthUser | null;
   /** Roh-Token aus dem Cookie (für den 2FA-Zwischenschritt/Logout, wenn user noch null ist). */
