@@ -845,6 +845,17 @@ export const appRouter = router({
       .mutation(({ input, ctx }) => ctx.dashboards.setDefault(input.dashboardId, ctx.user.email)),
   }),
 
+  // Stammdaten-Im-/Export (CSV): Artikel, Kunden, Lieferanten — Migration + Pflege.
+  // Kundendaten/Stammdaten → kein PRODUKTION-Zugriff (Kap. 12).
+  dataIo: router({
+    exportCsv: roleProcedure(...supplierRoles)
+      .input(z.object({ kind: z.enum(["ARTICLE", "COMPANY", "SUPPLIER"]) }))
+      .query(({ input, ctx }) => ctx.dataIo.exportCsv(input.kind)),
+    importCsv: roleProcedure(...supplierRoles)
+      .input(z.object({ kind: z.enum(["ARTICLE", "COMPANY", "SUPPLIER"]), csv: z.string().min(1) }))
+      .mutation(({ input, ctx }) => ctx.dataIo.importCsv(input.kind, input.csv)),
+  }),
+
   // Verknüpfte Belege („Connections"): alle mit einem Auftrag verbundenen Dokumente.
   // Finanzbelege werden für PRODUKTION ausgeblendet (canViewFinancials, Kap. 12).
   links: router({

@@ -9,7 +9,7 @@ import { Differentiators } from "./Differentiators.js";
 import { Banking } from "./Banking.js";
 import {
   CompaniesPage, CostCentersPage, DunningPage, InquiriesPage, IncomingInvoicesPage, LeadsPage, OrdersPage, ProcurementPage, ProductionReportingPage,
-  ProductsPage, PricingPage, EmailTemplatesPage, DashboardsPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
+  ProductsPage, PricingPage, EmailTemplatesPage, DashboardsPage, DataIoPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
 } from "./pages.js";
 import { trpc } from "./trpc.js";
 
@@ -30,7 +30,7 @@ const NAV: ReadonlyArray<{ group: string; items: ReadonlyArray<{ key: string; la
     { key: "banking", label: "Banking" }, { key: "costcenters", label: "Kostenstellen" },
     { key: "reporting", label: "Auswertungen" },
   ] },
-  { group: "System", items: [{ key: "emailtemplates", label: "E-Mail-Vorlagen" }] },
+  { group: "System", items: [{ key: "emailtemplates", label: "E-Mail-Vorlagen" }, { key: "dataio", label: "Import/Export" }] },
 ];
 const ALL_KEYS = NAV.flatMap((g) => g.items.map((i) => i.key));
 const hashKey = (): string => {
@@ -192,6 +192,7 @@ function Page({ k, role }: { k: string; role: string }): ReactNode {
     case "products": return <ProductsPage />;
     case "pricing": return <PricingPage />;
     case "emailtemplates": return <EmailTemplatesPage />;
+    case "dataio": return <DataIoPage />;
     case "differentiators": return <Differentiators role={role} />;
     case "subproduction": return <SubproductionPage />;
     case "prodreport": return <ProductionReportingPage />;

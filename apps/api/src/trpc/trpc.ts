@@ -35,6 +35,7 @@ import type { NotificationService, EmailTemplateService } from "../modules/notif
 import type { DashboardService } from "../modules/dashboard/dashboard.service.js";
 import type { DeliveryService } from "../modules/delivery/delivery.service.js";
 import type { LinksService } from "../modules/links/links.service.js";
+import type { DataIoService } from "../modules/dataio/dataio.service.js";
 import type {
   BankingQueryRepository,
   DunningQueryRepository,
@@ -84,6 +85,7 @@ export interface Context {
   dashboards: DashboardService;
   deliveries: DeliveryService;
   links: LinksService;
+  dataIo: DataIoService;
   auth: AuthService;
   user: AuthUser | null;
   /** Roh-Token aus dem Cookie (für den 2FA-Zwischenschritt/Logout, wenn user noch null ist). */

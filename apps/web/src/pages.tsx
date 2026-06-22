@@ -1357,3 +1357,63 @@ function PlanStat({ label, value, color }: { label: string; value: string; color
     </div>
   );
 }
+
+// Stammdaten-Im-/Export (CSV): Artikel/Kunden/Lieferanten exportieren (Download) und
+// importieren (Datei oder Textfeld). Migration aus CDH + laufende Pflege.
+export function DataIoPage(): JSX.Element {
+  const [kind, setKind] = useState<"ARTICLE" | "COMPANY" | "SUPPLIER">("ARTICLE");
+  const [csv, setCsv] = useState("");
+  const [summary, setSummary] = useState<Awaited<ReturnType<typeof trpc.dataIo.importCsv.mutate>> | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const label = { ARTICLE: "Artikel", COMPANY: "Kunden", SUPPLIER: "Lieferanten" }[kind];
+
+  const doExport = async (): Promise<void> => {
+    setErr(null);
+    try {
+      const text = await trpc.dataIo.exportCsv.query({ kind });
+      const blob = new Blob(["﻿" + text], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `${label.toLowerCase()}-export.csv`; a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) { setErr(errMsg(e)); }
+  };
+
+  return (
+    <>
+      <Title order={3}>Import / Export</Title>
+      <Text size="sm" c="dimmed" mt={4}>Stammdaten als CSV (deutsches Excel-Format, Trennzeichen „;"). Import upsertet je Artikelnummer bzw. Name; fehlerhafte Zeilen werden gemeldet und übersprungen.</Text>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+
+      <Group align="flex-end" gap="sm" mt="md" wrap="wrap">
+        <Select label="Datensatz" w={200} value={kind} onChange={(v) => { if (v) { setKind(v as typeof kind); setSummary(null); } }}
+          data={[{ value: "ARTICLE", label: "Artikel" }, { value: "COMPANY", label: "Kunden" }, { value: "SUPPLIER", label: "Lieferanten" }]} />
+        <Button variant="light" onClick={() => void doExport()}>{label} exportieren (CSV)</Button>
+      </Group>
+
+      <Title order={4} mt="xl">{label} importieren</Title>
+      <Group gap="sm" mt="xs">
+        <input type="file" accept=".csv,text/csv" onChange={(e) => {
+          const f = e.currentTarget.files?.[0]; if (!f) return;
+          const reader = new FileReader();
+          reader.onload = () => setCsv(String(reader.result ?? ""));
+          reader.readAsText(f);
+        }} />
+      </Group>
+      <Textarea label="…oder CSV einfügen" autosize minRows={4} maxRows={12} mt="xs" value={csv} onChange={(e) => setCsv(e.currentTarget.value)} placeholder="Artikelnummer;Bezeichnung;Marke&#10;A-1;Poloshirt;TEXMA" />
+      <Button mt="sm" disabled={!csv.trim()} onClick={async () => {
+        setErr(null); setSummary(null);
+        try { setSummary(await trpc.dataIo.importCsv.mutate({ kind, csv })); } catch (e) { setErr(errMsg(e)); }
+      }}>Importieren</Button>
+
+      {summary && (
+        <Alert color={summary.errors.length > 0 ? "yellow" : "green"} mt="md" title="Import-Ergebnis">
+          <Text size="sm">Neu: {summary.created} · Aktualisiert: {summary.updated} · Übersprungen: {summary.skipped} · Fehler: {summary.errors.length}</Text>
+          {summary.errors.slice(0, 20).map((e, i) => (
+            <Text key={i} size="xs" c="dimmed">Zeile {e.row}: {e.message}</Text>
+          ))}
+        </Alert>
+      )}
+    </>
+  );
+}
