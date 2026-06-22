@@ -80,6 +80,8 @@ export class PrismaOrderRepository
         number: true,
         companyId: true,
         status: true,
+        lieferstatus: true,
+        fakturastatus: true,
         zugesagterLiefertermin: true,
         externalNumber: true,
         employeeNote: true,
@@ -92,6 +94,8 @@ export class PrismaOrderRepository
       number: r.number,
       companyId: r.companyId,
       status: r.status,
+      lieferstatus: r.lieferstatus,
+      fakturastatus: r.fakturastatus,
       zugesagterLiefertermin: r.zugesagterLiefertermin,
       externalNumber: r.externalNumber,
       employeeNote: r.employeeNote,
@@ -111,6 +115,32 @@ export class PrismaOrderRepository
 
   async setDeliveryDate(orderId: string, date: Date | null): Promise<void> {
     await prisma.order.update({ where: { id: orderId }, data: { zugesagterLiefertermin: date } });
+  }
+
+  async loadFulfillmentInput(orderId: string): Promise<{ orderNetCents: number; invoiceNetCents: number | null; status: string; hasDelivery: boolean } | null> {
+    const o = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        status: true,
+        lines: { select: { qty: true, unitNetCents: true } },
+        invoice: { select: { netCents: true } },
+        deliveryNotes: { select: { id: true }, take: 1 },
+      },
+    });
+    if (!o) return null;
+    return {
+      orderNetCents: o.lines.reduce((s, l) => s + l.qty * l.unitNetCents, 0),
+      invoiceNetCents: o.invoice?.netCents ?? null,
+      status: o.status,
+      hasDelivery: o.deliveryNotes.length > 0,
+    };
+  }
+
+  async setFulfillment(orderId: string, lieferstatus: string, fakturastatus: string): Promise<void> {
+    await prisma.order.update({
+      where: { id: orderId },
+      data: { lieferstatus: lieferstatus as never, fakturastatus: fakturastatus as never },
+    });
   }
 
   async orderLines(orderId: string): Promise<OrderLineItem[]> {

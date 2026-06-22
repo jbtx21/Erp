@@ -6,6 +6,8 @@ export interface OrderListItem {
   number: string;
   companyId: string;
   status: string; // OrderStatus (B9) — Workflow-Übergänge via F2
+  lieferstatus: string; // Teil-Status (G-4): NICHT/TEILWEISE/VOLL
+  fakturastatus: string; // Teil-Status (G-4): NICHT/TEILWEISE/VOLL
   zugesagterLiefertermin: Date | null; // zugesagter Liefertermin (B9, Kap. 35.2) — produktionsrelevant, nicht redigiert
   externalNumber: string | null;
   employeeNote: string | null; // Kundendaten — für PRODUKTION redigiert (RBAC)

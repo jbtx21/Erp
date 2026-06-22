@@ -14,6 +14,8 @@ interface StoredOrder {
   number: string;
   companyId: string;
   status: string;
+  lieferstatus: string;
+  fakturastatus: string;
   zugesagterLiefertermin: Date | null;
   shopConnectorId: string;
   externalNumber: string;
@@ -49,6 +51,8 @@ export class InMemoryOrderRepository
       number,
       companyId: mapped.companyId,
       status: "ANGELEGT",
+      lieferstatus: "NICHT",
+      fakturastatus: "NICHT",
       zugesagterLiefertermin: null,
       shopConnectorId: mapped.shopConnectorId,
       externalNumber: mapped.externalNumber,
@@ -82,6 +86,18 @@ export class InMemoryOrderRepository
     if (o) o.zugesagterLiefertermin = date;
   }
 
+  async loadFulfillmentInput(orderId: string): Promise<{ orderNetCents: number; invoiceNetCents: number | null; status: string; hasDelivery: boolean } | null> {
+    const o = this.orders.find((x) => x.id === orderId);
+    if (!o) return null;
+    // In-Memory kennt keine Rechnungen/Lieferscheine → konservativ leer.
+    return { orderNetCents: o.totalNetCents, invoiceNetCents: null, status: o.status, hasDelivery: false };
+  }
+
+  async setFulfillment(orderId: string, lieferstatus: string, fakturastatus: string): Promise<void> {
+    const o = this.orders.find((x) => x.id === orderId);
+    if (o) { o.lieferstatus = lieferstatus; o.fakturastatus = fakturastatus; }
+  }
+
   async listRecent(limit: number): Promise<OrderListItem[]> {
     return this.orders
       .slice(-limit)
@@ -91,6 +107,8 @@ export class InMemoryOrderRepository
         number: o.number,
         companyId: o.companyId,
         status: o.status,
+        lieferstatus: o.lieferstatus,
+        fakturastatus: o.fakturastatus,
         zugesagterLiefertermin: o.zugesagterLiefertermin,
         externalNumber: o.externalNumber,
         employeeNote: o.employeeNote,

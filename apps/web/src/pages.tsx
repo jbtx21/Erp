@@ -22,7 +22,7 @@ const COL_LABELS: Record<string, string> = {
   qty: "Menge", menge: "Menge", position: "Pos.", description: "Beschreibung", sku: "SKU",
   supplierSku: "Lief.-SKU", availableQty: "Verfügbar", variantCount: "Varianten",
   createdAt: "Erstellt", updatedAt: "Geändert", ausgegebenAm: "Ausgegeben", dueDate: "Fällig",
-  gueltigBisAm: "Gültig bis", zugesagterLiefertermin: "Liefertermin", externalNumber: "Shop-Nr.", employeeNote: "Vermerk",
+  gueltigBisAm: "Gültig bis", zugesagterLiefertermin: "Liefertermin", lieferstatus: "Lieferstatus", fakturastatus: "Fakturastatus", externalNumber: "Shop-Nr.", employeeNote: "Vermerk",
   trackingNumber: "Tracking", invoiceId: "Rechnung", kontaktName: "Kontakt", note: "Notiz",
   verworfenGrund: "Grund", finalized: "Final", lastSyncAt: "Letzter Sync", dunningLevel: "Mahnstufe",
 };
@@ -524,6 +524,12 @@ export function OrdersPage({ role }: { role: string }): JSX.Element {
                   setPlan(p as SchedulePlan);
                 } catch (e) { setErr(errMsg(e)); }
               }}>Terminierung anzeigen</Button>
+            <Button variant="default" disabled={!termOrder}
+              onClick={async () => {
+                setErr(null);
+                try { await trpc.shopOrders.recomputeFulfillment.mutate({ orderId: termOrder! }); await load(); }
+                catch (e) { setErr(errMsg(e)); }
+              }}>Erfüllungsstatus neu berechnen</Button>
           </Group>
 
           {plan && (

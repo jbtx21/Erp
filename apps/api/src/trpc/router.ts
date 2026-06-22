@@ -142,6 +142,14 @@ export const appRouter = router({
           );
         } catch (e) { throw new TRPCError({ code: "CONFLICT", message: (e as Error).message }); }
       }),
+
+    /** Teil-Status neu berechnen (G-4): Liefer-/Fakturastatus aus Lieferung/Rechnung. */
+    recomputeFulfillment: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ orderId: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.orderWorkflow.recomputeFulfillment(input.orderId); }
+        catch (e) { throw new TRPCError({ code: "CONFLICT", message: (e as Error).message }); }
+      }),
   }),
 
   // Rückwärtsterminierung (B9, Kap. 35.2). preview ist rein (keine Persistenz): aus

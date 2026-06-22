@@ -12,6 +12,10 @@ import {
 class FakeOrderRepo implements OrderWorkflowRepository {
   status = new Map<string, string>([["o1", "ANGELEGT"]]);
   delivery = new Map<string, Date | null>();
+  fulfillment = new Map<string, { lieferstatus: string; fakturastatus: string }>();
+  fulfillmentInput: { orderNetCents: number; invoiceNetCents: number | null; status: string; hasDelivery: boolean } = {
+    orderNetCents: 10000, invoiceNetCents: null, status: "ANGELEGT", hasDelivery: false,
+  };
   async getStatus(id: string): Promise<string | null> {
     return this.status.get(id) ?? null;
   }
@@ -20,6 +24,12 @@ class FakeOrderRepo implements OrderWorkflowRepository {
   }
   async setDeliveryDate(id: string, date: Date | null): Promise<void> {
     this.delivery.set(id, date);
+  }
+  async loadFulfillmentInput(id: string): Promise<typeof this.fulfillmentInput | null> {
+    return this.status.has(id) ? this.fulfillmentInput : null;
+  }
+  async setFulfillment(id: string, lieferstatus: string, fakturastatus: string): Promise<void> {
+    this.fulfillment.set(id, { lieferstatus, fakturastatus });
   }
 }
 
@@ -69,5 +79,34 @@ describe("OrderWorkflowService.setDeliveryDate (B9, Liefertermin)", () => {
   it("wirft bei unbekanntem Auftrag (kein stiller Schreiber)", async () => {
     const { svc } = setup();
     await expect(svc.setDeliveryDate("nope", new Date())).rejects.toBeInstanceOf(OrderWorkflowError);
+  });
+});
+
+describe("OrderWorkflowService.recomputeFulfillment (G-4, Teil-Status)", () => {
+  it("keine Rechnung, kein Versand → fakturastatus/lieferstatus NICHT", async () => {
+    const { repo, svc } = setup();
+    const r = await svc.recomputeFulfillment("o1");
+    expect(r).toEqual({ lieferstatus: "NICHT", fakturastatus: "NICHT" });
+    expect(repo.fulfillment.get("o1")).toEqual({ lieferstatus: "NICHT", fakturastatus: "NICHT" });
+  });
+
+  it("Teilrechnung (< Auftragssumme) → fakturastatus TEILWEISE", async () => {
+    const { repo, svc } = setup();
+    repo.fulfillmentInput = { orderNetCents: 10000, invoiceNetCents: 4000, status: "VERSANDBEREIT", hasDelivery: true };
+    const r = await svc.recomputeFulfillment("o1");
+    expect(r.fakturastatus).toBe("TEILWEISE");
+    expect(r.lieferstatus).toBe("TEILWEISE"); // Lieferschein da, aber Status < VERSENDET
+  });
+
+  it("voll berechnet + versendet → beide VOLL", async () => {
+    const { repo, svc } = setup();
+    repo.fulfillmentInput = { orderNetCents: 10000, invoiceNetCents: 10000, status: "VERSENDET", hasDelivery: true };
+    const r = await svc.recomputeFulfillment("o1");
+    expect(r).toEqual({ lieferstatus: "VOLL", fakturastatus: "VOLL" });
+  });
+
+  it("wirft bei unbekanntem Auftrag", async () => {
+    const { svc } = setup();
+    await expect(svc.recomputeFulfillment("nope")).rejects.toBeInstanceOf(OrderWorkflowError);
   });
 });

@@ -600,6 +600,13 @@ enum OrderStatus {
   STORNIERT
 }
 
+// Teil-Erfüllungs-Status (ERP-Grundfunktion / G-4): delivery_status/billing_status-Muster.
+enum FulfillmentStatus {
+  NICHT
+  TEILWEISE
+  VOLL
+}
+
 model Order {
   id          String      @id @default(cuid())
   number      String      @unique
@@ -610,6 +617,8 @@ model Order {
   shopConnectorId String? // Herkunft Shop (null = manuell)
   shopConnector   ShopConnector? @relation(fields: [shopConnectorId], references: [id])
   status      OrderStatus @default(ANGELEGT)
+  lieferstatus FulfillmentStatus @default(NICHT) // Teil-Status (G-4) aus Lieferungen/Status
+  fakturastatus FulfillmentStatus @default(NICHT) // Teil-Status (G-4) aus Rechnungsbetrag vs. Auftragssumme
   zugesagterLiefertermin DateTime? // Rückwärtsterminierung (B9, Kap. 35.2)
   quoteId     String?     @unique
   quote       Quote?      @relation(fields: [quoteId], references: [id])
