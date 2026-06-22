@@ -461,30 +461,33 @@ export function ProductsPage(): JSX.Element {
 
 // Wiederverwendbarer Mehrzeilen-Positionseditor (Anfrage/Angebot/Auftrag-Erstellung):
 // Beschreibung, Menge, Einzelpreis (€) je Zeile; Zeilen hinzufügen/entfernen.
-export interface EditorLine { description: string; qty: number; euro: number }
+export type PositionKind = "TEXTIL" | "VEREDELUNG" | "SONSTIGE";
+export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind }
 export function LinesEditor({ lines, onChange }: { lines: EditorLine[]; onChange: (l: EditorLine[]) => void }): JSX.Element {
   const set = (i: number, patch: Partial<EditorLine>): void => onChange(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
   return (
     <Box>
       {lines.map((l, i) => (
         <Group key={i} gap="xs" mt={4} align="end">
-          <TextInput label={i === 0 ? "Beschreibung" : undefined} value={l.description} onChange={(e) => set(i, { description: e.currentTarget.value })} placeholder="200 Polos bestickt" w={260} />
+          <Select label={i === 0 ? "Art" : undefined} w={130} value={l.kind} onChange={(v) => v && set(i, { kind: v as PositionKind })}
+            data={[{ value: "TEXTIL", label: "Textil" }, { value: "VEREDELUNG", label: "Veredelung" }, { value: "SONSTIGE", label: "Sonstiges" }]} />
+          <TextInput label={i === 0 ? "Beschreibung" : undefined} value={l.description} onChange={(e) => set(i, { description: e.currentTarget.value })} placeholder="200 Polos bestickt" w={240} />
           <NumberInput label={i === 0 ? "Menge" : undefined} value={l.qty} onChange={(v) => set(i, { qty: Number(v) || 1 })} min={1} w={90} />
           <NumberInput label={i === 0 ? "Einzel (€)" : undefined} value={l.euro} onChange={(v) => set(i, { euro: Number(v) || 0 })} min={0} decimalScale={2} w={110} />
           <Button size="compact-sm" variant="subtle" color="red" disabled={lines.length === 1} onClick={() => onChange(lines.filter((_, j) => j !== i))}>✕</Button>
         </Group>
       ))}
-      <Button size="compact-xs" variant="light" mt="xs" onClick={() => onChange([...lines, { description: "", qty: 1, euro: 0 }])}>+ Position</Button>
+      <Button size="compact-xs" variant="light" mt="xs" onClick={() => onChange([...lines, { description: "", qty: 1, euro: 0, kind: "VEREDELUNG" }])}>+ Position</Button>
     </Box>
   );
 }
-export const toApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number }[] =>
-  lines.filter((l) => l.description.trim()).map((l) => ({ description: l.description.trim(), qty: l.qty, unitNetCents: Math.round(l.euro * 100) }));
+export const toApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; kind: PositionKind }[] =>
+  lines.filter((l) => l.description.trim()).map((l) => ({ description: l.description.trim(), qty: l.qty, unitNetCents: Math.round(l.euro * 100), kind: l.kind }));
 
 export function QuotesPage(): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [companyId, setCompanyId] = useState("co-muster");
-  const [lines, setLines] = useState<EditorLine[]>([{ description: "", qty: 10, euro: 12.9 }]);
+  const [lines, setLines] = useState<EditorLine[]>([{ description: "", qty: 10, euro: 12.9, kind: "TEXTIL" }]);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -528,7 +531,7 @@ export function QuotesPage(): JSX.Element {
         setBusy(true); setErr(null);
         try {
           await trpc.quotes.create.mutate({ companyId, lines: toApiLines(lines) });
-          setLines([{ description: "", qty: 10, euro: 12.9 }]); await load();
+          setLines([{ description: "", qty: 10, euro: 12.9, kind: "TEXTIL" }]); await load();
         } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
       }}>Angebot anlegen</Button>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
@@ -651,7 +654,7 @@ export function OrdersPage({ role }: { role: string }): JSX.Element {
   // Manuelle Auftragserstellung (ADMIN/BUERO).
   const [showCreate, setShowCreate] = useState(false);
   const [newCompany, setNewCompany] = useState("co-muster");
-  const [newLines, setNewLines] = useState<EditorLine[]>([{ description: "", qty: 10, euro: 12.9 }]);
+  const [newLines, setNewLines] = useState<EditorLine[]>([{ description: "", qty: 10, euro: 12.9, kind: "TEXTIL" }]);
 
   const load = useCallback(async () => {
     try { setRows((await trpc.shopOrders.list.query({ limit: 100 })) as Row[]); setErr(null); }
@@ -680,7 +683,7 @@ export function OrdersPage({ role }: { role: string }): JSX.Element {
                 try {
                   const r = await trpc.sales.createOrder.mutate({ companyId: newCompany, lines: toApiLines(newLines) });
                   window.alert(`Auftrag ${r.number} angelegt.`);
-                  setNewLines([{ description: "", qty: 10, euro: 12.9 }]); setShowCreate(false); await load();
+                  setNewLines([{ description: "", qty: 10, euro: 12.9, kind: "TEXTIL" }]); setShowCreate(false); await load();
                 } catch (e) { setErr(errMsg(e)); }
               }}>Auftrag anlegen</Button>
             </Box>

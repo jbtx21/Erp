@@ -23,7 +23,7 @@ export interface QuoteRow {
 export interface CreateQuoteInput {
   companyId: string;
   gueltigBisAm?: Date | null;
-  lines: Array<{ description: string; qty: number; unitNetCents: number }>;
+  lines: Array<{ description: string; qty: number; unitNetCents: number; kind?: import("@texma/shared").PositionKind }>;
 }
 
 export type QuoteTransition = "VERSENDET" | "NACHFASSEN" | "ANGENOMMEN";

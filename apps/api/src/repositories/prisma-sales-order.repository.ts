@@ -15,7 +15,7 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
         companyId: input.companyId,
         quoteId: input.quoteId,
         status: "ANGELEGT",
-        lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents })) },
+        lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, kind: (l.kind ?? "TEXTIL") as never })) },
       },
       select: { id: true },
     });
@@ -25,7 +25,7 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
   async quoteForConversion(quoteId: string): Promise<{ companyId: string; existingOrderId: string | null; lines: SalesLine[] } | null> {
     const q = await prisma.quote.findUnique({
       where: { id: quoteId },
-      select: { companyId: true, lines: { orderBy: { position: "asc" }, select: { description: true, qty: true, unitNetCents: true } } },
+      select: { companyId: true, lines: { orderBy: { position: "asc" }, select: { description: true, qty: true, unitNetCents: true, kind: true } } },
     });
     if (!q) return null;
     const existing = await prisma.order.findUnique({ where: { quoteId }, select: { id: true } });

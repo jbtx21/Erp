@@ -3,12 +3,14 @@
 // Shop-Import (T-01) bleibt der zweite Auftragsweg; hier die manuelle Erfassung.
 
 import { buildEntry, type AuditSink } from "@texma/audit";
+import type { PositionKind } from "@texma/shared";
 import type { NumberingService } from "../numbering/numbering.service.js";
 
 export interface SalesLine {
   description: string;
   qty: number;
   unitNetCents: number;
+  kind?: PositionKind;
 }
 
 export interface CreatedSalesOrder {

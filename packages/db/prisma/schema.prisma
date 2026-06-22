@@ -588,6 +588,7 @@ model QuoteLine {
   qty         Int
   unitNetCents Int // jede Veredelung als eigene Position, kein Pauschalpreis (Kap. 4.4)
   dbCents     Int? // Deckungsbeitrag bereits im Angebot sichtbar (Kap. 4.4)
+  kind        PositionKind @default(TEXTIL) // Textil- vs. Veredelungsposition (Kap. 4.4/11)
 }
 
 enum OrderStatus {
@@ -655,8 +656,17 @@ model OrderLine {
   description String
   qty         Int
   unitNetCents Int
+  kind        PositionKind @default(TEXTIL) // Textil- vs. Veredelungsposition (Kap. 4.4/11)
   rawPayload  Json? // Roh-Shopzeile für Replay/Traceability (Kap. 3)
   deliveryLines DeliveryNoteLine[] // gelieferte Teilmengen (Mehrfach-Teillieferung)
+}
+
+// Positionsart: Basistextil vs. Veredelung (Druck/Stick) vs. Sonstiges (Versand,
+// Einrichtung). Trennt Umsatz/Produktion in Auftrag und Angebot (Veredelungskern).
+enum PositionKind {
+  TEXTIL
+  VEREDELUNG
+  SONSTIGE
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -29,7 +29,7 @@ export class PrismaQuoteRepository implements QuoteRepository {
         number: input.number,
         companyId: input.companyId,
         gueltigBisAm: input.gueltigBisAm ?? null,
-        lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents })) },
+        lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, kind: (l.kind ?? "TEXTIL") as never })) },
       },
       select: { id: true },
     });
