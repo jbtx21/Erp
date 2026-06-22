@@ -88,6 +88,9 @@ import { PrintService } from "./modules/print/print.service.js";
 import { PrismaPrintRepository } from "./repositories/prisma-print.repository.js";
 import { SalesOrderService } from "./modules/sales/sales-order.service.js";
 import { PrismaSalesOrderRepository } from "./repositories/prisma-sales-order.repository.js";
+import { MailIntakeService } from "./modules/mail/mail.service.js";
+import { PrismaMailIntakeRepository } from "./repositories/prisma-mail.repository.js";
+import { ImapMailFetcher } from "./modules/mail/imap-fetcher.js";
 import { appRouter } from "./trpc/router.js";
 import type { Context } from "./trpc/trpc.js";
 import { portalAppRouter } from "./trpc/portal-router.js";
@@ -181,6 +184,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const dataIo = new DataIoService(new PrismaDataIoRepository(), new PrismaAuditSink());
   const print = new PrintService(new PrismaPrintRepository());
   const salesOrders = new SalesOrderService(new PrismaSalesOrderRepository(), new NumberingService(new PrismaNumberingRepository()), new PrismaAuditSink());
+  const mailIntake = new MailIntakeService(new ImapMailFetcher(), new PrismaMailIntakeRepository(), new NumberingService(new PrismaNumberingRepository()), new PrismaAuditSink());
   const auth = new AuthService(
     new PrismaUserRepository(),
     new PrismaSessionRepository(),
@@ -285,6 +289,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           dataIo,
           print,
           salesOrders,
+          mailIntake,
           auth,
           user,
           sessionToken,

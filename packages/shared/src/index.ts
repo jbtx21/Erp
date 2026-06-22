@@ -2,6 +2,7 @@ export * from "./money.js";
 export * from "./csv.js";
 export * from "./dataio.js";
 export * from "./beleg.js";
+export * from "./mail.js";
 export * from "./pricing.js";
 export * from "./markup.js";
 export * from "./pain001.js";

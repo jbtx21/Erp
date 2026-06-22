@@ -785,7 +785,11 @@ export function InquiriesPage(): JSX.Element {
   return (
     <>
       <Title order={3}>Anfragen</Title>
-      <Text size="sm" c="dimmed" mt={4}>Anfrage-Funnel NEU → In Bearbeitung → Angebot (B20, AF-Nummer aus F1).</Text>
+      <Text size="sm" c="dimmed" mt={4}>Anfrage-Funnel NEU → In Bearbeitung → Angebot (B20, AF-Nummer aus F1). Maileingang wird per IMAP zu Anfragen, Absender mit Kundenstammdaten abgeglichen.</Text>
+      <Button size="compact-sm" variant="light" mt="xs" onClick={() => void act(async () => {
+        const r = await trpc.mail.pollInbox.mutate();
+        window.alert(`Posteingang: ${r.created} neue Anfrage(n), ${r.matched} Kunde(n) zugeordnet, ${r.skipped} übersprungen.`);
+      })}>📧 Posteingang abrufen</Button>
       <Group mt="sm" gap="xs" align="end">
         <TextInput label="Anfragetext" value={text} onChange={(e) => setText(e.currentTarget.value)} placeholder="200 Polos bestickt, Logo …" w={280} />
         <Select label="Quelle" value={quelle} onChange={(v) => v && setQuelle(v)} data={["WEB", "EMAIL", "SHOP", "TELEFON"]} w={110} />

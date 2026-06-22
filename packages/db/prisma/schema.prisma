@@ -573,6 +573,7 @@ model Inquiry {
   text           String
   quoteId        String?       @unique
   quote          Quote?        @relation(fields: [quoteId], references: [id])
+  externalRef    String?       @unique // Mail-Message-ID (Idempotenz beim Maileingang)
   createdAt      DateTime      @default(now())
 
   @@index([status])

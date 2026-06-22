@@ -856,6 +856,13 @@ export const appRouter = router({
       .mutation(({ input, ctx }) => ctx.dataIo.importCsv(input.kind, input.csv)),
   }),
 
+  // Mailanbindung: Posteingang abrufen (IMAP) und Mails in Anfragen wandeln, mit
+  // Abgleich der Absenderadresse gegen die Kundenstammdaten (Kontakte). Kundendaten →
+  // kein PRODUKTION-Zugriff (Kap. 12).
+  mail: router({
+    pollInbox: roleProcedure("ADMIN", "BUERO").mutation(({ ctx }) => ctx.mailIntake.pollInbox()),
+  }),
+
   // Auftragserstellung (Vertrieb): manueller Auftrag + Angebot→Auftrag. Schreibt
   // Stammdaten/Preise → kein PRODUKTION-Zugriff (Kap. 12).
   sales: router({
