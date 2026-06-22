@@ -91,6 +91,9 @@ import { PrismaSalesOrderRepository } from "./repositories/prisma-sales-order.re
 import { MailIntakeService } from "./modules/mail/mail.service.js";
 import { PrismaMailIntakeRepository } from "./repositories/prisma-mail.repository.js";
 import { ImapMailFetcher } from "./modules/mail/imap-fetcher.js";
+import { NewsletterService, StubNewsletterProvider } from "./modules/newsletter/newsletter.service.js";
+import { BrevoNewsletterProvider } from "./modules/newsletter/brevo-provider.js";
+import { PrismaNewsletterRepository } from "./repositories/prisma-newsletter.repository.js";
 import { appRouter } from "./trpc/router.js";
 import type { Context } from "./trpc/trpc.js";
 import { portalAppRouter } from "./trpc/portal-router.js";
@@ -185,6 +188,10 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const print = new PrintService(new PrismaPrintRepository());
   const salesOrders = new SalesOrderService(new PrismaSalesOrderRepository(), new NumberingService(new PrismaNumberingRepository()), new PrismaAuditSink());
   const mailIntake = new MailIntakeService(new ImapMailFetcher(), new PrismaMailIntakeRepository(), new NumberingService(new PrismaNumberingRepository()), new PrismaAuditSink());
+  const newsletterProvider = process.env.BREVO_API_KEY
+    ? new BrevoNewsletterProvider(process.env.BREVO_API_KEY, { name: process.env.BREVO_SENDER_NAME ?? "TEXMA", email: process.env.BREVO_SENDER_EMAIL ?? "info@texma-gmbh.de" })
+    : new StubNewsletterProvider();
+  const newsletter = new NewsletterService(new PrismaNewsletterRepository(), newsletterProvider, new PrismaAuditSink());
   const auth = new AuthService(
     new PrismaUserRepository(),
     new PrismaSessionRepository(),
@@ -290,6 +297,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           print,
           salesOrders,
           mailIntake,
+          newsletter,
           auth,
           user,
           sessionToken,

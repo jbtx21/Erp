@@ -1551,3 +1551,49 @@ export function DataIoPage(): JSX.Element {
     </>
   );
 }
+
+// Newsletter (Brevo): Kampagnen anlegen + an Opt-in-Kontakte versenden (DSGVO).
+export function NewsletterPage(): JSX.Element {
+  const [list, setList] = useState<Row[]>([]);
+  const [audience, setAudience] = useState<number>(0);
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      setList((await trpc.newsletter.list.query()) as Row[]);
+      setAudience(await trpc.newsletter.audienceSize.query());
+      setErr(null);
+    } catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  return (
+    <>
+      <Title order={3}>Newsletter</Title>
+      <Text size="sm" c="dimmed" mt={4}>Kampagnen über Brevo an Kontakte mit Newsletter-Einwilligung (DSGVO, Kap. 28). Aktuelle Empfänger mit Opt-in: <b>{audience}</b>.</Text>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+
+      <Title order={4} mt="md">Neue Kampagne</Title>
+      <TextInput label="Betreff" value={subject} onChange={(e) => setSubject(e.currentTarget.value)} mt="xs" w={420} />
+      <Textarea label="Inhalt" value={body} onChange={(e) => setBody(e.currentTarget.value)} autosize minRows={4} mt="xs" />
+      <Button mt="sm" disabled={!subject.trim() || !body.trim()} onClick={async () => {
+        setErr(null);
+        try { await trpc.newsletter.create.mutate({ subject, body }); setSubject(""); setBody(""); await load(); }
+        catch (e) { setErr(errMsg(e)); }
+      }}>Kampagne anlegen</Button>
+
+      <Title order={4} mt="xl">Kampagnen</Title>
+      <AutoTable rows={list} hide={["body"]} action={(r) => (
+        String(r.status) === "ENTWURF"
+          ? <Button size="compact-xs" color="green" onClick={async () => {
+              setErr(null);
+              try { const res = await trpc.newsletter.send.mutate({ campaignId: String(r.id) }); window.alert(`Versendet an ${res.recipientCount} Empfänger.`); await load(); }
+              catch (e) { setErr(errMsg(e)); }
+            }}>Versenden</Button>
+          : <Text size="xs" c="dimmed">gesendet</Text>
+      )} />
+    </>
+  );
+}

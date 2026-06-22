@@ -133,6 +133,7 @@ model Contact {
   email     String?
   phone     String?
   role      String? // Funktion im Unternehmen
+  newsletterOptIn Boolean @default(false) // DSGVO-Einwilligung Newsletter (Kap. 28)
   gesperrtAm     DateTime? // DSGVO-Sperre (B12, Kap. 28)
   anonymisiertAm DateTime? // DSGVO-Anonymisierung (B12)
   createdAt DateTime @default(now())
@@ -1420,4 +1421,22 @@ model DashboardItem {
   position    Int                 @default(0)
 
   @@index([dashboardId])
+}
+
+// Newsletter-Kampagne (Brevo-Anbindung): Betreff/Inhalt + Versandstatus. Empfänger
+// werden zum Versandzeitpunkt aus den Kontakten mit Opt-in gebildet (DSGVO, Kap. 28).
+model NewsletterCampaign {
+  id             String                   @id @default(cuid())
+  subject        String
+  body           String
+  status         NewsletterStatus         @default(ENTWURF)
+  recipientCount Int                      @default(0)
+  providerRef    String? // Brevo-Kampagnen-/Nachrichten-ID
+  sentAt         DateTime?
+  createdAt      DateTime                 @default(now())
+}
+
+enum NewsletterStatus {
+  ENTWURF
+  GESENDET
 }

@@ -881,6 +881,25 @@ export const appRouter = router({
       .mutation(({ input, ctx }) => ctx.dataIo.importCsv(input.kind, input.csv)),
   }),
 
+  // Newsletter (Brevo): Kampagnen anlegen + an Opt-in-Kontakte versenden (DSGVO).
+  // Kundendaten/Marketing → kein PRODUKTION-Zugriff (Kap. 12).
+  newsletter: router({
+    list: roleProcedure("ADMIN", "BUERO").query(({ ctx }) => ctx.newsletter.listCampaigns()),
+    audienceSize: roleProcedure("ADMIN", "BUERO").query(({ ctx }) => ctx.newsletter.audienceSize()),
+    create: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ subject: z.string().min(1), body: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.newsletter.createCampaign(input.subject, input.body); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    send: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ campaignId: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.newsletter.send(input.campaignId); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+  }),
+
   // Mailanbindung: Posteingang abrufen (IMAP) und Mails in Anfragen wandeln, mit
   // Abgleich der Absenderadresse gegen die Kundenstammdaten (Kontakte). Kundendaten →
   // kein PRODUKTION-Zugriff (Kap. 12).
