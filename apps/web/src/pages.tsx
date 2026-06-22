@@ -4,6 +4,7 @@
 // Mahnlauf, Reorder→Bestellungen) sind je Seite ergänzt.
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Alert, Badge, Button, Group, Loader, NumberInput, Select, Table, Text, TextInput, Title } from "@mantine/core";
+import { orderStatusMachine, type OrderStatus } from "@texma/shared";
 import { trpc } from "./trpc.js";
 import { euro, numTd, statusMantineColor } from "./theme.js";
 
@@ -357,6 +358,45 @@ export function ProductsPage(): JSX.Element {
           <AutoTable rows={variants} />
         </>
       )}
+    </>
+  );
+}
+
+export function OrdersPage({ role }: { role: string }): JSX.Element {
+  const [rows, setRows] = useState<Row[]>([]);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try { setRows((await trpc.shopOrders.list.query({ limit: 100 })) as Row[]); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  const canAct = role === "ADMIN" || role === "BUERO";
+
+  return (
+    <>
+      <Title order={3}>Aufträge</Title>
+      <Text size="sm" c="dimmed" mt={4}>
+        {role === "PRODUKTION" ? "Rolle PRODUKTION: Preise/Kundendaten ausgeblendet (Kap. 12)." : "Status weiterschalten — illegale Übergänge blockiert (F2, Kap. 35.2)."}
+      </Text>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      <AutoTable rows={rows} hide={["rawPayload"]} action={!canAct ? undefined : (r) => {
+        const next = orderStatusMachine.next(String(r.status) as OrderStatus);
+        if (next.length === 0) return <Text size="xs" c="dimmed">—</Text>;
+        return (
+          <Group gap={4} justify="flex-end" wrap="nowrap">
+            {next.map((to) => (
+              <Button key={to} size="compact-xs" variant={to === "STORNIERT" ? "light" : "default"} color={to === "STORNIERT" ? "red" : undefined}
+                onClick={async () => {
+                  setErr(null);
+                  try { await trpc.shopOrders.transition.mutate({ orderId: String(r.id), to: to as Exclude<OrderStatus, "ANGELEGT"> }); await load(); }
+                  catch (e) { setErr(errMsg(e)); }
+                }}>→ {to}</Button>
+            ))}
+          </Group>
+        );
+      }} />
     </>
   );
 }

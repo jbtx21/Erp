@@ -79,6 +79,7 @@ export class PrismaOrderRepository
         id: true,
         number: true,
         companyId: true,
+        status: true,
         externalNumber: true,
         employeeNote: true,
         createdAt: true,
@@ -89,11 +90,21 @@ export class PrismaOrderRepository
       id: r.id,
       number: r.number,
       companyId: r.companyId,
+      status: r.status,
       externalNumber: r.externalNumber,
       employeeNote: r.employeeNote,
       totalNetCents: r.lines.reduce((sum, l) => sum + l.qty * l.unitNetCents, 0),
       createdAt: r.createdAt,
     }));
+  }
+
+  async getStatus(orderId: string): Promise<string | null> {
+    const o = await prisma.order.findUnique({ where: { id: orderId }, select: { status: true } });
+    return o?.status ?? null;
+  }
+
+  async setStatus(orderId: string, status: string): Promise<void> {
+    await prisma.order.update({ where: { id: orderId }, data: { status: status as never } });
   }
 
   async orderLines(orderId: string): Promise<OrderLineItem[]> {

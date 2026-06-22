@@ -5,6 +5,7 @@ export interface OrderListItem {
   id: string;
   number: string;
   companyId: string;
+  status: string; // OrderStatus (B9) — Workflow-Übergänge via F2
   externalNumber: string | null;
   employeeNote: string | null; // Kundendaten — für PRODUKTION redigiert (RBAC)
   totalNetCents: number | null; // Auftragswert — für PRODUKTION redigiert (RBAC)
@@ -23,6 +24,10 @@ export interface OrderQueryRepository {
   listRecent(limit: number): Promise<OrderListItem[]>;
   /** Positionen eines Auftrags (für Auswahl, z. B. Reklamation je Zeile). */
   orderLines(orderId: string): Promise<OrderLineItem[]>;
+  /** Aktueller Status (für Workflow-Übergang). */
+  getStatus(orderId: string): Promise<string | null>;
+  /** Setzt den Status (nach F2-Prüfung im Service). */
+  setStatus(orderId: string, status: string): Promise<void>;
 }
 
 // Lieferanten-Artikel (C3). EK-Preise sind finanziell sensibel → Endpunkt rollen-

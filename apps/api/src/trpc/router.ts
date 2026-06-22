@@ -119,6 +119,17 @@ export const appRouter = router({
     lines: roleProcedure(...supplierRoles)
       .input(z.object({ orderId: z.string().min(1) }))
       .query(({ input, ctx }) => ctx.orders.orderLines(input.orderId)),
+
+    /** Auftrags-Status weiterschalten (F2-geprüft, Kap. 35.2). */
+    transition: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({
+        orderId: z.string().min(1),
+        to: z.enum(["IN_BEARBEITUNG", "IN_PRODUKTION", "VERSANDBEREIT", "VERSENDET", "FAKTURIERT", "ABGESCHLOSSEN", "STORNIERT"]),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.orderWorkflow.transition(input.orderId, input.to); }
+        catch (e) { throw new TRPCError({ code: "CONFLICT", message: (e as Error).message }); }
+      }),
   }),
 
   suppliers: router({

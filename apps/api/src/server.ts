@@ -65,6 +65,7 @@ import { CompanyService } from "./modules/company/company.service.js";
 import { PrismaCompanyRepository } from "./repositories/prisma-company.repository.js";
 import { ProductService } from "./modules/product/product.service.js";
 import { PrismaProductRepository } from "./repositories/prisma-product.repository.js";
+import { OrderWorkflowService } from "./modules/order-workflow/order-workflow.service.js";
 import { appRouter } from "./trpc/router.js";
 import type { Context } from "./trpc/trpc.js";
 import { portalAppRouter } from "./trpc/portal-router.js";
@@ -141,6 +142,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   );
   const companies = new CompanyService(new PrismaCompanyRepository(), new PrismaAuditSink());
   const products = new ProductService(new PrismaProductRepository(), new PrismaAuditSink());
+  const orderWorkflow = new OrderWorkflowService(repo, new PrismaAuditSink());
   const auth = new AuthService(
     new PrismaUserRepository(),
     new PrismaSessionRepository(),
@@ -232,6 +234,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           sampleLoans,
           companies,
           products,
+          orderWorkflow,
           auth,
           user,
           sessionToken,

@@ -26,6 +26,7 @@ import type { InquiryService } from "../modules/inquiry/inquiry.service.js";
 import type { SampleLoanService } from "../modules/sample/sample.service.js";
 import type { CompanyService } from "../modules/company/company.service.js";
 import type { ProductService } from "../modules/product/product.service.js";
+import type { OrderWorkflowService } from "../modules/order-workflow/order-workflow.service.js";
 import type {
   BankingQueryRepository,
   DunningQueryRepository,
@@ -65,6 +66,7 @@ export interface Context {
   sampleLoans: SampleLoanService;
   companies: CompanyService;
   products: ProductService;
+  orderWorkflow: OrderWorkflowService;
   auth: AuthService;
   user: AuthUser | null;
   /** Roh-Token aus dem Cookie (für den 2FA-Zwischenschritt/Logout, wenn user noch null ist). */

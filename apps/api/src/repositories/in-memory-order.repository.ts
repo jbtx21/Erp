@@ -13,6 +13,7 @@ interface StoredOrder {
   id: string;
   number: string;
   companyId: string;
+  status: string;
   shopConnectorId: string;
   externalNumber: string;
   employeeNote: string;
@@ -46,6 +47,7 @@ export class InMemoryOrderRepository
       id,
       number,
       companyId: mapped.companyId,
+      status: "ANGELEGT",
       shopConnectorId: mapped.shopConnectorId,
       externalNumber: mapped.externalNumber,
       employeeNote: mapped.employeeNote,
@@ -64,6 +66,15 @@ export class InMemoryOrderRepository
     return [];
   }
 
+  async getStatus(orderId: string): Promise<string | null> {
+    return this.orders.find((o) => o.id === orderId)?.status ?? null;
+  }
+
+  async setStatus(orderId: string, status: string): Promise<void> {
+    const o = this.orders.find((x) => x.id === orderId);
+    if (o) o.status = status;
+  }
+
   async listRecent(limit: number): Promise<OrderListItem[]> {
     return this.orders
       .slice(-limit)
@@ -72,6 +83,7 @@ export class InMemoryOrderRepository
         id: o.id,
         number: o.number,
         companyId: o.companyId,
+        status: o.status,
         externalNumber: o.externalNumber,
         employeeNote: o.employeeNote,
         totalNetCents: o.totalNetCents,

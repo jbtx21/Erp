@@ -7,7 +7,7 @@ import { Reporting } from "./Reporting.js";
 import { Differentiators } from "./Differentiators.js";
 import { Banking } from "./Banking.js";
 import {
-  CompaniesPage, CostCentersPage, DunningPage, InquiriesPage, IncomingInvoicesPage, LeadsPage, ListPage, ProcurementPage, ProductionReportingPage,
+  CompaniesPage, CostCentersPage, DunningPage, InquiriesPage, IncomingInvoicesPage, LeadsPage, OrdersPage, ProcurementPage, ProductionReportingPage,
   ProductsPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SuppliersPage,
 } from "./pages.js";
 import { trpc } from "./trpc.js";
@@ -88,9 +88,7 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<voi
 
 function Page({ k, role }: { k: string; role: string }): ReactNode {
   switch (k) {
-    case "orders": return <ListPage title="Auftrags-Eingang"
-      hint={role === "PRODUKTION" ? "Rolle PRODUKTION: Preise/Kundendaten ausgeblendet (Kap. 12)." : "Shop-Bestellungen der Firma zugeordnet (T-01)."}
-      load={() => trpc.shopOrders.list.query({ limit: 100 }) as Promise<Record<string, unknown>[]>} hide={["rawPayload"]} />;
+    case "orders": return <OrdersPage role={role} />;
     case "companies": return <CompaniesPage />;
     case "leads": return <LeadsPage />;
     case "inquiries": return <InquiriesPage />;
