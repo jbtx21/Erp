@@ -9,7 +9,7 @@ import { Differentiators } from "./Differentiators.js";
 import { Banking } from "./Banking.js";
 import {
   CompaniesPage, CostCentersPage, DunningPage, InquiriesPage, IncomingInvoicesPage, LeadsPage, OrdersPage, ProcurementPage, ProductionReportingPage,
-  ProductsPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
+  ProductsPage, PricingPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
 } from "./pages.js";
 import { trpc } from "./trpc.js";
 
@@ -23,7 +23,7 @@ const NAV: ReadonlyArray<{ group: string; items: ReadonlyArray<{ key: string; la
     { key: "procurement", label: "Beschaffung" }, { key: "reorder", label: "Nachbestellung" },
     { key: "samples", label: "Muster-Leihgut" },
   ] },
-  { group: "Stammdaten", items: [{ key: "products", label: "Artikel/Varianten" }] },
+  { group: "Stammdaten", items: [{ key: "products", label: "Artikel/Varianten" }, { key: "pricing", label: "Preise/Staffel" }] },
   { group: "Produktion", items: [{ key: "differentiators", label: "Differenzierer" }, { key: "subproduction", label: "Fremdvergabe" }, { key: "prodreport", label: "Produktions-Reporting" }] },
   { group: "Logistik & Finanzen", items: [
     { key: "shipments", label: "Versand" }, { key: "dunning", label: "Mahnwesen" },
@@ -115,6 +115,7 @@ function Page({ k, role }: { k: string; role: string }): ReactNode {
     case "reorder": return <ReorderPage />;
     case "samples": return <SampleLoansPage />;
     case "products": return <ProductsPage />;
+    case "pricing": return <PricingPage />;
     case "differentiators": return <Differentiators role={role} />;
     case "subproduction": return <SubproductionPage />;
     case "prodreport": return <ProductionReportingPage />;

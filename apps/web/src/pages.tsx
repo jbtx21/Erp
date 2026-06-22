@@ -749,6 +749,115 @@ export function CostCentersPage(): JSX.Element {
   );
 }
 
+// Preise & Mengenstaffel (B4, Kap. 4.4 / T-15): Preis berechnen (mit Herkunft) +
+// Gruppen-Staffel pflegen. Präzedenz Kunde → Gruppen-Staffel → Einzelpreis.
+export function PricingPage(): JSX.Element {
+  const [companies, setCompanies] = useState<Row[]>([]);
+  const [articles, setArticles] = useState<Row[]>([]);
+  const [variants, setVariants] = useState<Row[]>([]);
+  const [companyId, setCompanyId] = useState<string | null>(null);
+  const [articleId, setArticleId] = useState<string | null>(null);
+  const [variantId, setVariantId] = useState<string | null>(null);
+  const [menge, setMenge] = useState<number>(1);
+  const [price, setPrice] = useState<{ netCents: number; source: string; minMenge: number | null } | null>(null);
+  const [tiers, setTiers] = useState<{ customerTiers: { minMenge: number; netCents: number }[]; groupTiers: { minMenge: number; netCents: number }[] } | null>(null);
+  const [newMin, setNewMin] = useState<number>(1);
+  const [newNet, setNewNet] = useState<number>(0);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        setCompanies((await trpc.companies.list.query()) as Row[]);
+        setArticles((await trpc.products.listArticles.query()) as Row[]);
+      } catch (e) { setErr(errMsg(e)); }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!articleId) { setVariants([]); return; }
+    void (async () => {
+      try { setVariants((await trpc.products.listVariants.query({ articleId })) as Row[]); }
+      catch (e) { setErr(errMsg(e)); }
+    })();
+  }, [articleId]);
+
+  const loadTiers = useCallback(async () => {
+    if (!companyId || !variantId) { setTiers(null); return; }
+    try { setTiers(await trpc.pricing.tiers.query({ companyId, variantId })); }
+    catch (e) { setErr(errMsg(e)); }
+  }, [companyId, variantId]);
+  useEffect(() => { void loadTiers(); }, [loadTiers]);
+
+  const compute = async (): Promise<void> => {
+    setErr(null); setPrice(null);
+    if (!companyId || !variantId) return;
+    try { setPrice(await trpc.pricing.resolve.query({ companyId, variantId, menge })); }
+    catch (e) { setErr(errMsg(e)); }
+  };
+
+  return (
+    <>
+      <Title order={3}>Preise &amp; Mengenstaffel (T-15)</Title>
+      <Text size="sm" c="dimmed" mt={4}>
+        Basispreis-Staffel je Preisgruppe + kundenindividuell. Präzedenz: Kunde → Gruppen-Staffel → Einzelpreis (Kap. 4.4).
+      </Text>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      <Group align="flex-end" gap="sm" mt="sm" wrap="wrap">
+        <Select label="Firma" w={200} searchable value={companyId} onChange={setCompanyId}
+          data={companies.map((c) => ({ value: String(c.id), label: String(c.name ?? c.id) }))} />
+        <Select label="Artikel" w={200} searchable value={articleId} onChange={(v) => { setArticleId(v); setVariantId(null); }}
+          data={articles.map((a) => ({ value: String(a.id), label: String(a.name ?? a.sku ?? a.id) }))} />
+        <Select label="Variante" w={200} searchable disabled={!articleId} value={variantId} onChange={setVariantId}
+          data={variants.map((v) => ({ value: String(v.id), label: String(v.sku ?? v.id) }))} />
+        <NumberInput label="Menge" w={110} min={1} value={menge} onChange={(v) => setMenge(typeof v === "number" ? v : 1)} />
+        <Button disabled={!companyId || !variantId} onClick={() => void compute()}>Preis berechnen</Button>
+      </Group>
+
+      {price && (
+        <Alert color="navy" variant="light" mt="md">
+          <b>{euro(price.netCents)}</b> netto/Stück bei {menge} Stück — Herkunft{" "}
+          <Badge variant="light">{price.source}</Badge>{price.minMenge !== null ? ` (ab ${String(price.minMenge)} Stück)` : ""}
+        </Alert>
+      )}
+
+      {companyId && variantId && (
+        <>
+          <Title order={4} mt="xl">Hinterlegte Staffel</Title>
+          <Table mt="xs" withTableBorder withColumnBorders striped>
+            <Table.Thead><Table.Tr>
+              <Table.Th>Ebene</Table.Th><Table.Th ta="right">ab Menge</Table.Th><Table.Th ta="right">Netto/Stück</Table.Th>
+            </Table.Tr></Table.Thead>
+            <Table.Tbody>
+              {(tiers?.customerTiers ?? []).map((t, i) => (
+                <Table.Tr key={`c${String(i)}`}><Table.Td><Badge color="grape" variant="light">Kunde</Badge></Table.Td>
+                  <Table.Td ta="right">{t.minMenge}</Table.Td><Table.Td ta="right">{euro(t.netCents)}</Table.Td></Table.Tr>
+              ))}
+              {(tiers?.groupTiers ?? []).map((t, i) => (
+                <Table.Tr key={`g${String(i)}`}><Table.Td><Badge variant="light">Gruppe</Badge></Table.Td>
+                  <Table.Td ta="right">{t.minMenge}</Table.Td><Table.Td ta="right">{euro(t.netCents)}</Table.Td></Table.Tr>
+              ))}
+              {(!tiers || (tiers.customerTiers.length === 0 && tiers.groupTiers.length === 0)) && (
+                <Table.Tr><Table.Td colSpan={3}><Text size="sm" c="dimmed">Keine Staffel hinterlegt.</Text></Table.Td></Table.Tr>
+              )}
+            </Table.Tbody>
+          </Table>
+          <Group align="flex-end" gap="sm" mt="sm">
+            <NumberInput label="ab Menge" w={110} min={1} value={newMin} onChange={(v) => setNewMin(typeof v === "number" ? v : 1)} />
+            <NumberInput label="Netto/Stück (Cent)" w={160} min={0} value={newNet} onChange={(v) => setNewNet(typeof v === "number" ? v : 0)} />
+            <Button variant="light" onClick={async () => {
+              setErr(null);
+              try { await trpc.pricing.addGroupTier.mutate({ companyId, variantId, minMenge: newMin, netCents: newNet }); await loadTiers(); }
+              catch (e) { setErr(errMsg(e)); }
+            }}>Gruppen-Stufe hinzufügen</Button>
+          </Group>
+          <Text size="xs" c="dimmed" mt={4}>Gruppen-Stufe gilt für alle Kunden der Preisgruppe dieser Firma (auditiert).</Text>
+        </>
+      )}
+    </>
+  );
+}
+
 export const ReklamationPage = (): JSX.Element => {
   const [orderId, setOrderId] = useState("ord-1");
   const [lines, setLines] = useState<Row[]>([]);

@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@texma/db";
 import { PrismaPricingRepository } from "./prisma-pricing.repository.js";
 import { PricingService } from "../modules/pricing/pricing.service.js";
+import { MemoryAuditSink } from "../audit/memory-audit-sink.js";
 
 const PG = "pg_b4";
 const CO = "co_b4";
@@ -20,7 +21,7 @@ if (!dbConfigured) {
   });
 } else {
   describe("PrismaPricingRepository — Mengenstaffel mit Präzedenz gegen echtes Postgres", () => {
-    const service = new PricingService(new PrismaPricingRepository());
+    const service = new PricingService(new PrismaPricingRepository(), new MemoryAuditSink());
 
     async function cleanup() {
       await prisma.customerPriceTier.deleteMany({ where: { variantId: VAR } });

@@ -68,6 +68,8 @@ import { PrismaProductRepository } from "./repositories/prisma-product.repositor
 import { OrderWorkflowService } from "./modules/order-workflow/order-workflow.service.js";
 import { QuoteService } from "./modules/quote/quote.service.js";
 import { PrismaQuoteRepository } from "./repositories/prisma-quote.repository.js";
+import { PricingService } from "./modules/pricing/pricing.service.js";
+import { PrismaPricingRepository } from "./repositories/prisma-pricing.repository.js";
 import { appRouter } from "./trpc/router.js";
 import type { Context } from "./trpc/trpc.js";
 import { portalAppRouter } from "./trpc/portal-router.js";
@@ -150,6 +152,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
     new NumberingService(new PrismaNumberingRepository()),
     new PrismaAuditSink()
   );
+  const pricing = new PricingService(new PrismaPricingRepository(), new PrismaAuditSink());
   const auth = new AuthService(
     new PrismaUserRepository(),
     new PrismaSessionRepository(),
@@ -243,6 +246,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           products,
           orderWorkflow,
           quotes,
+          pricing,
           auth,
           user,
           sessionToken,

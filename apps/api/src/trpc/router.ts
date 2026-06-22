@@ -734,6 +734,29 @@ export const appRouter = router({
       }),
   }),
 
+  // Preisfindung mit Mengenstaffel (B4, Kap. 4.4 / T-15). Finanziell sensibel → kein
+  // PRODUKTION-Zugriff. resolve liefert Preis + Herkunft der greifenden Stufe.
+  pricing: router({
+    resolve: roleProcedure(...supplierRoles)
+      .input(z.object({ companyId: z.string().min(1), variantId: z.string().min(1), menge: z.number().int().positive() }))
+      .query(async ({ input, ctx }) => {
+        try { return await ctx.pricing.resolve(input.companyId, input.variantId, input.menge); }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
+      }),
+    tiers: roleProcedure(...supplierRoles)
+      .input(z.object({ companyId: z.string().min(1), variantId: z.string().min(1) }))
+      .query(({ input, ctx }) => ctx.pricing.listTiers(input.companyId, input.variantId)),
+    addGroupTier: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({
+        companyId: z.string().min(1), variantId: z.string().min(1),
+        minMenge: z.number().int().positive(), netCents: z.number().int().nonnegative(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.pricing.addGroupTier(input.companyId, input.variantId, input.minMenge, input.netCents); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+  }),
+
   // Firmen/Kunden-Stammdaten (B3): anlegen/auflisten/bearbeiten.
   companies: router({
     list: roleProcedure("ADMIN", "BUERO", "BUCHHALTUNG").query(({ ctx }) => ctx.companies.list()),
