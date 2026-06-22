@@ -856,6 +856,26 @@ export const appRouter = router({
       .mutation(({ input, ctx }) => ctx.dataIo.importCsv(input.kind, input.csv)),
   }),
 
+  // Auftragserstellung (Vertrieb): manueller Auftrag + Angebot→Auftrag. Schreibt
+  // Stammdaten/Preise → kein PRODUKTION-Zugriff (Kap. 12).
+  sales: router({
+    createOrder: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({
+        companyId: z.string().min(1),
+        lines: z.array(z.object({ description: z.string().min(1), qty: z.number().int().positive(), unitNetCents: z.number().int().min(0) })).min(1),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.salesOrders.createManual(input.companyId, input.lines); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    convertQuote: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ quoteId: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.salesOrders.convertQuote(input.quoteId); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+  }),
+
   // Druckerzeugnisse: Lieferschein (ohne Preise → allRoles) und Rechnung (Finanz →
   // supplierRoles). Rückgabe = Dateiname + Base64-PDF zum Download.
   print: router({

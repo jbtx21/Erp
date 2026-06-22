@@ -37,6 +37,7 @@ import type { DeliveryService } from "../modules/delivery/delivery.service.js";
 import type { LinksService } from "../modules/links/links.service.js";
 import type { DataIoService } from "../modules/dataio/dataio.service.js";
 import type { PrintService } from "../modules/print/print.service.js";
+import type { SalesOrderService } from "../modules/sales/sales-order.service.js";
 import type {
   BankingQueryRepository,
   DunningQueryRepository,
@@ -88,6 +89,7 @@ export interface Context {
   links: LinksService;
   dataIo: DataIoService;
   print: PrintService;
+  salesOrders: SalesOrderService;
   auth: AuthService;
   user: AuthUser | null;
   /** Roh-Token aus dem Cookie (für den 2FA-Zwischenschritt/Logout, wenn user noch null ist). */

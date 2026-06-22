@@ -389,12 +389,32 @@ export function ProductsPage(): JSX.Element {
   );
 }
 
+// Wiederverwendbarer Mehrzeilen-Positionseditor (Anfrage/Angebot/Auftrag-Erstellung):
+// Beschreibung, Menge, Einzelpreis (€) je Zeile; Zeilen hinzufügen/entfernen.
+export interface EditorLine { description: string; qty: number; euro: number }
+export function LinesEditor({ lines, onChange }: { lines: EditorLine[]; onChange: (l: EditorLine[]) => void }): JSX.Element {
+  const set = (i: number, patch: Partial<EditorLine>): void => onChange(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+  return (
+    <Box>
+      {lines.map((l, i) => (
+        <Group key={i} gap="xs" mt={4} align="end">
+          <TextInput label={i === 0 ? "Beschreibung" : undefined} value={l.description} onChange={(e) => set(i, { description: e.currentTarget.value })} placeholder="200 Polos bestickt" w={260} />
+          <NumberInput label={i === 0 ? "Menge" : undefined} value={l.qty} onChange={(v) => set(i, { qty: Number(v) || 1 })} min={1} w={90} />
+          <NumberInput label={i === 0 ? "Einzel (€)" : undefined} value={l.euro} onChange={(v) => set(i, { euro: Number(v) || 0 })} min={0} decimalScale={2} w={110} />
+          <Button size="compact-sm" variant="subtle" color="red" disabled={lines.length === 1} onClick={() => onChange(lines.filter((_, j) => j !== i))}>✕</Button>
+        </Group>
+      ))}
+      <Button size="compact-xs" variant="light" mt="xs" onClick={() => onChange([...lines, { description: "", qty: 1, euro: 0 }])}>+ Position</Button>
+    </Box>
+  );
+}
+export const toApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number }[] =>
+  lines.filter((l) => l.description.trim()).map((l) => ({ description: l.description.trim(), qty: l.qty, unitNetCents: Math.round(l.euro * 100) }));
+
 export function QuotesPage(): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [companyId, setCompanyId] = useState("co-muster");
-  const [desc, setDesc] = useState("");
-  const [qty, setQty] = useState(10);
-  const [euroPrice, setEuroPrice] = useState(12.9);
+  const [lines, setLines] = useState<EditorLine[]>([{ description: "", qty: 10, euro: 12.9 }]);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -415,6 +435,7 @@ export function QuotesPage(): JSX.Element {
       <Group gap={4} justify="flex-end" wrap="nowrap">
         {status === "ENTWURF" && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.quotes.transition.mutate({ id, to: "VERSENDET" }))}>→ Versendet</Button>}
         {(status === "VERSENDET" || status === "NACHFASSEN") && <Button size="compact-xs" color="green" onClick={() => void act(() => trpc.quotes.transition.mutate({ id, to: "ANGENOMMEN" }))}>Angenommen</Button>}
+        {status === "ANGENOMMEN" && <Button size="compact-xs" color="blue" onClick={() => void act(async () => { const r = await trpc.sales.convertQuote.mutate({ quoteId: id }); window.alert(`Auftrag ${r.number} angelegt.`); })}>→ Auftrag</Button>}
         {status !== "ANGENOMMEN" && status !== "ABGELEHNT" && (
           <Button size="compact-xs" color="red" variant="light" onClick={() => {
             const grund = typeof window !== "undefined" ? window.prompt("Ablehnen — Verlustgrund?") : null;
@@ -428,20 +449,18 @@ export function QuotesPage(): JSX.Element {
   return (
     <>
       <Title order={3}>Angebote</Title>
-      <Text size="sm" c="dimmed" mt={4}>Entwurf anlegen → Versendet → Angenommen/Abgelehnt (B8, AN-Nummer aus F1).</Text>
+      <Text size="sm" c="dimmed" mt={4}>Mehrzeiliges Angebot anlegen → Versendet → Angenommen → „→ Auftrag" wandelt es in einen Auftrag um (B8, AN-Nummer aus F1).</Text>
       <Group mt="sm" gap="xs" align="end">
         <TextInput label="Firmen-ID" value={companyId} onChange={(e) => setCompanyId(e.currentTarget.value)} w={130} />
-        <TextInput label="Position" value={desc} onChange={(e) => setDesc(e.currentTarget.value)} placeholder="200 Polos bestickt" w={220} />
-        <NumberInput label="Menge" value={qty} onChange={(v) => setQty(Number(v) || 1)} min={1} w={90} />
-        <NumberInput label="Einzel (€)" value={euroPrice} onChange={(v) => setEuroPrice(Number(v) || 0)} min={0} decimalScale={2} w={110} />
-        <Button loading={busy} disabled={!companyId.trim() || !desc.trim()} onClick={async () => {
-          setBusy(true); setErr(null);
-          try {
-            await trpc.quotes.create.mutate({ companyId, lines: [{ description: desc.trim(), qty, unitNetCents: Math.round(euroPrice * 100) }] });
-            setDesc(""); await load();
-          } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
-        }}>Angebot anlegen</Button>
       </Group>
+      <LinesEditor lines={lines} onChange={setLines} />
+      <Button mt="sm" loading={busy} disabled={!companyId.trim() || toApiLines(lines).length === 0} onClick={async () => {
+        setBusy(true); setErr(null);
+        try {
+          await trpc.quotes.create.mutate({ companyId, lines: toApiLines(lines) });
+          setLines([{ description: "", qty: 10, euro: 12.9 }]); await load();
+        } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+      }}>Angebot anlegen</Button>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
       <AutoTable rows={rows} action={actionsFor} />
     </>
@@ -559,6 +578,10 @@ export function OrdersPage({ role }: { role: string }): JSX.Element {
   const [termOrder, setTermOrder] = useState<string | null>(null);
   const [dateStr, setDateStr] = useState<string>("");
   const [plan, setPlan] = useState<SchedulePlan | null>(null);
+  // Manuelle Auftragserstellung (ADMIN/BUERO).
+  const [showCreate, setShowCreate] = useState(false);
+  const [newCompany, setNewCompany] = useState("co-muster");
+  const [newLines, setNewLines] = useState<EditorLine[]>([{ description: "", qty: 10, euro: 12.9 }]);
 
   const load = useCallback(async () => {
     try { setRows((await trpc.shopOrders.list.query({ limit: 100 })) as Row[]); setErr(null); }
@@ -575,6 +598,25 @@ export function OrdersPage({ role }: { role: string }): JSX.Element {
         {role === "PRODUKTION" ? "Rolle PRODUKTION: Preise/Kundendaten ausgeblendet (Kap. 12)." : "Status weiterschalten — illegale Übergänge blockiert (F2, Kap. 35.2)."}
       </Text>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
+      {canAct && (
+        <Box mt="sm">
+          <Button size="compact-sm" variant="light" onClick={() => setShowCreate((v) => !v)}>{showCreate ? "Erfassung schließen" : "+ Auftrag manuell anlegen"}</Button>
+          {showCreate && (
+            <Box mt="xs" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+              <TextInput label="Firmen-ID" value={newCompany} onChange={(e) => setNewCompany(e.currentTarget.value)} w={160} />
+              <LinesEditor lines={newLines} onChange={setNewLines} />
+              <Button mt="sm" disabled={!newCompany.trim() || toApiLines(newLines).length === 0} onClick={async () => {
+                setErr(null);
+                try {
+                  const r = await trpc.sales.createOrder.mutate({ companyId: newCompany, lines: toApiLines(newLines) });
+                  window.alert(`Auftrag ${r.number} angelegt.`);
+                  setNewLines([{ description: "", qty: 10, euro: 12.9 }]); setShowCreate(false); await load();
+                } catch (e) { setErr(errMsg(e)); }
+              }}>Auftrag anlegen</Button>
+            </Box>
+          )}
+        </Box>
+      )}
       <AutoTable rows={rows} hide={["rawPayload"]} action={!canAct ? undefined : (r) => {
         const next = orderStatusMachine.next(String(r.status) as OrderStatus);
         if (next.length === 0) return <Text size="xs" c="dimmed">—</Text>;

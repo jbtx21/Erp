@@ -86,6 +86,8 @@ import { DataIoService } from "./modules/dataio/dataio.service.js";
 import { PrismaDataIoRepository } from "./repositories/prisma-dataio.repository.js";
 import { PrintService } from "./modules/print/print.service.js";
 import { PrismaPrintRepository } from "./repositories/prisma-print.repository.js";
+import { SalesOrderService } from "./modules/sales/sales-order.service.js";
+import { PrismaSalesOrderRepository } from "./repositories/prisma-sales-order.repository.js";
 import { appRouter } from "./trpc/router.js";
 import type { Context } from "./trpc/trpc.js";
 import { portalAppRouter } from "./trpc/portal-router.js";
@@ -178,6 +180,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const links = new LinksService(new PrismaLinksRepository());
   const dataIo = new DataIoService(new PrismaDataIoRepository(), new PrismaAuditSink());
   const print = new PrintService(new PrismaPrintRepository());
+  const salesOrders = new SalesOrderService(new PrismaSalesOrderRepository(), new NumberingService(new PrismaNumberingRepository()), new PrismaAuditSink());
   const auth = new AuthService(
     new PrismaUserRepository(),
     new PrismaSessionRepository(),
@@ -281,6 +284,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           links,
           dataIo,
           print,
+          salesOrders,
           auth,
           user,
           sessionToken,

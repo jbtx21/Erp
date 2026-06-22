@@ -185,7 +185,17 @@ async function main(): Promise<void> {
     await prisma.costCenter.upsert({ where: { id }, update: {}, create: { id, nummer, name } });
   }
 
-  console.log("Seed fertig: Preisgruppen, 2 Firmen, Shop, Artikel+3 Varianten, 2 Lieferanten, 4 Aufträge, 3 Produktionsaufträge + 2 Fremdvergabe-Stufen + 2 Angebote (Ampel), 2 Eingangs-/2 Ausgangsrechnungen.");
+  // Nummernkreise auf die geseedeten Belege heben, damit die echte Nummernvergabe
+  // (NumberingService.next) kollisionsfrei dahinter weiterzählt (sonst AB-2026-0001-Kollision).
+  for (const [key, next] of [["ORDER", 4], ["QUOTE", 2], ["PRODUCTION_ORDER", 3], ["INVOICE", 2]] as const) {
+    await prisma.numberSequence.upsert({
+      where: { key_year: { key, year: 2026 } },
+      update: { next: { set: next } },
+      create: { key, year: 2026, next },
+    });
+  }
+
+  console.log("Seed fertig: Preisgruppen, 2 Firmen, Shop, Artikel+3 Varianten, 2 Lieferanten, 4 Aufträge, 3 Produktionsaufträge + 2 Fremdvergabe-Stufen + 2 Angebote (Ampel), 2 Eingangs-/2 Ausgangsrechnungen; Nummernkreise synchronisiert.");
 }
 
 type OrderStatusLit = "ANGELEGT" | "IN_BEARBEITUNG" | "IN_PRODUKTION" | "VERSANDBEREIT" | "VERSENDET" | "FAKTURIERT" | "ABGESCHLOSSEN" | "STORNIERT";
