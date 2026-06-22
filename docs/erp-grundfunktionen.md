@@ -48,7 +48,7 @@
 |---|---|---|
 | Dashboard-Startseite | `Dashboard.tsx` + Termin-Ampel | ◐ fest verdrahtet |
 | **Charts + KPI-Kacheln als wiederverwendbare Entitäten** (mehreren Dashboards zuordenbar) | `dashboard`-Modul (G-7): DashboardChart/NumberCard/Dashboard/DashboardItem über festem Metrik-Katalog + DashboardsPage | ✓ (bounded Katalog statt unbegrenztem Aggregator) |
-| **Personalisiertes Dashboard je Mitarbeiter** (eigene + geteilte, frei anordenbar, persönliches Standard) | `Dashboard.ownerEmail`/`isDefault` (Migration 0037); `listForUser`/`createDashboard(name, ownerEmail)`/`setDefault`/`moveItem`/`removeItem`; DashboardsPage mit Geteilt-Schalter, Standard-Wahl, Kachel ↑/↓/✕ | ✓ |
+| **Personalisiertes Dashboard je Mitarbeiter** (eigene + geteilte, frei anordenbar, persönliches Standard) | `Dashboard.ownerEmail`/`isDefault` (Migration 0037); `listForUser`/`createDashboard(name, ownerEmail)`/`setDefault`/`moveItem`/`removeItem`; DashboardsPage mit Geteilt-Schalter, Standard-Wahl, Kachel ↑/↓/✕. **Auch für PRODUKTION** — Finanzkennzahlen (Umsatz) werden serverseitig aus Katalog/Erstellung/Auflösung redigiert (`canViewFinancials`, Kap. 12) | ✓ |
 | Berichte mit Filtern/Granularität | `reporting.ts`, KI-Report, Finanzberichte | ✓ |
 
 ## E. CRM-Tiefe (aus ERPNext-Lead/Opportunity)

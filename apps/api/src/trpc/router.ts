@@ -1,6 +1,6 @@
 // tRPC-AppRouter: Auth (Login/2FA/RBAC) + Shop-Order-Ingest/Liste.
 import { TRPCError } from "@trpc/server";
-import { ProductionSheetIncompleteError, redactOrderForRole, SubProductionTransitionError, scheduleBackward, backwardStart, type LeadStage } from "@texma/shared";
+import { ProductionSheetIncompleteError, redactOrderForRole, canViewFinancials, SubProductionTransitionError, scheduleBackward, backwardStart, type LeadStage } from "@texma/shared";
 import { ReklamationValidationError } from "../modules/reklamation/reklamation.service.js";
 import { z } from "zod";
 import { AuthError, SESSION_TTL_SECONDS } from "../modules/auth/auth.service.js";
@@ -8,6 +8,9 @@ import { protectedProcedure, publicProcedure, roleProcedure, router } from "./tr
 
 // EK-Preise sind finanziell sensibel → kein PRODUKTION-Zugriff (Kap. 12, C3).
 const supplierRoles = ["ADMIN", "BUERO", "BUCHHALTUNG"] as const;
+// Alle Rollen inkl. PRODUKTION — z. B. fürs personalisierte Dashboard (Finanzkennzahlen
+// werden für PRODUKTION serverseitig redigiert, Kap. 12).
+const allRoles = ["ADMIN", "BUERO", "BUCHHALTUNG", "PRODUKTION"] as const;
 
 // Zeitliche Granularität für Auswertungen (Kap. 29).
 const granularityEnum = z.enum(["DAY", "WEEK", "MONTH", "YEAR"]);
@@ -794,48 +797,50 @@ export const appRouter = router({
   // Generisches Dashboard (ERP-Grundfunktion / G-7): Charts/KPI-Kacheln als
   // wiederverwendbare Entitäten über einem festen Metrik-Katalog.
   dashboards: router({
-    metrics: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.dashboards.listMetrics()),
-    listCharts: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.dashboards.listCharts()),
-    listCards: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.dashboards.listCards()),
-    list: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.dashboards.listForUser(ctx.user.email)),
-    resolved: roleProcedure(...supplierRoles)
+    // PRODUKTION darf eigene Dashboards bauen; Finanzkennzahlen werden serverseitig
+    // ausgeblendet/redigiert (canViewFinancials, Kap. 12).
+    metrics: roleProcedure(...allRoles).query(({ ctx }) => ctx.dashboards.listMetrics(canViewFinancials(ctx.user.role))),
+    listCharts: roleProcedure(...allRoles).query(({ ctx }) => ctx.dashboards.listCharts()),
+    listCards: roleProcedure(...allRoles).query(({ ctx }) => ctx.dashboards.listCards()),
+    list: roleProcedure(...allRoles).query(({ ctx }) => ctx.dashboards.listForUser(ctx.user.email)),
+    resolved: roleProcedure(...allRoles)
       .input(z.object({ id: z.string().min(1) }))
       .query(async ({ input, ctx }) => {
-        try { return await ctx.dashboards.getResolved(input.id); }
+        try { return await ctx.dashboards.getResolved(input.id, canViewFinancials(ctx.user.role)); }
         catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
       }),
-    createChart: roleProcedure("ADMIN", "BUERO")
+    createChart: roleProcedure(...allRoles)
       .input(z.object({ name: z.string().min(1), chartType: z.enum(["BAR", "LINE", "DONUT"]).default("BAR"), metricKey: z.string().min(1) }))
       .mutation(async ({ input, ctx }) => {
-        try { return await ctx.dashboards.createChart(input.name, input.chartType, input.metricKey); }
+        try { return await ctx.dashboards.createChart(input.name, input.chartType, input.metricKey, canViewFinancials(ctx.user.role)); }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
-    createCard: roleProcedure("ADMIN", "BUERO")
+    createCard: roleProcedure(...allRoles)
       .input(z.object({ name: z.string().min(1), metricKey: z.string().min(1) }))
       .mutation(async ({ input, ctx }) => {
-        try { return await ctx.dashboards.createCard(input.name, input.metricKey); }
+        try { return await ctx.dashboards.createCard(input.name, input.metricKey, canViewFinancials(ctx.user.role)); }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
     // Persönliches Dashboard: ownerEmail = angemeldete:r Nutzer:in; shared = null (per Flag).
-    createDashboard: roleProcedure(...supplierRoles)
+    createDashboard: roleProcedure(...allRoles)
       .input(z.object({ name: z.string().min(1), shared: z.boolean().default(false) }))
       .mutation(async ({ input, ctx }) => {
         try { return await ctx.dashboards.createDashboard(input.name, input.shared ? null : ctx.user.email); }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
-    addItem: roleProcedure(...supplierRoles)
+    addItem: roleProcedure(...allRoles)
       .input(z.object({ dashboardId: z.string().min(1), kind: z.enum(["CHART", "CARD"]), refId: z.string().min(1), width: z.enum(["FULL", "HALF"]).default("HALF") }))
       .mutation(({ input, ctx }) => ctx.dashboards.addItem(input.dashboardId, input.kind, input.refId, input.width)),
-    removeItem: roleProcedure(...supplierRoles)
+    removeItem: roleProcedure(...allRoles)
       .input(z.object({ itemId: z.string().min(1) }))
       .mutation(({ input, ctx }) => ctx.dashboards.removeItem(input.itemId)),
-    moveItem: roleProcedure(...supplierRoles)
+    moveItem: roleProcedure(...allRoles)
       .input(z.object({ itemId: z.string().min(1), direction: z.enum(["UP", "DOWN"]) }))
       .mutation(async ({ input, ctx }) => {
         try { return await ctx.dashboards.moveItem(input.itemId, input.direction); }
         catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
       }),
-    setDefault: roleProcedure(...supplierRoles)
+    setDefault: roleProcedure(...allRoles)
       .input(z.object({ dashboardId: z.string().min(1) }))
       .mutation(({ input, ctx }) => ctx.dashboards.setDefault(input.dashboardId, ctx.user.email)),
   }),

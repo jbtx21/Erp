@@ -12,13 +12,15 @@ export interface MetricDef {
   key: string;
   label: string;
   kind: MetricKind;
+  /** Finanzkennzahl (Umsatz/Beträge) — für Rolle PRODUKTION nicht sichtbar (Kap. 12). */
+  financial?: boolean;
 }
 
 export const METRIC_CATALOG: ReadonlyArray<MetricDef> = [
   { key: "orders.count.total", label: "Aufträge gesamt", kind: "NUMBER" },
   { key: "companies.count.total", label: "Firmen gesamt", kind: "NUMBER" },
   { key: "suppliers.count.total", label: "Lieferanten gesamt", kind: "NUMBER" },
-  { key: "invoices.sum.net", label: "Umsatz netto (Cent)", kind: "NUMBER" },
+  { key: "invoices.sum.net", label: "Umsatz netto (Cent)", kind: "NUMBER", financial: true },
   { key: "orders.count.byStatus", label: "Aufträge nach Status", kind: "SERIES" },
   { key: "orders.count.byLieferstatus", label: "Aufträge nach Lieferstatus", kind: "SERIES" },
 ];
@@ -77,28 +79,30 @@ export class DashboardService {
     private readonly metrics: MetricRepository
   ) {}
 
-  listMetrics(): ReadonlyArray<MetricDef> {
-    return METRIC_CATALOG;
+  /** Katalog; ohne Finanzkennzahlen, wenn die Rolle keine Beträge sehen darf (PRODUKTION). */
+  listMetrics(includeFinancials = true): ReadonlyArray<MetricDef> {
+    return includeFinancials ? METRIC_CATALOG : METRIC_CATALOG.filter((m) => !m.financial);
   }
   listCharts(): Promise<ChartItem[]> { return this.repo.listCharts(); }
   listCards(): Promise<CardItem[]> { return this.repo.listCards(); }
   /** Persönliche + geteilte Dashboards des Mitarbeiters. */
   listForUser(ownerEmail: string): Promise<DashboardSummary[]> { return this.repo.listForUser(ownerEmail); }
 
-  private assertMetric(key: string): MetricDef {
+  private assertMetric(key: string, includeFinancials = true): MetricDef {
     const m = METRIC_BY_KEY.get(key);
     if (!m) throw new DashboardError(`Unbekannte Metrik '${key}'.`);
+    if (m.financial && !includeFinancials) throw new DashboardError(`Keine Berechtigung für Metrik '${key}'.`);
     return m;
   }
 
-  async createChart(name: string, chartType: ChartType, metricKey: string): Promise<ChartItem> {
+  async createChart(name: string, chartType: ChartType, metricKey: string, includeFinancials = true): Promise<ChartItem> {
     if (!name.trim()) throw new DashboardError("Name ist Pflicht.");
-    this.assertMetric(metricKey);
+    this.assertMetric(metricKey, includeFinancials);
     return this.repo.createChart(name.trim(), chartType, metricKey);
   }
-  async createCard(name: string, metricKey: string): Promise<CardItem> {
+  async createCard(name: string, metricKey: string, includeFinancials = true): Promise<CardItem> {
     if (!name.trim()) throw new DashboardError("Name ist Pflicht.");
-    this.assertMetric(metricKey);
+    this.assertMetric(metricKey, includeFinancials);
     return this.repo.createCard(name.trim(), metricKey);
   }
   async createDashboard(name: string, ownerEmail: string | null): Promise<DashboardSummary> {
@@ -128,8 +132,12 @@ export class DashboardService {
     await this.repo.updateItemPosition(neighbor.id, it.position);
   }
 
-  /** Löst ein Dashboard auf: jede Kachel mit berechneten Metrikdaten. */
-  async getResolved(dashboardId: string): Promise<ResolvedDashboard> {
+  /**
+   * Löst ein Dashboard auf: jede Kachel mit berechneten Metrikdaten.
+   * `includeFinancials=false` (Rolle PRODUKTION) → Finanzkacheln werden redigiert
+   * (Wert/Serie null), bleiben aber als Platzhalter sichtbar (geteilte Dashboards, Kap. 12).
+   */
+  async getResolved(dashboardId: string, includeFinancials = true): Promise<ResolvedDashboard> {
     const d = await this.repo.getDashboard(dashboardId);
     if (!d) throw new DashboardError(`Dashboard ${dashboardId} nicht gefunden.`);
     const widgets: ResolvedWidget[] = [];
@@ -137,13 +145,15 @@ export class DashboardService {
       if (it.kind === "CHART") {
         const c = await this.repo.getChart(it.refId);
         if (!c) continue;
-        const m = await this.metrics.compute(c.metricKey);
-        widgets.push({ id: it.id, kind: "CHART", width: it.width, title: c.name, chartType: c.chartType, metricKind: METRIC_BY_KEY.get(c.metricKey)?.kind ?? "SERIES", value: m.value, series: m.series });
+        const redact = (METRIC_BY_KEY.get(c.metricKey)?.financial ?? false) && !includeFinancials;
+        const m = redact ? { value: null, series: null } : await this.metrics.compute(c.metricKey);
+        widgets.push({ id: it.id, kind: "CHART", width: it.width, title: redact ? "🔒 gesperrt" : c.name, chartType: c.chartType, metricKind: METRIC_BY_KEY.get(c.metricKey)?.kind ?? "SERIES", value: m.value, series: m.series });
       } else {
         const c = await this.repo.getCard(it.refId);
         if (!c) continue;
-        const m = await this.metrics.compute(c.metricKey);
-        widgets.push({ id: it.id, kind: "CARD", width: it.width, title: c.name, chartType: null, metricKind: METRIC_BY_KEY.get(c.metricKey)?.kind ?? "NUMBER", value: m.value, series: m.series });
+        const redact = (METRIC_BY_KEY.get(c.metricKey)?.financial ?? false) && !includeFinancials;
+        const m = redact ? { value: null, series: null } : await this.metrics.compute(c.metricKey);
+        widgets.push({ id: it.id, kind: "CARD", width: it.width, title: redact ? "🔒 gesperrt" : c.name, chartType: null, metricKind: METRIC_BY_KEY.get(c.metricKey)?.kind ?? "NUMBER", value: m.value, series: m.series });
       }
     }
     return { id: d.id, name: d.name, widgets };

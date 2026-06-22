@@ -67,6 +67,30 @@ describe("DashboardService (G-7)", () => {
     expect(resolved.widgets[1]?.kind).toBe("CARD");
   });
 
+  it("blendet Finanzkennzahlen für PRODUKTION aus (Katalog + Erstellung)", async () => {
+    const svc = setup();
+    const ohneFinanz = svc.listMetrics(false);
+    expect(ohneFinanz.some((m) => m.key === "invoices.sum.net")).toBe(false);
+    expect(ohneFinanz.some((m) => m.key === "orders.count.total")).toBe(true);
+    // PRODUKTION (includeFinancials=false) darf keine Umsatz-Kachel anlegen
+    await expect(svc.createCard("Umsatz", "invoices.sum.net", false)).rejects.toBeInstanceOf(DashboardError);
+    // operative Kennzahl bleibt erlaubt
+    await expect(svc.createCard("Aufträge", "orders.count.total", false)).resolves.toBeDefined();
+  });
+
+  it("redigiert Finanzkacheln beim Auflösen für PRODUKTION (geteiltes Dashboard)", async () => {
+    const svc = setup();
+    const umsatz = await svc.createCard("Umsatz netto", "invoices.sum.net"); // von BUERO angelegt
+    const geteilt = await svc.createDashboard("Team", null);
+    await svc.addItem(geteilt.id, "CARD", umsatz.id, "HALF");
+    // BUERO sieht den Wert, PRODUKTION nicht
+    const fuerBuero = await svc.getResolved(geteilt.id, true);
+    expect(fuerBuero.widgets[0]?.value).toBe(42);
+    const fuerProd = await svc.getResolved(geteilt.id, false);
+    expect(fuerProd.widgets[0]?.value).toBeNull();
+    expect(fuerProd.widgets[0]?.title).toContain("gesperrt");
+  });
+
   it("entfernt eine Kachel", async () => {
     const svc = setup();
     const card = await svc.createCard("K", "orders.count.total");
