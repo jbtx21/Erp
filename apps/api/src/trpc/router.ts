@@ -114,6 +114,11 @@ export const appRouter = router({
         const items = await ctx.orders.listRecent(input?.limit ?? 50);
         return items.map((item) => redactOrderForRole(item, ctx.user.role));
       }),
+
+    /** Positionen eines Auftrags (z. B. zur Reklamations-Zeilenauswahl). */
+    lines: roleProcedure(...supplierRoles)
+      .input(z.object({ orderId: z.string().min(1) }))
+      .query(({ input, ctx }) => ctx.orders.orderLines(input.orderId)),
   }),
 
   suppliers: router({

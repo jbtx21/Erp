@@ -8,7 +8,7 @@ import type {
   CreatedOrder,
   OrderRepository,
 } from "../modules/shop-import/order-import.service.js";
-import type { OrderListItem, OrderQueryRepository } from "./read.js";
+import type { OrderLineItem, OrderListItem, OrderQueryRepository } from "./read.js";
 
 export class PrismaOrderRepository
   implements OrderRepository, OrderQueryRepository
@@ -94,5 +94,13 @@ export class PrismaOrderRepository
       totalNetCents: r.lines.reduce((sum, l) => sum + l.qty * l.unitNetCents, 0),
       createdAt: r.createdAt,
     }));
+  }
+
+  async orderLines(orderId: string): Promise<OrderLineItem[]> {
+    return prisma.orderLine.findMany({
+      where: { orderId },
+      orderBy: { position: "asc" },
+      select: { id: true, position: true, description: true, qty: true, unitNetCents: true },
+    });
   }
 }

@@ -7,7 +7,7 @@ import type {
   OrderRepository,
 } from "../modules/shop-import/order-import.service.js";
 import type { MappedOrder } from "@texma/shared";
-import type { OrderListItem, OrderQueryRepository } from "./read.js";
+import type { OrderLineItem, OrderListItem, OrderQueryRepository } from "./read.js";
 
 interface StoredOrder {
   id: string;
@@ -57,6 +57,11 @@ export class InMemoryOrderRepository
 
   async countCompanies(): Promise<number> {
     return this.companyIds.size;
+  }
+
+  // In-Memory speichert keine Einzelpositionen (nur Test/Demo) → leere Liste.
+  async orderLines(_orderId: string): Promise<OrderLineItem[]> {
+    return [];
   }
 
   async listRecent(limit: number): Promise<OrderListItem[]> {

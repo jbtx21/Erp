@@ -11,8 +11,18 @@ export interface OrderListItem {
   createdAt: Date;
 }
 
+export interface OrderLineItem {
+  id: string;
+  position: number;
+  description: string;
+  qty: number;
+  unitNetCents: number;
+}
+
 export interface OrderQueryRepository {
   listRecent(limit: number): Promise<OrderListItem[]>;
+  /** Positionen eines Auftrags (für Auswahl, z. B. Reklamation je Zeile). */
+  orderLines(orderId: string): Promise<OrderLineItem[]>;
 }
 
 // Lieferanten-Artikel (C3). EK-Preise sind finanziell sensibel → Endpunkt rollen-

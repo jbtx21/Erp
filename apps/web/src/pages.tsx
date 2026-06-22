@@ -417,15 +417,61 @@ export function CostCentersPage(): JSX.Element {
 }
 
 export const ReklamationPage = (): JSX.Element => {
-  const [orderId, setOrderId] = useState("");
+  const [orderId, setOrderId] = useState("ord-1");
+  const [lines, setLines] = useState<Row[]>([]);
+  const [lineId, setLineId] = useState("");
+  const [cause, setCause] = useState("INTERN");
+  const [followUp, setFollowUp] = useState("GUTSCHRIFT");
+  const [costEuro, setCostEuro] = useState(0);
+  const [err, setErr] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
+
+  const loadLines = useCallback(async () => {
+    setErr(null); setLineId("");
+    try {
+      const ls = (await trpc.shopOrders.lines.query({ orderId })) as Row[];
+      setLines(ls);
+      if (ls[0]) setLineId(String(ls[0].id));
+    } catch (e) { setErr(errMsg(e)); }
+  }, [orderId]);
+
   return (
     <>
       <Title order={3}>Reklamation</Title>
-      <Text size="sm" c="dimmed" mt={4}>Reklamationen je Auftrag → Folgevorgang (Gutschrift/Nachproduktion, Kap. 20).</Text>
+      <Text size="sm" c="dimmed" mt={4}>Reklamation je Auftragsposition → Folgevorgang (Gutschrift/Nachproduktion, Kap. 20).</Text>
       <Group mt="sm" gap="xs" align="end">
         <TextInput label="Auftrags-ID" value={orderId} onChange={(e) => setOrderId(e.currentTarget.value)} placeholder="ord-1" />
+        <Button variant="default" onClick={() => void loadLines()}>Positionen laden</Button>
       </Group>
-      {orderId && <ListPage title={`Reklamationen zu ${orderId}`}
+
+      {lines.length > 0 && (
+        <Group mt="sm" gap="xs" align="end">
+          <Select label="Position" value={lineId} onChange={(v) => v && setLineId(v)} w={260}
+            data={lines.map((l) => ({ value: String(l.id), label: `#${String(l.position)} ${String(l.description)} (${String(l.qty)}×)` }))} />
+          <Select label="Ursache" value={cause} onChange={(v) => v && setCause(v)} w={150}
+            data={[{ value: "LIEFERANT", label: "Lieferant" }, { value: "INTERN", label: "Intern" }, { value: "EXTERN_VEREDLER", label: "Externer Veredler" }]} />
+          <Select label="Folgevorgang" value={followUp} onChange={(v) => v && setFollowUp(v)} w={190}
+            data={[{ value: "NACHPRODUKTION", label: "Nachproduktion" }, { value: "EXPRESS_NACHPRODUKTION", label: "Express-Nachproduktion" }, { value: "GUTSCHRIFT", label: "Gutschrift" }, { value: "KEINE", label: "Keine" }]} />
+          <NumberInput label="Kosten (€)" value={costEuro} onChange={(v) => setCostEuro(Number(v) || 0)} min={0} w={110} />
+          <Button disabled={!lineId} onClick={async () => {
+            setErr(null); setStatus(null);
+            try {
+              const r = await trpc.reklamation.create.mutate({
+                orderId, orderLineId: lineId,
+                cause: cause as "LIEFERANT" | "INTERN" | "EXTERN_VEREDLER",
+                followUp: followUp as "NACHPRODUKTION" | "EXPRESS_NACHPRODUKTION" | "GUTSCHRIFT" | "KEINE",
+                costCents: Math.round(costEuro * 100),
+              });
+              setStatus(`Reklamation angelegt — Folgevorgang: ${JSON.stringify(r)}`);
+              setReload((n) => n + 1);
+            } catch (e) { setErr(errMsg(e)); }
+          }}>Reklamation anlegen</Button>
+        </Group>
+      )}
+      {status && <Text size="sm" mt="xs" c="dimmed">{status}</Text>}
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      {orderId && <ListPage key={`${orderId}-${reload}`} title={`Reklamationen zu ${orderId}`}
         load={() => trpc.reklamation.listByOrder.query({ orderId }) as Promise<Row[]>} />}
     </>
   );
