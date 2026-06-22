@@ -856,6 +856,23 @@ export const appRouter = router({
       .mutation(({ input, ctx }) => ctx.dataIo.importCsv(input.kind, input.csv)),
   }),
 
+  // Druckerzeugnisse: Lieferschein (ohne Preise → allRoles) und Rechnung (Finanz →
+  // supplierRoles). Rückgabe = Dateiname + Base64-PDF zum Download.
+  print: router({
+    deliveryNote: roleProcedure(...allRoles)
+      .input(z.object({ deliveryNoteId: z.string().min(1) }))
+      .query(async ({ input, ctx }) => {
+        try { return await ctx.print.deliveryNotePdf(input.deliveryNoteId); }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
+      }),
+    invoice: roleProcedure(...supplierRoles)
+      .input(z.object({ invoiceId: z.string().min(1) }))
+      .query(async ({ input, ctx }) => {
+        try { return await ctx.print.invoicePdf(input.invoiceId); }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
+      }),
+  }),
+
   // Verknüpfte Belege („Connections"): alle mit einem Auftrag verbundenen Dokumente.
   // Finanzbelege werden für PRODUKTION ausgeblendet (canViewFinancials, Kap. 12).
   links: router({

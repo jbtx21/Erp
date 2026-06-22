@@ -48,6 +48,8 @@ import { LinksService } from "../modules/links/links.service.js";
 import { InMemoryLinksRepository } from "../repositories/in-memory-links.repository.js";
 import { DataIoService } from "../modules/dataio/dataio.service.js";
 import { InMemoryDataIoRepository } from "../repositories/in-memory-dataio.repository.js";
+import { PrintService } from "../modules/print/print.service.js";
+import { InMemoryPrintRepository } from "../repositories/in-memory-print.repository.js";
 import { DeliveryService } from "../modules/delivery/delivery.service.js";
 import { InMemoryDeliveryRepository } from "../repositories/in-memory-delivery.repository.js";
 import { NumberingService } from "../modules/numbering/numbering.service.js";
@@ -270,6 +272,7 @@ function setup(user: AuthUser | null = BUERO) {
     deliveries: new DeliveryService(new InMemoryDeliveryRepository(), new MemoryAuditSink()),
     links: new LinksService(new InMemoryLinksRepository()),
     dataIo: new DataIoService(new InMemoryDataIoRepository(), new MemoryAuditSink()),
+    print: new PrintService(new InMemoryPrintRepository()),
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -369,6 +372,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       deliveries: {} as Context["deliveries"],
       links: {} as Context["links"],
       dataIo: {} as Context["dataIo"],
+      print: {} as Context["print"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",

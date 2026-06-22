@@ -32,7 +32,7 @@
 | **Benachrichtigungen** (in-app) + **E-Mail-Vorlagen** | `notification`-Modul (G-5): In-App-Glocke + `{{platzhalter}}`-Vorlagen + Render; Auto-Notiz bei Statuswechsel | ✓ (SMTP-Versand = Integrationspunkt) |
 | **Globale Suche / Volltext** | `search`-Modul (G-6): entitätsübergreifend (Firma/Lieferant/Auftrag/Artikel/Lead) + Header-Suchbox | ✓ |
 | Rollen/Rechte (feldgenau) | `rbac.ts` (inkl. Feld-Redaktion) | ✓ |
-| Druck/PDF je Belegtyp | `production-sheet-pdf`, `report-pdf` | ◐ gezielt |
+| Druck/PDF je Belegtyp | `production-sheet-pdf`, `report-pdf`, **`beleg-pdf` (Lieferschein/Rechnung)** via `print`-Modul + Download in UI | ✓ (Lieferschein ohne Preise, Rechnung mit Summen) |
 | Listen: Filter/Sort | `AutoTable`/`ListPage` | ◐ ohne gespeicherte Filter/Spaltenwahl |
 
 ## C. Beleg-/Vorgangsketten-Granularität

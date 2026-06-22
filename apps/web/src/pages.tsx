@@ -11,6 +11,15 @@ import { euro, numTd, statusMantineColor } from "./theme.js";
 type Row = Record<string, unknown>;
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
+// Lädt ein Base64-PDF (vom Server) als Datei herunter.
+function downloadBase64Pdf(filename: string, base64: string): void {
+  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
 // Deutsche Spaltenbezeichnungen statt roher Feldnamen ("Don't ship the schema").
 const COL_LABELS: Record<string, string> = {
   id: "ID", number: "Nr.", name: "Name", status: "Status", kind: "Art", quelle: "Quelle",
@@ -529,7 +538,13 @@ function DeliveryPanel({ orderId, onChanged }: { orderId: string; onChanged: () 
         <>
           <Text fw={600} size="sm" mt="md">Lieferscheine</Text>
           {notes.map((n) => (
-            <Text key={n.id} size="sm">📦 {n.number} — {n.lines.reduce((s, x) => s + x.qty, 0)} Stück ({fmtDate(n.createdAt)})</Text>
+            <Group key={n.id} gap="xs" mt={2}>
+              <Text size="sm">📦 {n.number} — {n.lines.reduce((s, x) => s + x.qty, 0)} Stück ({fmtDate(n.createdAt)})</Text>
+              <Button size="compact-xs" variant="light" onClick={async () => {
+                try { const pdf = await trpc.print.deliveryNote.query({ deliveryNoteId: n.id }); downloadBase64Pdf(pdf.filename, pdf.base64); }
+                catch (e) { setErr(errMsg(e)); }
+              }}>PDF</Button>
+            </Group>
           ))}
         </>
       )}
