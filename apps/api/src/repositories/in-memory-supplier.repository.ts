@@ -6,7 +6,7 @@ import type {
   SupplierRepository,
   UpsertSupplierItemInput,
 } from "../modules/supplier-import/supplier-import.service.js";
-import type { SupplierItemListItem, SupplierQueryRepository } from "./read.js";
+import type { SupplierItemListItem, SupplierListItem, SupplierQueryRepository } from "./read.js";
 
 interface StoredItem extends UpsertSupplierItemInput {
   id: string;
@@ -19,8 +19,20 @@ export class InMemorySupplierRepository
   private readonly items: StoredItem[] = [];
   private seq = 0;
 
+  private readonly suppliers: SupplierListItem[] = [];
+
   /** skuToVariant = vorhandene Varianten (Stammdaten). Wächst durch Import NICHT. */
   constructor(private readonly skuToVariant: Map<string, string>) {}
+
+  async listSuppliers(): Promise<SupplierListItem[]> {
+    return this.suppliers.map((s) => ({ ...s })).sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async createSupplier(input: { name: string; vatId?: string | null; iban?: string | null; bic?: string | null }): Promise<{ id: string }> {
+    const id = `sup_${++this.seq}`;
+    this.suppliers.push({ id, name: input.name, vatId: input.vatId ?? null, iban: input.iban ?? null, kind: "MANUAL", active: true });
+    return { id };
+  }
 
   async findVariantIdBySku(sku: string): Promise<string | null> {
     return this.skuToVariant.get(sku) ?? null;

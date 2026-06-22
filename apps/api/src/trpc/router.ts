@@ -138,6 +138,14 @@ export const appRouter = router({
     list: roleProcedure(...supplierRoles)
       .input(z.object({ supplierId: z.string().min(1), limit: z.number().int().positive().max(500).optional() }))
       .query(async ({ input, ctx }) => ctx.suppliers.listItems(input.supplierId, input.limit ?? 100)),
+
+    /** Alle Lieferanten-Stammsätze. */
+    listAll: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.suppliers.listSuppliers()),
+
+    /** Legt einen Lieferanten an (manueller Stammsatz). */
+    create: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ name: z.string().min(1), vatId: z.string().optional(), iban: z.string().optional(), bic: z.string().optional() }))
+      .mutation(({ input, ctx }) => ctx.suppliers.createSupplier(input)),
   }),
 
   incomingInvoices: router({

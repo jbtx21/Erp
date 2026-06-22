@@ -8,7 +8,7 @@ import type {
   SupplierRepository,
   UpsertSupplierItemInput,
 } from "../modules/supplier-import/supplier-import.service.js";
-import type { SupplierItemListItem, SupplierQueryRepository } from "./read.js";
+import type { SupplierItemListItem, SupplierListItem, SupplierQueryRepository } from "./read.js";
 
 export class PrismaSupplierRepository
   implements SupplierRepository, SupplierQueryRepository
@@ -57,5 +57,19 @@ export class PrismaSupplierRepository
       },
     });
     return rows;
+  }
+
+  async listSuppliers(): Promise<SupplierListItem[]> {
+    return prisma.supplier.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, vatId: true, iban: true, kind: true, active: true },
+    });
+  }
+
+  async createSupplier(input: { name: string; vatId?: string | null; iban?: string | null; bic?: string | null }): Promise<{ id: string }> {
+    return prisma.supplier.create({
+      data: { name: input.name, vatId: input.vatId ?? null, iban: input.iban ?? null, bic: input.bic ?? null, kind: "MANUAL" },
+      select: { id: true },
+    });
   }
 }

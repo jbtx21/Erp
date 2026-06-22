@@ -82,22 +82,51 @@ export function ListPage({
 }
 
 // ── Beschaffung ─────────────────────────────────────────────────────────────
-export const SuppliersPage = (): JSX.Element => {
-  const [sid, setSid] = useState("sup-fhb");
+export function SuppliersPage(): JSX.Element {
+  const [rows, setRows] = useState<Row[]>([]);
+  const [name, setName] = useState("");
+  const [vatId, setVatId] = useState("");
+  const [iban, setIban] = useState("");
   const [applied, setApplied] = useState("sup-fhb");
+  const [sid, setSid] = useState("sup-fhb");
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try { setRows((await trpc.suppliers.listAll.query()) as Row[]); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
   return (
     <>
-      <Title order={3}>Lieferanten-Katalog</Title>
-      <Text size="sm" c="dimmed" mt={4}>Katalogpositionen je Lieferant (EK nur ADMIN/BÜRO/BUCHHALTUNG, Kap. 12). Seed-IDs: sup-fhb, sup-stanley.</Text>
+      <Title order={3}>Lieferanten</Title>
+      <Text size="sm" c="dimmed" mt={4}>Stammsätze + Katalog je Lieferant (EK nur ADMIN/Büro/Buchhaltung, Kap. 12).</Text>
       <Group mt="sm" gap="xs" align="end">
-        <TextInput label="Lieferanten-ID" value={sid} onChange={(e) => setSid(e.currentTarget.value)} />
-        <Button size="sm" onClick={() => setApplied(sid)}>Anzeigen</Button>
+        <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Neuer Lieferant GmbH" />
+        <TextInput label="USt-IdNr." value={vatId} onChange={(e) => setVatId(e.currentTarget.value)} w={150} />
+        <TextInput label="IBAN" value={iban} onChange={(e) => setIban(e.currentTarget.value)} w={200} />
+        <Button loading={busy} disabled={!name.trim()} onClick={async () => {
+          setBusy(true); setErr(null);
+          try { await trpc.suppliers.create.mutate({ name: name.trim(), vatId: vatId || undefined, iban: iban || undefined }); setName(""); setVatId(""); setIban(""); await load(); }
+          catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+        }}>Lieferant anlegen</Button>
+      </Group>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      <AutoTable rows={rows} action={(r) => (
+        <Button size="compact-xs" variant="default" onClick={() => { setSid(String(r.id)); setApplied(String(r.id)); }}>Katalog</Button>
+      )} />
+
+      <Title order={4} mt="lg">Katalog</Title>
+      <Group mt="xs" gap="xs" align="end">
+        <TextInput label="Lieferanten-ID" value={sid} onChange={(e) => setSid(e.currentTarget.value)} w={200} />
+        <Button size="sm" variant="default" onClick={() => setApplied(sid)}>Anzeigen</Button>
       </Group>
       <ListPage key={applied} title={`Katalog · ${applied}`}
         load={() => trpc.suppliers.list.query({ supplierId: applied, limit: 100 }) as Promise<Row[]>} />
     </>
   );
-};
+}
 
 export const IncomingInvoicesPage = (): JSX.Element => (
   <ListPage title="Eingangsrechnungen" hint="Erfasste Kreditorenrechnungen (3-Wege-Match, Kap. 9)."

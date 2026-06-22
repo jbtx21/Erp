@@ -37,8 +37,21 @@ export interface SupplierItemListItem {
   priority: number;
 }
 
+export interface SupplierListItem {
+  id: string;
+  name: string;
+  vatId: string | null;
+  iban: string | null;
+  kind: string;
+  active: boolean;
+}
+
 export interface SupplierQueryRepository {
   listItems(supplierId: string, limit: number): Promise<SupplierItemListItem[]>;
+  /** Alle Lieferanten-Stammsätze (B6). */
+  listSuppliers(): Promise<SupplierListItem[]>;
+  /** Legt einen Lieferanten an (manueller Stammsatz). */
+  createSupplier(input: { name: string; vatId?: string | null; iban?: string | null; bic?: string | null }): Promise<{ id: string }>;
 }
 
 // Eingangsrechnungen (C4). Finanzdaten → Endpunkt rollengeschützt (kein PRODUKTION).
