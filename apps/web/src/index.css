@@ -1,0 +1,57 @@
+/* Globale Basis fürs TEXMA-ERP — Feinschliff nach den Web Interface Guidelines:
+   sichtbarer Tastatur-Fokus, sauberes Text-Rendering, ruhiger Hintergrund, kein
+   Doppeltipp-Zoom auf Controls. Farben referenzieren die Tokens aus theme.ts. */
+
+:root {
+  color-scheme: light; /* korrekte Kontraste für Scrollbars & Device-UI */
+  --erp-surface: #f5f6f8;
+  --erp-border: #e2e5ea;
+  --erp-focus: #34548a; /* Navy-Akzent für den Fokus-Ring */
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent; /* Tap-Highlight folgt dem Design */
+}
+
+body {
+  margin: 0;
+  background: var(--erp-surface);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Sichtbarer Fokus NUR bei Tastaturnavigation (nicht beim Mausklick). */
+:focus-visible {
+  outline: 2px solid var(--erp-focus);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Kein Doppeltipp-Zoom auf interaktiven Elementen (Mobile). */
+button,
+a,
+[role="button"],
+summary {
+  touch-action: manipulation;
+}
+
+/* Zahlen in Tabellen tabellarisch (Spalten richten sich aus). */
+table {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Reduzierte Bewegung respektieren. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

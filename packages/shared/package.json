@@ -21,6 +21,10 @@
     "./pain001": {
       "types": "./dist/pain001.d.ts",
       "import": "./dist/pain001.js"
+    },
+    "./order": {
+      "types": "./dist/order.d.ts",
+      "import": "./dist/order.js"
     }
   },
   "scripts": {

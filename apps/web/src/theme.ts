@@ -49,10 +49,24 @@ export const statusOf = (s: string): StatusToken =>
   STATUS[s] ?? { color: T.text2, symbol: "○", label: s };
 /** Mantine-Badge-Farbe je Ampel-Status (für StatusBadge-Komponenten). */
 export const statusMantineColor: Record<string, string> = {
-  ROT: "red",
-  GELB: "amber",
-  GRUEN: "green",
+  // Ampel
+  ROT: "red", GELB: "amber", GRUEN: "green",
+  // Entwurf / neu / Start (neutral)
+  ENTWURF: "gray", NEU: "gray", ANGELEGT: "gray", OFFEN: "gray", ERFASST: "gray",
+  // In Bearbeitung / unterwegs (blau)
+  IN_BEARBEITUNG: "blue", IN_PRODUKTION: "blue", KONTAKTIERT: "blue", NACHFASSEN: "blue",
+  VERSANDBEREIT: "blue", VERLIEHEN: "blue",
+  // Versendet / qualifiziert (indigo)
+  VERSENDET: "indigo", QUALIFIZIERT: "indigo",
+  // Positiv abgeschlossen (teal)
+  ANGENOMMEN: "teal", KONVERTIERT: "teal", ABGESCHLOSSEN: "teal", FAKTURIERT: "teal",
+  ZURUECK: "teal", BERECHNET: "teal",
+  // Negativ abgeschlossen (rot)
+  ABGELEHNT: "red", VERWORFEN: "red", STORNIERT: "red",
 };
+
+/** Badge-Farbe für einen Status (Fallback grau). */
+export const statusColor = (s: string): string => statusMantineColor[s] ?? "gray";
 
 // ── Mantine-Theme aus den Tokens (Navy primär, kompakte Defaults) ────────────────
 const navy: MantineColorsTuple = [
@@ -70,8 +84,20 @@ export const mantineTheme = createTheme({
   primaryShade: 9,
   defaultRadius: "sm",
   colors: { navy, amber },
+  autoContrast: true, // lesbarer Text auf farbigen Flächen (Badges/Buttons)
+  focusRing: "auto", // sichtbarer Fokus nur bei Tastatur (:focus-visible)
+  cursorType: "pointer", // klickbare Controls fühlen sich klickbar an
   // Kompakte Datenansicht (Kap. 38.1): kleinere Basisschrift als Mantine-Default.
   fontSizes: { xs: "11px", sm: "13px", md: "14px", lg: "16px", xl: "18px" },
+  headings: { fontWeight: "650", sizes: { h2: { fontSize: "20px" }, h3: { fontSize: "16px" }, h4: { fontSize: "14px" } } },
+  components: {
+    Table: { defaultProps: { striped: true, highlightOnHover: true, withTableBorder: true, verticalSpacing: "xs", horizontalSpacing: "sm", fz: "sm" } },
+    Card: { defaultProps: { withBorder: true, radius: "md", shadow: "none" } },
+    Badge: { defaultProps: { variant: "light", radius: "sm" } },
+    Button: { defaultProps: { radius: "sm" } },
+    Alert: { defaultProps: { radius: "md", variant: "light" } },
+    Tooltip: { defaultProps: { openDelay: 300, withArrow: true } },
+  },
 });
 
 /** Numerische Mantine-Table.Td: rechtsbuendig + tabellarische Ziffern (Spalten richten sich aus). */

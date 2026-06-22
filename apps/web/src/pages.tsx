@@ -4,12 +4,30 @@
 // Mahnlauf, Reorder→Bestellungen) sind je Seite ergänzt.
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Alert, Badge, Button, Group, Loader, NumberInput, Select, Table, Text, TextInput, Title } from "@mantine/core";
-import { orderStatusMachine, type OrderStatus } from "@texma/shared";
+import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { trpc } from "./trpc.js";
 import { euro, numTd, statusMantineColor } from "./theme.js";
 
 type Row = Record<string, unknown>;
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+
+// Deutsche Spaltenbezeichnungen statt roher Feldnamen ("Don't ship the schema").
+const COL_LABELS: Record<string, string> = {
+  id: "ID", number: "Nr.", name: "Name", status: "Status", kind: "Art", quelle: "Quelle",
+  companyId: "Firma", supplierId: "Lieferant", variantId: "Variante", articleId: "Artikel",
+  email: "E-Mail", phone: "Telefon", branche: "Branche", vatId: "USt-IdNr.", iban: "IBAN", bic: "BIC",
+  active: "Aktiv", mahnsperre: "Mahnsperre", gesperrt: "Gesperrt", priceGroupKind: "Preisgruppe",
+  zahlungszielTage: "Zahlungsziel (T)", netCents: "Netto", taxCents: "MwSt.", grossCents: "Brutto",
+  openCents: "Offen", ekCents: "EK", unitNetCents: "Einzel netto", totalNetCents: "Summe",
+  qty: "Menge", menge: "Menge", position: "Pos.", description: "Beschreibung", sku: "SKU",
+  supplierSku: "Lief.-SKU", availableQty: "Verfügbar", variantCount: "Varianten",
+  createdAt: "Erstellt", updatedAt: "Geändert", ausgegebenAm: "Ausgegeben", dueDate: "Fällig",
+  gueltigBisAm: "Gültig bis", externalNumber: "Shop-Nr.", employeeNote: "Vermerk",
+  trackingNumber: "Tracking", invoiceId: "Rechnung", kontaktName: "Kontakt", note: "Notiz",
+  verworfenGrund: "Grund", finalized: "Final", lastSyncAt: "Letzter Sync", dunningLevel: "Mahnstufe",
+};
+const colLabel = (key: string): string =>
+  COL_LABELS[key] ?? key.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (c) => c.toUpperCase());
 
 function fmtCell(key: string, v: unknown): ReactNode {
   if (v === null || v === undefined) return "—";
@@ -31,7 +49,7 @@ export function AutoTable({ rows, hide = [], action }: { rows: Row[]; hide?: str
     <Table striped highlightOnHover withTableBorder mt="sm" verticalSpacing="xs" fz="sm">
       <Table.Thead>
         <Table.Tr>
-          {cols.map((c) => <Table.Th key={c}>{c}</Table.Th>)}
+          {cols.map((c) => <Table.Th key={c}>{colLabel(c)}</Table.Th>)}
           {action && <Table.Th />}
         </Table.Tr>
       </Table.Thead>

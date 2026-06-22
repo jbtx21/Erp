@@ -1,7 +1,7 @@
 // Navigations-Gerüst: Auth-Gate + AppShell mit gruppierter Sidebar über ALLE Module
 // (alles durchklickbar). Jede Sektion ist eine Seite gegen die echten tRPC-Endpunkte.
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { AppShell, Badge, Button, Group, Loader, NavLink, ScrollArea, Text, Title } from "@mantine/core";
+import { AppShell, Badge, Box, Button, Group, Loader, NavLink, ScrollArea, Text, Title } from "@mantine/core";
 import { Login } from "./Login.js";
 import { Reporting } from "./Reporting.js";
 import { Differentiators } from "./Differentiators.js";
@@ -47,6 +47,8 @@ export function App(): JSX.Element {
   return <Shell user={user} onLogout={async () => { await trpc.auth.logout.mutate(); setUser(null); }} />;
 }
 
+const activeLabel = (k: string): string => NAV.flatMap((g) => g.items).find((i) => i.key === k)?.label ?? "";
+
 function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<void> }): JSX.Element {
   const [active, setActiveState] = useState<string>(hashKey);
   const setActive = useCallback((k: string) => {
@@ -54,27 +56,37 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<voi
     if (typeof location !== "undefined") location.hash = k;
   }, []);
 
+  // Genauer Seitentitel je Bereich (Web Interface Guidelines: accurate page titles).
+  useEffect(() => {
+    if (typeof document !== "undefined") document.title = `TEXMA ERP · ${activeLabel(active)}`;
+  }, [active]);
+
   return (
-    <AppShell header={{ height: 52 }} navbar={{ width: 230, breakpoint: "xs" }} padding="md">
+    <AppShell header={{ height: 52 }} navbar={{ width: 240, breakpoint: "xs" }} padding="md">
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between">
-          <Group gap="xs"><Title order={4}>TEXMA ERP</Title><Badge variant="light" size="sm">Demo</Badge></Group>
-          <Group gap="xs">
-            <Text size="sm" c="dimmed">{user.name} ({user.role})</Text>
-            <Button variant="subtle" size="xs" onClick={() => void onLogout()}>Abmelden</Button>
+          <Group gap="sm">
+            <Box w={22} h={22} style={{ borderRadius: 6, background: "var(--erp-focus)" }} aria-hidden />
+            <Title order={4}>TEXMA&nbsp;ERP</Title>
+            <Badge size="sm" color="amber">Demo</Badge>
+          </Group>
+          <Group gap="sm">
+            <Text size="sm" c="dimmed">{user.name} · {user.role}</Text>
+            <Button variant="default" size="xs" onClick={() => void onLogout()}>Abmelden</Button>
           </Group>
         </Group>
       </AppShell.Header>
 
-      <AppShell.Navbar p="xs">
-        <ScrollArea>
+      <AppShell.Navbar p="xs" style={{ background: "var(--erp-surface)" }}>
+        <ScrollArea type="scroll">
           {NAV.map((g) => (
-            <div key={g.group} style={{ marginBottom: 8 }}>
-              <Text size="xs" fw={700} c="dimmed" tt="uppercase" px="xs" mt="xs" mb={2}>{g.group}</Text>
+            <Box key={g.group} mb={6}>
+              <Text size="xs" fw={700} c="dimmed" tt="uppercase" px="xs" mt="sm" mb={4} style={{ letterSpacing: 0.4 }}>{g.group}</Text>
               {g.items.map((i) => (
-                <NavLink key={i.key} label={i.label} active={active === i.key} onClick={() => setActive(i.key)} />
+                <NavLink key={i.key} label={i.label} active={active === i.key} variant="light" color="navy"
+                  onClick={() => setActive(i.key)} style={{ borderRadius: 6 }} />
               ))}
-            </div>
+            </Box>
           ))}
         </ScrollArea>
       </AppShell.Navbar>
