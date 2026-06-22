@@ -8,6 +8,8 @@ import { QuoteRejectionError, StateTransitionError } from "@texma/shared";
 import { MemoryAuditSink } from "../audit/memory-audit-sink.js";
 import { PrismaQuoteRepository } from "./prisma-quote.repository.js";
 import { QuoteService } from "../modules/quote/quote.service.js";
+import { NumberingService } from "../modules/numbering/numbering.service.js";
+import { PrismaNumberingRepository } from "./prisma-numbering.repository.js";
 
 const PG = "pg_b8";
 const CO = "co_b8";
@@ -24,7 +26,7 @@ if (!dbConfigured) {
   });
 } else {
   describe("PrismaQuoteRepository — Verfall + Verlustgrund gegen echtes Postgres", () => {
-    const service = new QuoteService(new PrismaQuoteRepository(), new MemoryAuditSink());
+    const service = new QuoteService(new PrismaQuoteRepository(), new NumberingService(new PrismaNumberingRepository()), new MemoryAuditSink());
 
     async function cleanup() {
       await prisma.dueItem.deleteMany({ where: { entity: "Quote" } });

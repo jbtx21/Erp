@@ -362,6 +362,65 @@ export function ProductsPage(): JSX.Element {
   );
 }
 
+export function QuotesPage(): JSX.Element {
+  const [rows, setRows] = useState<Row[]>([]);
+  const [companyId, setCompanyId] = useState("co-muster");
+  const [desc, setDesc] = useState("");
+  const [qty, setQty] = useState(10);
+  const [euroPrice, setEuroPrice] = useState(12.9);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try { setRows((await trpc.quotes.list.query()) as Row[]); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  const act = async (fn: () => Promise<unknown>) => {
+    setErr(null);
+    try { await fn(); await load(); } catch (e) { setErr(errMsg(e)); }
+  };
+
+  const actionsFor = (r: Row): ReactNode => {
+    const id = String(r.id); const status = String(r.status);
+    return (
+      <Group gap={4} justify="flex-end" wrap="nowrap">
+        {status === "ENTWURF" && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.quotes.transition.mutate({ id, to: "VERSENDET" }))}>→ Versendet</Button>}
+        {(status === "VERSENDET" || status === "NACHFASSEN") && <Button size="compact-xs" color="green" onClick={() => void act(() => trpc.quotes.transition.mutate({ id, to: "ANGENOMMEN" }))}>Angenommen</Button>}
+        {status !== "ANGENOMMEN" && status !== "ABGELEHNT" && (
+          <Button size="compact-xs" color="red" variant="light" onClick={() => {
+            const grund = typeof window !== "undefined" ? window.prompt("Ablehnen — Verlustgrund?") : null;
+            if (grund) void act(() => trpc.quotes.reject.mutate({ id, verlustgrund: grund }));
+          }}>Ablehnen</Button>
+        )}
+      </Group>
+    );
+  };
+
+  return (
+    <>
+      <Title order={3}>Angebote</Title>
+      <Text size="sm" c="dimmed" mt={4}>Entwurf anlegen → Versendet → Angenommen/Abgelehnt (B8, AN-Nummer aus F1).</Text>
+      <Group mt="sm" gap="xs" align="end">
+        <TextInput label="Firmen-ID" value={companyId} onChange={(e) => setCompanyId(e.currentTarget.value)} w={130} />
+        <TextInput label="Position" value={desc} onChange={(e) => setDesc(e.currentTarget.value)} placeholder="200 Polos bestickt" w={220} />
+        <NumberInput label="Menge" value={qty} onChange={(v) => setQty(Number(v) || 1)} min={1} w={90} />
+        <NumberInput label="Einzel (€)" value={euroPrice} onChange={(v) => setEuroPrice(Number(v) || 0)} min={0} decimalScale={2} w={110} />
+        <Button loading={busy} disabled={!companyId.trim() || !desc.trim()} onClick={async () => {
+          setBusy(true); setErr(null);
+          try {
+            await trpc.quotes.create.mutate({ companyId, lines: [{ description: desc.trim(), qty, unitNetCents: Math.round(euroPrice * 100) }] });
+            setDesc(""); await load();
+          } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+        }}>Angebot anlegen</Button>
+      </Group>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      <AutoTable rows={rows} action={actionsFor} />
+    </>
+  );
+}
+
 export function OrdersPage({ role }: { role: string }): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [err, setErr] = useState<string | null>(null);

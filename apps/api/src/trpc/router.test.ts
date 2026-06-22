@@ -32,6 +32,8 @@ import { InMemoryCompanyRepository } from "../repositories/in-memory-company.rep
 import { ProductService } from "../modules/product/product.service.js";
 import { InMemoryProductRepository } from "../repositories/in-memory-product.repository.js";
 import { OrderWorkflowService } from "../modules/order-workflow/order-workflow.service.js";
+import { QuoteService } from "../modules/quote/quote.service.js";
+import { InMemoryQuoteRepository } from "../repositories/in-memory-quote.repository.js";
 import { NumberingService } from "../modules/numbering/numbering.service.js";
 import { InMemoryNumberingRepository } from "../repositories/in-memory-numbering.repository.js";
 import { ProductionSheetService } from "../modules/production-sheet/production-sheet.service.js";
@@ -242,6 +244,7 @@ function setup(user: AuthUser | null = BUERO) {
     companies: new CompanyService(new InMemoryCompanyRepository(), new MemoryAuditSink()),
     products: new ProductService(new InMemoryProductRepository(), new MemoryAuditSink()),
     orderWorkflow: new OrderWorkflowService(repo, new MemoryAuditSink()),
+    quotes: new QuoteService(new InMemoryQuoteRepository(), new NumberingService(new InMemoryNumberingRepository()), new MemoryAuditSink()),
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -331,6 +334,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       companies: {} as Context["companies"],
       products: {} as Context["products"],
       orderWorkflow: {} as Context["orderWorkflow"],
+      quotes: {} as Context["quotes"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",

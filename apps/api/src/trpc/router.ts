@@ -670,6 +670,33 @@ export const appRouter = router({
       }),
   }),
 
+  // Angebote (B8): auflisten + Entwurf anlegen + Status weiterschalten + ablehnen.
+  quotes: router({
+    list: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.quotes.list()),
+    create: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({
+        companyId: z.string().min(1),
+        gueltigBisAm: z.string().datetime().optional(),
+        lines: z.array(z.object({ description: z.string().min(1), qty: z.number().int().positive(), unitNetCents: z.number().int().nonnegative() })).min(1),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.quotes.create({ ...input, gueltigBisAm: input.gueltigBisAm ? new Date(input.gueltigBisAm) : null }); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    transition: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ id: z.string().min(1), to: z.enum(["VERSENDET", "NACHFASSEN", "ANGENOMMEN"]) }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.quotes.transition(input.id, input.to); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "CONFLICT", message: (e as Error).message }); }
+      }),
+    reject: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ id: z.string().min(1), verlustgrund: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.quotes.reject(input.id, input.verlustgrund); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "CONFLICT", message: (e as Error).message }); }
+      }),
+  }),
+
   // Firmen/Kunden-Stammdaten (B3): anlegen/auflisten/bearbeiten.
   companies: router({
     list: roleProcedure("ADMIN", "BUERO", "BUCHHALTUNG").query(({ ctx }) => ctx.companies.list()),

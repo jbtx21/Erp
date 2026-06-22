@@ -3,12 +3,40 @@
 
 import { prisma } from "@texma/db";
 import type { QuoteStatus } from "@texma/shared";
-import type { ExpiredQuote, QuoteRepository } from "../modules/quote/quote.service.js";
+import type { CreateQuoteInput, ExpiredQuote, QuoteRepository, QuoteRow } from "../modules/quote/quote.service.js";
 
 export class PrismaQuoteRepository implements QuoteRepository {
   async getStatus(quoteId: string): Promise<QuoteStatus | null> {
     const q = await prisma.quote.findUnique({ where: { id: quoteId }, select: { status: true } });
     return (q?.status ?? null) as QuoteStatus | null;
+  }
+
+  async list(): Promise<QuoteRow[]> {
+    const rows = await prisma.quote.findMany({
+      orderBy: { createdAt: "desc" },
+      select: { id: true, number: true, companyId: true, status: true, gueltigBisAm: true, lines: { select: { qty: true, unitNetCents: true } } },
+    });
+    return rows.map((q) => ({
+      id: q.id, number: q.number, companyId: q.companyId, status: q.status as QuoteStatus,
+      gueltigBisAm: q.gueltigBisAm,
+      totalNetCents: q.lines.reduce((s, l) => s + l.qty * l.unitNetCents, 0),
+    }));
+  }
+
+  async create(input: CreateQuoteInput & { number: string }): Promise<{ id: string }> {
+    return prisma.quote.create({
+      data: {
+        number: input.number,
+        companyId: input.companyId,
+        gueltigBisAm: input.gueltigBisAm ?? null,
+        lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents })) },
+      },
+      select: { id: true },
+    });
+  }
+
+  async setStatus(quoteId: string, status: QuoteStatus): Promise<void> {
+    await prisma.quote.update({ where: { id: quoteId }, data: { status: status as never } });
   }
 
   async reject(quoteId: string, verlustgrund: string): Promise<void> {

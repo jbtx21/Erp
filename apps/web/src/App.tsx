@@ -8,14 +8,14 @@ import { Differentiators } from "./Differentiators.js";
 import { Banking } from "./Banking.js";
 import {
   CompaniesPage, CostCentersPage, DunningPage, InquiriesPage, IncomingInvoicesPage, LeadsPage, OrdersPage, ProcurementPage, ProductionReportingPage,
-  ProductsPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SuppliersPage,
+  ProductsPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SuppliersPage,
 } from "./pages.js";
 import { trpc } from "./trpc.js";
 
 interface AuthUser { id: string; email: string; name: string; role: string; totpEnabled: boolean; }
 
 const NAV: ReadonlyArray<{ group: string; items: ReadonlyArray<{ key: string; label: string }> }> = [
-  { group: "Vertrieb", items: [{ key: "companies", label: "Firmen/Kunden" }, { key: "leads", label: "Leads" }, { key: "inquiries", label: "Anfragen" }, { key: "orders", label: "Aufträge" }, { key: "reklamation", label: "Reklamation" }] },
+  { group: "Vertrieb", items: [{ key: "companies", label: "Firmen/Kunden" }, { key: "leads", label: "Leads" }, { key: "inquiries", label: "Anfragen" }, { key: "quotes", label: "Angebote" }, { key: "orders", label: "Aufträge" }, { key: "reklamation", label: "Reklamation" }] },
   { group: "Beschaffung", items: [
     { key: "suppliers", label: "Lieferanten" }, { key: "incoming", label: "Eingangsrechnungen" },
     { key: "procurement", label: "Beschaffung" }, { key: "reorder", label: "Nachbestellung" },
@@ -92,6 +92,7 @@ function Page({ k, role }: { k: string; role: string }): ReactNode {
     case "companies": return <CompaniesPage />;
     case "leads": return <LeadsPage />;
     case "inquiries": return <InquiriesPage />;
+    case "quotes": return <QuotesPage />;
     case "reklamation": return <ReklamationPage />;
     case "suppliers": return <SuppliersPage />;
     case "incoming": return <IncomingInvoicesPage />;
