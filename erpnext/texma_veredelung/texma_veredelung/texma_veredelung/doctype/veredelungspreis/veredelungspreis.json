@@ -28,7 +28,7 @@
    "fieldname": "finishing_type",
    "label": "Veredelungsart",
    "fieldtype": "Select",
-   "options": "Transfer\nSiebdruck\nStickerei\nFlex/Flock\nDigitaldruck",
+   "options": "DTF/Transferdruck\nFlex/Flock\nSilberreflex\nPlastisol-Transfer\nSiebdruck\nStickerei",
    "reqd": 1,
    "in_list_view": 1
   },
