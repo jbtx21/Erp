@@ -141,3 +141,28 @@ Das bestehende TS-Repo wird zur **Spezifikation + Abnahme-Suite** für den ERPNe
 
 **Nächster Schritt:** Skelett unter `erpnext/texma_veredelung/` auf einem Frappe-Bench installieren,
 Standard-Config gegen Abschnitt 3 aufsetzen, dann Integrationen (Block „groß") priorisieren.
+
+---
+
+## Anhang A — DATEV/ADDISON-Export (T-07), belegt aus dem Steuerberater-Handbuch
+
+Quelle: *ADDISON „Buchungsexport Datev", Benutzerhandbuch Wolters Kluwer, Stand 11/2022* (von TEXMA
+bereitgestellt). Der Steuerberater nutzt **ADDISON** (Wolters Kluwer) — das spricht das DATEV-Pro-Format.
+Damit der ERPNext-Export importierbar ist, gelten dessen Konventionen:
+
+- **Format:** DATEV-Pro / „Kanzlei Rechnungswesen"-Standardimportformat (EXTF). ERPNext-Export muss
+  exakt dieses Format erzeugen (Greenfield-Referenz für die Satzstruktur: `packages/shared/src/datev.ts`).
+- **Kontenrahmen:** **Original-DATEV-Kontenrahmen Pflicht, SKR13 verboten** → **SKR03** (in der Site
+  gewählt) ist gültig; SKR04 wäre die Alternative. Mit Steuerberater final bestätigen (K-01).
+- **Steuer-/Buchungsschlüssel** müssen **identisch zu DATEV** sein → DATEV-Steuerschlüssel in ERPNext
+  hinterlegen/mappen.
+- **Keine Aufteilungsbuchungen** (DATEV kennt sie nicht) → in Einzelbuchungen auflösen. Empfohlene
+  Zwischenkonten: **8000/4000** (Debitor, SKR03/SKR04), **3200/5200** (Kreditor, SKR03/SKR04).
+- **Stapel je Buchungsmonat** in separate Dateien; bei abweichendem Wirtschaftsjahr getrennt
+  (TEXMA: Kalenderjahr ab 01.01. → unkritisch).
+- **Stammdaten** (Sachkonten, Debitoren/Kreditoren) werden im Datev-Pro-Format automatisch mit exportiert.
+- **Pflicht-/Kopffelder beim Export:** Beraternummer + Mandantennummer (NKZ optional) → **vom
+  Steuerberater erfragen**.
+- **ERPNext-Umsetzung:** DATEV-Export-App (regional, z. B. `erpnext_germany`/DATEV-Export) **oder**
+  Custom-Export aus `GL Entry`/`Sales Invoice`, der EXTF mit SKR03-Konten + DATEV-Steuerschlüssel
+  schreibt. Abnahme T-07: erzeugte Datei probeweise in ADDISON/DATEV importieren (mit Steuerberater).
