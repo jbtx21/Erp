@@ -1,16 +1,19 @@
 // In-Memory-Lead-Repository für Unit-Tests/Dev.
 
-import type { LeadStatus } from "@texma/shared";
-import type { CreateLeadInput, LeadRepository } from "../modules/lead/lead.service.js";
+import type { InquirySource, LeadStatus } from "@texma/shared";
+import type { CreateLeadInput, LeadRepository, LeadRow } from "../modules/lead/lead.service.js";
 
 interface Lead {
   id: string;
   name: string;
   email: string | null;
   phone: string | null;
+  quelle: InquirySource;
+  note: string | null;
   status: LeadStatus;
   verworfenGrund: string | null;
   convertedCompanyId: string | null;
+  createdAt: Date;
 }
 
 export class InMemoryLeadRepository implements LeadRepository {
@@ -21,6 +24,10 @@ export class InMemoryLeadRepository implements LeadRepository {
     return this.leads.get(id);
   }
 
+  async list(): Promise<LeadRow[]> {
+    return [...this.leads.values()].map((l) => ({ ...l })).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
   async create(input: CreateLeadInput): Promise<{ id: string }> {
     const id = `lead_${++this.seq}`;
     this.leads.set(id, {
@@ -28,9 +35,12 @@ export class InMemoryLeadRepository implements LeadRepository {
       name: input.name,
       email: input.email ?? null,
       phone: input.phone ?? null,
+      quelle: input.quelle,
+      note: input.note ?? null,
       status: "NEU",
       verworfenGrund: null,
       convertedCompanyId: null,
+      createdAt: new Date(),
     });
     return { id };
   }

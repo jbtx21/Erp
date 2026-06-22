@@ -624,6 +624,37 @@ export const appRouter = router({
       }),
   }),
 
+  // Leads/Interessenten (B15): Funnel NEU->KONTAKTIERT->QUALIFIZIERT->konvertiert.
+  leads: router({
+    list: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.leads.list()),
+    create: roleProcedure(...supplierRoles)
+      .input(z.object({
+        name: z.string().min(1),
+        quelle: z.enum(["WEB", "EMAIL", "SHOP", "TELEFON"]),
+        email: z.string().optional(),
+        phone: z.string().optional(),
+        note: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.leads.create(input); } catch (e) { throw toTrpcError(e); }
+      }),
+    transition: roleProcedure(...supplierRoles)
+      .input(z.object({ id: z.string().min(1), to: z.enum(["KONTAKTIERT", "QUALIFIZIERT"]) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.leads.transition(input.id, input.to); } catch (e) { throw toTrpcError(e); }
+      }),
+    convert: roleProcedure(...supplierRoles)
+      .input(z.object({ id: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.leads.convert(input.id); } catch (e) { throw toTrpcError(e); }
+      }),
+    discard: roleProcedure(...supplierRoles)
+      .input(z.object({ id: z.string().min(1), grund: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.leads.discard(input.id, input.grund); } catch (e) { throw toTrpcError(e); }
+      }),
+  }),
+
   // Kostenstellen (B7): Stammdaten anlegen/auflisten/löschen + Auswertung je Kostenstelle.
   costCenters: router({
     list: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.costCenters.list()),

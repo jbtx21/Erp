@@ -118,6 +118,14 @@ async function main(): Promise<void> {
     }).catch(() => {});
   }
 
+  // ── Leads (B15) ────────────────────────────────────────────────────────────
+  for (const [id, name, quelle, status] of [
+    ["lead-1", "Sportverein Adler e.V.", "WEB", "NEU"],
+    ["lead-2", "Müller Bau GmbH", "TELEFON", "QUALIFIZIERT"],
+  ] as const) {
+    await prisma.lead.upsert({ where: { id }, update: {}, create: { id, name, quelle, status, email: "info@example.de" } });
+  }
+
   // ── Kostenstellen (B7) ─────────────────────────────────────────────────────
   for (const [id, nummer, name] of [["cc-1", "1000", "Veredelung"], ["cc-2", "2000", "Vertrieb"]] as const) {
     await prisma.costCenter.upsert({ where: { id }, update: {}, create: { id, nummer, name } });

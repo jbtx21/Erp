@@ -7,7 +7,7 @@ import { Reporting } from "./Reporting.js";
 import { Differentiators } from "./Differentiators.js";
 import { Banking } from "./Banking.js";
 import {
-  CostCentersPage, DunningPage, IncomingInvoicesPage, ListPage, ProcurementPage, ProductionReportingPage,
+  CostCentersPage, DunningPage, IncomingInvoicesPage, LeadsPage, ListPage, ProcurementPage, ProductionReportingPage,
   ReklamationPage, ReorderPage, ShipmentsPage, SuppliersPage,
 } from "./pages.js";
 import { trpc } from "./trpc.js";
@@ -15,7 +15,7 @@ import { trpc } from "./trpc.js";
 interface AuthUser { id: string; email: string; name: string; role: string; totpEnabled: boolean; }
 
 const NAV: ReadonlyArray<{ group: string; items: ReadonlyArray<{ key: string; label: string }> }> = [
-  { group: "Vertrieb", items: [{ key: "orders", label: "Aufträge" }, { key: "reklamation", label: "Reklamation" }] },
+  { group: "Vertrieb", items: [{ key: "leads", label: "Leads" }, { key: "orders", label: "Aufträge" }, { key: "reklamation", label: "Reklamation" }] },
   { group: "Beschaffung", items: [
     { key: "suppliers", label: "Lieferanten" }, { key: "incoming", label: "Eingangsrechnungen" },
     { key: "procurement", label: "Beschaffung" }, { key: "reorder", label: "Nachbestellung" },
@@ -89,6 +89,7 @@ function Page({ k, role }: { k: string; role: string }): ReactNode {
     case "orders": return <ListPage title="Auftrags-Eingang"
       hint={role === "PRODUKTION" ? "Rolle PRODUKTION: Preise/Kundendaten ausgeblendet (Kap. 12)." : "Shop-Bestellungen der Firma zugeordnet (T-01)."}
       load={() => trpc.shopOrders.list.query({ limit: 100 }) as Promise<Record<string, unknown>[]>} hide={["rawPayload"]} />;
+    case "leads": return <LeadsPage />;
     case "reklamation": return <ReklamationPage />;
     case "suppliers": return <SuppliersPage />;
     case "incoming": return <IncomingInvoicesPage />;

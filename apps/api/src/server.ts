@@ -55,6 +55,8 @@ import { PrismaReportingRepository } from "./repositories/prisma-reporting.repos
 import { PrismaProductionReportingRepository } from "./repositories/prisma-production-reporting.repository.js";
 import { CostCenterService } from "./modules/cost-center/cost-center.service.js";
 import { PrismaCostCenterRepository } from "./repositories/prisma-cost-center.repository.js";
+import { LeadService } from "./modules/lead/lead.service.js";
+import { PrismaLeadRepository } from "./repositories/prisma-lead.repository.js";
 import { appRouter } from "./trpc/router.js";
 import type { Context } from "./trpc/trpc.js";
 import { portalAppRouter } from "./trpc/portal-router.js";
@@ -118,6 +120,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const reporting = new ReportingService(new PrismaReportingRepository(), AnthropicReportClient.fromEnv());
   const productionReporting = new ProductionReportingService(new PrismaProductionReportingRepository());
   const costCenters = new CostCenterService(new PrismaCostCenterRepository(), new PrismaAuditSink());
+  const leads = new LeadService(new PrismaLeadRepository(), new PrismaAuditSink());
   const auth = new AuthService(
     new PrismaUserRepository(),
     new PrismaSessionRepository(),
@@ -204,6 +207,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           reporting,
           productionReporting,
           costCenters,
+          leads,
           auth,
           user,
           sessionToken,

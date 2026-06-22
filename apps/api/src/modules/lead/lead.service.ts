@@ -19,8 +19,22 @@ export interface CreateLeadInput {
   note?: string | null;
 }
 
+export interface LeadRow {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  quelle: InquirySource;
+  status: LeadStatus;
+  note: string | null;
+  verworfenGrund: string | null;
+  convertedCompanyId: string | null;
+  createdAt: Date;
+}
+
 export interface LeadRepository {
   create(input: CreateLeadInput): Promise<{ id: string }>;
+  list(): Promise<LeadRow[]>;
   load(id: string): Promise<{ status: LeadStatus; name: string; email: string | null; phone: string | null } | null>;
   setStatus(id: string, status: LeadStatus): Promise<void>;
   discard(id: string, grund: string): Promise<void>;
@@ -43,6 +57,11 @@ export class LeadService {
       buildEntry({ entity: "Lead", entityId: id, action: "CREATE", after: { name: input.name, quelle: input.quelle } })
     );
     return { id };
+  }
+
+  /** Alle Leads (neueste zuerst). */
+  async list(): Promise<LeadRow[]> {
+    return this.repo.list();
   }
 
   /** Funnel-Übergang (KONTAKTIERT/QUALIFIZIERT) mit F2-Prüfung. */

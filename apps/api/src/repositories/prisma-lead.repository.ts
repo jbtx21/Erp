@@ -4,9 +4,15 @@
 
 import { prisma } from "@texma/db";
 import type { LeadStatus } from "@texma/shared";
-import type { CreateLeadInput, LeadRepository } from "../modules/lead/lead.service.js";
+import type { CreateLeadInput, LeadRepository, LeadRow } from "../modules/lead/lead.service.js";
+import type { InquirySource } from "@texma/shared";
 
 export class PrismaLeadRepository implements LeadRepository {
+  async list(): Promise<LeadRow[]> {
+    const rows = await prisma.lead.findMany({ orderBy: { createdAt: "desc" } });
+    return rows.map((l) => ({ ...l, quelle: l.quelle as InquirySource, status: l.status as LeadStatus }));
+  }
+
   async create(input: CreateLeadInput): Promise<{ id: string }> {
     return prisma.lead.create({
       data: {

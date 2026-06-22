@@ -21,6 +21,8 @@ import { StickereiService } from "../modules/stickerei/stickerei.service.js";
 import { ReorderService } from "../modules/reorder/reorder.service.js";
 import { CostCenterService } from "../modules/cost-center/cost-center.service.js";
 import { InMemoryCostCenterRepository } from "../repositories/in-memory-cost-center.repository.js";
+import { LeadService } from "../modules/lead/lead.service.js";
+import { InMemoryLeadRepository } from "../repositories/in-memory-lead.repository.js";
 import { ProductionSheetService } from "../modules/production-sheet/production-sheet.service.js";
 import { ReportingService } from "../modules/reporting/reporting.service.js";
 import { ProductionReportingService } from "../modules/production-reporting/production-reporting.service.js";
@@ -223,6 +225,7 @@ function setup(user: AuthUser | null = BUERO) {
     reporting,
     productionReporting,
     costCenters: new CostCenterService(new InMemoryCostCenterRepository(), new MemoryAuditSink()),
+    leads: new LeadService(new InMemoryLeadRepository(), new MemoryAuditSink()),
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -306,6 +309,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       reporting: {} as Context["reporting"],
       productionReporting: {} as Context["productionReporting"],
       costCenters: {} as Context["costCenters"],
+      leads: {} as Context["leads"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",
