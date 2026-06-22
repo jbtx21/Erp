@@ -35,7 +35,7 @@ export interface MetricRepository {
 
 export interface ChartItem { id: string; name: string; chartType: ChartType; metricKey: string }
 export interface CardItem { id: string; name: string; metricKey: string }
-export interface DashboardSummary { id: string; name: string; isDefault: boolean }
+export interface DashboardSummary { id: string; name: string; ownerEmail: string | null; isDefault: boolean }
 export interface DashboardItemRow { id: string; kind: WidgetKind; refId: string; width: WidgetWidth; position: number }
 
 export interface DashboardRepository {
@@ -45,13 +45,20 @@ export interface DashboardRepository {
   listCards(): Promise<CardItem[]>;
   getChart(id: string): Promise<ChartItem | null>;
   getCard(id: string): Promise<CardItem | null>;
-  createDashboard(name: string): Promise<DashboardSummary>;
-  listDashboards(): Promise<DashboardSummary[]>;
+  createDashboard(name: string, ownerEmail: string | null): Promise<DashboardSummary>;
+  /** Dashboards eines Mitarbeiters: eigene (ownerEmail) + geteilte (ownerEmail null). */
+  listForUser(ownerEmail: string): Promise<DashboardSummary[]>;
   getDashboard(id: string): Promise<{ id: string; name: string; items: DashboardItemRow[] } | null>;
   addItem(dashboardId: string, kind: WidgetKind, refId: string, width: WidgetWidth): Promise<DashboardItemRow>;
+  removeItem(itemId: string): Promise<void>;
+  getItem(itemId: string): Promise<{ id: string; dashboardId: string; position: number } | null>;
+  listItems(dashboardId: string): Promise<DashboardItemRow[]>;
+  updateItemPosition(itemId: string, position: number): Promise<void>;
+  setDefault(dashboardId: string, ownerEmail: string): Promise<void>;
 }
 
 export interface ResolvedWidget {
+  id: string;
   kind: WidgetKind;
   width: WidgetWidth;
   title: string;
@@ -75,7 +82,8 @@ export class DashboardService {
   }
   listCharts(): Promise<ChartItem[]> { return this.repo.listCharts(); }
   listCards(): Promise<CardItem[]> { return this.repo.listCards(); }
-  listDashboards(): Promise<DashboardSummary[]> { return this.repo.listDashboards(); }
+  /** Persönliche + geteilte Dashboards des Mitarbeiters. */
+  listForUser(ownerEmail: string): Promise<DashboardSummary[]> { return this.repo.listForUser(ownerEmail); }
 
   private assertMetric(key: string): MetricDef {
     const m = METRIC_BY_KEY.get(key);
@@ -93,12 +101,31 @@ export class DashboardService {
     this.assertMetric(metricKey);
     return this.repo.createCard(name.trim(), metricKey);
   }
-  async createDashboard(name: string): Promise<DashboardSummary> {
+  async createDashboard(name: string, ownerEmail: string | null): Promise<DashboardSummary> {
     if (!name.trim()) throw new DashboardError("Name ist Pflicht.");
-    return this.repo.createDashboard(name.trim());
+    return this.repo.createDashboard(name.trim(), ownerEmail);
   }
   addItem(dashboardId: string, kind: WidgetKind, refId: string, width: WidgetWidth): Promise<DashboardItemRow> {
     return this.repo.addItem(dashboardId, kind, refId, width);
+  }
+  removeItem(itemId: string): Promise<void> {
+    return this.repo.removeItem(itemId);
+  }
+  setDefault(dashboardId: string, ownerEmail: string): Promise<void> {
+    return this.repo.setDefault(dashboardId, ownerEmail);
+  }
+
+  /** Verschiebt eine Kachel in der Reihenfolge (freie Anordnung). */
+  async moveItem(itemId: string, direction: "UP" | "DOWN"): Promise<void> {
+    const it = await this.repo.getItem(itemId);
+    if (!it) throw new DashboardError(`Kachel ${itemId} nicht gefunden.`);
+    const items = (await this.repo.listItems(it.dashboardId)).sort((a, b) => a.position - b.position);
+    const idx = items.findIndex((x) => x.id === itemId);
+    const neighborIdx = direction === "UP" ? idx - 1 : idx + 1;
+    if (neighborIdx < 0 || neighborIdx >= items.length) return; // Rand → No-Op
+    const neighbor = items[neighborIdx]!;
+    await this.repo.updateItemPosition(it.id, neighbor.position);
+    await this.repo.updateItemPosition(neighbor.id, it.position);
   }
 
   /** Löst ein Dashboard auf: jede Kachel mit berechneten Metrikdaten. */
@@ -111,12 +138,12 @@ export class DashboardService {
         const c = await this.repo.getChart(it.refId);
         if (!c) continue;
         const m = await this.metrics.compute(c.metricKey);
-        widgets.push({ kind: "CHART", width: it.width, title: c.name, chartType: c.chartType, metricKind: METRIC_BY_KEY.get(c.metricKey)?.kind ?? "SERIES", value: m.value, series: m.series });
+        widgets.push({ id: it.id, kind: "CHART", width: it.width, title: c.name, chartType: c.chartType, metricKind: METRIC_BY_KEY.get(c.metricKey)?.kind ?? "SERIES", value: m.value, series: m.series });
       } else {
         const c = await this.repo.getCard(it.refId);
         if (!c) continue;
         const m = await this.metrics.compute(c.metricKey);
-        widgets.push({ kind: "CARD", width: it.width, title: c.name, chartType: null, metricKind: METRIC_BY_KEY.get(c.metricKey)?.kind ?? "NUMBER", value: m.value, series: m.series });
+        widgets.push({ id: it.id, kind: "CARD", width: it.width, title: c.name, chartType: null, metricKind: METRIC_BY_KEY.get(c.metricKey)?.kind ?? "NUMBER", value: m.value, series: m.series });
       }
     }
     return { id: d.id, name: d.name, widgets };

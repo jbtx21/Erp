@@ -1389,11 +1389,14 @@ model NumberCard {
 }
 
 model Dashboard {
-  id        String          @id @default(cuid())
-  name      String          @unique
-  isDefault Boolean         @default(false)
-  items     DashboardItem[]
-  createdAt DateTime        @default(now())
+  id         String          @id @default(cuid())
+  name       String
+  ownerEmail String? // null = geteilt/global; gesetzt = persönliches Dashboard des Mitarbeiters
+  isDefault  Boolean         @default(false) // persönliches Standard-Dashboard des Besitzers
+  items      DashboardItem[]
+  createdAt  DateTime        @default(now())
+
+  @@index([ownerEmail])
 }
 
 model DashboardItem {

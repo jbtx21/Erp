@@ -3,7 +3,7 @@
 // Bereiche mit wenig Code anbindbar sind. Interaktive Aktionen (Versand bestätigen,
 // Mahnlauf, Reorder→Bestellungen) sind je Seite ergänzt.
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Alert, Badge, Box, Button, Checkbox, Group, Loader, NumberInput, Select, Table, Text, Textarea, TextInput, Title } from "@mantine/core";
+import { Alert, Badge, Box, Button, Checkbox, Group, Loader, NumberInput, Select, Switch, Table, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { trpc } from "./trpc.js";
 import { euro, numTd, statusMantineColor } from "./theme.js";
@@ -844,12 +844,19 @@ export function DashboardsPage(): JSX.Element {
   const [err, setErr] = useState<string | null>(null);
   const [chartName, setChartName] = useState(""); const [chartMetric, setChartMetric] = useState<string | null>(null);
   const [cardName, setCardName] = useState(""); const [cardMetric, setCardMetric] = useState<string | null>(null);
-  const [dashName, setDashName] = useState("");
+  const [dashName, setDashName] = useState(""); const [dashShared, setDashShared] = useState(false);
   const [addKind, setAddKind] = useState<string>("CARD"); const [addRef, setAddRef] = useState<string | null>(null);
+
+  const reloadResolved = useCallback(async (id: string) => {
+    setResolved(await trpc.dashboards.resolved.query({ id }));
+  }, []);
 
   const loadAll = useCallback(async () => {
     try {
-      setDashboards((await trpc.dashboards.list.query()) as Row[]);
+      const ds = (await trpc.dashboards.list.query()) as Row[];
+      setDashboards(ds);
+      // Persönliches Standard-Dashboard automatisch vorauswählen (jede:r sieht das eigene).
+      setSel((cur) => cur ?? (ds.find((d) => d.isDefault)?.id as string | undefined) ?? null);
       setMetrics(await trpc.dashboards.metrics.query());
       setCharts((await trpc.dashboards.listCharts.query()) as Row[]);
       setCards((await trpc.dashboards.listCards.query()) as Row[]);
@@ -870,16 +877,28 @@ export function DashboardsPage(): JSX.Element {
   return (
     <>
       <Title order={3}>Dashboards</Title>
-      <Text size="sm" c="dimmed" mt={4}>Charts + KPI-Kacheln als wiederverwendbare Entitäten über einem festen Metrik-Katalog (G-7).</Text>
+      <Text size="sm" c="dimmed" mt={4}>Personalisierte Dashboards je Mitarbeiter — frei aus Charts + KPI-Kacheln (fester Metrik-Katalog, G-7) zusammenstellbar. „Geteilt" = für alle sichtbar.</Text>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
 
-      <Select label="Dashboard" placeholder="wählen" w={260} mt="sm" data={dashboards.map((d) => ({ value: String(d.id), label: String(d.name) }))} value={sel} onChange={setSel} />
+      <Group align="flex-end" gap="sm" mt="sm">
+        <Select label="Dashboard" placeholder="wählen" w={300}
+          data={dashboards.map((d) => ({ value: String(d.id), label: `${String(d.name)}${d.ownerEmail ? "" : " · geteilt"}${d.isDefault ? " ★" : ""}` }))}
+          value={sel} onChange={setSel} />
+        <Button variant="light" disabled={!sel} onClick={async () => { setErr(null); try { await trpc.dashboards.setDefault.mutate({ dashboardId: sel! }); await loadAll(); } catch (e) { setErr(errMsg(e)); } }}>Als mein Standard</Button>
+      </Group>
 
       {resolved && (
         <Group align="stretch" mt="md" gap="md" wrap="wrap">
-          {resolved.widgets.map((w, i) => (
-            <Box key={i} p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, width: w.width === "FULL" ? "100%" : "calc(50% - 8px)" }}>
-              <Text size="sm" fw={600}>{w.title}</Text>
+          {resolved.widgets.map((w) => (
+            <Box key={w.id} p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, width: w.width === "FULL" ? "100%" : "calc(50% - 8px)" }}>
+              <Group justify="space-between" align="flex-start" gap={4}>
+                <Text size="sm" fw={600}>{w.title}</Text>
+                <Group gap={2}>
+                  <Button size="compact-xs" variant="subtle" onClick={async () => { setErr(null); try { await trpc.dashboards.moveItem.mutate({ itemId: w.id, direction: "UP" }); if (sel) await reloadResolved(sel); } catch (e) { setErr(errMsg(e)); } }}>↑</Button>
+                  <Button size="compact-xs" variant="subtle" onClick={async () => { setErr(null); try { await trpc.dashboards.moveItem.mutate({ itemId: w.id, direction: "DOWN" }); if (sel) await reloadResolved(sel); } catch (e) { setErr(errMsg(e)); } }}>↓</Button>
+                  <Button size="compact-xs" variant="subtle" color="red" onClick={async () => { setErr(null); try { await trpc.dashboards.removeItem.mutate({ itemId: w.id }); if (sel) await reloadResolved(sel); } catch (e) { setErr(errMsg(e)); } }}>✕</Button>
+                </Group>
+              </Group>
               {w.kind === "CARD"
                 ? <Text fz={32} fw={700} mt={4}>{w.value ?? "—"}</Text>
                 : w.series && w.series.length > 0 ? <MiniBars series={w.series} /> : <Text size="sm" c="dimmed" mt={4}>Keine Daten.</Text>}
@@ -904,7 +923,8 @@ export function DashboardsPage(): JSX.Element {
       <Title order={4} mt="xl">Dashboard zusammenstellen</Title>
       <Group align="flex-end" gap="sm" mt="xs" wrap="wrap">
         <TextInput label="Neues Dashboard" value={dashName} onChange={(e) => setDashName(e.currentTarget.value)} w={200} />
-        <Button variant="light" disabled={!dashName.trim()} onClick={async () => { setErr(null); try { const d = await trpc.dashboards.createDashboard.mutate({ name: dashName }); setDashName(""); await loadAll(); setSel(d.id); } catch (e) { setErr(errMsg(e)); } }}>+ Dashboard</Button>
+        <Switch label="Geteilt (für alle)" checked={dashShared} onChange={(e) => setDashShared(e.currentTarget.checked)} mb={6} />
+        <Button variant="light" disabled={!dashName.trim()} onClick={async () => { setErr(null); try { const d = await trpc.dashboards.createDashboard.mutate({ name: dashName, shared: dashShared }); setDashName(""); setDashShared(false); await loadAll(); setSel(d.id); } catch (e) { setErr(errMsg(e)); } }}>+ Dashboard</Button>
       </Group>
       <Group align="flex-end" gap="sm" mt="xs" wrap="wrap">
         <Select label="Typ" w={120} data={[{ value: "CARD", label: "Kachel" }, { value: "CHART", label: "Chart" }]} value={addKind} onChange={(v) => { if (v) { setAddKind(v); setAddRef(null); } }} />

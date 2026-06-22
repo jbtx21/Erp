@@ -797,7 +797,7 @@ export const appRouter = router({
     metrics: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.dashboards.listMetrics()),
     listCharts: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.dashboards.listCharts()),
     listCards: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.dashboards.listCards()),
-    list: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.dashboards.listDashboards()),
+    list: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.dashboards.listForUser(ctx.user.email)),
     resolved: roleProcedure(...supplierRoles)
       .input(z.object({ id: z.string().min(1) }))
       .query(async ({ input, ctx }) => {
@@ -816,15 +816,28 @@ export const appRouter = router({
         try { return await ctx.dashboards.createCard(input.name, input.metricKey); }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
-    createDashboard: roleProcedure("ADMIN", "BUERO")
-      .input(z.object({ name: z.string().min(1) }))
+    // Persönliches Dashboard: ownerEmail = angemeldete:r Nutzer:in; shared = null (per Flag).
+    createDashboard: roleProcedure(...supplierRoles)
+      .input(z.object({ name: z.string().min(1), shared: z.boolean().default(false) }))
       .mutation(async ({ input, ctx }) => {
-        try { return await ctx.dashboards.createDashboard(input.name); }
+        try { return await ctx.dashboards.createDashboard(input.name, input.shared ? null : ctx.user.email); }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
-    addItem: roleProcedure("ADMIN", "BUERO")
+    addItem: roleProcedure(...supplierRoles)
       .input(z.object({ dashboardId: z.string().min(1), kind: z.enum(["CHART", "CARD"]), refId: z.string().min(1), width: z.enum(["FULL", "HALF"]).default("HALF") }))
       .mutation(({ input, ctx }) => ctx.dashboards.addItem(input.dashboardId, input.kind, input.refId, input.width)),
+    removeItem: roleProcedure(...supplierRoles)
+      .input(z.object({ itemId: z.string().min(1) }))
+      .mutation(({ input, ctx }) => ctx.dashboards.removeItem(input.itemId)),
+    moveItem: roleProcedure(...supplierRoles)
+      .input(z.object({ itemId: z.string().min(1), direction: z.enum(["UP", "DOWN"]) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.dashboards.moveItem(input.itemId, input.direction); }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
+      }),
+    setDefault: roleProcedure(...supplierRoles)
+      .input(z.object({ dashboardId: z.string().min(1) }))
+      .mutation(({ input, ctx }) => ctx.dashboards.setDefault(input.dashboardId, ctx.user.email)),
   }),
 
   // Benachrichtigungen (ERP-Grundfunktion / G-5): In-App-Feed je angemeldete:r Nutzer:in.
