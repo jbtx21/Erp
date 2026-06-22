@@ -25,9 +25,9 @@
 ## B. Querschnitt auf JEDEM Datensatz (ERPNext-„DocType-Basics")
 | Grundfunktion | TEXMA-Stand | Status |
 |---|---|---|
-| **Anhänge** (Dateien an Belegen/Stammdaten) | nicht vorhanden | ○ **Lücke** |
-| **Kommentare / Notizen** | nicht vorhanden | ○ **Lücke** |
-| **Aktivitäten** (offene Tasks/Termine „was ist als Nächstes") | nicht vorhanden | ○ **Lücke** |
+| **Anhänge** (Dateien an Belegen/Stammdaten) | `RecordAttachment` + `collab`-API + `RecordPanel` (Stufe 1) | ✓ (Upload = Integrationspunkt) |
+| **Kommentare / Notizen** | `RecordComment` + `collab`-API + `RecordPanel` (Stufe 1) | ✓ |
+| **Aktivitäten** (offene Tasks/Termine „was ist als Nächstes") | `RecordActivity` (TASK/EVENT, abhakbar) (Stufe 1) | ✓ |
 | **Verknüpfte Belege („Connections")** generisch sichtbar | Kette existiert, keine generische Ansicht | ◐ |
 | **Benachrichtigungen** (in-app) + **E-Mail-Vorlagen** | nicht vorhanden | ○ **Lücke** |
 | **Globale Suche / Volltext** | nicht vorhanden | ○ **Lücke** |
@@ -69,10 +69,10 @@ Projects/Timesheets, Subscription/Shareholder, indische Steuerkonzepte — s. `e
 
 ## Empfohlener Bauplan (explizit, kein Framework-Rewrite, G1-konform)
 
-**Stufe 1 — Generischer Datensatz-Querschnitt (höchster Hebel, auf ALLEN Entitäten nutzbar):**
-- **G-1 Anhänge:** `Attachment(entity, entityId, fileName, mimeType, url, uploadedBy, createdAt)` + Service + UI-Panel, generisch an jeden Beleg andockbar.
-- **G-2 Kommentare/Aktivitäten:** `Comment(entity, entityId, author, text, createdAt)` + `Activity(entity, entityId, kind[TASK|EVENT], dueDate, done)` — „was ist als Nächstes".
-- **G-3 Ersteller/Bearbeiter:** `createdById`/`updatedById` (User-FK) als Audit-Basis je Beleg.
+**Stufe 1 — Generischer Datensatz-Querschnitt — ✅ GEBAUT** (höchster Hebel, auf ALLEN Entitäten nutzbar):
+- **G-1 Anhänge:** `RecordAttachment` + Service/Repo + `collab.addAttachment` + UI-`RecordPanel` (generisch an jeden Beleg andockbar; Upload = Integrationspunkt). ✅
+- **G-2 Kommentare/Aktivitäten:** `RecordComment` + `RecordActivity` (TASK/EVENT, Fälligkeit, abhakbar) + UI — „was ist als Nächstes". ✅
+- **G-3 Ersteller je Datensatz:** Autor/Ersteller (`author`/`createdBy`/`uploadedBy` = angemeldete:r Nutzer:in) auf den Querschnitt-Datensätzen; User-FK auf den Kern-Belegen noch offen. ◐
 
 **Stufe 2 — Ketten-Korrektheit:**
 - **G-4 Teil-Status:** `lieferstatus`/`fakturastatus` an `Order`, automatisch aus Liefer-/Rechnungsmengen.

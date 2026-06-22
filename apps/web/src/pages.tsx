@@ -3,7 +3,7 @@
 // Bereiche mit wenig Code anbindbar sind. Interaktive Aktionen (Versand bestätigen,
 // Mahnlauf, Reorder→Bestellungen) sind je Seite ergänzt.
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Alert, Badge, Button, Group, Loader, NumberInput, Select, Table, Text, TextInput, Title } from "@mantine/core";
+import { Alert, Badge, Button, Checkbox, Group, Loader, NumberInput, Select, Table, Text, TextInput, Title } from "@mantine/core";
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { trpc } from "./trpc.js";
 import { euro, numTd, statusMantineColor } from "./theme.js";
@@ -552,6 +552,7 @@ export function OrdersPage({ role }: { role: string }): JSX.Element {
               </Text>
             </>
           )}
+          {termOrder && <RecordPanel entity="Order" entityId={termOrder} />}
         </>
       )}
     </>
@@ -745,6 +746,72 @@ export function CostCentersPage(): JSX.Element {
           catch (e) { setErr(errMsg(e)); }
         }}>Löschen</Button>
       )} />
+    </>
+  );
+}
+
+// Generischer Datensatz-Querschnitt (ERP-Grundfunktion): Kommentare, Aktivitäten
+// ("was ist als Nächstes") und Anhänge — auf JEDEN Beleg/Stammsatz einsetzbar.
+const fmtDate = (v: unknown): string => (v ? new Date(v as string).toLocaleDateString("de-DE") : "—");
+
+export function RecordPanel({ entity, entityId }: { entity: string; entityId: string }): JSX.Element {
+  const [data, setData] = useState<Awaited<ReturnType<typeof trpc.collab.list.query>> | null>(null);
+  const [comment, setComment] = useState("");
+  const [actTitle, setActTitle] = useState("");
+  const [attName, setAttName] = useState("");
+  const [attUrl, setAttUrl] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try { setData(await trpc.collab.list.query({ entity, entityId })); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
+  }, [entity, entityId]);
+  useEffect(() => { void load(); }, [load]);
+
+  return (
+    <>
+      <Title order={4} mt="xl">Notizen, Aktivitäten &amp; Anhänge</Title>
+      <Text size="sm" c="dimmed" mt={2}>Generischer Datensatz-Querschnitt — „was ist als Nächstes" zu {entity} {entityId}.</Text>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+
+      {/* Aktivitäten */}
+      <Text fw={600} size="sm" mt="md">Aktivitäten</Text>
+      {(data?.activities ?? []).map((a) => (
+        <Group key={a.id} gap="xs" mt={4}>
+          <Checkbox checked={a.done} label={`${a.title}${a.dueDate ? ` (fällig ${fmtDate(a.dueDate)})` : ""}`}
+            onChange={async (e) => { setErr(null); try { await trpc.collab.setActivityDone.mutate({ id: a.id, done: e.currentTarget.checked }); await load(); } catch (x) { setErr(errMsg(x)); } }} />
+          <Badge size="xs" variant="light">{a.kind}</Badge>
+        </Group>
+      ))}
+      <Group gap="xs" mt={6}>
+        <TextInput placeholder="Neue Aufgabe…" value={actTitle} onChange={(e) => setActTitle(e.currentTarget.value)} w={260} />
+        <Button size="compact-sm" variant="light" disabled={!actTitle.trim()}
+          onClick={async () => { setErr(null); try { await trpc.collab.addActivity.mutate({ entity, entityId, kind: "TASK", title: actTitle, dueDate: null }); setActTitle(""); await load(); } catch (x) { setErr(errMsg(x)); } }}>+ Aufgabe</Button>
+      </Group>
+
+      {/* Kommentare */}
+      <Text fw={600} size="sm" mt="md">Kommentare</Text>
+      {(data?.comments ?? []).map((c) => (
+        <Text key={c.id} size="sm" mt={2}><b>{c.author}</b> ({fmtDate(c.createdAt)}): {c.text}</Text>
+      ))}
+      <Group gap="xs" mt={6}>
+        <TextInput placeholder="Kommentar…" value={comment} onChange={(e) => setComment(e.currentTarget.value)} w={320} />
+        <Button size="compact-sm" variant="light" disabled={!comment.trim()}
+          onClick={async () => { setErr(null); try { await trpc.collab.addComment.mutate({ entity, entityId, text: comment }); setComment(""); await load(); } catch (x) { setErr(errMsg(x)); } }}>+ Kommentar</Button>
+      </Group>
+
+      {/* Anhänge */}
+      <Text fw={600} size="sm" mt="md">Anhänge</Text>
+      {(data?.attachments ?? []).map((f) => (
+        <Text key={f.id} size="sm" mt={2}>📎 <a href={f.url} target="_blank" rel="noreferrer">{f.fileName}</a> — {f.uploadedBy} ({fmtDate(f.createdAt)})</Text>
+      ))}
+      <Group gap="xs" mt={6}>
+        <TextInput placeholder="Dateiname" value={attName} onChange={(e) => setAttName(e.currentTarget.value)} w={180} />
+        <TextInput placeholder="URL/Verweis" value={attUrl} onChange={(e) => setAttUrl(e.currentTarget.value)} w={240} />
+        <Button size="compact-sm" variant="light" disabled={!attName.trim() || !attUrl.trim()}
+          onClick={async () => { setErr(null); try { await trpc.collab.addAttachment.mutate({ entity, entityId, fileName: attName, mimeType: null, url: attUrl }); setAttName(""); setAttUrl(""); await load(); } catch (x) { setErr(errMsg(x)); } }}>+ Anhang</Button>
+      </Group>
+      <Text size="xs" c="dimmed" mt={4}>Datei-Upload selbst ist ein Integrationspunkt (Objektspeicher); hier wird der Verweis erfasst.</Text>
     </>
   );
 }

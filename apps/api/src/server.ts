@@ -70,6 +70,8 @@ import { QuoteService } from "./modules/quote/quote.service.js";
 import { PrismaQuoteRepository } from "./repositories/prisma-quote.repository.js";
 import { PricingService } from "./modules/pricing/pricing.service.js";
 import { PrismaPricingRepository } from "./repositories/prisma-pricing.repository.js";
+import { CollaborationService } from "./modules/collaboration/collaboration.service.js";
+import { PrismaCollaborationRepository } from "./repositories/prisma-collaboration.repository.js";
 import { appRouter } from "./trpc/router.js";
 import type { Context } from "./trpc/trpc.js";
 import { portalAppRouter } from "./trpc/portal-router.js";
@@ -153,6 +155,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
     new PrismaAuditSink()
   );
   const pricing = new PricingService(new PrismaPricingRepository(), new PrismaAuditSink());
+  const collaboration = new CollaborationService(new PrismaCollaborationRepository(), new PrismaAuditSink());
   const auth = new AuthService(
     new PrismaUserRepository(),
     new PrismaSessionRepository(),
@@ -247,6 +250,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           orderWorkflow,
           quotes,
           pricing,
+          collaboration,
           auth,
           user,
           sessionToken,

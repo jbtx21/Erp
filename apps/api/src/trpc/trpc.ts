@@ -29,6 +29,7 @@ import type { ProductService } from "../modules/product/product.service.js";
 import type { OrderWorkflowService } from "../modules/order-workflow/order-workflow.service.js";
 import type { QuoteService } from "../modules/quote/quote.service.js";
 import type { PricingService } from "../modules/pricing/pricing.service.js";
+import type { CollaborationService } from "../modules/collaboration/collaboration.service.js";
 import type {
   BankingQueryRepository,
   DunningQueryRepository,
@@ -71,6 +72,7 @@ export interface Context {
   orderWorkflow: OrderWorkflowService;
   quotes: QuoteService;
   pricing: PricingService;
+  collaboration: CollaborationService;
   auth: AuthService;
   user: AuthUser | null;
   /** Roh-Token aus dem Cookie (für den 2FA-Zwischenschritt/Logout, wenn user noch null ist). */

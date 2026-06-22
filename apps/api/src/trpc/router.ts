@@ -757,6 +757,44 @@ export const appRouter = router({
       }),
   }),
 
+  // Generischer Datensatz-Querschnitt (ERP-Grundfunktion): Kommentare, Aktivitäten
+  // ("was ist als Nächstes") und Anhänge an JEDEM Beleg/Stammsatz (entity, entityId).
+  collab: router({
+    list: protectedProcedure
+      .input(z.object({ entity: z.string().min(1), entityId: z.string().min(1) }))
+      .query(async ({ input, ctx }) => ({
+        comments: await ctx.collaboration.listComments(input.entity, input.entityId),
+        activities: await ctx.collaboration.listActivities(input.entity, input.entityId),
+        attachments: await ctx.collaboration.listAttachments(input.entity, input.entityId),
+      })),
+    addComment: protectedProcedure
+      .input(z.object({ entity: z.string().min(1), entityId: z.string().min(1), text: z.string().min(1) }))
+      .mutation(({ input, ctx }) => ctx.collaboration.addComment(input.entity, input.entityId, ctx.user.email, input.text)),
+    addActivity: protectedProcedure
+      .input(z.object({
+        entity: z.string().min(1), entityId: z.string().min(1),
+        kind: z.enum(["TASK", "EVENT"]).default("TASK"),
+        title: z.string().min(1), dueDate: z.string().datetime().nullable().default(null),
+      }))
+      .mutation(({ input, ctx }) => ctx.collaboration.addActivity(input.entity, input.entityId, ctx.user.email, {
+        kind: input.kind, title: input.title, dueDate: input.dueDate ? new Date(input.dueDate) : null,
+      })),
+    setActivityDone: protectedProcedure
+      .input(z.object({ id: z.string().min(1), done: z.boolean() }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.collaboration.setActivityDone(input.id, input.done); }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
+      }),
+    addAttachment: protectedProcedure
+      .input(z.object({
+        entity: z.string().min(1), entityId: z.string().min(1),
+        fileName: z.string().min(1), mimeType: z.string().nullable().default(null), url: z.string().min(1),
+      }))
+      .mutation(({ input, ctx }) => ctx.collaboration.addAttachment(input.entity, input.entityId, ctx.user.email, {
+        fileName: input.fileName, mimeType: input.mimeType, url: input.url,
+      })),
+  }),
+
   // Firmen/Kunden-Stammdaten (B3): anlegen/auflisten/bearbeiten.
   companies: router({
     list: roleProcedure("ADMIN", "BUERO", "BUCHHALTUNG").query(({ ctx }) => ctx.companies.list()),

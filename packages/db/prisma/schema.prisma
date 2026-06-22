@@ -1257,3 +1257,52 @@ model IntegrationLog {
 
   @@index([connector, createdAt])
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Generischer Datensatz-Querschnitt (ERP-Grundfunktion, s. docs/erp-grundfunktionen.md):
+// Kommentare, Aktivitäten ("was ist als Nächstes") und Anhänge an JEDEM Beleg/Stammsatz.
+// Polymorph über (entity, entityId) — kein generisches DocType-Framework, nur die Basics.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum ActivityKind {
+  TASK // offene Aufgabe (mit Fälligkeit)
+  EVENT // Termin/Ereignis
+}
+
+model RecordComment {
+  id        String   @id @default(cuid())
+  entity    String // DocType-Name, z. B. "Order", "Company"
+  entityId  String
+  author    String // User/Rolle, der/die kommentiert hat
+  text      String
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+}
+
+model RecordActivity {
+  id        String       @id @default(cuid())
+  entity    String
+  entityId  String
+  kind      ActivityKind @default(TASK)
+  title     String
+  dueDate   DateTime?
+  done      Boolean      @default(false)
+  createdBy String
+  createdAt DateTime     @default(now())
+
+  @@index([entity, entityId])
+}
+
+model RecordAttachment {
+  id         String   @id @default(cuid())
+  entity     String
+  entityId   String
+  fileName   String
+  mimeType   String?
+  url        String // Verweis/Objektspeicher-URL (Upload selbst ist Integrationspunkt)
+  uploadedBy String
+  createdAt  DateTime @default(now())
+
+  @@index([entity, entityId])
+}
