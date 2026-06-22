@@ -9,7 +9,7 @@ import { Differentiators } from "./Differentiators.js";
 import { Banking } from "./Banking.js";
 import {
   CompaniesPage, CostCentersPage, DunningPage, InquiriesPage, IncomingInvoicesPage, LeadsPage, OrdersPage, ProcurementPage, ProductionReportingPage,
-  ProductsPage, PricingPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
+  ProductsPage, PricingPage, EmailTemplatesPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
 } from "./pages.js";
 import { trpc } from "./trpc.js";
 
@@ -30,6 +30,7 @@ const NAV: ReadonlyArray<{ group: string; items: ReadonlyArray<{ key: string; la
     { key: "banking", label: "Banking" }, { key: "costcenters", label: "Kostenstellen" },
     { key: "reporting", label: "Auswertungen" },
   ] },
+  { group: "System", items: [{ key: "emailtemplates", label: "E-Mail-Vorlagen" }] },
 ];
 const ALL_KEYS = NAV.flatMap((g) => g.items.map((i) => i.key));
 const hashKey = (): string => {
@@ -83,6 +84,45 @@ function GlobalSearch({ onNavigate }: { onNavigate: (k: string) => void }): JSX.
   );
 }
 
+// In-App-Benachrichtigungen (G-5): Glocke mit Ungelesen-Zähler + Dropdown; Treffer
+// navigieren ins Modul und werden als gelesen markiert.
+function NotificationBell({ onNavigate }: { onNavigate: (k: string) => void }): JSX.Element {
+  const [items, setItems] = useState<Awaited<ReturnType<typeof trpc.notifications.list.query>>>([]);
+  const [count, setCount] = useState(0);
+  const [open, setOpen] = useState(false);
+  const refresh = useCallback(async () => {
+    try { setCount(await trpc.notifications.unreadCount.query()); } catch { /* ignore */ }
+  }, []);
+  useEffect(() => { void refresh(); const t = setInterval(() => void refresh(), 30000); return () => clearInterval(t); }, [refresh]);
+
+  return (
+    <Box style={{ position: "relative" }}>
+      <Button variant="subtle" size="xs" color="navy"
+        onClick={async () => { const n = !open; setOpen(n); if (n) { try { setItems(await trpc.notifications.list.query({})); } catch { /* ignore */ } } }}>
+        🔔 {count > 0 ? <Badge size="xs" color="red" ml={4}>{count}</Badge> : null}
+      </Button>
+      {open && (
+        <Paper shadow="md" withBorder style={{ position: "absolute", top: 34, right: 0, width: 320, zIndex: 300, maxHeight: 360, overflowY: "auto" }}>
+          <Group justify="space-between" px="sm" py={6}>
+            <Text size="xs" fw={700}>Benachrichtigungen</Text>
+            <Button size="compact-xs" variant="subtle"
+              onClick={async () => { await trpc.notifications.markAllRead.mutate(); setItems(await trpc.notifications.list.query({})); await refresh(); }}>Alle gelesen</Button>
+          </Group>
+          {items.length === 0
+            ? <Text size="sm" c="dimmed" px="sm" pb="sm">Keine Benachrichtigungen.</Text>
+            : items.map((n) => (
+              <Box key={n.id} px="sm" py={6} style={{ cursor: "pointer", background: n.read ? undefined : "var(--erp-surface)" }}
+                onClick={async () => { if (n.navKey) onNavigate(n.navKey); await trpc.notifications.markRead.mutate({ id: n.id }); setOpen(false); await refresh(); }}>
+                <Text size="sm" fw={n.read ? 400 : 600}>{n.title}</Text>
+                {n.body ? <Text size="xs" c="dimmed">{n.body}</Text> : null}
+              </Box>
+            ))}
+        </Paper>
+      )}
+    </Box>
+  );
+}
+
 function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<void> }): JSX.Element {
   const [active, setActiveState] = useState<string>(hashKey);
   const setActive = useCallback((k: string) => {
@@ -106,6 +146,7 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<voi
           </Group>
           <GlobalSearch onNavigate={setActive} />
           <Group gap="sm">
+            <NotificationBell onNavigate={setActive} />
             <Text size="sm" c="dimmed">{user.name} · {user.role}</Text>
             <Button variant="default" size="xs" onClick={() => void onLogout()}>Abmelden</Button>
           </Group>
@@ -149,6 +190,7 @@ function Page({ k, role }: { k: string; role: string }): ReactNode {
     case "samples": return <SampleLoansPage />;
     case "products": return <ProductsPage />;
     case "pricing": return <PricingPage />;
+    case "emailtemplates": return <EmailTemplatesPage />;
     case "differentiators": return <Differentiators role={role} />;
     case "subproduction": return <SubproductionPage />;
     case "prodreport": return <ProductionReportingPage />;

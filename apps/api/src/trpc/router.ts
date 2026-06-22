@@ -127,8 +127,12 @@ export const appRouter = router({
         to: z.enum(["IN_BEARBEITUNG", "IN_PRODUKTION", "VERSANDBEREIT", "VERSENDET", "FAKTURIERT", "ABGESCHLOSSEN", "STORNIERT"]),
       }))
       .mutation(async ({ input, ctx }) => {
-        try { return await ctx.orderWorkflow.transition(input.orderId, input.to); }
-        catch (e) { throw new TRPCError({ code: "CONFLICT", message: (e as Error).message }); }
+        try {
+          const res = await ctx.orderWorkflow.transition(input.orderId, input.to);
+          // G-5: In-App-Benachrichtigung über den Statuswechsel (Versand-Integrationspunkt separat).
+          await ctx.notifications.notify(ctx.user.email, `Auftrag → ${input.to}`, `Auftrag ${input.orderId} ist jetzt ${input.to}.`, "orders");
+          return res;
+        } catch (e) { throw new TRPCError({ code: "CONFLICT", message: (e as Error).message }); }
       }),
 
     /** Zugesagten Liefertermin setzen/entfernen (B9, Kap. 35.2). Auditiert. */
@@ -762,6 +766,36 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         try { await ctx.pricing.addGroupTier(input.companyId, input.variantId, input.minMenge, input.netCents); return { ok: true as const }; }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+  }),
+
+  // Benachrichtigungen (ERP-Grundfunktion / G-5): In-App-Feed je angemeldete:r Nutzer:in.
+  notifications: router({
+    list: protectedProcedure
+      .input(z.object({ limit: z.number().int().positive().max(100).optional() }).optional())
+      .query(({ input, ctx }) => ctx.notifications.listFor(ctx.user.email, input?.limit ?? 30)),
+    unreadCount: protectedProcedure.query(({ ctx }) => ctx.notifications.unreadCount(ctx.user.email)),
+    markRead: protectedProcedure
+      .input(z.object({ id: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => { await ctx.notifications.markRead(input.id); return { ok: true as const }; }),
+    markAllRead: protectedProcedure
+      .mutation(async ({ ctx }) => { await ctx.notifications.markAllRead(ctx.user.email); return { ok: true as const }; }),
+  }),
+
+  // E-Mail-/Text-Vorlagen (ERP-Grundfunktion / G-5): {{platzhalter}}-Rendering.
+  emailTemplates: router({
+    list: roleProcedure("ADMIN", "BUERO").query(({ ctx }) => ctx.emailTemplates.list()),
+    upsert: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ key: z.string().min(1), subject: z.string().min(1), body: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.emailTemplates.upsert(input.key, input.subject, input.body); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    render: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ key: z.string().min(1), vars: z.record(z.string(), z.union([z.string(), z.number()])).default({}) }))
+      .query(async ({ input, ctx }) => {
+        try { return await ctx.emailTemplates.render(input.key, input.vars); }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
       }),
   }),
 

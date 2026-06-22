@@ -3,7 +3,7 @@
 // Bereiche mit wenig Code anbindbar sind. Interaktive Aktionen (Versand bestätigen,
 // Mahnlauf, Reorder→Bestellungen) sind je Seite ergänzt.
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Alert, Badge, Button, Checkbox, Group, Loader, NumberInput, Select, Table, Text, TextInput, Title } from "@mantine/core";
+import { Alert, Badge, Button, Checkbox, Group, Loader, NumberInput, Select, Table, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { trpc } from "./trpc.js";
 import { euro, numTd, statusMantineColor } from "./theme.js";
@@ -752,6 +752,57 @@ export function CostCentersPage(): JSX.Element {
           catch (e) { setErr(errMsg(e)); }
         }}>Löschen</Button>
       )} />
+    </>
+  );
+}
+
+// E-Mail-/Text-Vorlagen (G-5): anlegen/bearbeiten + Vorschau-Rendering mit Variablen.
+// Platzhalter in doppelten geschweiften Klammern (z. B. name, nr).
+export function EmailTemplatesPage(): JSX.Element {
+  const [list, setList] = useState<Row[]>([]);
+  const [key, setKey] = useState("");
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [varsJson, setVarsJson] = useState('{ "name": "Max", "nr": "WC-1" }');
+  const [preview, setPreview] = useState<{ subject: string; body: string } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try { setList((await trpc.emailTemplates.list.query()) as Row[]); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  return (
+    <>
+      <Title order={3}>E-Mail-Vorlagen</Title>
+      <Text size="sm" c="dimmed" mt={4}>Vorlagen mit Platzhaltern (doppelte geschweifte Klammern), z. B. „name" oder „nr" (G-5).</Text>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      <AutoTable rows={list} hide={["id", "updatedAt", "body"]} action={(t) => (
+        <Button size="compact-xs" variant="light" onClick={() => { setKey(String(t.key)); setSubject(String(t.subject)); setBody(String(t.body)); setPreview(null); }}>Bearbeiten</Button>
+      )} />
+
+      <Title order={4} mt="xl">Vorlage anlegen/bearbeiten</Title>
+      <TextInput label="Schlüssel" placeholder="auftrag.versendet" value={key} onChange={(e) => setKey(e.currentTarget.value)} w={340} mt="xs" />
+      <TextInput label="Betreff" value={subject} onChange={(e) => setSubject(e.currentTarget.value)} mt="xs" />
+      <Textarea label="Text" value={body} onChange={(e) => setBody(e.currentTarget.value)} autosize minRows={4} mt="xs" />
+      <Button mt="sm" disabled={!key.trim() || !subject.trim() || !body.trim()}
+        onClick={async () => { setErr(null); try { await trpc.emailTemplates.upsert.mutate({ key, subject, body }); await load(); } catch (e) { setErr(errMsg(e)); } }}>Speichern</Button>
+
+      <Title order={4} mt="xl">Vorschau (Rendering)</Title>
+      <Textarea label="Variablen (JSON)" value={varsJson} onChange={(e) => setVarsJson(e.currentTarget.value)} autosize minRows={2} mt="xs" />
+      <Button mt="sm" variant="light" disabled={!key.trim()}
+        onClick={async () => {
+          setErr(null); setPreview(null);
+          try { setPreview(await trpc.emailTemplates.render.query({ key, vars: JSON.parse(varsJson) as Record<string, string | number> })); }
+          catch (e) { setErr(errMsg(e)); }
+        }}>Vorschau rendern</Button>
+      {preview && (
+        <Alert color="navy" variant="light" mt="md">
+          <b>{preview.subject}</b>
+          <Text size="sm" mt={4} style={{ whiteSpace: "pre-wrap" }}>{preview.body}</Text>
+        </Alert>
+      )}
     </>
   );
 }

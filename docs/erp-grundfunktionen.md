@@ -29,7 +29,7 @@
 | **Kommentare / Notizen** | `RecordComment` + `collab`-API + `RecordPanel` (Stufe 1) | ✓ |
 | **Aktivitäten** (offene Tasks/Termine „was ist als Nächstes") | `RecordActivity` (TASK/EVENT, abhakbar) (Stufe 1) | ✓ |
 | **Verknüpfte Belege („Connections")** generisch sichtbar | Kette existiert, keine generische Ansicht | ◐ |
-| **Benachrichtigungen** (in-app) + **E-Mail-Vorlagen** | nicht vorhanden | ○ **Lücke** |
+| **Benachrichtigungen** (in-app) + **E-Mail-Vorlagen** | `notification`-Modul (G-5): In-App-Glocke + `{{platzhalter}}`-Vorlagen + Render; Auto-Notiz bei Statuswechsel | ✓ (SMTP-Versand = Integrationspunkt) |
 | **Globale Suche / Volltext** | `search`-Modul (G-6): entitätsübergreifend (Firma/Lieferant/Auftrag/Artikel/Lead) + Header-Suchbox | ✓ |
 | Rollen/Rechte (feldgenau) | `rbac.ts` (inkl. Feld-Redaktion) | ✓ |
 | Druck/PDF je Belegtyp | `production-sheet-pdf`, `report-pdf` | ◐ gezielt |

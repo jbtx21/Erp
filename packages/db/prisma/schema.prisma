@@ -1315,3 +1315,25 @@ model RecordAttachment {
 
   @@index([entity, entityId])
 }
+
+// In-App-Benachrichtigungen je Empfänger (ERP-Grundfunktion / G-5).
+model Notification {
+  id        String   @id @default(cuid())
+  recipient String // User-E-Mail
+  title     String
+  body      String?
+  navKey    String? // optionales Navigationsziel (Modul)
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([recipient, read])
+}
+
+// E-Mail-/Text-Vorlagen mit {{platzhalter}} (ERP-Grundfunktion / G-5).
+model EmailTemplate {
+  id        String   @id @default(cuid())
+  key       String   @unique // z. B. "auftrag.versendet"
+  subject   String
+  body      String
+  updatedAt DateTime @updatedAt
+}

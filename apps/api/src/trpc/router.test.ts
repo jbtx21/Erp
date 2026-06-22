@@ -40,6 +40,8 @@ import { CollaborationService } from "../modules/collaboration/collaboration.ser
 import { InMemoryCollaborationRepository } from "../repositories/in-memory-collaboration.repository.js";
 import { SearchService } from "../modules/search/search.service.js";
 import { InMemorySearchRepository } from "../repositories/in-memory-search.repository.js";
+import { NotificationService, EmailTemplateService } from "../modules/notification/notification.service.js";
+import { InMemoryNotificationRepository, InMemoryEmailTemplateRepository } from "../repositories/in-memory-notification.repository.js";
 import { NumberingService } from "../modules/numbering/numbering.service.js";
 import { InMemoryNumberingRepository } from "../repositories/in-memory-numbering.repository.js";
 import { ProductionSheetService } from "../modules/production-sheet/production-sheet.service.js";
@@ -254,6 +256,8 @@ function setup(user: AuthUser | null = BUERO) {
     pricing: new PricingService(new InMemoryPricingRepository(), new MemoryAuditSink()),
     collaboration: new CollaborationService(new InMemoryCollaborationRepository(), new MemoryAuditSink()),
     search: new SearchService(new InMemorySearchRepository()),
+    notifications: new NotificationService(new InMemoryNotificationRepository()),
+    emailTemplates: new EmailTemplateService(new InMemoryEmailTemplateRepository()),
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -347,6 +351,8 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       pricing: {} as Context["pricing"],
       collaboration: {} as Context["collaboration"],
       search: {} as Context["search"],
+      notifications: {} as Context["notifications"],
+      emailTemplates: {} as Context["emailTemplates"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",
