@@ -13,8 +13,8 @@ class FakeOrderRepo implements OrderWorkflowRepository {
   status = new Map<string, string>([["o1", "ANGELEGT"]]);
   delivery = new Map<string, Date | null>();
   fulfillment = new Map<string, { lieferstatus: string; fakturastatus: string }>();
-  fulfillmentInput: { orderNetCents: number; invoiceNetCents: number | null; status: string; hasDelivery: boolean } = {
-    orderNetCents: 10000, invoiceNetCents: null, status: "ANGELEGT", hasDelivery: false,
+  fulfillmentInput: { orderNetCents: number; invoiceNetCents: number | null; orderedQty: number; deliveredQty: number } = {
+    orderNetCents: 10000, invoiceNetCents: null, orderedQty: 10, deliveredQty: 0,
   };
   async getStatus(id: string): Promise<string | null> {
     return this.status.get(id) ?? null;
@@ -90,17 +90,16 @@ describe("OrderWorkflowService.recomputeFulfillment (G-4, Teil-Status)", () => {
     expect(repo.fulfillment.get("o1")).toEqual({ lieferstatus: "NICHT", fakturastatus: "NICHT" });
   });
 
-  it("Teilrechnung (< Auftragssumme) → fakturastatus TEILWEISE", async () => {
+  it("Teilrechnung + Teillieferung → beide TEILWEISE", async () => {
     const { repo, svc } = setup();
-    repo.fulfillmentInput = { orderNetCents: 10000, invoiceNetCents: 4000, status: "VERSANDBEREIT", hasDelivery: true };
+    repo.fulfillmentInput = { orderNetCents: 10000, invoiceNetCents: 4000, orderedQty: 10, deliveredQty: 4 };
     const r = await svc.recomputeFulfillment("o1");
-    expect(r.fakturastatus).toBe("TEILWEISE");
-    expect(r.lieferstatus).toBe("TEILWEISE"); // Lieferschein da, aber Status < VERSENDET
+    expect(r).toEqual({ lieferstatus: "TEILWEISE", fakturastatus: "TEILWEISE" });
   });
 
-  it("voll berechnet + versendet → beide VOLL", async () => {
+  it("voll berechnet + voll geliefert → beide VOLL", async () => {
     const { repo, svc } = setup();
-    repo.fulfillmentInput = { orderNetCents: 10000, invoiceNetCents: 10000, status: "VERSENDET", hasDelivery: true };
+    repo.fulfillmentInput = { orderNetCents: 10000, invoiceNetCents: 10000, orderedQty: 10, deliveredQty: 10 };
     const r = await svc.recomputeFulfillment("o1");
     expect(r).toEqual({ lieferstatus: "VOLL", fakturastatus: "VOLL" });
   });

@@ -44,6 +44,8 @@ import { NotificationService, EmailTemplateService } from "../modules/notificati
 import { InMemoryNotificationRepository, InMemoryEmailTemplateRepository } from "../repositories/in-memory-notification.repository.js";
 import { DashboardService } from "../modules/dashboard/dashboard.service.js";
 import { InMemoryDashboardRepository, FakeMetricRepository } from "../repositories/in-memory-dashboard.repository.js";
+import { DeliveryService } from "../modules/delivery/delivery.service.js";
+import { InMemoryDeliveryRepository } from "../repositories/in-memory-delivery.repository.js";
 import { NumberingService } from "../modules/numbering/numbering.service.js";
 import { InMemoryNumberingRepository } from "../repositories/in-memory-numbering.repository.js";
 import { ProductionSheetService } from "../modules/production-sheet/production-sheet.service.js";
@@ -261,6 +263,7 @@ function setup(user: AuthUser | null = BUERO) {
     notifications: new NotificationService(new InMemoryNotificationRepository()),
     emailTemplates: new EmailTemplateService(new InMemoryEmailTemplateRepository()),
     dashboards: new DashboardService(new InMemoryDashboardRepository(), new FakeMetricRepository()),
+    deliveries: new DeliveryService(new InMemoryDeliveryRepository(), new MemoryAuditSink()),
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -357,6 +360,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       notifications: {} as Context["notifications"],
       emailTemplates: {} as Context["emailTemplates"],
       dashboards: {} as Context["dashboards"],
+      deliveries: {} as Context["deliveries"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",

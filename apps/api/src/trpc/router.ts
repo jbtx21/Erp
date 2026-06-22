@@ -769,6 +769,28 @@ export const appRouter = router({
       }),
   }),
 
+  // Mehrfach-Teillieferung: Restmengen + (Teil-)Lieferscheine je Auftragsposition.
+  deliveries: router({
+    remaining: roleProcedure("ADMIN", "BUERO", "PRODUKTION")
+      .input(z.object({ orderId: z.string().min(1) }))
+      .query(async ({ input, ctx }) => {
+        try { return await ctx.deliveries.remaining(input.orderId); }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
+      }),
+    list: roleProcedure("ADMIN", "BUERO", "PRODUKTION")
+      .input(z.object({ orderId: z.string().min(1) }))
+      .query(({ input, ctx }) => ctx.deliveries.listDeliveryNotes(input.orderId)),
+    create: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({
+        orderId: z.string().min(1),
+        lines: z.array(z.object({ orderLineId: z.string().min(1), qty: z.number().int().nonnegative() })).min(1),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.deliveries.createDeliveryNote(input.orderId, input.lines); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+  }),
+
   // Generisches Dashboard (ERP-Grundfunktion / G-7): Charts/KPI-Kacheln als
   // wiederverwendbare Entitäten über einem festen Metrik-Katalog.
   dashboards: router({

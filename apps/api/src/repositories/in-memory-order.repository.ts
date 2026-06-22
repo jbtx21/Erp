@@ -86,11 +86,11 @@ export class InMemoryOrderRepository
     if (o) o.zugesagterLiefertermin = date;
   }
 
-  async loadFulfillmentInput(orderId: string): Promise<{ orderNetCents: number; invoiceNetCents: number | null; status: string; hasDelivery: boolean } | null> {
+  async loadFulfillmentInput(orderId: string): Promise<{ orderNetCents: number; invoiceNetCents: number | null; orderedQty: number; deliveredQty: number } | null> {
     const o = this.orders.find((x) => x.id === orderId);
     if (!o) return null;
-    // In-Memory kennt keine Rechnungen/Lieferscheine → konservativ leer.
-    return { orderNetCents: o.totalNetCents, invoiceNetCents: null, status: o.status, hasDelivery: false };
+    // In-Memory verfolgt keine Zeilenmengen/Rechnungen → konservativ leer.
+    return { orderNetCents: o.totalNetCents, invoiceNetCents: null, orderedQty: 0, deliveredQty: 0 };
   }
 
   async setFulfillment(orderId: string, lieferstatus: string, fakturastatus: string): Promise<void> {

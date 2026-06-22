@@ -655,6 +655,7 @@ model OrderLine {
   qty         Int
   unitNetCents Int
   rawPayload  Json? // Roh-Shopzeile für Replay/Traceability (Kap. 3)
+  deliveryLines DeliveryNoteLine[] // gelieferte Teilmengen (Mehrfach-Teillieferung)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1120,9 +1121,23 @@ model DeliveryNote {
   number    String   @unique
   orderId   String
   order     Order    @relation(fields: [orderId], references: [id])
+  lines     DeliveryNoteLine[] // Mehrfach-Teillieferung: Zeilenmengen je Lieferschein
   createdAt DateTime @default(now())
 
   @@index([orderId])
+}
+
+// Lieferzeile: gelieferte Menge einer Auftragsposition (ermöglicht Mehrfach-Teillieferung).
+model DeliveryNoteLine {
+  id             String       @id @default(cuid())
+  deliveryNoteId String
+  deliveryNote   DeliveryNote @relation(fields: [deliveryNoteId], references: [id], onDelete: Cascade)
+  orderLineId    String
+  orderLine      OrderLine    @relation(fields: [orderLineId], references: [id])
+  qty            Int
+
+  @@index([deliveryNoteId])
+  @@index([orderLineId])
 }
 
 model CreditNote {

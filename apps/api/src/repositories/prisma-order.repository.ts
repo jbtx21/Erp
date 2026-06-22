@@ -117,22 +117,20 @@ export class PrismaOrderRepository
     await prisma.order.update({ where: { id: orderId }, data: { zugesagterLiefertermin: date } });
   }
 
-  async loadFulfillmentInput(orderId: string): Promise<{ orderNetCents: number; invoiceNetCents: number | null; status: string; hasDelivery: boolean } | null> {
+  async loadFulfillmentInput(orderId: string): Promise<{ orderNetCents: number; invoiceNetCents: number | null; orderedQty: number; deliveredQty: number } | null> {
     const o = await prisma.order.findUnique({
       where: { id: orderId },
       select: {
-        status: true,
-        lines: { select: { qty: true, unitNetCents: true } },
+        lines: { select: { qty: true, unitNetCents: true, deliveryLines: { select: { qty: true } } } },
         invoice: { select: { netCents: true } },
-        deliveryNotes: { select: { id: true }, take: 1 },
       },
     });
     if (!o) return null;
     return {
       orderNetCents: o.lines.reduce((s, l) => s + l.qty * l.unitNetCents, 0),
       invoiceNetCents: o.invoice?.netCents ?? null,
-      status: o.status,
-      hasDelivery: o.deliveryNotes.length > 0,
+      orderedQty: o.lines.reduce((s, l) => s + l.qty, 0),
+      deliveredQty: o.lines.reduce((s, l) => s + l.deliveryLines.reduce((a, d) => a + d.qty, 0), 0),
     };
   }
 

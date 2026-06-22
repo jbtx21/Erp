@@ -9,8 +9,8 @@ import { buildEntry, type AuditSink } from "@texma/audit";
 export interface FulfillmentInput {
   orderNetCents: number; // Auftragssumme (Soll)
   invoiceNetCents: number | null; // bereits berechnet (null = keine Rechnung)
-  status: string; // OrderStatus (für Lieferstatus-Heuristik)
-  hasDelivery: boolean; // existiert mind. ein Lieferschein?
+  orderedQty: number; // Soll-Menge gesamt (Summe Auftragszeilen)
+  deliveredQty: number; // gelieferte Menge gesamt (Summe Lieferzeilen, Mehrfach-Teillieferung)
 }
 
 export interface OrderWorkflowRepository {
@@ -24,14 +24,7 @@ export interface OrderWorkflowRepository {
   setFulfillment(orderId: string, lieferstatus: FulfillmentStatus, fakturastatus: FulfillmentStatus): Promise<void>;
 }
 
-// Lieferstatus-Heuristik (G-4): unser Modell hat keine Lieferzeilen-Mengen, daher aus
-// Auftragsstatus + Lieferschein-Existenz abgeleitet (echte Mehrfach-Teillieferung bräuchte
-// ein Lieferzeilen-Remodel — bewusst nicht G1-fremd aufgebläht).
-const DELIVERED_STATUSES = new Set(["VERSENDET", "FAKTURIERT", "ABGESCHLOSSEN"]);
-function deriveLieferstatus(status: string, hasDelivery: boolean): FulfillmentStatus {
-  if (DELIVERED_STATUSES.has(status)) return "VOLL";
-  return hasDelivery ? "TEILWEISE" : "NICHT";
-}
+// Lieferstatus (G-4) jetzt REAL aus gelieferter vs. bestellter Menge (Mehrfach-Teillieferung).
 
 export class OrderWorkflowError extends Error {}
 
@@ -76,7 +69,7 @@ export class OrderWorkflowService {
     const inp = await this.repo.loadFulfillmentInput(orderId);
     if (!inp) throw new OrderWorkflowError(`Auftrag ${orderId} nicht gefunden.`);
     const fakturastatus = fulfillmentStatus(inp.orderNetCents, inp.invoiceNetCents ?? 0);
-    const lieferstatus = deriveLieferstatus(inp.status, inp.hasDelivery);
+    const lieferstatus = fulfillmentStatus(inp.orderedQty, inp.deliveredQty);
     await this.repo.setFulfillment(orderId, lieferstatus, fakturastatus);
     await this.audit.append(
       buildEntry({ entity: "Order", entityId: orderId, action: "UPDATE", after: { lieferstatus, fakturastatus } })

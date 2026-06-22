@@ -39,7 +39,7 @@
 | Grundfunktion | TEXMA-Stand | Status |
 |---|---|---|
 | Belegkette Angebot→Auftrag→Lieferung→Faktura | verdrahtet | ✓ |
-| **Teil-Erfüllung: `lieferstatus`/`fakturastatus`** (Nicht/Teilweise/Voll) | `fulfillment.ts` + Order-Felder + `recomputeFulfillment` (G-4) | ✓ (Fakturastatus aus Betrag; Lieferstatus Heuristik — echte Mehrfach-Teillieferung = Remodel) |
+| **Teil-Erfüllung: `lieferstatus`/`fakturastatus`** (Nicht/Teilweise/Voll) | `fulfillment.ts` + Order-Felder; **Mehrfach-Teillieferung** (`DeliveryNoteLine`, `delivery`-Modul) → echter Lieferstatus aus gelieferter Menge | ✓ (Lieferstatus jetzt mengenecht; Fakturastatus aus Betrag) |
 | Mengen-Rückverweise (`against_*`/`*_detail`) für Teilmengen | implizit | ◐ |
 | Zugesagter Liefertermin + Rückwärtsterminierung | **B9** (gerade gebaut) | ✓ |
 

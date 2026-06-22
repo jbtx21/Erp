@@ -456,6 +456,64 @@ interface SchedulePlan {
 }
 const deDate = (iso: string): string => new Date(iso).toLocaleDateString("de-DE");
 
+// Mehrfach-Teillieferung: Restmengen je Position erfassen → (Teil-)Lieferschein.
+function DeliveryPanel({ orderId, onChanged }: { orderId: string; onChanged: () => void }): JSX.Element {
+  const [lines, setLines] = useState<Awaited<ReturnType<typeof trpc.deliveries.remaining.query>>>([]);
+  const [notes, setNotes] = useState<Awaited<ReturnType<typeof trpc.deliveries.list.query>>>([]);
+  const [qty, setQty] = useState<Record<string, number>>({});
+  const [err, setErr] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    try { setLines(await trpc.deliveries.remaining.query({ orderId })); setNotes(await trpc.deliveries.list.query({ orderId })); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
+  }, [orderId]);
+  useEffect(() => { void load(); }, [load]);
+
+  return (
+    <>
+      <Title order={4} mt="xl">Teillieferung erfassen</Title>
+      <Text size="sm" c="dimmed" mt={2}>Mehrere Teil-Lieferscheine je Auftrag möglich; Überlieferung wird blockiert.</Text>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      {lines.length === 0 ? <Text size="sm" c="dimmed" mt="xs">Keine Auftragspositionen (Demo-Auftrag ohne Zeilen).</Text> : (
+        <Table mt="xs" withTableBorder withColumnBorders>
+          <Table.Thead><Table.Tr>
+            <Table.Th>Pos.</Table.Th><Table.Th>Beschreibung</Table.Th>
+            <Table.Th ta="right">Bestellt</Table.Th><Table.Th ta="right">Geliefert</Table.Th><Table.Th ta="right">Rest</Table.Th><Table.Th ta="right">Jetzt liefern</Table.Th>
+          </Table.Tr></Table.Thead>
+          <Table.Tbody>
+            {lines.map((l) => (
+              <Table.Tr key={l.orderLineId}>
+                <Table.Td>{l.position}</Table.Td><Table.Td>{l.description}</Table.Td>
+                <Table.Td ta="right">{l.orderedQty}</Table.Td><Table.Td ta="right">{l.deliveredQty}</Table.Td><Table.Td ta="right">{l.remainingQty}</Table.Td>
+                <Table.Td ta="right">
+                  <NumberInput size="xs" w={90} min={0} max={l.remainingQty} disabled={l.remainingQty === 0}
+                    value={qty[l.orderLineId] ?? 0} onChange={(v) => setQty((q) => ({ ...q, [l.orderLineId]: typeof v === "number" ? v : 0 }))} />
+                </Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      )}
+      <Button mt="sm" disabled={Object.values(qty).every((v) => !v)}
+        onClick={async () => {
+          setErr(null);
+          try {
+            const dlines = Object.entries(qty).filter(([, v]) => v > 0).map(([orderLineId, v]) => ({ orderLineId, qty: v }));
+            await trpc.deliveries.create.mutate({ orderId, lines: dlines });
+            setQty({}); await load(); onChanged();
+          } catch (e) { setErr(errMsg(e)); }
+        }}>Lieferschein erstellen</Button>
+      {notes.length > 0 && (
+        <>
+          <Text fw={600} size="sm" mt="md">Lieferscheine</Text>
+          {notes.map((n) => (
+            <Text key={n.id} size="sm">📦 {n.number} — {n.lines.reduce((s, x) => s + x.qty, 0)} Stück ({fmtDate(n.createdAt)})</Text>
+          ))}
+        </>
+      )}
+    </>
+  );
+}
+
 export function OrdersPage({ role }: { role: string }): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -558,6 +616,7 @@ export function OrdersPage({ role }: { role: string }): JSX.Element {
               </Text>
             </>
           )}
+          {termOrder && <DeliveryPanel orderId={termOrder} onChanged={() => void load()} />}
           {termOrder && <RecordPanel entity="Order" entityId={termOrder} />}
         </>
       )}
