@@ -267,6 +267,48 @@ export function SampleLoansPage(): JSX.Element {
   );
 }
 
+export function CompaniesPage(): JSX.Element {
+  const [rows, setRows] = useState<Row[]>([]);
+  const [name, setName] = useState("");
+  const [branche, setBranche] = useState("");
+  const [kind, setKind] = useState("STANDARD");
+  const [ziel, setZiel] = useState(14);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try { setRows((await trpc.companies.list.query()) as Row[]); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  return (
+    <>
+      <Title order={3}>Firmen / Kunden</Title>
+      <Text size="sm" c="dimmed" mt={4}>Stammdaten (B3). Sperren/Anonymisieren erfolgt separat (DSGVO).</Text>
+      <Group mt="sm" gap="xs" align="end">
+        <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Neue Firma GmbH" />
+        <TextInput label="Branche" value={branche} onChange={(e) => setBranche(e.currentTarget.value)} w={140} />
+        <Select label="Preisgruppe" value={kind} onChange={(v) => v && setKind(v)} w={170}
+          data={["STANDARD", "TOP", "PREMIUM", "WIEDERVERKAEUFER", "AGENTUR"]} />
+        <NumberInput label="Zahlungsziel (Tage)" value={ziel} onChange={(v) => setZiel(Number(v) || 0)} min={0} max={180} w={150} />
+        <Button loading={busy} disabled={!name.trim()} onClick={async () => {
+          setBusy(true); setErr(null);
+          try { await trpc.companies.create.mutate({ name: name.trim(), branche: branche || undefined, priceGroupKind: kind as "STANDARD" | "TOP" | "PREMIUM" | "WIEDERVERKAEUFER" | "AGENTUR", zahlungszielTage: ziel }); setName(""); setBranche(""); await load(); }
+          catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+        }}>Firma anlegen</Button>
+      </Group>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      <AutoTable rows={rows} action={(r) => (
+        <Button size="compact-xs" variant="light" color={r.mahnsperre ? "teal" : "orange"} onClick={async () => {
+          try { await trpc.companies.update.mutate({ id: String(r.id), mahnsperre: !r.mahnsperre }); await load(); }
+          catch (e) { setErr(errMsg(e)); }
+        }}>{r.mahnsperre ? "Mahnsperre aufheben" : "Mahnsperre setzen"}</Button>
+      )} />
+    </>
+  );
+}
+
 export function InquiriesPage(): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [text, setText] = useState("");

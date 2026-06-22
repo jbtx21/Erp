@@ -629,6 +629,32 @@ export const appRouter = router({
       }),
   }),
 
+  // Firmen/Kunden-Stammdaten (B3): anlegen/auflisten/bearbeiten.
+  companies: router({
+    list: roleProcedure("ADMIN", "BUERO", "BUCHHALTUNG").query(({ ctx }) => ctx.companies.list()),
+    create: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({
+        name: z.string().min(1),
+        branche: z.string().optional(),
+        zahlungszielTage: z.number().int().min(0).max(180).optional(),
+        priceGroupKind: z.enum(["STANDARD", "TOP", "PREMIUM", "WIEDERVERKAEUFER", "AGENTUR"]),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.companies.create(input); } catch (e) { throw toTrpcError(e); }
+      }),
+    update: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({
+        id: z.string().min(1),
+        name: z.string().optional(),
+        branche: z.string().optional(),
+        zahlungszielTage: z.number().int().min(0).max(180).optional(),
+        mahnsperre: z.boolean().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.companies.update(input); return { ok: true as const }; } catch (e) { throw toTrpcError(e); }
+      }),
+  }),
+
   // Muster-Leihgut (B5): Ausgabe/Rückgabe + 21-Tage-Berechnung (Listenpreis).
   sampleLoans: router({
     list: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.sampleLoans.list()),

@@ -61,6 +61,8 @@ import { InquiryService } from "./modules/inquiry/inquiry.service.js";
 import { PrismaInquiryRepository } from "./repositories/prisma-inquiry.repository.js";
 import { SampleLoanService } from "./modules/sample/sample.service.js";
 import { PrismaSampleLoanRepository } from "./repositories/prisma-sample.repository.js";
+import { CompanyService } from "./modules/company/company.service.js";
+import { PrismaCompanyRepository } from "./repositories/prisma-company.repository.js";
 import { appRouter } from "./trpc/router.js";
 import type { Context } from "./trpc/trpc.js";
 import { portalAppRouter } from "./trpc/portal-router.js";
@@ -135,6 +137,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
     new NumberingService(new PrismaNumberingRepository()),
     new PrismaAuditSink()
   );
+  const companies = new CompanyService(new PrismaCompanyRepository(), new PrismaAuditSink());
   const auth = new AuthService(
     new PrismaUserRepository(),
     new PrismaSessionRepository(),
@@ -224,6 +227,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           leads,
           inquiries,
           sampleLoans,
+          companies,
           auth,
           user,
           sessionToken,
