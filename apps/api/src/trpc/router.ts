@@ -624,6 +624,25 @@ export const appRouter = router({
       }),
   }),
 
+  // Muster-Leihgut (B5): Ausgabe/Rückgabe + 21-Tage-Berechnung (Listenpreis).
+  sampleLoans: router({
+    list: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.sampleLoans.list()),
+    issue: roleProcedure(...supplierRoles)
+      .input(z.object({ companyId: z.string().min(1), variantId: z.string().min(1), menge: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.sampleLoans.issue(input); } catch (e) { throw toTrpcError(e); }
+      }),
+    returnSample: roleProcedure(...supplierRoles)
+      .input(z.object({ loanId: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.sampleLoans.returnSample(input.loanId); return { ok: true as const }; } catch (e) { throw toTrpcError(e); }
+      }),
+    billOverdue: roleProcedure(...supplierRoles)
+      .mutation(async ({ ctx }) => {
+        try { return await ctx.sampleLoans.billOverdue(); } catch (e) { throw toTrpcError(e); }
+      }),
+  }),
+
   // Anfragen (B20): Funnel NEU->IN_BEARBEITUNG->ANGEBOT; Konvertierung erzeugt Quote.
   inquiries: router({
     list: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.inquiries.list()),

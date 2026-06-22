@@ -3,7 +3,7 @@
 // Bereiche mit wenig Code anbindbar sind. Interaktive Aktionen (Versand bestätigen,
 // Mahnlauf, Reorder→Bestellungen) sind je Seite ergänzt.
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Alert, Badge, Button, Group, Loader, Select, Table, Text, TextInput, Title } from "@mantine/core";
+import { Alert, Badge, Button, Group, Loader, NumberInput, Select, Table, Text, TextInput, Title } from "@mantine/core";
 import { trpc } from "./trpc.js";
 import { euro, numTd, statusMantineColor } from "./theme.js";
 
@@ -217,6 +217,55 @@ export const ProductionReportingPage = (): JSX.Element => {
     </>
   );
 };
+
+export function SampleLoansPage(): JSX.Element {
+  const [rows, setRows] = useState<Row[]>([]);
+  const [companyId, setCompanyId] = useState("co-muster");
+  const [variantId, setVariantId] = useState("var-polo-navy-l");
+  const [menge, setMenge] = useState(3);
+  const [err, setErr] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try { setRows((await trpc.sampleLoans.list.query()) as Row[]); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  const act = async (fn: () => Promise<unknown>) => {
+    setErr(null);
+    try { await fn(); await load(); } catch (e) { setErr(errMsg(e)); }
+  };
+
+  return (
+    <>
+      <Title order={3}>Muster-Leihgut</Title>
+      <Text size="sm" c="dimmed" mt={4}>Ausgabe als Leihgut; Rückgabe unter 21 Tagen → keine Rechnung, sonst Musterrechnung zum Listenpreis (B5).</Text>
+      <Group mt="sm" gap="xs" align="end">
+        <TextInput label="Firmen-ID" value={companyId} onChange={(e) => setCompanyId(e.currentTarget.value)} w={130} />
+        <TextInput label="Varianten-ID" value={variantId} onChange={(e) => setVariantId(e.currentTarget.value)} w={170} />
+        <NumberInput label="Menge" value={menge} onChange={(v) => setMenge(Number(v) || 1)} min={1} w={90} />
+        <Button loading={busy} onClick={async () => {
+          setBusy(true); setErr(null);
+          try { await trpc.sampleLoans.issue.mutate({ companyId, variantId, menge }); await load(); }
+          catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+        }}>Muster ausgeben</Button>
+        <Button variant="light" onClick={() => void act(async () => {
+          const r = await trpc.sampleLoans.billOverdue.mutate();
+          setStatus(`Berechnungslauf: ${r.billed.length} berechnet, ${r.failed.length} fehlgeschlagen.`);
+        })}>Überfällige berechnen</Button>
+      </Group>
+      {status && <Text size="sm" mt="xs" c="dimmed">{status}</Text>}
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      <AutoTable rows={rows} action={(r) => (
+        String(r.status) === "VERLIEHEN"
+          ? <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.sampleLoans.returnSample.mutate({ loanId: String(r.id) }))}>Zurückgenommen</Button>
+          : <Text size="xs" c="dimmed">—</Text>
+      )} />
+    </>
+  );
+}
 
 export function InquiriesPage(): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);

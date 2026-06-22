@@ -6,6 +6,7 @@ import type {
   OverdueSampleLoan,
   SampleInvoiceData,
   SampleLoanRepository,
+  SampleLoanRow,
 } from "../modules/sample/sample.service.js";
 
 interface Loan {
@@ -32,6 +33,10 @@ export class InMemorySampleLoanRepository implements SampleLoanRepository {
 
   private moveMuster(variantId: string, delta: number): void {
     this.musterStock.set(variantId, (this.musterStock.get(variantId) ?? 0) + delta);
+  }
+
+  async list(): Promise<SampleLoanRow[]> {
+    return [...this.loans.values()].map((l) => ({ ...l })).sort((a, b) => b.ausgegebenAm.getTime() - a.ausgegebenAm.getTime());
   }
 
   async issue(input: {

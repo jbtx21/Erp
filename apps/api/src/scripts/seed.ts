@@ -134,6 +134,12 @@ async function main(): Promise<void> {
     await prisma.inquiry.upsert({ where: { id }, update: {}, create: { id, number, text, status, quelle: "WEB", companyId: cid } });
   }
 
+  // ── Muster-Leihgut (B5) ────────────────────────────────────────────────────
+  await prisma.sampleLoan.upsert({
+    where: { id: "loan-1" }, update: {},
+    create: { id: "loan-1", companyId: muster.id, variantId: "var-polo-navy-l", menge: 3, status: "VERLIEHEN", ausgegebenAm: at(-5) },
+  });
+
   // ── Kostenstellen (B7) ─────────────────────────────────────────────────────
   for (const [id, nummer, name] of [["cc-1", "1000", "Veredelung"], ["cc-2", "2000", "Vertrieb"]] as const) {
     await prisma.costCenter.upsert({ where: { id }, update: {}, create: { id, nummer, name } });

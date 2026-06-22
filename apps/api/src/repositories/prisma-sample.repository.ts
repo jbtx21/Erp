@@ -14,9 +14,17 @@ import type {
   OverdueSampleLoan,
   SampleInvoiceData,
   SampleLoanRepository,
+  SampleLoanRow,
 } from "../modules/sample/sample.service.js";
 
 export class PrismaSampleLoanRepository implements SampleLoanRepository {
+  async list(): Promise<SampleLoanRow[]> {
+    return prisma.sampleLoan.findMany({
+      orderBy: { ausgegebenAm: "desc" },
+      select: { id: true, companyId: true, variantId: true, menge: true, ausgegebenAm: true, status: true, invoiceId: true },
+    });
+  }
+
   async issue(input: {
     companyId: string;
     variantId: string;

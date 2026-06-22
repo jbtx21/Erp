@@ -25,7 +25,19 @@ export interface OverdueSampleLoan {
   ausgegebenAm: Date;
 }
 
+export interface SampleLoanRow {
+  id: string;
+  companyId: string;
+  variantId: string;
+  menge: number;
+  ausgegebenAm: Date;
+  status: string;
+  invoiceId: string | null;
+}
+
 export interface SampleLoanRepository {
+  /** Alle Muster-Leihen (neueste zuerst). */
+  list(): Promise<SampleLoanRow[]>;
   /** Legt die Leihe an, bucht den Muster-Abgang (−menge) und die DueItem-Frist. */
   issue(input: {
     companyId: string;
@@ -67,6 +79,11 @@ export class SampleLoanService {
     private readonly numbering: NumberingService,
     private readonly audit: AuditSink
   ) {}
+
+  /** Alle Muster-Leihen (neueste zuerst). */
+  async list(): Promise<SampleLoanRow[]> {
+    return this.repo.list();
+  }
 
   /** Gibt ein Muster aus (Leihe + Muster-Abgang + 21-Tage-Wiedervorlage). */
   async issue(input: {

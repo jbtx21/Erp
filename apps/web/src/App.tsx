@@ -8,7 +8,7 @@ import { Differentiators } from "./Differentiators.js";
 import { Banking } from "./Banking.js";
 import {
   CostCentersPage, DunningPage, InquiriesPage, IncomingInvoicesPage, LeadsPage, ListPage, ProcurementPage, ProductionReportingPage,
-  ReklamationPage, ReorderPage, ShipmentsPage, SuppliersPage,
+  ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SuppliersPage,
 } from "./pages.js";
 import { trpc } from "./trpc.js";
 
@@ -19,6 +19,7 @@ const NAV: ReadonlyArray<{ group: string; items: ReadonlyArray<{ key: string; la
   { group: "Beschaffung", items: [
     { key: "suppliers", label: "Lieferanten" }, { key: "incoming", label: "Eingangsrechnungen" },
     { key: "procurement", label: "Beschaffung" }, { key: "reorder", label: "Nachbestellung" },
+    { key: "samples", label: "Muster-Leihgut" },
   ] },
   { group: "Produktion", items: [{ key: "differentiators", label: "Differenzierer" }, { key: "prodreport", label: "Produktions-Reporting" }] },
   { group: "Logistik & Finanzen", items: [
@@ -96,6 +97,7 @@ function Page({ k, role }: { k: string; role: string }): ReactNode {
     case "incoming": return <IncomingInvoicesPage />;
     case "procurement": return <ProcurementPage />;
     case "reorder": return <ReorderPage />;
+    case "samples": return <SampleLoansPage />;
     case "differentiators": return <Differentiators role={role} />;
     case "prodreport": return <ProductionReportingPage />;
     case "shipments": return <ShipmentsPage />;

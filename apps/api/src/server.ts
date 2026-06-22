@@ -59,6 +59,8 @@ import { LeadService } from "./modules/lead/lead.service.js";
 import { PrismaLeadRepository } from "./repositories/prisma-lead.repository.js";
 import { InquiryService } from "./modules/inquiry/inquiry.service.js";
 import { PrismaInquiryRepository } from "./repositories/prisma-inquiry.repository.js";
+import { SampleLoanService } from "./modules/sample/sample.service.js";
+import { PrismaSampleLoanRepository } from "./repositories/prisma-sample.repository.js";
 import { appRouter } from "./trpc/router.js";
 import type { Context } from "./trpc/trpc.js";
 import { portalAppRouter } from "./trpc/portal-router.js";
@@ -125,6 +127,11 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const leads = new LeadService(new PrismaLeadRepository(), new PrismaAuditSink());
   const inquiries = new InquiryService(
     new PrismaInquiryRepository(),
+    new NumberingService(new PrismaNumberingRepository()),
+    new PrismaAuditSink()
+  );
+  const sampleLoans = new SampleLoanService(
+    new PrismaSampleLoanRepository(),
     new NumberingService(new PrismaNumberingRepository()),
     new PrismaAuditSink()
   );
@@ -216,6 +223,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           costCenters,
           leads,
           inquiries,
+          sampleLoans,
           auth,
           user,
           sessionToken,
