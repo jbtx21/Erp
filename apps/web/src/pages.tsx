@@ -218,6 +218,61 @@ export const ProductionReportingPage = (): JSX.Element => {
   );
 };
 
+export function InquiriesPage(): JSX.Element {
+  const [rows, setRows] = useState<Row[]>([]);
+  const [text, setText] = useState("");
+  const [quelle, setQuelle] = useState("WEB");
+  const [companyId, setCompanyId] = useState("co-muster");
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try { setRows((await trpc.inquiries.list.query()) as Row[]); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  const act = async (fn: () => Promise<unknown>) => {
+    setErr(null);
+    try { await fn(); await load(); } catch (e) { setErr(errMsg(e)); }
+  };
+
+  const actionsFor = (r: Row): ReactNode => {
+    const id = String(r.id); const status = String(r.status);
+    return (
+      <Group gap={4} justify="flex-end" wrap="nowrap">
+        {status === "NEU" && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.inquiries.startProcessing.mutate({ id }))}>In Bearbeitung</Button>}
+        {status === "IN_BEARBEITUNG" && <Button size="compact-xs" color="green" onClick={() => void act(() => trpc.inquiries.convertToQuote.mutate({ id }))}>→ Angebot</Button>}
+        {status !== "ANGEBOT" && status !== "VERWORFEN" && (
+          <Button size="compact-xs" color="red" variant="light" onClick={() => {
+            const grund = typeof window !== "undefined" ? window.prompt("Verwerfen — Grund?") : null;
+            if (grund) void act(() => trpc.inquiries.discard.mutate({ id, grund }));
+          }}>Verwerfen</Button>
+        )}
+      </Group>
+    );
+  };
+
+  return (
+    <>
+      <Title order={3}>Anfragen</Title>
+      <Text size="sm" c="dimmed" mt={4}>Anfrage-Funnel NEU → In Bearbeitung → Angebot (B20, AF-Nummer aus F1).</Text>
+      <Group mt="sm" gap="xs" align="end">
+        <TextInput label="Anfragetext" value={text} onChange={(e) => setText(e.currentTarget.value)} placeholder="200 Polos bestickt, Logo …" w={280} />
+        <Select label="Quelle" value={quelle} onChange={(v) => v && setQuelle(v)} data={["WEB", "EMAIL", "SHOP", "TELEFON"]} w={110} />
+        <TextInput label="Firmen-ID (optional)" value={companyId} onChange={(e) => setCompanyId(e.currentTarget.value)} w={150} />
+        <Button loading={busy} disabled={!text.trim()} onClick={async () => {
+          setBusy(true); setErr(null);
+          try { await trpc.inquiries.create.mutate({ text: text.trim(), quelle: quelle as "WEB" | "EMAIL" | "SHOP" | "TELEFON", companyId: companyId || undefined }); setText(""); await load(); }
+          catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+        }}>Anfrage anlegen</Button>
+      </Group>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      <AutoTable rows={rows} hide={["verworfenGrund"]} action={actionsFor} />
+    </>
+  );
+}
+
 export function LeadsPage(): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [name, setName] = useState("");

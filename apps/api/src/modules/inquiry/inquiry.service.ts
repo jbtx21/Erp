@@ -19,8 +19,22 @@ export interface CreateInquiryInput {
   kontaktName?: string | null;
 }
 
+export interface InquiryRow {
+  id: string;
+  number: string;
+  companyId: string | null;
+  kontaktName: string | null;
+  quelle: InquirySource;
+  status: InquiryStatus;
+  verworfenGrund: string | null;
+  text: string;
+  quoteId: string | null;
+  createdAt: Date;
+}
+
 export interface InquiryRepository {
   create(input: CreateInquiryInput & { number: string }): Promise<{ id: string }>;
+  list(): Promise<InquiryRow[]>;
   load(id: string): Promise<{ status: InquiryStatus; companyId: string | null } | null>;
   setStatus(id: string, status: InquiryStatus): Promise<void>;
   discard(id: string, grund: string): Promise<void>;
@@ -46,6 +60,11 @@ export class InquiryService {
       buildEntry({ entity: "Inquiry", entityId: id, action: "CREATE", after: { number, quelle: input.quelle } })
     );
     return { id, number };
+  }
+
+  /** Alle Anfragen (neueste zuerst). */
+  async list(): Promise<InquiryRow[]> {
+    return this.repo.list();
   }
 
   /** In Bearbeitung nehmen (NEU → IN_BEARBEITUNG). */

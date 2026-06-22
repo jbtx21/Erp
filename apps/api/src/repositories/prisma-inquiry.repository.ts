@@ -1,13 +1,19 @@
 // Prisma-Implementierung des Anfrage-Funnels (Produktionspfad, B20).
 
 import { prisma } from "@texma/db";
-import type { InquiryStatus } from "@texma/shared";
+import type { InquirySource, InquiryStatus } from "@texma/shared";
 import type {
   CreateInquiryInput,
   InquiryRepository,
+  InquiryRow,
 } from "../modules/inquiry/inquiry.service.js";
 
 export class PrismaInquiryRepository implements InquiryRepository {
+  async list(): Promise<InquiryRow[]> {
+    const rows = await prisma.inquiry.findMany({ orderBy: { createdAt: "desc" } });
+    return rows.map((i) => ({ ...i, quelle: i.quelle as InquirySource, status: i.status as InquiryStatus }));
+  }
+
   async create(input: CreateInquiryInput & { number: string }): Promise<{ id: string }> {
     return prisma.inquiry.create({
       data: {

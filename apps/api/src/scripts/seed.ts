@@ -126,6 +126,14 @@ async function main(): Promise<void> {
     await prisma.lead.upsert({ where: { id }, update: {}, create: { id, name, quelle, status, email: "info@example.de" } });
   }
 
+  // ── Anfragen (B20) ─────────────────────────────────────────────────────────
+  for (const [id, number, text, status, cid] of [
+    ["inq-1", "AF-2026-0001", "200 Polos navy, Logo bestickt, bis KW40", "NEU", muster.id],
+    ["inq-2", "AF-2026-0002", "50 Softshelljacken, Rückenprint", "IN_BEARBEITUNG", gross.id],
+  ] as const) {
+    await prisma.inquiry.upsert({ where: { id }, update: {}, create: { id, number, text, status, quelle: "WEB", companyId: cid } });
+  }
+
   // ── Kostenstellen (B7) ─────────────────────────────────────────────────────
   for (const [id, nummer, name] of [["cc-1", "1000", "Veredelung"], ["cc-2", "2000", "Vertrieb"]] as const) {
     await prisma.costCenter.upsert({ where: { id }, update: {}, create: { id, nummer, name } });

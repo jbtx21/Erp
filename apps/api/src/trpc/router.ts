@@ -624,6 +624,36 @@ export const appRouter = router({
       }),
   }),
 
+  // Anfragen (B20): Funnel NEU->IN_BEARBEITUNG->ANGEBOT; Konvertierung erzeugt Quote.
+  inquiries: router({
+    list: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.inquiries.list()),
+    create: roleProcedure(...supplierRoles)
+      .input(z.object({
+        quelle: z.enum(["WEB", "EMAIL", "SHOP", "TELEFON"]),
+        text: z.string().min(1),
+        companyId: z.string().optional(),
+        kontaktName: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.inquiries.create(input); } catch (e) { throw toTrpcError(e); }
+      }),
+    startProcessing: roleProcedure(...supplierRoles)
+      .input(z.object({ id: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.inquiries.startProcessing(input.id); } catch (e) { throw toTrpcError(e); }
+      }),
+    convertToQuote: roleProcedure(...supplierRoles)
+      .input(z.object({ id: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.inquiries.convertToQuote(input.id); } catch (e) { throw toTrpcError(e); }
+      }),
+    discard: roleProcedure(...supplierRoles)
+      .input(z.object({ id: z.string().min(1), grund: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.inquiries.discard(input.id, input.grund); } catch (e) { throw toTrpcError(e); }
+      }),
+  }),
+
   // Leads/Interessenten (B15): Funnel NEU->KONTAKTIERT->QUALIFIZIERT->konvertiert.
   leads: router({
     list: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.leads.list()),

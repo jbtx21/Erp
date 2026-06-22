@@ -1,9 +1,10 @@
 // In-Memory-Inquiry-Repository für Unit-Tests/Dev.
 
-import type { InquiryStatus } from "@texma/shared";
+import type { InquirySource, InquiryStatus } from "@texma/shared";
 import type {
   CreateInquiryInput,
   InquiryRepository,
+  InquiryRow,
 } from "../modules/inquiry/inquiry.service.js";
 
 interface Inquiry {
@@ -11,8 +12,12 @@ interface Inquiry {
   number: string;
   status: InquiryStatus;
   companyId: string | null;
+  kontaktName: string | null;
+  quelle: InquirySource;
+  text: string;
   verworfenGrund: string | null;
   quoteId: string | null;
+  createdAt: Date;
 }
 
 export class InMemoryInquiryRepository implements InquiryRepository {
@@ -23,6 +28,10 @@ export class InMemoryInquiryRepository implements InquiryRepository {
     return this.inquiries.get(id);
   }
 
+  async list(): Promise<InquiryRow[]> {
+    return [...this.inquiries.values()].map((i) => ({ ...i })).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
   async create(input: CreateInquiryInput & { number: string }): Promise<{ id: string }> {
     const id = `inq_${++this.seq}`;
     this.inquiries.set(id, {
@@ -30,8 +39,12 @@ export class InMemoryInquiryRepository implements InquiryRepository {
       number: input.number,
       status: "NEU",
       companyId: input.companyId ?? null,
+      kontaktName: input.kontaktName ?? null,
+      quelle: input.quelle,
+      text: input.text,
       verworfenGrund: null,
       quoteId: null,
+      createdAt: new Date(),
     });
     return { id };
   }
