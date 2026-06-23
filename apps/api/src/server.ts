@@ -35,7 +35,7 @@ import { ProductionSheetService } from "./modules/production-sheet/production-sh
 import { ReportingService } from "./modules/reporting/reporting.service.js";
 import { AnthropicReportClient } from "./modules/reporting/anthropic-report-client.js";
 import { ProductionReportingService } from "./modules/production-reporting/production-reporting.service.js";
-import { PrismaSessionRepository, PrismaUserRepository } from "./repositories/prisma-auth.repository.js";
+import { PrismaSessionRepository, PrismaUserRepository, PrismaPasswordResetRepository } from "./repositories/prisma-auth.repository.js";
 import { PrismaOrderRepository } from "./repositories/prisma-order.repository.js";
 import { PrismaSupplierRepository } from "./repositories/prisma-supplier.repository.js";
 import { PrismaIncomingInvoiceRepository } from "./repositories/prisma-incoming-invoice.repository.js";
@@ -230,7 +230,13 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
     new PrismaSessionRepository(),
     new PrismaAuditSink(),
     new Argon2Hasher(),
-    new OtpauthTotpService()
+    new OtpauthTotpService(),
+    () => new Date(),
+    {
+      repo: new PrismaPasswordResetRepository(),
+      baseUrl: process.env.APP_BASE_URL ?? "http://localhost:5173",
+      mailer: { sendResetLink: (email, link) => mailSend.send({ to: email, subject: "TEXMA ERP — Passwort zurücksetzen", body: `Passwort zurücksetzen über folgenden Link (1 Stunde gültig):\n\n${link}\n\nFalls Sie das nicht angefordert haben, ignorieren Sie diese E-Mail.` }).then(() => undefined) },
+    }
   );
   // Kundenportal (B13): EIGENER Auth-Pfad/Service, getrennt vom Mitarbeiter-`auth`.
   const portalAuth = new PortalAuthService(

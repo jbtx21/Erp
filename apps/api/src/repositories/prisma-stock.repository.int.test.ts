@@ -51,7 +51,7 @@ if (!dbConfigured) {
       const cache = await prisma.stockLevel.findUnique({ where: { variantId: VAR }, select: { qty: true } });
       expect(cache?.qty).toBe(70);
 
-      expect(await service.balance(VAR)).toEqual({ HAUPT: 70, MUSTER: 5 });
+      expect(await service.balance(VAR)).toEqual({ HAUPT: 70, MUSTER: 5, SHOWROOM: 0, TRANSFERDRUCK: 0 });
     });
   });
 }

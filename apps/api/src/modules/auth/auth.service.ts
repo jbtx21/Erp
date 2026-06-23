@@ -62,6 +62,20 @@ export interface UserRepository {
   create(input: { email: string; name: string; role: Role; passwordHash: string }): Promise<{ id: string }>;
   list(): Promise<UserListRow[]>;
   setActive(userId: string, active: boolean): Promise<void>;
+  setPassword(userId: string, passwordHash: string): Promise<void>;
+  setName(userId: string, name: string): Promise<void>;
+}
+
+/** Token-Speicher für „Passwort vergessen". */
+export interface PasswordResetRepository {
+  create(input: { userId: string; tokenHash: string; expiresAt: Date }): Promise<void>;
+  /** Gültiges (nicht abgelaufenes, unbenutztes) Token → userId; sonst null. */
+  consume(tokenHash: string, now: Date): Promise<string | null>;
+}
+
+/** Versand des Reset-Links (per E-Mail). */
+export interface ResetMailer {
+  sendResetLink(email: string, link: string): Promise<void>;
 }
 
 export interface SessionRepository {
@@ -90,6 +104,13 @@ function toAuthUser(u: UserRecord): AuthUser {
   return { id: u.id, email: u.email, name: u.name, role: u.role, totpEnabled: u.totpEnabled };
 }
 
+export interface PasswordResetDeps {
+  repo: PasswordResetRepository;
+  mailer: ResetMailer;
+  /** Basis-URL für den Reset-Link, z. B. https://erp.texma-gmbh.de */
+  baseUrl: string;
+}
+
 export class AuthService {
   constructor(
     private readonly users: UserRepository,
@@ -97,7 +118,8 @@ export class AuthService {
     private readonly audit: AuditSink,
     private readonly hasher: Hasher,
     private readonly totp: TotpService,
-    private readonly now: () => Date = () => new Date()
+    private readonly now: () => Date = () => new Date(),
+    private readonly reset?: PasswordResetDeps
   ) {}
 
   async loginWithPassword(email: string, password: string): Promise<LoginResult> {
@@ -204,6 +226,53 @@ export class AuthService {
   async setUserActive(userId: string, active: boolean): Promise<void> {
     await this.users.setActive(userId, active);
     await this.audit.append(buildEntry({ entity: "User", entityId: userId, action: "UPDATE", after: { active } }));
+  }
+
+  // ── Konto-Selbstverwaltung (jede:r für sich) ─────────────────────────────────
+
+  /** Eigenen Namen ändern. */
+  async updateProfile(userId: string, name: string): Promise<void> {
+    if (!name.trim()) throw new UserValidationError("Name ist Pflicht.");
+    await this.users.setName(userId, name.trim());
+    await this.audit.append(buildEntry({ userId, entity: "User", entityId: userId, action: "UPDATE", after: { name: name.trim() } }));
+  }
+
+  /** Eigenes Passwort ändern (altes Passwort muss stimmen). */
+  async changePassword(userId: string, oldPassword: string, newPassword: string): Promise<void> {
+    const user = await this.users.findById(userId);
+    if (!user) throw new AuthError("NO_SESSION", "Unbekannter Nutzer.");
+    if (!(await this.hasher.verify(user.passwordHash, oldPassword))) {
+      throw new AuthError("INVALID_CREDENTIALS", "Aktuelles Passwort ist falsch.");
+    }
+    if (newPassword.length < 8) throw new UserValidationError("Neues Passwort muss mindestens 8 Zeichen haben.");
+    await this.users.setPassword(userId, await this.hasher.hash(newPassword));
+    await this.audit.append(buildEntry({ userId, entity: "User", entityId: userId, action: "UPDATE", after: { passwordChanged: true } }));
+  }
+
+  /**
+   * Passwort vergessen: erzeugt ein 1-Stunden-Token und mailt den Reset-Link. Gibt
+   * IMMER ok zurück (keine Auskunft, ob die Adresse existiert — Enumeration-Schutz).
+   */
+  async requestPasswordReset(email: string): Promise<void> {
+    if (!this.reset) throw new UserValidationError("Passwort-Reset ist nicht konfiguriert.");
+    const user = await this.users.findByEmail(email.trim().toLowerCase());
+    if (!user) return; // still ok
+    const token = randomToken();
+    const expiresAt = new Date(this.now().getTime() + 60 * 60 * 1000);
+    await this.reset.repo.create({ userId: user.id, tokenHash: hashToken(token), expiresAt });
+    const link = `${this.reset.baseUrl.replace(/\/$/, "")}/#reset?token=${token}`;
+    await this.reset.mailer.sendResetLink(user.email, link);
+    await this.audit.append(buildEntry({ userId: user.id, entity: "User", entityId: user.id, action: "UPDATE", after: { passwordResetRequested: true } }));
+  }
+
+  /** Passwort mit gültigem Reset-Token neu setzen. */
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    if (!this.reset) throw new UserValidationError("Passwort-Reset ist nicht konfiguriert.");
+    if (newPassword.length < 8) throw new UserValidationError("Neues Passwort muss mindestens 8 Zeichen haben.");
+    const userId = await this.reset.repo.consume(hashToken(token), this.now());
+    if (!userId) throw new AuthError("INVALID_CREDENTIALS", "Reset-Link ungültig oder abgelaufen.");
+    await this.users.setPassword(userId, await this.hasher.hash(newPassword));
+    await this.audit.append(buildEntry({ userId, entity: "User", entityId: userId, action: "UPDATE", after: { passwordReset: true } }));
   }
 
   private async auditAttempt(email: string, reason: string, userId?: string): Promise<void> {

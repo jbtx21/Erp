@@ -90,6 +90,39 @@ export const appRouter = router({
         }
       }),
 
+    // Konto-Selbstverwaltung (jede:r für sich).
+    /** Eigenen Namen ändern. */
+    updateProfile: protectedProcedure
+      .input(z.object({ name: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.auth.updateProfile(ctx.user.id, input.name); return { ok: true as const }; }
+        catch (err) { toTrpcError(err); }
+      }),
+
+    /** Eigenes Passwort ändern (altes Passwort erforderlich). */
+    changePassword: protectedProcedure
+      .input(z.object({ oldPassword: z.string().min(1), newPassword: z.string().min(8) }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.auth.changePassword(ctx.user.id, input.oldPassword, input.newPassword); return { ok: true as const }; }
+        catch (err) { toTrpcError(err); }
+      }),
+
+    /** Passwort vergessen: Reset-Link per E-Mail (gibt immer ok zurück — Enumeration-Schutz). */
+    requestPasswordReset: publicProcedure
+      .input(z.object({ email: z.string().email() }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.auth.requestPasswordReset(input.email); } catch { /* still ok */ }
+        return { ok: true as const };
+      }),
+
+    /** Passwort mit gültigem Reset-Token neu setzen. */
+    resetPassword: publicProcedure
+      .input(z.object({ token: z.string().min(1), newPassword: z.string().min(8) }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.auth.resetPassword(input.token, input.newPassword); return { ok: true as const }; }
+        catch (err) { toTrpcError(err); }
+      }),
+
     // Benutzerverwaltung (nur Geschäftsleitung/ADMIN): Konten @texma-gmbh.de + 2FA.
     listUsers: roleProcedure("ADMIN").query(({ ctx }) => ctx.auth.listUsers()),
     createUser: roleProcedure("ADMIN")

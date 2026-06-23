@@ -2,6 +2,7 @@ import { Secret, TOTP } from "otpauth";
 import { beforeEach, describe, expect, it } from "vitest";
 import { MemoryAuditSink } from "../../audit/memory-audit-sink.js";
 import {
+  InMemoryPasswordResetRepository,
   InMemorySessionRepository,
   InMemoryUserRepository,
 } from "../../repositories/in-memory-auth.repository.js";
@@ -153,5 +154,56 @@ describe("AuthService — Benutzerverwaltung (@texma-gmbh.de)", () => {
     const { id } = await service.createUser({ email: "d@texma-gmbh.de", name: "D", role: "BUERO", password: "geheim12" });
     await service.setUserActive(id, false);
     expect((await userRepo.findById(id))?.active).toBe(false);
+  });
+});
+
+describe("AuthService — Konto-Selbstverwaltung", () => {
+  function setupSelf(users: UserRecord[]) {
+    const userRepo = new InMemoryUserRepository(users);
+    const sessionRepo = new InMemorySessionRepository();
+    const audit = new MemoryAuditSink();
+    const resetRepo = new InMemoryPasswordResetRepository();
+    const sent: { email: string; link: string }[] = [];
+    const service = new AuthService(userRepo, sessionRepo, audit, hasher, totp, () => new Date(), {
+      repo: resetRepo,
+      mailer: { sendResetLink: async (email, link) => void sent.push({ email, link }) },
+      baseUrl: "https://erp.texma-gmbh.de",
+    });
+    return { service, userRepo, sent };
+  }
+
+  it("updateProfile ändert den eigenen Namen", async () => {
+    const { service, userRepo } = setupSelf([await makeUser()]);
+    await service.updateProfile("u1", "Neuer Name");
+    expect((await userRepo.findById("u1"))?.name).toBe("Neuer Name");
+    await expect(service.updateProfile("u1", "  ")).rejects.toThrow(/Pflicht/);
+  });
+
+  it("changePassword prüft das alte Passwort und setzt das neue", async () => {
+    const { service } = setupSelf([await makeUser()]);
+    await expect(service.changePassword("u1", "falsch", "neuesPW12")).rejects.toMatchObject({ code: "INVALID_CREDENTIALS" });
+    await service.changePassword("u1", "geheim123", "neuesPW12");
+    const login = await service.loginWithPassword("büro@texma.de", "neuesPW12");
+    expect(login.token).toBeTruthy();
+    await expect(service.changePassword("u1", "neuesPW12", "kurz")).rejects.toThrow(/8 Zeichen/);
+  });
+
+  it("Passwort vergessen → Reset-Link → Passwort neu setzen", async () => {
+    const { service, sent } = setupSelf([await makeUser()]);
+    await service.requestPasswordReset("BÜRO@texma.de");
+    expect(sent).toHaveLength(1);
+    const token = new URL(sent[0]!.link.replace("/#reset?", "/reset?")).searchParams.get("token")!;
+    expect(token).toBeTruthy();
+    await service.resetPassword(token, "ganzNeu123");
+    const login = await service.loginWithPassword("büro@texma.de", "ganzNeu123");
+    expect(login.token).toBeTruthy();
+    // Token ist verbraucht → zweiter Versuch scheitert
+    await expect(service.resetPassword(token, "nochmal123")).rejects.toMatchObject({ code: "INVALID_CREDENTIALS" });
+  });
+
+  it("Passwort vergessen für unbekannte Adresse meldet keinen Fehler (Enumeration-Schutz)", async () => {
+    const { service, sent } = setupSelf([await makeUser()]);
+    await expect(service.requestPasswordReset("niemand@texma.de")).resolves.toBeUndefined();
+    expect(sent).toHaveLength(0);
   });
 });

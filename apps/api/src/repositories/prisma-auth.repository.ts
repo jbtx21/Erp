@@ -2,6 +2,7 @@
 import { prisma } from "@texma/db";
 import type { Role } from "@texma/shared";
 import type {
+  PasswordResetRepository,
   SessionRecord,
   SessionRepository,
   UserListRow,
@@ -44,6 +45,12 @@ export class PrismaUserRepository implements UserRepository {
   async setActive(userId: string, active: boolean): Promise<void> {
     await prisma.user.update({ where: { id: userId }, data: { active } });
   }
+  async setPassword(userId: string, passwordHash: string): Promise<void> {
+    await prisma.user.update({ where: { id: userId }, data: { passwordHash, failedLoginCount: 0, lockedUntil: null } });
+  }
+  async setName(userId: string, name: string): Promise<void> {
+    await prisma.user.update({ where: { id: userId }, data: { name } });
+  }
 
   private map(u: Awaited<ReturnType<typeof prisma.user.findUnique>>): UserRecord | null {
     if (!u) return null;
@@ -75,5 +82,17 @@ export class PrismaSessionRepository implements SessionRepository {
   }
   async deleteByTokenHash(tokenHash: string): Promise<void> {
     await prisma.session.deleteMany({ where: { tokenHash } });
+  }
+}
+
+export class PrismaPasswordResetRepository implements PasswordResetRepository {
+  async create(input: { userId: string; tokenHash: string; expiresAt: Date }): Promise<void> {
+    await prisma.passwordResetToken.create({ data: input });
+  }
+  async consume(tokenHash: string, now: Date): Promise<string | null> {
+    const row = await prisma.passwordResetToken.findUnique({ where: { tokenHash } });
+    if (!row || row.usedAt || row.expiresAt.getTime() < now.getTime()) return null;
+    await prisma.passwordResetToken.update({ where: { tokenHash }, data: { usedAt: now } });
+    return row.userId;
   }
 }

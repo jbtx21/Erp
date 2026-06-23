@@ -1,6 +1,7 @@
 // In-Memory-User/Session-Repos für Auth-Tests (ohne DB).
 import type { Role } from "@texma/shared";
 import type {
+  PasswordResetRepository,
   SessionRecord,
   SessionRepository,
   UserListRow,
@@ -51,6 +52,27 @@ export class InMemoryUserRepository implements UserRepository {
   async setActive(userId: string, active: boolean): Promise<void> {
     const u = this.users.find((x) => x.id === userId);
     if (u) u.active = active;
+  }
+  async setPassword(userId: string, passwordHash: string): Promise<void> {
+    const u = this.users.find((x) => x.id === userId);
+    if (u) { u.passwordHash = passwordHash; u.failedLoginCount = 0; u.lockedUntil = null; }
+  }
+  async setName(userId: string, name: string): Promise<void> {
+    const u = this.users.find((x) => x.id === userId);
+    if (u) u.name = name;
+  }
+}
+
+export class InMemoryPasswordResetRepository implements PasswordResetRepository {
+  private tokens = new Map<string, { userId: string; expiresAt: Date; used: boolean }>();
+  async create(input: { userId: string; tokenHash: string; expiresAt: Date }): Promise<void> {
+    this.tokens.set(input.tokenHash, { userId: input.userId, expiresAt: input.expiresAt, used: false });
+  }
+  async consume(tokenHash: string, now: Date): Promise<string | null> {
+    const t = this.tokens.get(tokenHash);
+    if (!t || t.used || t.expiresAt.getTime() < now.getTime()) return null;
+    t.used = true;
+    return t.userId;
   }
 }
 

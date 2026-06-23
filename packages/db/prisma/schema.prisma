@@ -40,6 +40,7 @@ model User {
   sessions     Session[]
   auditEntries AuditLog[]
   accessLogs   AccessLog[]
+  resetTokens  PasswordResetToken[]
 }
 
 // Server-seitige Session (Kap. 14). tokenHash = SHA-256 des Cookie-Tokens — der
@@ -1609,4 +1610,17 @@ model IntegrationSetting {
   enabled    Boolean  @default(false)
   configJson String? // JSON der Konfig-Felder
   updatedAt  DateTime @updatedAt
+}
+
+// Passwort-Reset („Passwort vergessen"): Einmal-Token (gehasht), zeitlich begrenzt.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }

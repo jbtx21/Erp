@@ -2312,15 +2312,60 @@ export function IntegrationsPage(): JSX.Element {
 }
 
 // Mein Konto / Sicherheit: TOTP-2FA selbst einrichten (für jede:n angemeldete:n Nutzer:in).
-export function SecurityPage(): JSX.Element {
+export function SecurityPage({ userName, onProfileUpdated }: { userName?: string; onProfileUpdated?: () => void } = {}): JSX.Element {
   const [setup, setSetup] = useState<{ secret: string; keyUri: string } | null>(null);
   const [code, setCode] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
+  // Profil (Name)
+  const [name, setName] = useState(userName ?? "");
+  const [profileMsg, setProfileMsg] = useState<string | null>(null);
+  const [profileErr, setProfileErr] = useState<string | null>(null);
+
+  // Passwort ändern
+  const [oldPw, setOldPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [newPw2, setNewPw2] = useState("");
+  const [pwMsg, setPwMsg] = useState<string | null>(null);
+  const [pwErr, setPwErr] = useState<string | null>(null);
+
   return (
     <>
-      <Title order={3}>Mein Konto — 2FA-Sicherheit</Title>
+      <Title order={3}>Mein Konto</Title>
+
+      <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, maxWidth: 560 }}>
+        <Text fw={600}>Profil</Text>
+        <Text size="sm" c="dimmed" mt={2}>Eigenen Anzeigenamen ändern.</Text>
+        {profileErr && <Alert color="red" mt="sm">{profileErr}</Alert>}
+        {profileMsg && <Alert color="green" mt="sm">{profileMsg}</Alert>}
+        <Group gap="xs" align="end" mt="xs">
+          <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} w={300} />
+          <Button disabled={!name.trim()} onClick={async () => {
+            setProfileErr(null); setProfileMsg(null);
+            try { await trpc.auth.updateProfile.mutate({ name }); setProfileMsg("Name gespeichert."); onProfileUpdated?.(); }
+            catch (e) { setProfileErr(errMsg(e)); }
+          }}>Speichern</Button>
+        </Group>
+      </Box>
+
+      <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, maxWidth: 560 }}>
+        <Text fw={600}>Passwort ändern</Text>
+        <Text size="sm" c="dimmed" mt={2}>Mindestens 8 Zeichen. Das aktuelle Passwort ist zur Bestätigung erforderlich.</Text>
+        {pwErr && <Alert color="red" mt="sm">{pwErr}</Alert>}
+        {pwMsg && <Alert color="green" mt="sm">{pwMsg}</Alert>}
+        <TextInput type="password" label="Aktuelles Passwort" value={oldPw} onChange={(e) => setOldPw(e.currentTarget.value)} mt="xs" w={300} />
+        <TextInput type="password" label="Neues Passwort" value={newPw} onChange={(e) => setNewPw(e.currentTarget.value)} mt="xs" w={300} />
+        <TextInput type="password" label="Neues Passwort (Wiederholung)" value={newPw2} onChange={(e) => setNewPw2(e.currentTarget.value)} mt="xs" w={300} />
+        <Button mt="sm" disabled={!oldPw || newPw.length < 8 || newPw !== newPw2} onClick={async () => {
+          setPwErr(null); setPwMsg(null);
+          if (newPw !== newPw2) { setPwErr("Die neuen Passwörter stimmen nicht überein."); return; }
+          try { await trpc.auth.changePassword.mutate({ oldPassword: oldPw, newPassword: newPw }); setPwMsg("Passwort geändert."); setOldPw(""); setNewPw(""); setNewPw2(""); }
+          catch (e) { setPwErr(errMsg(e)); }
+        }}>Passwort ändern</Button>
+      </Box>
+
+      <Title order={4} mt="xl">2FA-Sicherheit</Title>
       <Text size="sm" c="dimmed" mt={4}>Zwei-Faktor-Authentifizierung (TOTP) mit einer Authenticator-App (z. B. Google Authenticator, Authy) einrichten.</Text>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
       {msg && <Alert color="green" mt="sm">{msg}</Alert>}

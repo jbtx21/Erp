@@ -168,13 +168,13 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<voi
       </AppShell.Navbar>
 
       <AppShell.Main>
-        <Page k={active} role={user.role} />
+        <Page k={active} role={user.role} userName={user.name} />
       </AppShell.Main>
     </AppShell>
   );
 }
 
-function Page({ k, role }: { k: string; role: string }): ReactNode {
+function Page({ k, role, userName }: { k: string; role: string; userName: string }): ReactNode {
   switch (k) {
     case "dashboard": return <Dashboard />;
     case "dashboards": return <DashboardsPage />;
@@ -198,7 +198,7 @@ function Page({ k, role }: { k: string; role: string }): ReactNode {
     case "calendar": return <CalendarPage />;
     case "messages": return <MessagesPage />;
     case "admin": return <AdminPage />;
-    case "security": return <SecurityPage />;
+    case "security": return <SecurityPage userName={userName} onProfileUpdated={() => { if (typeof location !== "undefined") location.reload(); }} />;
     case "lager": return <LagerPage />;
     case "hr": return <HrPage />;
     case "integrations": return <IntegrationsPage />;
