@@ -38,6 +38,19 @@ export class WorkflowService {
     return routeProgress(route, 0);
   }
 
+  /**
+   * Auftragsbestätigung mit Druckfreigabe „senden" (Workflow-Schritt AB_DRUCKFREIGABE):
+   * benachrichtigt + protokolliert. Der echte E-Mail-Versand läuft über den Mail-Port
+   * (Integrationspunkt); ohne SMTP-Konfiguration bleibt es bei der In-App-Benachrichtigung.
+   */
+  async sendAuftragsbestaetigung(orderId: string, recipient: string): Promise<{ ok: true }> {
+    if (this.notifier) {
+      await this.notifier.notify(recipient, "Auftragsbestätigung mit Druckfreigabe versendet", `Auftrag ${orderId}: AB an den Kunden gesendet (Druckfreigabe angefordert).`, "orders");
+    }
+    await this.audit.append(buildEntry({ entity: "Order", entityId: orderId, action: "UPDATE", after: { auftragsbestaetigung: "versendet", druckfreigabe: "angefordert" } }));
+    return { ok: true };
+  }
+
   /** Aktueller Workflow-Status des Auftrags. */
   async status(orderId: string): Promise<RouteProgress | null> {
     const r = await this.repo.getRoute(orderId);

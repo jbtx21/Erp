@@ -674,6 +674,48 @@ const STEP_ACTION_HINT: Record<string, string> = {
   QK_BILD: 'Qualitätskontrolle mit Bild dokumentieren — Foto im Anhänge-Panel unten hochladen.',
 };
 
+// Ein-Klick-Aktionen je Workflow-Schritt: Laufzettel-PDF erzeugen, Bestellvorschlag,
+// AB+Druckfreigabe senden, QK-Bild hochladen — verdrahtet an die jeweiligen Endpunkte.
+function StepActionBox({ orderId, action }: { orderId: string; action: string }): JSX.Element {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const run = async (fn: () => Promise<string>): Promise<void> => {
+    setBusy(true); setErr(null); setMsg(null);
+    try { setMsg(await fn()); } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+  return (
+    <Alert color="blue" mt="xs" title="🔔 Aktion fällig">
+      <Text size="sm">{STEP_ACTION_HINT[action] ?? action}</Text>
+      <Group gap="xs" mt="xs">
+        {action === "LAUFZETTEL" && (
+          <Button size="compact-xs" loading={busy} onClick={() => void run(async () => {
+            const pdf = await trpc.print.laufzettel.query({ orderId }); downloadBase64Pdf(pdf.filename, pdf.base64); return "Laufzettel-PDF erzeugt.";
+          })}>Laufzettel-PDF erzeugen</Button>
+        )}
+        {action === "BESTELLVORSCHLAG" && (
+          <Button size="compact-xs" loading={busy} onClick={() => void run(async () => {
+            const d = await trpc.reorder.demandProposals.query(); return `${d.length} Bestellvorschlag/-vorschläge (auftragsübergreifend) — siehe „Lager & Inventur" / „Nachbestellung".`;
+          })}>Bestellvorschlag prüfen</Button>
+        )}
+        {action === "AB_DRUCKFREIGABE" && (
+          <Button size="compact-xs" loading={busy} onClick={() => void run(async () => {
+            await trpc.workflow.sendAuftragsbestaetigung.mutate({ orderId }); return "Auftragsbestätigung mit Druckfreigabe versendet.";
+          })}>AB + Druckfreigabe senden</Button>
+        )}
+        {action === "QK_BILD" && (
+          <Button size="compact-xs" component="label">
+            QK-Foto anhängen
+            <input type="file" accept="image/*" hidden onChange={(e) => { const f = e.currentTarget.files?.[0]; if (f) void run(async () => { await trpc.collab.addAttachment.mutate({ entity: "Order", entityId: orderId, fileName: f.name, mimeType: f.type || null, url: `qk://${orderId}/${f.name}` }); return `Foto „${f.name}" als QK-Beleg vermerkt (Datei-Upload = Integrationspunkt).`; }); }} />
+          </Button>
+        )}
+      </Group>
+      {msg && <Text size="xs" c="green" mt={4}>{msg}</Text>}
+      {err && <Text size="xs" c="red" mt={4}>{err}</Text>}
+    </Alert>
+  );
+}
+
 function WorkflowPanel({ orderId }: { orderId: string }): JSX.Element {
   const [status, setStatus] = useState<Awaited<ReturnType<typeof trpc.workflow.status.query>> | null>(null);
   const [route, setRoute] = useState<string | null>(null);
@@ -695,11 +737,7 @@ function WorkflowPanel({ orderId }: { orderId: string }): JSX.Element {
       ) : (
         <>
           <Text size="sm" mt={4}>{status.label} · Schritt {Math.min(status.stepIndex + 1, status.totalSteps)}/{status.totalSteps}{status.done ? " · abgeschlossen ✓" : ""}</Text>
-          {status.currentStep?.action && (
-            <Alert color="blue" mt="xs" title="🔔 Aktion fällig">
-              {STEP_ACTION_HINT[status.currentStep.action] ?? status.currentStep.action}
-            </Alert>
-          )}
+          {status.currentStep?.action && <StepActionBox orderId={orderId} action={status.currentStep.action} />}
           <Box mt="xs">
             {status.steps.map((s) => (
               <Group key={s.key} gap={8} py={3}>

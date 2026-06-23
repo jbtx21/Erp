@@ -1009,6 +1009,13 @@ export const appRouter = router({
         try { return await ctx.workflow.advance(input.orderId, ctx.user.email); }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
+    // Workflow-Aktion AB_DRUCKFREIGABE: Auftragsbestätigung mit Druckfreigabe senden.
+    sendAuftragsbestaetigung: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ orderId: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.workflow.sendAuftragsbestaetigung(input.orderId, ctx.user.email); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
   }),
 
   // Büro-Kalender (Terminmanagement): Termine/Urlaub/Abwesenheiten — eigene + geteilte.
@@ -1112,6 +1119,13 @@ export const appRouter = router({
       .input(z.object({ invoiceId: z.string().min(1) }))
       .query(async ({ input, ctx }) => {
         try { return await ctx.print.invoicePdf(input.invoiceId); }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
+      }),
+    // Laufzettel/Produktionszettel zum Auftrag (Workflow-Aktion LAUFZETTEL; ohne Preise → allRoles).
+    laufzettel: roleProcedure(...allRoles)
+      .input(z.object({ orderId: z.string().min(1) }))
+      .query(async ({ input, ctx }) => {
+        try { return await ctx.print.laufzettelPdf(input.orderId); }
         catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
       }),
   }),

@@ -18,7 +18,7 @@ export interface BelegSumme {
   value: string;
 }
 
-export type BelegTyp = "LIEFERSCHEIN" | "RECHNUNG";
+export type BelegTyp = "LIEFERSCHEIN" | "RECHNUNG" | "LAUFZETTEL";
 
 export interface BelegDokument {
   typ: BelegTyp;
@@ -67,6 +67,33 @@ export function lieferscheinDokument(input: LieferscheinInput): BelegDokument {
     positionen: input.positionen.map((p) => ({ menge: p.menge, bezeichnung: p.bezeichnung })),
     summen: [],
     hinweise: input.hinweise ?? ["Bitte prüfen Sie die Lieferung auf Vollständigkeit und Unversehrtheit."],
+    zeigePreise: false,
+  };
+}
+
+export interface LaufzettelInput {
+  nummer: string;
+  datum: Date;
+  kunde: string;
+  routeLabel?: string;
+  positionen: { menge: number; bezeichnung: string; kind?: "TEXTIL" | "VEREDELUNG" | "SONSTIGE" }[];
+  absender?: string[];
+}
+
+/** Laufzettel / Produktionszettel — interner Werkbeleg, OHNE Preise; Positionsart
+ *  (Textil/Veredelung) je Zeile vorangestellt. */
+export function laufzettelDokument(input: LaufzettelInput): BelegDokument {
+  const tag = (k?: string): string => (k === "VEREDELUNG" ? "[Veredelung] " : k === "SONSTIGE" ? "[Sonstiges] " : "[Textil] ");
+  return {
+    typ: "LAUFZETTEL",
+    titel: "Laufzettel / Produktionszettel",
+    nummer: input.nummer,
+    datum: formatDatum(input.datum),
+    absender: input.absender && input.absender.length > 0 ? input.absender : [...ABSENDER_TEXMA],
+    empfaenger: [`Kunde: ${input.kunde}`, ...(input.routeLabel ? [`Route: ${input.routeLabel}`] : [])],
+    positionen: input.positionen.map((p) => ({ menge: p.menge, bezeichnung: `${tag(p.kind)}${p.bezeichnung}` })),
+    summen: [],
+    hinweise: ["Interner Produktionsbeleg — Veredelung erst nach Druckfreigabe des Kunden.", "Qualitätskontrolle mit Bilddokumentation vor Kommissionierung."],
     zeigePreise: false,
   };
 }

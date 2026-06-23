@@ -2,7 +2,7 @@
 // Belegen. Die Datenform wird vom Repository geliefert; das reine Inhaltsmodell baut
 // @texma/shared, gerendert wird mit pdf-lib (beleg-pdf). Rückgabe = Dateiname + Base64.
 
-import { lieferscheinDokument, rechnungDokument } from "@texma/shared";
+import { laufzettelDokument, lieferscheinDokument, rechnungDokument, type PositionKind } from "@texma/shared";
 import { renderBelegPdf } from "../../pdf/beleg-pdf.js";
 
 export interface DeliveryNotePrintData {
@@ -22,9 +22,18 @@ export interface InvoicePrintData {
   grossCents: number;
 }
 
+export interface LaufzettelPrintData {
+  number: string;
+  createdAt: Date;
+  kunde: string;
+  routeLabel: string | null;
+  positionen: { menge: number; bezeichnung: string; kind: PositionKind }[];
+}
+
 export interface PrintRepository {
   deliveryNoteForPrint(id: string): Promise<DeliveryNotePrintData | null>;
   invoiceForPrint(id: string): Promise<InvoicePrintData | null>;
+  laufzettelForPrint(orderId: string): Promise<LaufzettelPrintData | null>;
   /** Konfigurierter Briefkopf (Admin-Portal); leer = Renderer-Default. */
   briefkopf(): Promise<string[]>;
 }
@@ -47,6 +56,17 @@ export class PrintService {
       nummer: d.number, datum: d.createdAt, empfaenger: d.empfaenger, positionen: d.positionen, absender,
     }));
     return { filename: `Lieferschein-${d.number}.pdf`, base64: Buffer.from(bytes).toString("base64") };
+  }
+
+  /** Laufzettel/Produktionszettel zum Auftrag (Workflow-Schritt LAUFZETTEL). */
+  async laufzettelPdf(orderId: string): Promise<PdfResult> {
+    const o = await this.repo.laufzettelForPrint(orderId);
+    if (!o) throw new PrintError(`Auftrag ${orderId} nicht gefunden.`);
+    const absender = await this.repo.briefkopf();
+    const bytes = await renderBelegPdf(laufzettelDokument({
+      nummer: o.number, datum: o.createdAt, kunde: o.kunde, routeLabel: o.routeLabel ?? undefined, positionen: o.positionen, absender,
+    }));
+    return { filename: `Laufzettel-${o.number}.pdf`, base64: Buffer.from(bytes).toString("base64") };
   }
 
   async invoicePdf(id: string): Promise<PdfResult> {

@@ -36,3 +36,17 @@ describe("PrintService (Druckerzeugnisse)", () => {
     await expect(new PrintService(new InMemoryPrintRepository()).deliveryNotePdf("nope")).rejects.toBeInstanceOf(PrintError);
   });
 });
+
+describe("PrintService.laufzettelPdf", () => {
+  it("erzeugt ein Laufzettel-PDF aus den Auftragspositionen", async () => {
+    const { InMemoryPrintRepository } = await import("../../repositories/in-memory-print.repository.js");
+    const repo = new InMemoryPrintRepository();
+    repo.laufzettel["ord-1"] = {
+      number: "AB-2026-0001", createdAt: new Date("2026-06-22"), kunde: "Muster GmbH", routeLabel: "Route 2 – interne Veredelung",
+      positionen: [{ menge: 100, bezeichnung: "Polo", kind: "TEXTIL" }, { menge: 100, bezeichnung: "Stick", kind: "VEREDELUNG" }],
+    };
+    const res = await new PrintService(repo).laufzettelPdf("ord-1");
+    expect(res.filename).toBe("Laufzettel-AB-2026-0001.pdf");
+    expect(Buffer.from(res.base64, "base64").subarray(0, 5).toString("latin1")).toBe("%PDF-");
+  });
+});
