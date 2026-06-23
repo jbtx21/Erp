@@ -40,3 +40,33 @@ describe("PostCalcService.compute (T-10)", () => {
     ).rejects.toThrow(/nicht gefunden/);
   });
 });
+
+describe("PostCalcService.computeForProduction (T-10, abgeleiteter Plan)", () => {
+  it("leitet Plan automatisch ab und stellt ihn dem Ist gegenüber", async () => {
+    const repo = new InMemoryPostCalcRepository({
+      pa: {
+        revenueCents: 100000, materialCents: 40000, laborMinutes: 600,
+        plan: { revenueCents: 100000, materialCents: 35000, laborMinutes: 500 },
+      },
+    });
+    const service = new PostCalcService(repo);
+    const res = await service.computeForProduction({ productionId: "pa", laborRateCentsPerMinute: 80 });
+    expect(res.plan.dbCents).toBe(25000); // 100000 − 35000 − 40000
+    expect(res.ist.dbCents).toBe(12000); // 100000 − 40000 − 48000
+    expect(res.dbVarianceCents).toBe(-13000);
+  });
+
+  it("überschreibt die Plan-Lohnminuten manuell (stückzahlabhängig)", async () => {
+    const repo = new InMemoryPostCalcRepository({
+      pa: { revenueCents: 100000, materialCents: 40000, laborMinutes: 600, plan: { revenueCents: 100000, materialCents: 35000, laborMinutes: 500 } },
+    });
+    const service = new PostCalcService(repo);
+    const res = await service.computeForProduction({ productionId: "pa", laborRateCentsPerMinute: 80, planLaborMinutes: 700 });
+    expect(res.plan.laborCents).toBe(56000); // 700 × 80
+  });
+
+  it("wirft für einen unbekannten PA", async () => {
+    const service = new PostCalcService(new InMemoryPostCalcRepository({}));
+    await expect(service.computeForProduction({ productionId: "x", laborRateCentsPerMinute: 80 })).rejects.toThrow(/nicht gefunden/);
+  });
+});

@@ -49,7 +49,8 @@ if (!dbConfigured) {
       await prisma.article.create({ data: { id: ART, sku: "ART-PC", name: "Shirt" } });
       await prisma.variant.create({ data: { id: VAR, articleId: ART, sku: "PC-1" } });
       await prisma.order.create({
-        data: { id: ORD, number: "AB-PC-1", companyId: CO, lines: { create: { position: 1, description: "Shirt", qty: 100, unitNetCents: 1000 } } },
+        // Plan-DB je Stück 600 (VK 1000 − EK 400) am Beleg gespeichert → Plan-Material ableitbar.
+        data: { id: ORD, number: "AB-PC-1", companyId: CO, lines: { create: { position: 1, description: "Shirt", qty: 100, unitNetCents: 1000, dbCents: 600 } } },
       });
       await prisma.productionOrder.create({ data: { id: PA, number: "PA-PC-1", orderId: ORD } });
       await prisma.purchaseOrder.create({
@@ -71,6 +72,14 @@ if (!dbConfigured) {
       // Ist: Umsatz 100×10€ = 1000 €, Material 100×4€ = 400 €, 600 min × 0,80 € = 480 € → DB 120 €.
       expect(res.ist).toMatchObject({ revenueCents: 100000, materialCents: 40000, laborCents: 48000, dbCents: 12000 });
       expect(res.dbVarianceCents).toBe(-13000);
+    });
+
+    it("leitet die Plan-Seite automatisch aus dem Beleg ab (Plan-Material = Umsatz − Plan-DB)", async () => {
+      // Plan-DB 100×600 = 600 €; Plan-Material = 1000 − 600 = 400 €. Plan-Lohn manuell 500 min.
+      const res = await service.computeForProduction({ productionId: PA, laborRateCentsPerMinute: 80, planLaborMinutes: 500 });
+      expect(res.plan).toMatchObject({ revenueCents: 100000, materialCents: 40000, laborCents: 40000, dbCents: 20000 });
+      expect(res.ist.dbCents).toBe(12000);
+      expect(res.dbVarianceCents).toBe(-8000);
     });
   });
 }

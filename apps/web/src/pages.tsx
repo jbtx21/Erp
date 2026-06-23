@@ -1726,12 +1726,63 @@ function ProductionCreateDialog({ orderId, onClose, onDone }: { orderId: string;
   );
 }
 
+// Nachkalkulation Soll-Ist (T-10): Plan-DB (aus dem Beleg abgeleitet) vs. Ist-DB
+// (Material + Lohn). Plan-Lohnminuten sind stückzahlabhängig und manuell überschreibbar.
+function NachkalkulationModal({ productionId, onClose }: { productionId: string; onClose: () => void }): JSX.Element {
+  const [eurPerHour, setEurPerHour] = useState<number>(45);
+  const [planMin, setPlanMin] = useState<number | "">("");
+  const [res, setRes] = useState<Awaited<ReturnType<typeof trpc.postcalc.computeForProduction.query>> | null>(null);
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
+
+  const run = async (): Promise<void> => {
+    setBusy(true); setErr(null);
+    try {
+      const rate = Math.round((eurPerHour * 100) / 60); // €/h → Cent/Minute
+      setRes(await trpc.postcalc.computeForProduction.query({ productionId, laborRateCentsPerMinute: rate, ...(planMin !== "" ? { planLaborMinutes: Number(planMin) } : {}) }));
+    } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+  useEffect(() => { void run(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const ampelColor: Record<string, string> = { GRUEN: "teal", GELB: "yellow", ROT: "red" };
+  const ampelLabel: Record<string, string> = { GRUEN: "im Plan", GELB: "knapp", ROT: "unter Plan" };
+  return (
+    <Modal opened onClose={onClose} title="Nachkalkulation (Soll-Ist)" size="lg">
+      {err && <Alert color="red" mb="sm">{err}</Alert>}
+      <Group gap="md" align="end" wrap="wrap">
+        <NumberInput label="Stundensatz (€/h)" value={eurPerHour} onChange={(v) => setEurPerHour(Number(v) || 0)} min={0} w={150} />
+        <NumberInput label="Plan-Lohnminuten (optional)" value={planMin} onChange={(v) => setPlanMin(typeof v === "number" ? v : "")} min={0} w={210} placeholder="aus Sollzeit abgeleitet" />
+        <Button onClick={() => void run()} loading={busy}>Neu berechnen</Button>
+      </Group>
+      {res && (
+        <>
+          <Group mt="lg" gap="xl">
+            <Box><Text size="xs" c="dimmed">Plan-DB</Text><Text fz={24} fw={700}>{euro(res.plan.dbCents)}</Text><Text size="xs" c="dimmed">Marge {(res.planMarginPct * 100).toFixed(0)} %</Text></Box>
+            <Box><Text size="xs" c="dimmed">Ist-DB</Text><Text fz={24} fw={700} c={res.dbVarianceCents < 0 ? "red" : "teal"}>{euro(res.ist.dbCents)}</Text><Text size="xs" c="dimmed">Marge {(res.istMarginPct * 100).toFixed(0)} %</Text></Box>
+            <Box><Text size="xs" c="dimmed">Abweichung</Text><Text fz={24} fw={700} c={res.dbVarianceCents < 0 ? "red" : "teal"}>{euro(res.dbVarianceCents)}</Text><Badge color={ampelColor[res.status] ?? "gray"} variant="light">{ampelLabel[res.status] ?? res.status}</Badge></Box>
+          </Group>
+          <Title order={6} mt="lg">Abweichungszerlegung</Title>
+          <Table mt="xs" withTableBorder verticalSpacing="xs" fz="sm" w="auto">
+            <Table.Tbody>
+              <Table.Tr><Table.Td>Material (Plan − Ist)</Table.Td><Table.Td ta="right" c={res.variance.materialVarianceCents < 0 ? "red" : "teal"}>{euro(res.variance.materialVarianceCents)}</Table.Td></Table.Tr>
+              <Table.Tr><Table.Td>Lohn-Menge (Zeit)</Table.Td><Table.Td ta="right" c={res.variance.laborQtyVarianceCents < 0 ? "red" : "teal"}>{euro(res.variance.laborQtyVarianceCents)}</Table.Td></Table.Tr>
+              <Table.Tr><Table.Td>Lohn-Satz</Table.Td><Table.Td ta="right" c={res.variance.laborRateVarianceCents < 0 ? "red" : "teal"}>{euro(res.variance.laborRateVarianceCents)}</Table.Td></Table.Tr>
+              <Table.Tr><Table.Td>Erlös (Ist − Plan)</Table.Td><Table.Td ta="right" c={res.variance.revenueVarianceCents < 0 ? "red" : "teal"}>{euro(res.variance.revenueVarianceCents)}</Table.Td></Table.Tr>
+            </Table.Tbody>
+          </Table>
+          <Text size="xs" c="dimmed" mt="xs">Plan-Material aus dem hinterlegten Plan-DB des Belegs; Plan-Lohn aus den Veredelungs-Sollzeiten (manuell überschreibbar, stückzahlabhängig).</Text>
+        </>
+      )}
+    </Modal>
+  );
+}
+
 // Belegkette/Connections (ERPNext-Muster): phasen-gruppierter Belegbaum eines Auftrags
 // + „Create"-Folgebeleg-Aktionen (Rechnung erzeugen / Storno per Gutschrift / Produktion).
 function ConnectionsPanel({ orderId, role, onChanged }: { orderId: string; role: string; onChanged: () => void }): JSX.Element {
   const [graph, setGraph] = useState<Awaited<ReturnType<typeof trpc.shopOrders.connections.query>> | null>(null);
   const [prod, setProd] = useState<Awaited<ReturnType<typeof trpc.production.status.query>> | null>(null);
   const [laufzettelFor, setLaufzettelFor] = useState<string | null>(null);
+  const [nachkalkFor, setNachkalkFor] = useState<string | null>(null);
   const [createProdOpen, setCreateProdOpen] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -1754,6 +1805,7 @@ function ConnectionsPanel({ orderId, role, onChanged }: { orderId: string; role:
   return (
     <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
       {laufzettelFor && <LaufzettelModal productionId={laufzettelFor} defaultKind={isExternalProfile(prod?.finishingProfile) ? "EXTERN" : "INTERN"} onClose={() => setLaufzettelFor(null)} />}
+      {nachkalkFor && <NachkalkulationModal productionId={nachkalkFor} onClose={() => setNachkalkFor(null)} />}
       {createProdOpen && <ProductionCreateDialog orderId={orderId} onClose={() => setCreateProdOpen(false)} onDone={(m) => { setCreateProdOpen(false); setMsg(m); setErr(null); void load(); onChanged(); }} />}
       <Group justify="space-between">
         <Text fw={600}>Belegkette {graph ? `· ${graph.anchor.label}` : ""}</Text>
@@ -1770,6 +1822,9 @@ function ConnectionsPanel({ orderId, role, onChanged }: { orderId: string; role:
           )}
           {prod?.productionId && (
             <Button size="compact-xs" variant="light" color="orange" onClick={() => setLaufzettelFor(prod.productionId)}>Laufzettel (PDF)</Button>
+          )}
+          {canFinance && prod?.productionId && (
+            <Button size="compact-xs" variant="light" color="grape" onClick={() => setNachkalkFor(prod.productionId)}>Nachkalkulation</Button>
           )}
           {canFinance && (
             <>

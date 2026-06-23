@@ -526,6 +526,17 @@ export const appRouter = router({
         })
       )
       .query(async ({ input, ctx }) => ctx.postcalc.compute(input)),
+    /** Soll-Ist mit automatisch abgeleiteter Plan-Seite (Plan-DB aus dem Auftrag, T-10). */
+    computeForProduction: roleProcedure(...supplierRoles)
+      .input(z.object({
+        productionId: z.string().min(1),
+        laborRateCentsPerMinute: z.number().int().nonnegative(),
+        planLaborMinutes: z.number().int().nonnegative().optional(),
+      }))
+      .query(async ({ input, ctx }) => {
+        try { return await ctx.postcalc.computeForProduction(input); }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
+      }),
   }),
 
   reklamation: router({
