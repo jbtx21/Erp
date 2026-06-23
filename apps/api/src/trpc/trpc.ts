@@ -57,6 +57,7 @@ import type { AutomationService } from "../modules/automation/automation.service
 import type { TaskService } from "../modules/task/task.service.js";
 import type { PreferencesService } from "../modules/preferences/preferences.service.js";
 import type { AuditQueryService } from "../modules/audit-log/audit-query.service.js";
+import type { EanImportService } from "../modules/ean-import/ean-import.service.js";
 import type {
   BankingQueryRepository,
   DunningQueryRepository,
@@ -129,6 +130,7 @@ export interface Context {
   tasks: TaskService;
   preferences: PreferencesService;
   auditLog: AuditQueryService;
+  eanImport: EanImportService;
   auth: AuthService;
   user: AuthUser | null;
   /** Roh-Token aus dem Cookie (für den 2FA-Zwischenschritt/Logout, wenn user noch null ist). */

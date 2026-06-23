@@ -1529,6 +1529,31 @@ export const appRouter = router({
       })),
   }),
 
+  // EAN-Listen-Import (B18): Massenimport Artikelstammdaten mit automatischem EAN/SKU-Abgleich.
+  // Stammdaten/Preise → kein PRODUKTION-Zugriff (Kap. 12). Vorschau (read-only) + Anwenden.
+  eanImport: router({
+    preview: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ csv: z.string() }))
+      .mutation(({ input, ctx }) => ctx.eanImport.preview(input.csv)),
+    run: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({
+        csv: z.string(),
+        options: z.object({
+          createUnmatched: z.boolean(),
+          updatePim: z.boolean(),
+          updateGtinWeight: z.boolean(),
+          ek: z.object({ supplierId: z.string().min(1) }).optional(),
+          vk: z.object({
+            groups: z.array(z.object({
+              kind: z.enum(["STANDARD", "TOP", "PREMIUM", "WIEDERVERKAEUFER", "AGENTUR"]),
+              factor: z.number().positive(),
+            })).min(1),
+          }).optional(),
+        }),
+      }))
+      .mutation(({ input, ctx }) => ctx.eanImport.apply(input.csv, input.options)),
+  }),
+
   // Regel-Engine (Event → Bedingung → Aktion). Konfiguration nur Admin.
   automation: router({
     meta: roleProcedure("ADMIN").query(({ ctx }) => ({ triggers: ctx.automation.knownTriggers(), actions: ctx.automation.knownActions() })),

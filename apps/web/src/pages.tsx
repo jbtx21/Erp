@@ -2042,6 +2042,130 @@ export function DataIoPage(): JSX.Element {
   );
 }
 
+// EAN-Listen-Import (B18): Massenimport Artikelstammdaten mit automatischem Abgleich
+// (EAN, sonst SKU). Vorschau zeigt Treffer/Nicht-Treffer; Optionen steuern, was geschrieben
+// wird (Anlegen, PIM, EK/Lieferant, VK je Preisgruppe über Aufschlag).
+const EAN_PRICE_GROUPS = ["STANDARD", "TOP", "PREMIUM", "WIEDERVERKAEUFER", "AGENTUR"] as const;
+const EAN_MATCH_COLOR: Record<string, string> = { EAN: "green", SKU: "blue", NONE: "gray" };
+export function EanImportPage(): JSX.Element {
+  const [csv, setCsv] = useState("");
+  const [plan, setPlan] = useState<Awaited<ReturnType<typeof trpc.eanImport.preview.mutate>> | null>(null);
+  const [summary, setSummary] = useState<Awaited<ReturnType<typeof trpc.eanImport.run.mutate>> | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  // Optionen
+  const [createUnmatched, setCreateUnmatched] = useState(false);
+  const [updatePim, setUpdatePim] = useState(true);
+  const [updateGtinWeight, setUpdateGtinWeight] = useState(true);
+  const [ekSupplier, setEkSupplier] = useState("");
+  const [vk, setVk] = useState<Record<string, { on: boolean; factor: number }>>({
+    STANDARD: { on: false, factor: 1.88 }, TOP: { on: false, factor: 1.7 }, PREMIUM: { on: false, factor: 2.1 },
+    WIEDERVERKAEUFER: { on: false, factor: 1.5 }, AGENTUR: { on: false, factor: 1.4 },
+  });
+
+  const buildOptions = () => {
+    const groups = EAN_PRICE_GROUPS.filter((k) => vk[k]?.on).map((k) => ({ kind: k, factor: vk[k]!.factor }));
+    return {
+      createUnmatched, updatePim, updateGtinWeight,
+      ...(ekSupplier ? { ek: { supplierId: ekSupplier } } : {}),
+      ...(groups.length > 0 ? { vk: { groups } } : {}),
+    };
+  };
+
+  const doPreview = async (): Promise<void> => {
+    setErr(null); setSummary(null); setBusy(true);
+    try { setPlan(await trpc.eanImport.preview.mutate({ csv })); } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+  const doRun = async (): Promise<void> => {
+    setErr(null); setBusy(true);
+    try { setSummary(await trpc.eanImport.run.mutate({ csv, options: buildOptions() })); await doPreview(); }
+    catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+
+  const c = plan?.counts;
+  return (
+    <>
+      <Title order={3}>EAN-Listen-Import</Title>
+      <Text size="sm" c="dimmed" mt={4}>Massenimport von Artikelstammdaten mit automatischem Abgleich gegen den Bestand — primär per EAN/GTIN (Prüfziffer wird validiert), ersatzweise per Artikelnummer. Erst Vorschau, dann gezielt anwenden. Spalten: <b>EAN</b> (Pflicht), Artikelnummer, Bezeichnung, Marke, Material, Pflegehinweis, Zolltarifnummer, Ursprungsland, Gewicht (g), EK (EUR).</Text>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+
+      <Group gap="sm" mt="md">
+        <input type="file" accept=".csv,text/csv" onChange={(e) => {
+          const f = e.currentTarget.files?.[0]; if (!f) return;
+          const reader = new FileReader();
+          reader.onload = () => setCsv(String(reader.result ?? ""));
+          reader.readAsText(f);
+        }} />
+      </Group>
+      <Textarea label="…oder CSV einfügen" autosize minRows={4} maxRows={12} mt="xs" value={csv} onChange={(e) => setCsv(e.currentTarget.value)}
+        placeholder="EAN;Artikelnummer;Bezeichnung;Marke;EK (EUR)&#10;4006381333931;POLO-001;Poloshirt;TEXMA;4,50" />
+      <Button mt="sm" disabled={!csv.trim() || busy} onClick={() => void doPreview()}>Vorschau / Abgleich</Button>
+
+      {c && (
+        <>
+          <Group mt="md" gap="xs">
+            <Badge color="green" variant="light">EAN-Treffer: {c.matchedEan}</Badge>
+            <Badge color="blue" variant="light">SKU-Treffer: {c.matchedSku}</Badge>
+            <Badge color="gray" variant="light">Nicht-Treffer: {c.unmatched}</Badge>
+            <Badge color={c.invalidGtin ? "orange" : "gray"} variant="light">Ungültige EAN: {c.invalidGtin}</Badge>
+            <Badge variant="outline">Zeilen gesamt: {c.total}</Badge>
+          </Group>
+
+          <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, maxWidth: 720 }}>
+            <Text fw={600} mb={6}>Was soll geschrieben werden?</Text>
+            <Checkbox label="Stammdaten/PIM aus der Liste aktualisieren" checked={updatePim} onChange={(e) => setUpdatePim(e.currentTarget.checked)} mb={6} />
+            <Checkbox label="EAN + Gewicht auf der Variante setzen (ergänzt fehlende EAN)" checked={updateGtinWeight} onChange={(e) => setUpdateGtinWeight(e.currentTarget.checked)} mb={6} />
+            <Checkbox label={`Nicht-Treffer als neuen Artikel + Variante anlegen (${c.unmatched})`} checked={createUnmatched} onChange={(e) => setCreateUnmatched(e.currentTarget.checked)} mb={10} />
+            <Group align="end" gap="xs" mb={10}>
+              <SupplierPicker label="EK + Lieferant aus Liste (optional)" value={ekSupplier} onChange={setEkSupplier} w={260} />
+              {ekSupplier && <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setEkSupplier("")}>EK abwählen</Button>}
+            </Group>
+            <Text fw={600} mt={6} mb={4}>VK-Preise aus EK über Aufschlag generieren</Text>
+            <Text size="xs" c="dimmed" mb={6}>Gewählte Preisgruppen werden bei Bedarf angelegt. VK = EK × Aufschlag.</Text>
+            {EAN_PRICE_GROUPS.map((k) => (
+              <Group key={k} gap="xs" mb={4}>
+                <Checkbox label={k} checked={vk[k]?.on ?? false} w={200}
+                  onChange={(e) => setVk((s) => ({ ...s, [k]: { on: e.currentTarget.checked, factor: s[k]?.factor ?? 1.88 } }))} />
+                <NumberInput size="xs" w={120} step={0.01} min={0.1} decimalScale={2} disabled={!vk[k]?.on}
+                  value={vk[k]?.factor ?? 1.88} onChange={(v) => setVk((s) => ({ ...s, [k]: { on: s[k]?.on ?? false, factor: Number(v) || 1 } }))} />
+                <Text size="xs" c="dimmed">× Aufschlag</Text>
+              </Group>
+            ))}
+            <Button mt="md" color="navy" disabled={busy} onClick={() => void doRun()}>Importieren / Anwenden</Button>
+          </Box>
+
+          {summary && (
+            <Alert color={summary.errors.length > 0 ? "yellow" : "green"} mt="md" title="Import-Ergebnis">
+              <Text size="sm">Aktualisiert: {summary.matchedUpdated} · Neu angelegt: {summary.created} · Übersprungen: {summary.skipped} · PIM: {summary.pimUpdated} · EK: {summary.ekUpdated} · VK-Preise: {summary.pricesWritten} · Fehler: {summary.errors.length}</Text>
+              {summary.errors.slice(0, 10).map((e, i) => <Text key={i} size="xs" c="dimmed">Zeile {e.row}: {e.message}</Text>)}
+            </Alert>
+          )}
+
+          <Title order={5} mt="lg">Abgleich-Vorschau ({plan.rows.length})</Title>
+          <Table mt="xs" striped withTableBorder>
+            <Table.Thead><Table.Tr>
+              <Table.Th>EAN</Table.Th><Table.Th>Artikelnr.</Table.Th><Table.Th>Bezeichnung</Table.Th>
+              <Table.Th>Abgleich</Table.Th><Table.Th>Treffer</Table.Th><Table.Th ta="right">EK</Table.Th>
+            </Table.Tr></Table.Thead>
+            <Table.Tbody>
+              {plan.rows.slice(0, 200).map((r) => (
+                <Table.Tr key={r.line}>
+                  <Table.Td><Text size="xs" ff="monospace" c={r.gtinValid ? undefined : "orange"}>{r.gtin}{r.gtinValid ? "" : " ⚠"}</Text></Table.Td>
+                  <Table.Td>{r.sku}</Table.Td>
+                  <Table.Td>{r.fields.name}</Table.Td>
+                  <Table.Td><Badge size="xs" variant="light" color={EAN_MATCH_COLOR[r.match]}>{r.match === "NONE" ? "neu" : r.match}</Badge></Table.Td>
+                  <Table.Td><Text size="xs" c="dimmed">{r.matchLabel ?? "—"}</Text></Table.Td>
+                  <Table.Td ta="right">{r.fields.ekCents != null ? `${(r.fields.ekCents / 100).toFixed(2)} €` : "—"}</Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </>
+      )}
+    </>
+  );
+}
+
 // Newsletter (Brevo): Kampagnen anlegen + an Opt-in-Kontakte versenden (DSGVO).
 export function NewsletterPage(): JSX.Element {
   const [list, setList] = useState<Row[]>([]);

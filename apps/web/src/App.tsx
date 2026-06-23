@@ -9,7 +9,7 @@ import { Differentiators } from "./Differentiators.js";
 import { Banking } from "./Banking.js";
 import {
   CompaniesPage, CostCentersPage, DunningPage, InquiriesPage, IncomingInvoicesPage, LeadsPage, OrdersPage, ProcurementPage, ProductionReportingPage,
-  ProductsPage, PricingPage, EmailTemplatesPage, DashboardsPage, DataIoPage, NewsletterPage, OpportunitiesPage, CalendarPage, MessagesPage, AdminPage, ArchivePage, AuditLogPage, AutomationPage, TasksPage, HomePage, LagerPage, HrPage, IntegrationsPage, SecurityPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
+  ProductsPage, PricingPage, EmailTemplatesPage, DashboardsPage, DataIoPage, EanImportPage, NewsletterPage, OpportunitiesPage, CalendarPage, MessagesPage, AdminPage, ArchivePage, AuditLogPage, AutomationPage, TasksPage, HomePage, LagerPage, HrPage, IntegrationsPage, SecurityPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
 } from "./pages.js";
 import { trpc } from "./trpc.js";
 
@@ -23,7 +23,7 @@ const NAV: ReadonlyArray<{ group: string; items: ReadonlyArray<{ key: string; la
     { key: "procurement", label: "Beschaffung" }, { key: "reorder", label: "Nachbestellung" },
     { key: "samples", label: "Muster-Leihgut" }, { key: "lager", label: "Lager & Inventur" },
   ] },
-  { group: "Stammdaten", items: [{ key: "products", label: "Artikel/Varianten" }, { key: "pricing", label: "Preise/Staffel" }] },
+  { group: "Stammdaten", items: [{ key: "products", label: "Artikel/Varianten" }, { key: "pricing", label: "Preise/Staffel" }, { key: "eanimport", label: "EAN-Listen-Import" }] },
   { group: "Produktion", items: [{ key: "differentiators", label: "Differenzierer" }, { key: "subproduction", label: "Fremdvergabe" }, { key: "prodreport", label: "Produktions-Reporting" }] },
   { group: "Logistik & Finanzen", items: [
     { key: "shipments", label: "Versand" }, { key: "dunning", label: "Mahnwesen" },
@@ -261,6 +261,7 @@ function Page({ k, role, userName, onNavigate, focusId }: { k: string; role: str
     case "pricing": return <PricingPage />;
     case "emailtemplates": return <EmailTemplatesPage />;
     case "dataio": return <DataIoPage />;
+    case "eanimport": return <EanImportPage />;
     case "newsletter": return <NewsletterPage />;
     case "opportunities": return <OpportunitiesPage />;
     case "calendar": return <CalendarPage />;

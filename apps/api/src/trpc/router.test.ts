@@ -90,6 +90,8 @@ import { PreferencesService } from "../modules/preferences/preferences.service.j
 import { InMemoryUserPreferenceRepository } from "../repositories/in-memory-user-preference.repository.js";
 import { AuditQueryService } from "../modules/audit-log/audit-query.service.js";
 import { InMemoryAuditLogRepository } from "../repositories/in-memory-audit-log.repository.js";
+import { EanImportService } from "../modules/ean-import/ean-import.service.js";
+import { InMemoryEanImportRepository } from "../repositories/in-memory-ean-import.repository.js";
 import { DeliveryService } from "../modules/delivery/delivery.service.js";
 import { InMemoryDeliveryRepository } from "../repositories/in-memory-delivery.repository.js";
 import { NumberingService } from "../modules/numbering/numbering.service.js";
@@ -334,6 +336,7 @@ function setup(user: AuthUser | null = BUERO) {
     tasks: new TaskService(new InMemoryTaskRepository(), new MemoryAuditSink()),
     preferences: new PreferencesService(new InMemoryUserPreferenceRepository()),
     auditLog: new AuditQueryService(new InMemoryAuditLogRepository()),
+    eanImport: new EanImportService(new InMemoryEanImportRepository(), new MemoryAuditSink()),
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -455,6 +458,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       tasks: {} as Context["tasks"],
       preferences: {} as Context["preferences"],
       auditLog: {} as Context["auditLog"],
+      eanImport: {} as Context["eanImport"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",
@@ -1102,5 +1106,20 @@ describe("tRPC auditLog — GoBD-Protokoll nur für Admin", () => {
   it("PRODUKTION darf das Protokoll nicht lesen (FORBIDDEN)", async () => {
     const { caller } = setup(PRODUKTION);
     await expect(caller.auditLog.list()).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+describe("tRPC eanImport — Massenimport mit EAN-Abgleich", () => {
+  const csv = ["EAN;Artikelnummer;Bezeichnung", "4006381333931;POLO-1;Polo"].join("\n");
+
+  it("BUERO erhält eine Abgleich-Vorschau", async () => {
+    const { caller } = setup(BUERO);
+    const plan = await caller.eanImport.preview({ csv });
+    expect(plan.counts.total).toBe(1);
+  });
+
+  it("PRODUKTION darf nicht importieren (FORBIDDEN)", async () => {
+    const { caller } = setup(PRODUKTION);
+    await expect(caller.eanImport.preview({ csv })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });

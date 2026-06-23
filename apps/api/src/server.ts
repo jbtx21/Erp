@@ -132,6 +132,8 @@ import { PreferencesService } from "./modules/preferences/preferences.service.js
 import { PrismaUserPreferenceRepository } from "./repositories/prisma-user-preference.repository.js";
 import { AuditQueryService } from "./modules/audit-log/audit-query.service.js";
 import { PrismaAuditLogRepository } from "./repositories/prisma-audit-log.repository.js";
+import { EanImportService } from "./modules/ean-import/ean-import.service.js";
+import { PrismaEanImportRepository } from "./repositories/prisma-ean-import.repository.js";
 import { PrismaIntegrationsRepository } from "./repositories/prisma-integrations.repository.js";
 import { HttpSlackSender } from "./modules/integrations/slack-provider.js";
 import { appRouter } from "./trpc/router.js";
@@ -268,6 +270,8 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const preferences = new PreferencesService(new PrismaUserPreferenceRepository());
   // Audit-Log-Viewer (GoBD): read-only Abfrage des append-only AuditLog.
   const auditLog = new AuditQueryService(new PrismaAuditLogRepository());
+  // EAN-Listen-Import (B18): Massenimport Artikelstammdaten mit automatischem EAN-Abgleich.
+  const eanImport = new EanImportService(new PrismaEanImportRepository(), new PrismaAuditSink());
   // Regel-Engine: Aktions-Handler bündeln vorhandene Seiteneffekte (In-App, Mail, Aufgabe).
   // Weitere Handler (Slack o. Ä.) lassen sich hier ohne Engine-Änderung ergänzen.
   const automationHandlers: Record<string, ActionHandler> = {
@@ -426,6 +430,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           tasks,
           preferences,
           auditLog,
+          eanImport,
           auth,
           user,
           sessionToken,
