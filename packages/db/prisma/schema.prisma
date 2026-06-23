@@ -1626,6 +1626,26 @@ model PasswordResetToken {
   @@index([userId])
 }
 
+// Aufgabe/Zuweisung (ERPNext „Assigned To/ToDo"): Beleg/Vorgang einer Person zuweisen,
+// persönliche Arbeitsliste. Optional an einen Beleg gekoppelt (entity/entityId + navKey).
+model Task {
+  id            String    @id @default(cuid())
+  title         String
+  description   String?
+  entity        String? // verknüpfter Beleg, z. B. "Order"
+  entityId      String?
+  navKey        String? // UI-Sprungziel
+  assigneeEmail String
+  createdBy     String?
+  status        String    @default("OFFEN") // OFFEN | ERLEDIGT
+  dueDate       DateTime?
+  createdAt     DateTime  @default(now())
+  completedAt   DateTime?
+
+  @@index([assigneeEmail, status])
+  @@index([entity, entityId])
+}
+
 // Automations-/Regel-Engine (Event → Bedingung → Aktion): im Admin-Portal konfigurierbar,
 // läuft auf dem vorhandenen Event-Backbone. conditionsJson/actionsJson tragen die
 // deklarative Regel (siehe @texma/shared automation.ts).

@@ -84,6 +84,8 @@ import { ContactLinkService } from "../modules/contact/contact-link.service.js";
 import { InMemoryContactLinkRepository } from "../repositories/in-memory-contact-link.repository.js";
 import { AutomationService } from "../modules/automation/automation.service.js";
 import { InMemoryAutomationRepository } from "../repositories/in-memory-automation.repository.js";
+import { TaskService } from "../modules/task/task.service.js";
+import { InMemoryTaskRepository } from "../repositories/in-memory-task.repository.js";
 import { DeliveryService } from "../modules/delivery/delivery.service.js";
 import { InMemoryDeliveryRepository } from "../repositories/in-memory-delivery.repository.js";
 import { NumberingService } from "../modules/numbering/numbering.service.js";
@@ -325,6 +327,7 @@ function setup(user: AuthUser | null = BUERO) {
     connections: new ConnectionsService(new InMemoryConnectionsRepository({})),
     contactLinks: new ContactLinkService(new InMemoryContactLinkRepository([]), new MemoryAuditSink()),
     automation: new AutomationService(new InMemoryAutomationRepository(), { notify: async () => undefined }, new MemoryAuditSink()),
+    tasks: new TaskService(new InMemoryTaskRepository(), new MemoryAuditSink()),
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -443,6 +446,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       connections: {} as Context["connections"],
       contactLinks: {} as Context["contactLinks"],
       automation: {} as Context["automation"],
+      tasks: {} as Context["tasks"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",
@@ -1046,5 +1050,29 @@ describe("tRPC invoices — Order → Invoice Make-Target", () => {
   it("unbekannter Auftrag → BAD_REQUEST", async () => {
     const { caller } = setup();
     await expect(caller.invoices.createFromOrder({ orderId: "nope" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+});
+
+describe("tRPC tasks — Aufgaben/Zuweisung", () => {
+  it("BUERO legt eine Aufgabe an und findet sie in der eigenen Arbeitsliste", async () => {
+    const { caller } = setup(); // BUERO = b@texma.de
+    await caller.tasks.create({ title: "Druckdaten prüfen", assigneeEmail: "b@texma.de", entity: "Order", entityId: "o1", navKey: "orders" });
+    const mine = await caller.tasks.mine();
+    expect(mine).toHaveLength(1);
+    expect(mine[0]).toMatchObject({ title: "Druckdaten prüfen", status: "OFFEN" });
+    expect(await caller.tasks.openCount()).toBe(1);
+  });
+
+  it("Erledigen nimmt die Aufgabe aus der offenen Liste", async () => {
+    const { caller } = setup();
+    const t = await caller.tasks.create({ title: "x", assigneeEmail: "b@texma.de" });
+    await caller.tasks.complete({ id: t.id });
+    expect(await caller.tasks.mine()).toHaveLength(0);
+    expect(await caller.tasks.openCount()).toBe(0);
+  });
+
+  it("erfordert eine Anmeldung (UNAUTHORIZED)", async () => {
+    const { caller } = setup(null);
+    await expect(caller.tasks.mine()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
   });
 });

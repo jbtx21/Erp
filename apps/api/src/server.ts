@@ -126,6 +126,8 @@ import { ContactLinkService } from "./modules/contact/contact-link.service.js";
 import { PrismaContactLinkRepository } from "./repositories/prisma-contact-link.repository.js";
 import { AutomationService, type ActionHandler } from "./modules/automation/automation.service.js";
 import { PrismaAutomationRepository } from "./repositories/prisma-automation.repository.js";
+import { TaskService } from "./modules/task/task.service.js";
+import { PrismaTaskRepository } from "./repositories/prisma-task.repository.js";
 import { PrismaIntegrationsRepository } from "./repositories/prisma-integrations.repository.js";
 import { HttpSlackSender } from "./modules/integrations/slack-provider.js";
 import { appRouter } from "./trpc/router.js";
@@ -256,11 +258,14 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const connections = new ConnectionsService(new PrismaConnectionsRepository());
   // Contact-Dynamic-Link (CRM): Person ↔ mehrere Parteien (Company/Lead/Supplier).
   const contactLinks = new ContactLinkService(new PrismaContactLinkRepository(), new PrismaAuditSink());
-  // Regel-Engine: Aktions-Handler bündeln vorhandene Seiteneffekte (In-App, Mail).
+  // Aufgaben/Zuweisung (Assigned To/ToDo): persönliche Arbeitsliste.
+  const tasks = new TaskService(new PrismaTaskRepository(), new PrismaAuditSink());
+  // Regel-Engine: Aktions-Handler bündeln vorhandene Seiteneffekte (In-App, Mail, Aufgabe).
   // Weitere Handler (Slack o. Ä.) lassen sich hier ohne Engine-Änderung ergänzen.
   const automationHandlers: Record<string, ActionHandler> = {
     notify: async (p) => { await notifications.notify(p.to ?? "", p.title ?? "Automation", p.body ?? "", p.navKey ?? "dashboard"); },
     email: async (p) => { await mailSend.send({ to: p.to ?? "", subject: p.subject ?? p.title ?? "TEXMA ERP", body: p.body ?? "" }); },
+    task: async (p) => { await tasks.create({ title: p.title ?? "Aufgabe", description: p.body ?? null, assigneeEmail: p.to ?? "", entity: p.entity ?? null, entityId: p.entityId ?? null, navKey: p.navKey ?? null }); },
   };
   const automation = new AutomationService(new PrismaAutomationRepository(), automationHandlers, new PrismaAuditSink());
   const auth = new AuthService(
@@ -410,6 +415,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           connections,
           contactLinks,
           automation,
+          tasks,
           auth,
           user,
           sessionToken,

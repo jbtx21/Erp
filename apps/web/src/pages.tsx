@@ -1027,6 +1027,7 @@ export function OrdersPage({ role }: { role: string }): JSX.Element {
             </>
           )}
           {termOrder && <ConnectionsPanel orderId={termOrder} role={role} onChanged={() => void load()} />}
+          {termOrder && <AssignTaskBox entity="Order" entityId={termOrder} navKey="orders" />}
           {termOrder && <WorkflowPanel orderId={termOrder} />}
           {termOrder && <LinksPanel orderId={termOrder} />}
           {termOrder && <DeliveryPanel orderId={termOrder} onChanged={() => void load()} />}
@@ -2714,5 +2715,72 @@ export function AutomationPage(): JSX.Element {
         </Table.Tbody>
       </Table>
     </>
+  );
+}
+
+// Meine Aufgaben (Arbeitsliste, ERPNext „Assigned To/ToDo"): offene Aufgaben der
+// angemeldeten Person, Erledigen/Neuzuweisen, Sprung zum verknüpften Beleg.
+export function TasksPage({ onNavigate }: { onNavigate?: (k: string) => void } = {}): JSX.Element {
+  const [tasks, setTasks] = useState<Awaited<ReturnType<typeof trpc.tasks.mine.query>>>([]);
+  const [showDone, setShowDone] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    try { setTasks(await trpc.tasks.mine.query({ includeDone: showDone })); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
+  }, [showDone]);
+  useEffect(() => { void load(); }, [load]);
+
+  return (
+    <>
+      <Title order={3}>Meine Aufgaben</Title>
+      <Text size="sm" c="dimmed" mt={4}>Persönliche Arbeitsliste — zugewiesene Vorgänge, optional an einen Beleg gekoppelt.</Text>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      <Switch mt="sm" label="Erledigte anzeigen" checked={showDone} onChange={(e) => setShowDone(e.currentTarget.checked)} />
+      <Table mt="xs" striped withTableBorder>
+        <Table.Thead><Table.Tr>
+          <Table.Th>Status</Table.Th><Table.Th>Titel</Table.Th><Table.Th>Beleg</Table.Th><Table.Th>Fällig</Table.Th><Table.Th></Table.Th>
+        </Table.Tr></Table.Thead>
+        <Table.Tbody>
+          {tasks.map((t) => (
+            <Table.Tr key={t.id}>
+              <Table.Td><Badge size="xs" color={t.status === "ERLEDIGT" ? "gray" : "blue"} variant="light">{t.status}</Badge></Table.Td>
+              <Table.Td>{t.title}{t.description ? <Text size="xs" c="dimmed">{t.description}</Text> : null}</Table.Td>
+              <Table.Td>{t.entity ? <Button size="compact-xs" variant="subtle" disabled={!t.navKey || !onNavigate} onClick={() => t.navKey && onNavigate?.(t.navKey)}>{t.entity} {t.entityId?.slice(0, 8)}</Button> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
+              <Table.Td><Text size="xs" c="dimmed">{t.dueDate ? new Date(t.dueDate).toLocaleDateString("de-DE") : "—"}</Text></Table.Td>
+              <Table.Td>
+                {t.status === "OFFEN"
+                  ? <Button size="compact-xs" onClick={async () => { await trpc.tasks.complete.mutate({ id: t.id }); await load(); }}>Erledigt</Button>
+                  : <Button size="compact-xs" variant="subtle" onClick={async () => { await trpc.tasks.reopen.mutate({ id: t.id }); await load(); }}>Wieder öffnen</Button>}
+              </Table.Td>
+            </Table.Tr>
+          ))}
+          {tasks.length === 0 && <Table.Tr><Table.Td colSpan={5}><Text size="sm" c="dimmed">Keine Aufgaben.</Text></Table.Td></Table.Tr>}
+        </Table.Tbody>
+      </Table>
+    </>
+  );
+}
+
+// Aufgabe zu einem Beleg zuweisen (inline, z. B. auf der Auftragsseite).
+export function AssignTaskBox({ entity, entityId, navKey }: { entity: string; entityId: string; navKey?: string }): JSX.Element {
+  const [title, setTitle] = useState("");
+  const [to, setTo] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  return (
+    <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+      <Text fw={600}>Aufgabe zuweisen</Text>
+      {err && <Alert color="red" mt="xs">{err}</Alert>}
+      {msg && <Alert color="green" mt="xs">{msg}</Alert>}
+      <Group gap="xs" align="end" mt="xs">
+        <TextInput label="Aufgabe" value={title} onChange={(e) => setTitle(e.currentTarget.value)} w={260} placeholder="z. B. Druckdaten prüfen" />
+        <TextInput label="An (E-Mail)" value={to} onChange={(e) => setTo(e.currentTarget.value)} w={220} placeholder="kollege@texma-gmbh.de" />
+        <Button disabled={!title.trim() || !to.trim()} onClick={async () => {
+          setErr(null); setMsg(null);
+          try { await trpc.tasks.create.mutate({ title, assigneeEmail: to, entity, entityId, navKey }); setMsg("Aufgabe zugewiesen."); setTitle(""); }
+          catch (e) { setErr(errMsg(e)); }
+        }}>Zuweisen</Button>
+      </Group>
+    </Box>
   );
 }

@@ -9,14 +9,14 @@ import { Differentiators } from "./Differentiators.js";
 import { Banking } from "./Banking.js";
 import {
   CompaniesPage, CostCentersPage, DunningPage, InquiriesPage, IncomingInvoicesPage, LeadsPage, OrdersPage, ProcurementPage, ProductionReportingPage,
-  ProductsPage, PricingPage, EmailTemplatesPage, DashboardsPage, DataIoPage, NewsletterPage, OpportunitiesPage, CalendarPage, MessagesPage, AdminPage, ArchivePage, AutomationPage, LagerPage, HrPage, IntegrationsPage, SecurityPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
+  ProductsPage, PricingPage, EmailTemplatesPage, DashboardsPage, DataIoPage, NewsletterPage, OpportunitiesPage, CalendarPage, MessagesPage, AdminPage, ArchivePage, AutomationPage, TasksPage, LagerPage, HrPage, IntegrationsPage, SecurityPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
 } from "./pages.js";
 import { trpc } from "./trpc.js";
 
 interface AuthUser { id: string; email: string; name: string; role: string; totpEnabled: boolean; }
 
 const NAV: ReadonlyArray<{ group: string; items: ReadonlyArray<{ key: string; label: string }> }> = [
-  { group: "Übersicht", items: [{ key: "dashboard", label: "Dashboard" }, { key: "dashboards", label: "Dashboards (G-7)" }, { key: "calendar", label: "Kalender" }, { key: "messages", label: "Nachrichten" }, { key: "security", label: "Mein Konto (2FA)" }] },
+  { group: "Übersicht", items: [{ key: "dashboard", label: "Dashboard" }, { key: "dashboards", label: "Dashboards (G-7)" }, { key: "calendar", label: "Kalender" }, { key: "tasks", label: "Meine Aufgaben" }, { key: "messages", label: "Nachrichten" }, { key: "security", label: "Mein Konto (2FA)" }] },
   { group: "Vertrieb", items: [{ key: "companies", label: "Firmen/Kunden" }, { key: "leads", label: "Leads" }, { key: "opportunities", label: "Verkaufschancen" }, { key: "inquiries", label: "Anfragen" }, { key: "quotes", label: "Angebote" }, { key: "orders", label: "Aufträge" }, { key: "reklamation", label: "Reklamation" }] },
   { group: "Beschaffung", items: [
     { key: "suppliers", label: "Lieferanten" }, { key: "incoming", label: "Eingangsrechnungen" },
@@ -123,6 +123,20 @@ function NotificationBell({ onNavigate }: { onNavigate: (k: string) => void }): 
   );
 }
 
+// Aufgaben-Badge im Header: zeigt die Zahl offener eigener Aufgaben, öffnet die Arbeitsliste.
+function TaskBadge({ onOpen }: { onOpen: () => void }): JSX.Element {
+  const [count, setCount] = useState(0);
+  const refresh = useCallback(async () => {
+    try { setCount(await trpc.tasks.openCount.query()); } catch { /* ignore */ }
+  }, []);
+  useEffect(() => { void refresh(); const t = setInterval(() => void refresh(), 30000); return () => clearInterval(t); }, [refresh]);
+  return (
+    <Button variant="subtle" size="xs" color="navy" onClick={onOpen}>
+      ✓ Aufgaben {count > 0 ? <Badge size="xs" color="blue" ml={4}>{count}</Badge> : null}
+    </Button>
+  );
+}
+
 function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<void> }): JSX.Element {
   const [active, setActiveState] = useState<string>(hashKey);
   const setActive = useCallback((k: string) => {
@@ -146,6 +160,7 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<voi
           </Group>
           <GlobalSearch onNavigate={setActive} />
           <Group gap="sm">
+            <TaskBadge onOpen={() => setActive("tasks")} />
             <NotificationBell onNavigate={setActive} />
             <Text size="sm" c="dimmed">{user.name} · {user.role}</Text>
             <Button variant="default" size="xs" onClick={() => void onLogout()}>Abmelden</Button>
@@ -168,13 +183,13 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<voi
       </AppShell.Navbar>
 
       <AppShell.Main>
-        <Page k={active} role={user.role} userName={user.name} />
+        <Page k={active} role={user.role} userName={user.name} onNavigate={setActive} />
       </AppShell.Main>
     </AppShell>
   );
 }
 
-function Page({ k, role, userName }: { k: string; role: string; userName: string }): ReactNode {
+function Page({ k, role, userName, onNavigate }: { k: string; role: string; userName: string; onNavigate: (k: string) => void }): ReactNode {
   switch (k) {
     case "dashboard": return <Dashboard />;
     case "dashboards": return <DashboardsPage />;
@@ -201,6 +216,7 @@ function Page({ k, role, userName }: { k: string; role: string; userName: string
     case "archive": return <ArchivePage role={role} />;
     case "automation": return <AutomationPage />;
     case "security": return <SecurityPage userName={userName} onProfileUpdated={() => { if (typeof location !== "undefined") location.reload(); }} />;
+    case "tasks": return <TasksPage onNavigate={onNavigate} />;
     case "lager": return <LagerPage />;
     case "hr": return <HrPage />;
     case "integrations": return <IntegrationsPage />;

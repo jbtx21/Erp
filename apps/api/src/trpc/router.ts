@@ -1422,6 +1422,52 @@ export const appRouter = router({
       .mutation(({ input, ctx }) => ctx.costCenters.remove(input.id)),
   }),
 
+  // Aufgaben/Zuweisung (Assigned To/ToDo): persönliche Arbeitsliste.
+  tasks: router({
+    /** Meine offenen Aufgaben (Arbeitsliste). */
+    mine: protectedProcedure
+      .input(z.object({ includeDone: z.boolean().optional() }).optional())
+      .query(({ input, ctx }) => ctx.tasks.listForUser(ctx.user.email, input?.includeDone ?? false)),
+
+    /** Zähler für das Badge im Header. */
+    openCount: protectedProcedure.query(({ ctx }) => ctx.tasks.openCount(ctx.user.email)),
+
+    /** Aufgaben eines Belegs. */
+    forEntity: roleProcedure(...allRoles)
+      .input(z.object({ entity: z.string().min(1), entityId: z.string().min(1) }))
+      .query(({ input, ctx }) => ctx.tasks.listForEntity(input.entity, input.entityId)),
+
+    create: roleProcedure(...allRoles)
+      .input(z.object({
+        title: z.string().min(1),
+        description: z.string().optional(),
+        assigneeEmail: z.string().email(),
+        entity: z.string().optional(),
+        entityId: z.string().optional(),
+        navKey: z.string().optional(),
+        dueDate: z.string().datetime().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.tasks.create({ ...input, dueDate: input.dueDate ? new Date(input.dueDate) : null, createdBy: ctx.user.id }); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+
+    complete: protectedProcedure
+      .input(z.object({ id: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => { await ctx.tasks.complete(input.id, ctx.user.id); return { ok: true as const }; }),
+
+    reopen: protectedProcedure
+      .input(z.object({ id: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => { await ctx.tasks.reopen(input.id, ctx.user.id); return { ok: true as const }; }),
+
+    reassign: roleProcedure(...allRoles)
+      .input(z.object({ id: z.string().min(1), assigneeEmail: z.string().email() }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.tasks.reassign(input.id, input.assigneeEmail, ctx.user.id); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+  }),
+
   // Regel-Engine (Event → Bedingung → Aktion). Konfiguration nur Admin.
   automation: router({
     meta: roleProcedure("ADMIN").query(({ ctx }) => ({ triggers: ctx.automation.knownTriggers(), actions: ctx.automation.knownActions() })),
