@@ -2,6 +2,8 @@
 // Ersetzt die Excel-Terminliste: jeder terminierte Vorgang bekommt eine Ampel
 // aus Restlaufzeit bis zum Liefertermin. Bewusst einfach (kein APS, Kap. 33).
 
+import { csvField } from "./csv.js";
+
 export type AmpelStatus = "GRUEN" | "GELB" | "ROT";
 
 export type ProcessLevel = "ANGEBOT" | "AUFTRAG" | "PRODUKTION" | "VEREDLER";
@@ -156,4 +158,33 @@ export function summarizeAmpel(rows: ReadonlyArray<AmpelRow>): AmpelSummary {
   }
   const mostUrgent = rows.find((r) => !r.done) ?? null;
   return { total: rows.length, rot, gelb, gruen, overdue, kritisch, mostUrgent, byLevel };
+}
+
+// ── Arbeitsliste-Export (Notbetrieb, K-17) ──────────────────────────────────
+// Read-only-Druckliste der Termin-Ampel: bei Internet-Ausfall arbeitet das Büro mit
+// dem PDF/CSV weiter. Reine Formatierung → identisch für PDF (Server) und CSV (UI/Server).
+
+export const AMPEL_WORKLIST_COLUMNS = ["Ebene", "Vorgang", "Termin", "Status", "Verbleibend (Tage)", "Eskalation"] as const;
+
+const AMPEL_LEVEL_DE: Record<ProcessLevel, string> = { ANGEBOT: "Angebot", AUFTRAG: "Auftrag", PRODUKTION: "Produktion", VEREDLER: "Veredler" };
+const AMPEL_STATUS_DE: Record<AmpelStatus, string> = { GRUEN: "Im Plan", GELB: "Knapp", ROT: "Überfällig" };
+const escalationLabel = (e: 0 | 1 | 2): string => (e === 2 ? "kritisch" : e === 1 ? "erhöht" : "—");
+
+/** Formatiert die Ampel-Zeilen als druckbare Tabelle (Strings, eine Zeile je Vorgang). */
+export function ampelWorklistRows(rows: ReadonlyArray<AmpelRow>): string[][] {
+  return rows.map((r) => [
+    AMPEL_LEVEL_DE[r.level],
+    r.label,
+    r.dueDate.toISOString().slice(0, 10),
+    AMPEL_STATUS_DE[r.ampel],
+    r.overdueDays > 0 ? `−${r.overdueDays}` : String(r.daysRemaining),
+    escalationLabel(r.escalation),
+  ]);
+}
+
+/** Arbeitsliste als CSV (`;`-getrennt, RFC-4180-Escaping) für den Offline-Notbetrieb. */
+export function ampelWorklistCsv(rows: ReadonlyArray<AmpelRow>): string {
+  const header = AMPEL_WORKLIST_COLUMNS.join(";");
+  const lines = ampelWorklistRows(rows).map((cols) => cols.map(csvField).join(";"));
+  return [header, ...lines].join("\n");
 }

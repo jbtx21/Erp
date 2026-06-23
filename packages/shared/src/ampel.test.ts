@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  AMPEL_WORKLIST_COLUMNS,
+  ampelWorklistCsv,
+  ampelWorklistRows,
   buildAmpelOverview,
   computeAmpel,
   escalationLevel,
@@ -33,6 +36,26 @@ describe("Ampel (Kap. 35.4)", () => {
     const rows = buildAmpelOverview(procs, today);
     expect(rows.map((r) => r.id)).toEqual(["b", "c", "a"]);
     expect(rows[0]?.ampel).toBe("ROT");
+  });
+});
+
+describe("Ampel-Arbeitsliste (Notbetrieb, K-17)", () => {
+  const procs: TrackedProcess[] = [
+    { id: "b", level: "PRODUKTION", label: "AB-2026-0007 · Müller", dueDate: inDays(-2), done: false },
+    { id: "a", level: "AUFTRAG", label: "AB-2026-0008 · Meier", dueDate: inDays(10), done: false },
+  ];
+
+  it("formatiert je Vorgang eine Zeile (überfällig negativ, Status deutsch)", () => {
+    const rows = ampelWorklistRows(buildAmpelOverview(procs, today));
+    expect(rows[0]).toEqual(["Produktion", "AB-2026-0007 · Müller", inDays(-2).toISOString().slice(0, 10), "Überfällig", "−2", expect.any(String)]);
+    expect(rows[1]?.[3]).toBe("Im Plan");
+  });
+
+  it("CSV hat Kopfzeile + eine Zeile je Vorgang", () => {
+    const csv = ampelWorklistCsv(buildAmpelOverview(procs, today));
+    const lines = csv.split("\n");
+    expect(lines[0]).toBe(AMPEL_WORKLIST_COLUMNS.join(";"));
+    expect(lines).toHaveLength(3);
   });
 });
 

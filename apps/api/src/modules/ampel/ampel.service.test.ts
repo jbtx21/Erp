@@ -23,4 +23,24 @@ describe("AmpelService.overview (Kap. 35.4)", () => {
     ]);
     expect((await new AmpelService(repo).overview(new Date(Date.UTC(2026, 5, 15))))[0]?.ampel).toBe("GRUEN");
   });
+
+  it("Arbeitsliste (K-17): Tabellenmodell mit einer Zeile je Vorgang", async () => {
+    const repo = new InMemoryAmpelRepository([
+      { id: "late", level: "PRODUKTION", label: "PA-1", dueDate: new Date(Date.UTC(2026, 4, 1)), done: false },
+      { id: "ok", level: "AUFTRAG", label: "AB-1", dueDate: new Date(Date.UTC(2026, 11, 1)), done: false },
+    ]);
+    const wl = await new AmpelService(repo).worklist(new Date(Date.UTC(2026, 5, 15)));
+    expect(wl.columns[0]).toBe("Ebene");
+    expect(wl.rows).toHaveLength(2);
+    expect(wl.rows[0]?.[3]).toBe("Überfällig");
+  });
+
+  it("Arbeitsliste als PDF: liefert Dateiname + base64-PDF (%PDF-Header)", async () => {
+    const repo = new InMemoryAmpelRepository([
+      { id: "ok", level: "AUFTRAG", label: "AB-1", dueDate: new Date(Date.UTC(2026, 11, 1)), done: false },
+    ]);
+    const res = await new AmpelService(repo).worklistPdf(new Date(Date.UTC(2026, 5, 15)));
+    expect(res.fileName).toBe("termin-ampel-2026-06-15.pdf");
+    expect(Buffer.from(res.pdfBase64, "base64").subarray(0, 4).toString("latin1")).toBe("%PDF");
+  });
 });

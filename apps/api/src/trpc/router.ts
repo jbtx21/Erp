@@ -514,6 +514,20 @@ export const appRouter = router({
       .query(async ({ input, ctx }) =>
         ctx.ampel.summary(input?.today ? new Date(input.today) : new Date())
       ),
+
+    /** Arbeitsliste als Tabelle (Notbetrieb K-17) — für CSV-Download. */
+    worklist: protectedProcedure
+      .input(z.object({ today: z.string().datetime().optional() }).optional())
+      .query(async ({ input, ctx }) =>
+        ctx.ampel.worklist(input?.today ? new Date(input.today) : new Date())
+      ),
+
+    /** Arbeitsliste als druckbares PDF (Offline-Notbetrieb K-17). */
+    worklistPdf: protectedProcedure
+      .input(z.object({ today: z.string().datetime().optional() }).optional())
+      .mutation(async ({ input, ctx }) =>
+        ctx.ampel.worklistPdf(input?.today ? new Date(input.today) : new Date())
+      ),
   }),
 
   stickerei: router({

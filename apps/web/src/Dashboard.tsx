@@ -3,8 +3,9 @@
 // plus die dringendsten Vorgänge zuerst. Reine Leseansicht über ampel.summary/overview.
 // Status nie allein über Farbe (Symbol + Text doppeln, Web Interface Guidelines).
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Alert, Badge, Card, Group, Loader, SimpleGrid, Table, Text, Title } from "@mantine/core";
+import { Alert, Badge, Button, Card, Group, Loader, SimpleGrid, Table, Text, Title } from "@mantine/core";
 import { trpc } from "./trpc.js";
+import { downloadBase64Pdf, downloadCsv } from "./export.js";
 import { statusColor } from "./theme.js";
 
 type AmpelStatus = "GRUEN" | "GELB" | "ROT";
@@ -68,11 +69,30 @@ export function Dashboard(): JSX.Element {
   if (err) return <Alert color="red" title="Fehler">{err}</Alert>;
   if (!summary) return <Text c="dimmed">Keine Daten.</Text>;
 
+  const exportCsv = async (): Promise<void> => {
+    try {
+      const wl = await trpc.ampel.worklist.query();
+      downloadCsv(`termin-ampel-${new Date().toISOString().slice(0, 10)}.csv`, wl.columns, wl.rows);
+    } catch (e) { setErr(errMsg(e)); }
+  };
+  const exportPdf = async (): Promise<void> => {
+    try {
+      const res = await trpc.ampel.worklistPdf.mutate();
+      downloadBase64Pdf(res.fileName, res.pdfBase64);
+    } catch (e) { setErr(errMsg(e)); }
+  };
+
   const urgent = summary.mostUrgent;
   return (
     <>
-      <Title order={3}>Übersicht — Termin-Ampel</Title>
-      <Text size="sm" c="dimmed" mt={4}>Ebenenübergreifende Terminlage (Kap. 35.4): dringendste Vorgänge zuerst. Ersetzt die Excel-Terminliste.</Text>
+      <Group justify="space-between" align="start" wrap="nowrap">
+        <Title order={3}>Übersicht — Termin-Ampel</Title>
+        <Group gap="xs">
+          <Button size="xs" variant="default" onClick={() => void exportPdf()}>Arbeitsliste (PDF)</Button>
+          <Button size="xs" variant="default" onClick={() => void exportCsv()}>CSV</Button>
+        </Group>
+      </Group>
+      <Text size="sm" c="dimmed" mt={4}>Ebenenübergreifende Terminlage (Kap. 35.4): dringendste Vorgänge zuerst. Ersetzt die Excel-Terminliste. Für den Offline-Notbetrieb (K-17) als PDF/CSV exportierbar.</Text>
 
       {urgent && (
         <Alert mt="md" variant="light" color={statusColor(urgent.ampel)} title="Dringendster Vorgang">
