@@ -411,6 +411,17 @@ model Supplier {
   vatId           String? // USt-IdNr. — Auflösung eingehender E-Rechnungen (Kap. 19/C4)
   iban            String? // Gläubiger-IBAN für SEPA-Überweisungen (PIS, Kap. 9)
   bic             String?
+  // Stammdaten 360° (Paket 1): Adresse + Konditionen + Vermerk
+  street          String?
+  zip             String?
+  city            String?
+  country         String   @default("DE")
+  zahlungszielTage Int     @default(14)
+  skontoPercent   Int?
+  skontoDays      Int?
+  lieferzeitTage  Int? // typische Lieferzeit
+  notiz           String?
+  contacts        SupplierContact[]
   // Inbound-Connector (C3): Katalog/Lager/EK eingehend synchronisieren.
   kind            SupplierKind @default(MANUAL)
   baseUrl         String? // REST-Basis-URL des Lieferantensystems
@@ -425,6 +436,21 @@ model Supplier {
   incomingInvoices IncomingInvoice[]
   sampleLoanLines  SampleLoanLine[]
   createdAt       DateTime @default(now())
+}
+
+// Ansprechpartner je Lieferant (Paket 1) — analog Contact bei der Firma.
+model SupplierContact {
+  id         String   @id @default(cuid())
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  firstName  String
+  lastName   String
+  email      String?
+  phone      String?
+  role       String? // Funktion (z. B. Vertrieb, Disposition)
+  createdAt  DateTime @default(now())
+
+  @@index([supplierId])
 }
 
 model SupplierItem {

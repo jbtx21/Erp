@@ -132,6 +132,148 @@ export function ListPage({
 }
 
 // ── Beschaffung ─────────────────────────────────────────────────────────────
+
+// Lieferanten-360° (Paket 1): Stammdaten (Adresse/Konditionen) + Ansprechpartner +
+// Historie (Bestellungen, Eingangsrechnungen, Einkaufsvolumen). Anzeige + Inline-Edit.
+type SupplierDetail = NonNullable<Awaited<ReturnType<typeof trpc.suppliers.overview.query>>>;
+function SupplierStammdatenEditor({ s, onSaved }: { s: SupplierDetail["supplier"]; onSaved: () => void }): JSX.Element {
+  const [edit, setEdit] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const init = () => ({
+    street: s.street ?? "", zip: s.zip ?? "", city: s.city ?? "", country: s.country ?? "DE",
+    iban: s.iban ?? "", bic: s.bic ?? "",
+    zahlungszielTage: String(s.zahlungszielTage ?? 14), skontoPercent: s.skontoPercent?.toString() ?? "", skontoDays: s.skontoDays?.toString() ?? "",
+    lieferzeitTage: s.lieferzeitTage?.toString() ?? "", notiz: s.notiz ?? "",
+  });
+  const [f, setF] = useState(init);
+  const set = (k: keyof ReturnType<typeof init>) => (v: string): void => setF((x) => ({ ...x, [k]: v }));
+  const numOrNull = (v: string): number | null => (v.trim() === "" ? null : Number(v));
+
+  const save = async (): Promise<void> => {
+    setBusy(true); setErr(null);
+    try {
+      await trpc.suppliers.update.mutate({
+        id: s.id, street: f.street.trim() || null, zip: f.zip.trim() || null, city: f.city.trim() || null, country: f.country.trim() || "DE",
+        iban: f.iban.trim() || null, bic: f.bic.trim() || null,
+        zahlungszielTage: Number(f.zahlungszielTage) || 14, skontoPercent: numOrNull(f.skontoPercent), skontoDays: numOrNull(f.skontoDays),
+        lieferzeitTage: numOrNull(f.lieferzeitTage), notiz: f.notiz.trim() || null,
+      });
+      setEdit(false); onSaved();
+    } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+
+  if (!edit) {
+    const addr = [s.street, [s.zip, s.city].filter(Boolean).join(" "), s.country].filter(Boolean).join(", ");
+    return (
+      <Box mt="sm" p="xs" style={{ background: "var(--mantine-color-gray-0)", borderRadius: 6 }}>
+        <Group justify="space-between" mb={4}><Text size="xs" fw={700} tt="uppercase" c="dimmed">Stammdaten</Text>
+          <Button size="compact-xs" variant="subtle" onClick={() => { setF(init()); setEdit(true); }}>Bearbeiten</Button></Group>
+        <Group gap="lg" wrap="wrap">
+          <Text size="sm">Adresse: <b>{addr || "—"}</b></Text>
+          <Text size="sm">USt-IdNr.: <b>{s.vatId || "—"}</b></Text>
+          <Text size="sm">IBAN: <b>{s.iban || "—"}</b></Text>
+          <Text size="sm">Zahlungsziel: <b>{s.zahlungszielTage} T</b></Text>
+          <Text size="sm">Skonto: <b>{s.skontoPercent != null ? `${s.skontoPercent} % / ${s.skontoDays ?? "?"} T` : "—"}</b></Text>
+          <Text size="sm">Lieferzeit: <b>{s.lieferzeitTage != null ? `${s.lieferzeitTage} T` : "—"}</b></Text>
+        </Group>
+        {s.notiz ? <Text size="sm" mt={4}>Notiz: {s.notiz}</Text> : null}
+      </Box>
+    );
+  }
+  return (
+    <Box mt="sm" p="xs" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 6 }}>
+      {err && <Alert color="red" mb="xs">{err}</Alert>}
+      <Group gap="xs" align="end" wrap="wrap">
+        <TextInput size="xs" label="Straße" w={200} value={f.street} onChange={(e) => set("street")(e.currentTarget.value)} />
+        <TextInput size="xs" label="PLZ" w={80} value={f.zip} onChange={(e) => set("zip")(e.currentTarget.value)} />
+        <TextInput size="xs" label="Ort" w={150} value={f.city} onChange={(e) => set("city")(e.currentTarget.value)} />
+        <TextInput size="xs" label="Land" w={70} value={f.country} onChange={(e) => set("country")(e.currentTarget.value)} />
+      </Group>
+      <Group gap="xs" align="end" wrap="wrap" mt={6}>
+        <TextInput size="xs" label="IBAN" w={200} value={f.iban} onChange={(e) => set("iban")(e.currentTarget.value)} />
+        <TextInput size="xs" label="BIC" w={120} value={f.bic} onChange={(e) => set("bic")(e.currentTarget.value)} />
+        <NumberInput size="xs" label="Zahlungsziel (T)" w={120} min={0} max={180} value={Number(f.zahlungszielTage) || 0} onChange={(v) => set("zahlungszielTage")(String(v ?? 0))} />
+        <NumberInput size="xs" label="Skonto %" w={90} min={0} max={100} value={f.skontoPercent === "" ? "" : Number(f.skontoPercent)} onChange={(v) => set("skontoPercent")(v === "" ? "" : String(v))} />
+        <NumberInput size="xs" label="Skonto-Tage" w={100} min={0} max={180} value={f.skontoDays === "" ? "" : Number(f.skontoDays)} onChange={(v) => set("skontoDays")(v === "" ? "" : String(v))} />
+        <NumberInput size="xs" label="Lieferzeit (T)" w={110} min={0} max={365} value={f.lieferzeitTage === "" ? "" : Number(f.lieferzeitTage)} onChange={(v) => set("lieferzeitTage")(v === "" ? "" : String(v))} />
+      </Group>
+      <TextInput size="xs" label="Notiz" mt={6} w={420} value={f.notiz} onChange={(e) => set("notiz")(e.currentTarget.value)} />
+      <Group gap="xs" mt="sm">
+        <Button size="compact-xs" loading={busy} onClick={() => void save()}>Speichern</Button>
+        <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setEdit(false)}>Abbrechen</Button>
+      </Group>
+    </Box>
+  );
+}
+
+function SupplierContactsBox({ supplierId, contacts, onChanged }: { supplierId: string; contacts: SupplierDetail["contacts"]; onChanged: () => void }): JSX.Element {
+  const [fn, setFn] = useState(""); const [ln, setLn] = useState(""); const [email, setEmail] = useState(""); const [phone, setPhone] = useState(""); const [role, setRole] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const add = async (): Promise<void> => {
+    if (!fn.trim() || !ln.trim()) { setErr("Vor- und Nachname sind Pflicht."); return; }
+    setErr(null);
+    try { await trpc.suppliers.addContact.mutate({ supplierId, firstName: fn.trim(), lastName: ln.trim(), email: email || undefined, phone: phone || undefined, role: role || undefined }); setFn(""); setLn(""); setEmail(""); setPhone(""); setRole(""); onChanged(); }
+    catch (e) { setErr(errMsg(e)); }
+  };
+  return (
+    <Box mt="sm">
+      <Text size="xs" fw={700} tt="uppercase" c="dimmed" mb={4}>Ansprechpartner ({contacts.length})</Text>
+      {err && <Alert color="red" mb="xs">{err}</Alert>}
+      {contacts.map((c) => (
+        <Group key={c.id} gap="xs" mb={2} wrap="nowrap">
+          <Text size="sm">{c.firstName} {c.lastName}{c.role ? ` · ${c.role}` : ""}</Text>
+          {c.email ? <Text size="xs" c="dimmed">{c.email}</Text> : null}
+          {c.phone ? <Text size="xs" c="dimmed">{c.phone}</Text> : null}
+          <Button size="compact-xs" variant="subtle" color="red" onClick={async () => { try { await trpc.suppliers.deleteContact.mutate({ id: c.id }); onChanged(); } catch (e) { setErr(errMsg(e)); } }}>✕</Button>
+        </Group>
+      ))}
+      <Group gap="xs" align="end" mt={6} wrap="wrap">
+        <TextInput size="xs" label="Vorname" w={120} value={fn} onChange={(e) => setFn(e.currentTarget.value)} />
+        <TextInput size="xs" label="Nachname" w={120} value={ln} onChange={(e) => setLn(e.currentTarget.value)} />
+        <TextInput size="xs" label="E-Mail" w={170} value={email} onChange={(e) => setEmail(e.currentTarget.value)} />
+        <TextInput size="xs" label="Telefon" w={120} value={phone} onChange={(e) => setPhone(e.currentTarget.value)} />
+        <TextInput size="xs" label="Funktion" w={120} value={role} onChange={(e) => setRole(e.currentTarget.value)} />
+        <Button size="compact-xs" onClick={() => void add()}>+ Kontakt</Button>
+      </Group>
+    </Box>
+  );
+}
+
+function SupplierDetailPanel({ supplierId }: { supplierId: string }): JSX.Element {
+  const [ov, setOv] = useState<SupplierDetail | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const reload = useCallback(() => { void trpc.suppliers.overview.query({ supplierId }).then(setOv).catch((e) => setErr(errMsg(e))); }, [supplierId]);
+  useEffect(() => { reload(); }, [reload]);
+  if (err) return <Alert color="red" mt="md">{err}</Alert>;
+  if (!ov) return <Text size="sm" c="dimmed" mt="md">lädt…</Text>;
+  const d = (x: string | Date): string => new Date(x).toLocaleDateString("de-DE");
+  return (
+    <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+      <Group justify="space-between">
+        <Text fw={600}>{ov.supplier.name}</Text>
+        <Group gap="xs">
+          <Badge size="xs" variant="light">{ov.supplier.kind}</Badge>
+          <Badge size="xs" variant="light" color="gray">{ov.itemCount} Katalog-Artikel</Badge>
+          <Badge size="xs" color="blue" variant="light">Einkaufsvolumen {euro(ov.purchaseVolumeCents)}</Badge>
+        </Group>
+      </Group>
+      <SupplierStammdatenEditor s={ov.supplier} onSaved={reload} />
+      <SupplierContactsBox supplierId={supplierId} contacts={ov.contacts} onChanged={reload} />
+      <Group align="flex-start" gap="lg" mt="sm" wrap="wrap">
+        <Box miw={230}>
+          <Text size="xs" fw={700} tt="uppercase" c="dimmed" mb={4}>Bestellungen ({ov.purchaseOrders.length})</Text>
+          {ov.purchaseOrders.length === 0 ? <Text size="sm" c="dimmed">—</Text> : ov.purchaseOrders.slice(0, 8).map((p) => <Text key={p.id} size="sm">{p.number} · {p.status}</Text>)}
+        </Box>
+        <Box miw={230}>
+          <Text size="xs" fw={700} tt="uppercase" c="dimmed" mb={4}>Eingangsrechnungen ({ov.incomingInvoices.length})</Text>
+          {ov.incomingInvoices.length === 0 ? <Text size="sm" c="dimmed">—</Text> : ov.incomingInvoices.slice(0, 8).map((i) => <Text key={i.id} size="sm">{i.number} · {euro(i.grossCents)} · {d(i.receivedAt)}</Text>)}
+        </Box>
+      </Group>
+    </Box>
+  );
+}
+
 export function SuppliersPage({ focusId }: { focusId?: string } = {}): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [name, setName] = useState("");
@@ -139,6 +281,7 @@ export function SuppliersPage({ focusId }: { focusId?: string } = {}): JSX.Eleme
   const [iban, setIban] = useState("");
   const [applied, setApplied] = useState("sup-fhb");
   const [sid, setSid] = useState("sup-fhb");
+  const [openSupplier, setOpenSupplier] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -147,8 +290,8 @@ export function SuppliersPage({ focusId }: { focusId?: string } = {}): JSX.Eleme
     catch (e) { setErr(errMsg(e)); }
   }, []);
   useEffect(() => { void load(); }, [load]);
-  // Deep-Link aus der globalen Suche: Lieferanten-Zeile hervorheben + Katalog laden.
-  useEffect(() => { if (focusId) { setApplied(focusId); setSid(focusId); } }, [focusId]);
+  // Deep-Link aus der globalen Suche: Lieferanten-Zeile hervorheben + Detail öffnen.
+  useEffect(() => { if (focusId) { setApplied(focusId); setSid(focusId); setOpenSupplier(focusId); } }, [focusId]);
 
   return (
     <>
@@ -165,9 +308,13 @@ export function SuppliersPage({ focusId }: { focusId?: string } = {}): JSX.Eleme
         }}>Lieferant anlegen</Button>
       </Group>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
-      <AutoTable rows={rows} highlightId={focusId} action={(r) => (
-        <Button size="compact-xs" variant="default" onClick={() => { setSid(String(r.id)); setApplied(String(r.id)); }}>Katalog</Button>
+      <AutoTable rows={rows} highlightId={focusId} onRowClick={(r) => setOpenSupplier((c) => c === String(r.id) ? null : String(r.id))} action={(r) => (
+        <Group gap={4} justify="flex-end" wrap="nowrap">
+          <Button size="compact-xs" variant={openSupplier === String(r.id) ? "filled" : "subtle"} onClick={() => setOpenSupplier((c) => c === String(r.id) ? null : String(r.id))}>Details</Button>
+          <Button size="compact-xs" variant="default" onClick={() => { setSid(String(r.id)); setApplied(String(r.id)); }}>Katalog</Button>
+        </Group>
       )} />
+      {openSupplier && <SupplierDetailPanel supplierId={openSupplier} />}
 
       <Title order={4} mt="lg">Katalog</Title>
       <Group mt="xs" gap="xs" align="end">

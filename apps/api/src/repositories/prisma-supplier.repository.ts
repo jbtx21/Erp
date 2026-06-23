@@ -8,7 +8,7 @@ import type {
   SupplierRepository,
   UpsertSupplierItemInput,
 } from "../modules/supplier-import/supplier-import.service.js";
-import type { SupplierItemListItem, SupplierListItem, SupplierQueryRepository } from "./read.js";
+import type { SupplierItemListItem, SupplierListItem, SupplierOverview, SupplierQueryRepository, UpdateSupplierInput } from "./read.js";
 
 export class PrismaSupplierRepository
   implements SupplierRepository, SupplierQueryRepository
@@ -71,5 +71,56 @@ export class PrismaSupplierRepository
       data: { name: input.name, vatId: input.vatId ?? null, iban: input.iban ?? null, bic: input.bic ?? null, kind: "MANUAL" },
       select: { id: true },
     });
+  }
+
+  async updateSupplier(input: UpdateSupplierInput): Promise<void> {
+    const pick = (k: keyof UpdateSupplierInput): object => (input[k] !== undefined ? { [k]: input[k] } : {});
+    await prisma.supplier.update({
+      where: { id: input.id },
+      data: {
+        ...pick("name"), ...pick("vatId"), ...pick("iban"), ...pick("bic"),
+        ...pick("street"), ...pick("zip"), ...pick("city"), ...pick("country"),
+        ...pick("zahlungszielTage"), ...pick("skontoPercent"), ...pick("skontoDays"), ...pick("lieferzeitTage"), ...pick("notiz"),
+      },
+    });
+  }
+
+  async supplierOverview(supplierId: string): Promise<SupplierOverview | null> {
+    const s = await prisma.supplier.findUnique({
+      where: { id: supplierId },
+      select: {
+        id: true, name: true, vatId: true, iban: true, bic: true, kind: true, active: true,
+        street: true, zip: true, city: true, country: true,
+        zahlungszielTage: true, skontoPercent: true, skontoDays: true, lieferzeitTage: true, notiz: true,
+        _count: { select: { supplierItems: true } },
+        contacts: { orderBy: { createdAt: "asc" }, select: { id: true, firstName: true, lastName: true, email: true, phone: true, role: true } },
+        purchaseOrders: { orderBy: { createdAt: "desc" }, take: 50, select: { id: true, number: true, status: true, createdAt: true } },
+        incomingInvoices: { orderBy: { receivedAt: "desc" }, take: 50, select: { id: true, number: true, grossCents: true, status: true, receivedAt: true } },
+      },
+    });
+    if (!s) return null;
+    return {
+      supplier: {
+        id: s.id, name: s.name, vatId: s.vatId, iban: s.iban, bic: s.bic, kind: s.kind, active: s.active,
+        street: s.street, zip: s.zip, city: s.city, country: s.country,
+        zahlungszielTage: s.zahlungszielTage, skontoPercent: s.skontoPercent, skontoDays: s.skontoDays, lieferzeitTage: s.lieferzeitTage, notiz: s.notiz,
+      },
+      itemCount: s._count.supplierItems,
+      contacts: s.contacts,
+      purchaseOrders: s.purchaseOrders,
+      incomingInvoices: s.incomingInvoices,
+      purchaseVolumeCents: s.incomingInvoices.reduce((sum, i) => sum + i.grossCents, 0),
+    };
+  }
+
+  async addSupplierContact(input: { supplierId: string; firstName: string; lastName: string; email?: string | null; phone?: string | null; role?: string | null }): Promise<{ id: string }> {
+    return prisma.supplierContact.create({
+      data: { supplierId: input.supplierId, firstName: input.firstName, lastName: input.lastName, email: input.email ?? null, phone: input.phone ?? null, role: input.role ?? null },
+      select: { id: true },
+    });
+  }
+
+  async deleteSupplierContact(id: string): Promise<void> {
+    await prisma.supplierContact.delete({ where: { id } });
   }
 }

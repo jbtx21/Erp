@@ -275,6 +275,33 @@ export const appRouter = router({
     create: roleProcedure("ADMIN", "BUERO")
       .input(z.object({ name: z.string().min(1), vatId: z.string().optional(), iban: z.string().optional(), bic: z.string().optional() }))
       .mutation(({ input, ctx }) => ctx.suppliers.createSupplier(input)),
+
+    /** Lieferanten-Detail + Historie (Bestellungen, Eingangsrechnungen, Einkaufsvolumen). */
+    overview: roleProcedure(...supplierRoles)
+      .input(z.object({ supplierId: z.string().min(1) }))
+      .query(({ input, ctx }) => ctx.suppliers.supplierOverview(input.supplierId)),
+
+    /** Lieferanten-Stammdaten (Adresse/Konditionen) aktualisieren; null = leeren. */
+    update: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({
+        id: z.string().min(1),
+        name: z.string().optional(), vatId: z.string().nullable().optional(), iban: z.string().nullable().optional(), bic: z.string().nullable().optional(),
+        street: z.string().nullable().optional(), zip: z.string().nullable().optional(), city: z.string().nullable().optional(), country: z.string().nullable().optional(),
+        zahlungszielTage: z.number().int().min(0).max(180).optional(),
+        skontoPercent: z.number().int().min(0).max(100).nullable().optional(),
+        skontoDays: z.number().int().min(0).max(180).nullable().optional(),
+        lieferzeitTage: z.number().int().min(0).max(365).nullable().optional(),
+        notiz: z.string().nullable().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => { await ctx.suppliers.updateSupplier(input); return { ok: true as const }; }),
+
+    /** Ansprechpartner anlegen/löschen. */
+    addContact: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ supplierId: z.string().min(1), firstName: z.string().min(1), lastName: z.string().min(1), email: z.string().optional(), phone: z.string().optional(), role: z.string().optional() }))
+      .mutation(({ input, ctx }) => ctx.suppliers.addSupplierContact(input)),
+    deleteContact: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ id: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => { await ctx.suppliers.deleteSupplierContact(input.id); return { ok: true as const }; }),
   }),
 
   incomingInvoices: router({

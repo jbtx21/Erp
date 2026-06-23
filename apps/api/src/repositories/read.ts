@@ -54,12 +54,59 @@ export interface SupplierListItem {
   active: boolean;
 }
 
+/** Lieferanten-Stammdaten 360° (Paket 1): Adresse + Konditionen. */
+export interface SupplierStammdaten {
+  street: string | null;
+  zip: string | null;
+  city: string | null;
+  country: string | null;
+  zahlungszielTage: number;
+  skontoPercent: number | null;
+  skontoDays: number | null;
+  lieferzeitTage: number | null;
+  notiz: string | null;
+}
+
+export interface SupplierContactRow {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  phone: string | null;
+  role: string | null;
+}
+
+export interface UpdateSupplierInput extends Partial<SupplierStammdaten> {
+  id: string;
+  name?: string;
+  vatId?: string | null;
+  iban?: string | null;
+  bic?: string | null;
+}
+
+/** Lieferanten-Detail + Historie (Bestellungen, Eingangsrechnungen, Einkaufsvolumen). */
+export interface SupplierOverview {
+  supplier: SupplierListItem & SupplierStammdaten & { bic: string | null };
+  itemCount: number;
+  contacts: SupplierContactRow[];
+  purchaseOrders: Array<{ id: string; number: string; status: string; createdAt: Date }>;
+  incomingInvoices: Array<{ id: string; number: string; grossCents: number; status: string; receivedAt: Date }>;
+  /** Einkaufsvolumen = Summe der Eingangsrechnungen (brutto). */
+  purchaseVolumeCents: number;
+}
+
 export interface SupplierQueryRepository {
   listItems(supplierId: string, limit: number): Promise<SupplierItemListItem[]>;
   /** Alle Lieferanten-Stammsätze (B6). */
   listSuppliers(): Promise<SupplierListItem[]>;
   /** Legt einen Lieferanten an (manueller Stammsatz). */
   createSupplier(input: { name: string; vatId?: string | null; iban?: string | null; bic?: string | null }): Promise<{ id: string }>;
+  /** Aktualisiert Lieferanten-Stammdaten (Adresse/Konditionen). */
+  updateSupplier(input: UpdateSupplierInput): Promise<void>;
+  /** Lieferanten-Detail + Historie. */
+  supplierOverview(supplierId: string): Promise<SupplierOverview | null>;
+  addSupplierContact(input: { supplierId: string; firstName: string; lastName: string; email?: string | null; phone?: string | null; role?: string | null }): Promise<{ id: string }>;
+  deleteSupplierContact(id: string): Promise<void>;
 }
 
 // Eingangsrechnungen (C4). Finanzdaten → Endpunkt rollengeschützt (kein PRODUKTION).
