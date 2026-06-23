@@ -930,6 +930,20 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         try { return await ctx.products.createVariant(input); } catch (e) { throw toTrpcError(e); }
       }),
+    // Logo/Veredelung als wiederverwendbaren Artikel anlegen (Pflicht-Veredler + eigene Staffel).
+    createVeredelung: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({
+        name: z.string().min(1),
+        sku: z.string().min(1),
+        method: z.enum(["STICK", "DRUCK", "TRANSFER"]),
+        placement: z.string().optional(),
+        veredlerId: z.string().min(1),
+        ekCents: z.number().int().nonnegative().optional(),
+        tiers: z.array(z.object({ minMenge: z.number().int().positive(), vkCents: z.number().int().nonnegative() })).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.products.createVeredelungArticle(input); } catch (e) { throw toTrpcError(e); }
+      }),
     // Set/Bundle-Stückliste (Kap. 5.1): Komponenten einer Variante lesen/setzen.
     components: roleProcedure(...supplierRoles)
       .input(z.object({ variantId: z.string().min(1) }))

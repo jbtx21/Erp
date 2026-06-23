@@ -931,10 +931,68 @@ function BundlePreview({ variantId, positionQty }: { variantId: string; position
   );
 }
 
+// Logo/Veredelung als wiederverwendbaren Artikel anlegen (Kap. 5.4/11): Pflicht-Veredler
+// (analog Textil-„Hersteller"), eigener EK beim Veredler + eigene Mengenstaffel. Beim
+// Siebdruck den festen Siebdruck-Lieferanten wählen. Direkt als Angebotsposition übernommen.
+interface TierRow { minMenge: number; euro: number }
+function LogoArticleDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (e: { label: string; variantId: string; unitNetCents: number }) => void }): JSX.Element {
+  const [name, setName] = useState(""); const [sku, setSku] = useState("");
+  const [method, setMethod] = useState<"STICK" | "DRUCK" | "TRANSFER">("STICK");
+  const [placement, setPlacement] = useState("");
+  const [veredlerId, setVeredlerId] = useState("");
+  const [ek, setEk] = useState<number | "">("");
+  const [tiers, setTiers] = useState<TierRow[]>([{ minMenge: 1, euro: 0 }]);
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
+
+  const setTier = (i: number, patch: Partial<TierRow>): void => setTiers((ts) => ts.map((t, j) => (j === i ? { ...t, ...patch } : t)));
+  const create = async (): Promise<void> => {
+    setBusy(true); setErr(null);
+    try {
+      const cleanTiers = tiers.filter((t) => t.minMenge > 0).map((t) => ({ minMenge: t.minMenge, vkCents: Math.round(t.euro * 100) }));
+      const e = await trpc.products.createVeredelung.mutate({
+        name: name.trim(), sku: sku.trim(), method, ...(placement.trim() ? { placement: placement.trim() } : {}),
+        veredlerId, ...(ek !== "" ? { ekCents: Math.round(Number(ek) * 100) } : {}), tiers: cleanTiers,
+      });
+      onCreated({ label: e.label, variantId: e.variantId, unitNetCents: e.unitNetCents });
+    } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+
+  return (
+    <Modal opened onClose={onClose} title="Logo / Veredelung anlegen" size="lg">
+      {err && <Alert color="red" mb="sm">{err}</Alert>}
+      <Group gap="md" align="end" wrap="wrap">
+        <TextInput label="Bezeichnung" placeholder="z. B. Logo TSV Emden" value={name} onChange={(e) => setName(e.currentTarget.value)} w={240} />
+        <TextInput label="Artikel-Nr. (SKU)" placeholder="LOGO-…" value={sku} onChange={(e) => setSku(e.currentTarget.value)} w={150} />
+        <Select label="Veredelungsart" w={150} value={method} onChange={(v) => v && setMethod(v as typeof method)}
+          data={[{ value: "STICK", label: "Stick" }, { value: "DRUCK", label: "Siebdruck" }, { value: "TRANSFER", label: "Transfer" }]} />
+        <TextInput label="Position" placeholder="Brust links" value={placement} onChange={(e) => setPlacement(e.currentTarget.value)} w={140} />
+      </Group>
+      <Group gap="md" align="end" wrap="wrap" mt="sm">
+        <SupplierPicker label={method === "DRUCK" ? "Siebdruck-Lieferant (Pflicht)" : "Veredler (Pflicht)"} value={veredlerId} onChange={setVeredlerId} w={240} />
+        <NumberInput label="EK beim Veredler (€)" value={ek} onChange={(v) => setEk(typeof v === "number" ? v : "")} min={0} decimalScale={2} w={170} placeholder="je Logo abweichend" />
+      </Group>
+      <Title order={6} mt="md">Mengenstaffel (VK je Stück)</Title>
+      {tiers.map((t, i) => (
+        <Group key={i} gap="xs" mt={4} align="end">
+          <NumberInput label={i === 0 ? "ab Menge" : undefined} value={t.minMenge} onChange={(v) => setTier(i, { minMenge: Number(v) || 1 })} min={1} w={110} />
+          <NumberInput label={i === 0 ? "VK (€)" : undefined} value={t.euro} onChange={(v) => setTier(i, { euro: Number(v) || 0 })} min={0} decimalScale={2} w={120} />
+          <Button size="compact-sm" variant="subtle" color="red" disabled={tiers.length === 1} onClick={() => setTiers((ts) => ts.filter((_, j) => j !== i))}>✕</Button>
+        </Group>
+      ))}
+      <Button size="compact-xs" variant="light" mt="xs" onClick={() => setTiers((ts) => [...ts, { minMenge: (ts.at(-1)?.minMenge ?? 0) + 10, euro: 0 }])}>+ Staffelstufe</Button>
+      <Group justify="flex-end" mt="lg">
+        <Button variant="default" onClick={onClose}>Abbrechen</Button>
+        <Button color="dark" loading={busy} disabled={!name.trim() || !sku.trim() || !veredlerId} onClick={() => void create()}>Anlegen &amp; übernehmen</Button>
+      </Group>
+    </Modal>
+  );
+}
+
 export function LinesEditor({ lines, onChange, quoteMode = false, companyId }: { lines: EditorLine[]; onChange: (l: EditorLine[]) => void; quoteMode?: boolean; companyId?: string }): JSX.Element {
   const set = (i: number, patch: Partial<EditorLine>): void => onChange(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
   const [bundleFor, setBundleFor] = useState<number | null>(null); // Index der Zeile mit offenem Stücklisten-Editor
   const [shown, setShown] = useState<Record<number, boolean>>({}); // aufgeklappte Stücklisten-Vorschauen
+  const [logoOpen, setLogoOpen] = useState(false); // Dialog „Logo/Veredelung anlegen"
   // Erste leere Zeile ersetzen, sonst anhängen; gibt den Zielindex zurück.
   const addLine = (line: EditorLine): number => {
     const idx = lines.findIndex((l) => !l.description.trim());
@@ -960,8 +1018,10 @@ export function LinesEditor({ lines, onChange, quoteMode = false, companyId }: {
       <Group gap="xs" mb={6}>
         <ArticlePicker onPick={addFromCatalog} />
         {quoteMode && <HauptartikelPicker onPick={addHauptartikel} />}
-        <Text size="xs" c="dimmed">{quoteMode ? "Variante wählen, Hauptartikel (Farbe/Größe offen) oder unten frei erfassen" : "aus dem Artikelstamm wählen oder unten frei erfassen"}</Text>
+        {quoteMode && <Button size="xs" variant="light" color="grape" onClick={() => setLogoOpen(true)}>+ Logo/Veredelung</Button>}
+        <Text size="xs" c="dimmed">{quoteMode ? "Variante/Hauptartikel wählen, Logo anlegen oder unten frei erfassen" : "aus dem Artikelstamm wählen oder unten frei erfassen"}</Text>
       </Group>
+      {logoOpen && <LogoArticleDialog onClose={() => setLogoOpen(false)} onCreated={(e) => { addLine({ description: e.label, qty: 1, euro: e.unitNetCents / 100, kind: "VEREDELUNG", variantId: e.variantId }); setLogoOpen(false); }} />}
       {lines.map((l, i) => {
         const db = lineDbCents(l);
         const margePct = db !== null && l.euro > 0 ? (l.euro - (l.ekEuro ?? 0)) / l.euro : null;

@@ -66,6 +66,26 @@ export interface ComponentInput {
   componentVariantId?: string | null;
 }
 
+/** Mengenstaffel-Stufe eines Veredelungs-/Logo-Artikels (ab minMenge gilt vkCents). */
+export interface VeredelungTier {
+  minMenge: number;
+  vkCents: number;
+}
+
+/** Anlage eines Veredelungs-/Logo-Artikels mit Pflicht-Veredler + eigener Staffel. */
+export interface CreateVeredelungInput {
+  name: string;
+  sku: string;
+  method: "STICK" | "DRUCK" | "TRANSFER";
+  placement?: string;
+  /** Zugewiesener Veredler (Pflicht; analog Textil-„Hersteller"). */
+  veredlerId: string;
+  /** Einkaufspreis des Logos beim Veredler (Cent); je Logo abweichend. */
+  ekCents?: number;
+  /** Eigene Mengenstaffel (VK je Stück ab Menge) — pro Logo unterschiedlich. */
+  tiers?: VeredelungTier[];
+}
+
 export interface ProductRepository {
   listArticles(): Promise<Omit<ArticleRow, "completeness">[]>;
   createArticle(sku: string, name: string): Promise<{ id: string }>;
@@ -81,6 +101,10 @@ export interface ProductRepository {
   listComponents(variantId: string): Promise<ComponentRow[]>;
   /** Setzt die Stückliste neu (ersetzt) und markiert die Variante als Set (isBundle). */
   setComponents(variantId: string, components: ComponentInput[]): Promise<void>;
+  /** Prüft, ob ein Lieferant (Veredler) existiert. */
+  supplierExists(id: string): Promise<boolean>;
+  /** Legt einen Veredelungs-/Logo-Artikel mit Veredler, EK und Mengenstaffel an. */
+  createVeredelungArticle(input: Required<Pick<CreateVeredelungInput, "name" | "sku" | "method" | "veredlerId">> & { placement: string | null; ekCents: number | null; tiers: VeredelungTier[] }): Promise<CatalogEntry>;
 }
 
 export class ProductError extends Error {}
@@ -184,5 +208,30 @@ export class ProductService {
     }
     await this.repo.setComponents(variantId, clean);
     await this.audit.append(buildEntry({ entity: "Variant", entityId: variantId, action: "UPDATE", after: { stueckliste: clean.length, isBundle: clean.length > 0 } }));
+  }
+
+  /**
+   * Legt ein Logo/eine Veredelung als wiederverwendbaren Artikel an (Kap. 5.4/11):
+   * Pflicht-Veredler (analog Textil-„Hersteller"), eigener EK beim Veredler und eine
+   * eigene Mengenstaffel (je Logo unterschiedlich). Sofort im Katalog wählbar.
+   */
+  async createVeredelungArticle(input: CreateVeredelungInput): Promise<CatalogEntry> {
+    if (!input.name?.trim() || !input.sku?.trim()) throw new ProductError("SKU und Name sind Pflicht.");
+    if (!input.veredlerId?.trim()) throw new ProductError("Veredler ist Pflicht (Logo/Veredelung).");
+    if (!(await this.repo.supplierExists(input.veredlerId))) throw new ProductError("Unbekannter Veredler.");
+    if (input.ekCents !== undefined && input.ekCents < 0) throw new ProductError("EK darf nicht negativ sein.");
+    const tiers = (input.tiers ?? []).filter((t) => t.minMenge > 0 && t.vkCents >= 0).sort((a, b) => a.minMenge - b.minMenge);
+    for (const t of tiers) if (t.vkCents < 0) throw new ProductError("Staffelpreis darf nicht negativ sein.");
+
+    const entry = await this.repo.createVeredelungArticle({
+      name: input.name.trim(), sku: input.sku.trim(), method: input.method,
+      placement: input.placement?.trim() || null, veredlerId: input.veredlerId,
+      ekCents: input.ekCents ?? null, tiers,
+    });
+    await this.audit.append(buildEntry({
+      entity: "Article", entityId: entry.articleId, action: "CREATE",
+      after: { veredelung: input.method, veredlerId: input.veredlerId, ekCents: input.ekCents ?? null, staffeln: tiers.length },
+    }));
+    return entry;
   }
 }

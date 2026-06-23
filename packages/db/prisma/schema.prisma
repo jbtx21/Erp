@@ -250,6 +250,9 @@ model Article {
   name        String
   description String?
   isVeredelung Boolean  @default(false) // Transfer/Siebdruck/Stick (Kap. 11)
+  // Zugewiesener Veredler (Pflicht bei Veredelungs-/Logo-Artikeln, analog Textil-„Hersteller").
+  veredlerId  String?
+  veredler    Supplier? @relation("ArticleVeredler", fields: [veredlerId], references: [id])
   // Textil-PIM (B18). Faserzusammensetzung ist EU-Pflicht (VO 1007/2011).
   materialComposition String? // z. B. "100% Baumwolle"
   careInstructions    String?
@@ -450,6 +453,7 @@ model Supplier {
   syncCursor      String? // Delta-Sync-Cursor (Kap. 13)
   active          Boolean  @default(true)
   supplierItems   SupplierItem[]
+  veredelungsArtikel Article[] @relation("ArticleVeredler") // als Veredler zugewiesene Logo-/Veredelungsartikel
   subProductions  SubProductionOrder[]
   stickereiKunden Company[] @relation("StickereiPartner")
   purchaseOrders  PurchaseOrder[]

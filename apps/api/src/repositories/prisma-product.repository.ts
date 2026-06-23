@@ -4,11 +4,13 @@ import { prisma } from "@texma/db";
 import type {
   ArticlePatch,
   ArticleRow,
+  CatalogEntry,
   ComponentInput,
   ComponentRow,
   CreateVariantInput,
   ProductRepository,
   VariantRow,
+  VeredelungTier,
 } from "../modules/product/product.service.js";
 
 /** Anzeigetext einer Variante (Artikelname — Merkmale (SKU)) für Komponentenlisten. */
@@ -107,5 +109,37 @@ export class PrismaProductRepository implements ProductRepository {
       }),
       prisma.variant.update({ where: { id: variantId }, data: { isBundle: components.length > 0 } }),
     ]);
+  }
+
+  async supplierExists(id: string): Promise<boolean> {
+    return (await prisma.supplier.count({ where: { id } })) > 0;
+  }
+
+  async createVeredelungArticle(input: { name: string; sku: string; method: "STICK" | "DRUCK" | "TRANSFER"; placement: string | null; veredlerId: string; ekCents: number | null; tiers: VeredelungTier[] }): Promise<CatalogEntry> {
+    // VK-Staffel des Logos liegt unter der Basis-Preisgruppe STANDARD (Preisgruppe ≠ Mengenstaffel).
+    const standard = input.tiers.length > 0 ? await prisma.priceGroup.findFirst({ where: { kind: "STANDARD" }, select: { id: true } }) : null;
+    if (input.tiers.length > 0 && !standard) throw new Error("Keine Preisgruppe STANDARD vorhanden — Staffel kann nicht angelegt werden.");
+
+    return prisma.$transaction(async (tx) => {
+      const article = await tx.article.create({
+        data: {
+          sku: input.sku, name: input.name, isVeredelung: true, veredlerId: input.veredlerId,
+          finishingSpecs: { create: { method: input.method as never, placement: input.placement ?? "" } },
+          variants: { create: { sku: input.sku } },
+        },
+        select: { id: true, name: true, variants: { select: { id: true } } },
+      });
+      const variantId = article.variants[0]!.id;
+      if (input.ekCents !== null) {
+        await tx.supplierItem.create({ data: { supplierId: input.veredlerId, variantId, ekCents: input.ekCents, priority: 1 } });
+      }
+      if (standard && input.tiers.length > 0) {
+        await tx.priceGroupPriceTier.createMany({
+          data: input.tiers.map((t) => ({ variantId, priceGroupId: standard.id, minMenge: t.minMenge, netCents: t.vkCents })),
+        });
+      }
+      const baseVk = input.tiers[0]?.vkCents ?? 0;
+      return { variantId, articleId: article.id, articleName: article.name, sku: input.sku, label: `${article.name} (${input.sku})`, unitNetCents: baseVk, isBundle: false };
+    });
   }
 }

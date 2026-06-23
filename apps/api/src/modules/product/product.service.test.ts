@@ -107,3 +107,29 @@ describe("ProductService — Set/Bundle-Stückliste (Kap. 5.1)", () => {
     expect((await svc.catalog()).find((c) => c.variantId === set.variantId)?.isBundle).toBe(false);
   });
 });
+
+describe("ProductService — Veredelungs-/Logo-Artikel (Kap. 5.4/11)", () => {
+  it("legt ein Logo mit Pflicht-Veredler, EK und Mengenstaffel an", async () => {
+    const { svc, repo } = await setup();
+    repo.addSupplier("sup_stick");
+    const entry = await svc.createVeredelungArticle({
+      name: "Logo TSV Emden", sku: "LOGO-EMDEN", method: "STICK", veredlerId: "sup_stick",
+      ekCents: 250, tiers: [{ minMenge: 1, vkCents: 600 }, { minMenge: 50, vkCents: 450 }],
+    });
+    expect(entry.label).toBe("Logo TSV Emden (LOGO-EMDEN)");
+    expect(repo.veredelungArticles.get(entry.articleId)).toMatchObject({ veredlerId: "sup_stick", ekCents: 250 });
+    expect(repo.veredelungArticles.get(entry.articleId)?.tiers).toHaveLength(2);
+  });
+
+  it("verlangt einen Veredler (Pflicht, wie Hersteller bei Textilien)", async () => {
+    const { svc } = await setup();
+    await expect(svc.createVeredelungArticle({ name: "Logo", sku: "L-1", method: "STICK", veredlerId: "  " }))
+      .rejects.toBeInstanceOf(ProductError);
+  });
+
+  it("weist einen unbekannten Veredler ab", async () => {
+    const { svc } = await setup();
+    await expect(svc.createVeredelungArticle({ name: "Logo", sku: "L-2", method: "STICK", veredlerId: "sup_unknown" }))
+      .rejects.toBeInstanceOf(ProductError);
+  });
+});

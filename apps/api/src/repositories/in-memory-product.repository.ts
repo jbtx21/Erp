@@ -3,11 +3,13 @@
 import type {
   ArticlePatch,
   ArticleRow,
+  CatalogEntry,
   ComponentInput,
   ComponentRow,
   CreateVariantInput,
   ProductRepository,
   VariantRow,
+  VeredelungTier,
 } from "../modules/product/product.service.js";
 
 type StoredArticle = { id: string; sku: string; name: string; description: string; brand: string; materialComposition: string; careInstructions: string; hsCode: string; originCountry: string };
@@ -84,5 +86,21 @@ export class InMemoryProductRepository implements ProductRepository {
     this.components.set(variantId, components.map((c) => ({ ...c })));
     const v = this.variants.get(variantId);
     if (v) v.isBundle = components.length > 0;
+  }
+
+  // Veredler (Lieferanten) für Tests registrierbar.
+  readonly suppliers = new Set<string>();
+  readonly veredelungArticles = new Map<string, { veredlerId: string; ekCents: number | null; tiers: VeredelungTier[] }>();
+  addSupplier(id: string): void { this.suppliers.add(id); }
+
+  async supplierExists(id: string): Promise<boolean> { return this.suppliers.has(id); }
+
+  async createVeredelungArticle(input: { name: string; sku: string; method: "STICK" | "DRUCK" | "TRANSFER"; placement: string | null; veredlerId: string; ekCents: number | null; tiers: VeredelungTier[] }): Promise<CatalogEntry> {
+    const articleId = `art_${++this.seq}`;
+    this.articles.set(articleId, { id: articleId, sku: input.sku, name: input.name, ...emptyPim });
+    const variantId = `var_${++this.seq}`;
+    this.variants.set(variantId, { id: variantId, articleId, sku: input.sku, attributes: [], isBundle: false });
+    this.veredelungArticles.set(articleId, { veredlerId: input.veredlerId, ekCents: input.ekCents, tiers: input.tiers });
+    return { variantId, articleId, articleName: input.name, sku: input.sku, label: `${input.name} (${input.sku})`, unitNetCents: input.tiers[0]?.vkCents ?? 0, isBundle: false };
   }
 }
