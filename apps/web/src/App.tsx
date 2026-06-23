@@ -1,7 +1,7 @@
 // Navigations-Gerüst: Auth-Gate + AppShell mit gruppierter Sidebar über ALLE Module
 // (alles durchklickbar). Jede Sektion ist eine Seite gegen die echten tRPC-Endpunkte.
-import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { AppShell, Badge, Box, Button, Group, Loader, NavLink, Paper, ScrollArea, Text, TextInput, Title } from "@mantine/core";
+import { useCallback, useEffect, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import { AppShell, Badge, Box, Button, Group, Kbd, Loader, Modal, NavLink, Paper, ScrollArea, Stack, Text, TextInput, Title } from "@mantine/core";
 import { Login } from "./Login.js";
 import { Dashboard } from "./Dashboard.js";
 import { Reporting } from "./Reporting.js";
@@ -52,35 +52,77 @@ export function App(): JSX.Element {
 
 const activeLabel = (k: string): string => NAV.flatMap((g) => g.items).find((i) => i.key === k)?.label ?? "";
 
-// Globale Suche (G-6): entitätsübergreifende Suchbox im Header; Treffer navigieren
-// zum jeweiligen Modul (navKey). Ab 2 Zeichen.
-function GlobalSearch({ onNavigate }: { onNavigate: (k: string) => void }): JSX.Element {
-  const [q, setQ] = useState("");
-  const [hits, setHits] = useState<Awaited<ReturnType<typeof trpc.search.global.query>>>([]);
+// Globale Suche (G-6) im Spotlight-Stil: ⌘K/Strg+K (oder Klick) öffnet ein Overlay,
+// Tippen sucht entitätsübergreifend ab 2 Zeichen, ↑/↓ wählt, ⏎ springt direkt auf den
+// Beleg (navKey + Fokus-ID), Esc schließt. Treffer nach Entität gruppiert.
+type SearchHit = Awaited<ReturnType<typeof trpc.search.global.query>>[number];
+
+function GlobalSearch({ onSelect }: { onSelect: (hit: SearchHit) => void }): JSX.Element {
   const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [hits, setHits] = useState<SearchHit[]>([]);
+  const [active, setActive] = useState(0);
+
+  // ⌘K / Strg+K öffnet die Suche von überall.
   useEffect(() => {
-    if (q.trim().length < 2) { setHits([]); return; }
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setOpen((o) => !o); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  useEffect(() => {
+    if (q.trim().length < 2) { setHits([]); setActive(0); return; }
     let cancelled = false;
-    void trpc.search.global.query({ query: q }).then((r) => { if (!cancelled) { setHits(r); setOpen(true); } }).catch(() => undefined);
+    void trpc.search.global.query({ query: q }).then((r) => { if (!cancelled) { setHits(r); setActive(0); } }).catch(() => undefined);
     return () => { cancelled = true; };
   }, [q]);
+
+  const choose = (hit: SearchHit | undefined): void => {
+    if (!hit) return;
+    onSelect(hit);
+    setOpen(false); setQ(""); setHits([]);
+  };
+
+  const onInputKey = (e: ReactKeyboardEvent): void => {
+    if (e.key === "ArrowDown") { e.preventDefault(); setActive((i) => Math.min(i + 1, hits.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setActive((i) => Math.max(i - 1, 0)); }
+    else if (e.key === "Enter") { e.preventDefault(); choose(hits[active]); }
+  };
+
   return (
-    <Box style={{ position: "relative", width: 340 }}>
-      <TextInput size="xs" placeholder="Suche: Firma, Auftrag, Artikel, Lead…" value={q}
-        onChange={(e) => setQ(e.currentTarget.value)} onFocus={() => hits.length > 0 && setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)} />
-      {open && hits.length > 0 && (
-        <Paper shadow="md" withBorder style={{ position: "absolute", top: 32, left: 0, right: 0, zIndex: 300, maxHeight: 340, overflowY: "auto" }}>
-          {hits.map((h) => (
-            <Box key={`${h.entity}-${h.id}`} px="sm" py={6} style={{ cursor: "pointer" }}
-              onMouseDown={(e) => { e.preventDefault(); onNavigate(h.navKey); setOpen(false); setQ(""); }}>
-              <Text size="sm"><Badge size="xs" variant="light" mr={6}>{h.entity}</Badge>{h.label}
-                {h.sub ? <Text span c="dimmed" size="xs"> · {h.sub}</Text> : null}</Text>
-            </Box>
-          ))}
-        </Paper>
-      )}
-    </Box>
+    <>
+      <Button variant="default" size="xs" w={340} justify="space-between" onClick={() => setOpen(true)}
+        rightSection={<Kbd size="xs">⌘K</Kbd>} c="dimmed" fw={400}>
+        Suche: Firma, Auftrag, Artikel, Lead…
+      </Button>
+      <Modal opened={open} onClose={() => setOpen(false)} withCloseButton={false} size="lg" yOffset={80} padding={0}
+        overlayProps={{ backgroundOpacity: 0.35, blur: 1 }} transitionProps={{ duration: 120 }}>
+        <TextInput size="md" variant="unstyled" px="md" autoFocus placeholder="Suchen… (Firma, Auftrag, Artikel, Lead, Lieferant)"
+          value={q} onChange={(e) => setQ(e.currentTarget.value)} onKeyDown={onInputKey}
+          styles={{ input: { borderBottom: "1px solid var(--mantine-color-gray-3)", height: 48 } }} />
+        <ScrollArea.Autosize mah={400}>
+          {hits.length === 0
+            ? <Text size="sm" c="dimmed" p="md">{q.trim().length < 2 ? "Mindestens 2 Zeichen eingeben." : "Keine Treffer."}</Text>
+            : <Stack gap={0} p={4}>
+                {hits.map((h, i) => (
+                  <Box key={`${h.entity}-${h.id}`} px="sm" py={8} style={{ cursor: "pointer", borderRadius: 6, background: i === active ? "var(--mantine-color-blue-0)" : undefined }}
+                    onMouseEnter={() => setActive(i)} onMouseDown={(e) => { e.preventDefault(); choose(h); }}>
+                    <Group gap={8} wrap="nowrap">
+                      <Badge size="xs" variant="light">{h.entity}</Badge>
+                      <Text size="sm" style={{ flex: 1, minWidth: 0 }} truncate>{h.label}
+                        {h.sub ? <Text span c="dimmed" size="xs"> · {h.sub}</Text> : null}</Text>
+                    </Group>
+                  </Box>
+                ))}
+              </Stack>}
+        </ScrollArea.Autosize>
+        <Group justify="space-between" px="md" py={6} style={{ borderTop: "1px solid var(--mantine-color-gray-2)" }}>
+          <Text size="xs" c="dimmed"><Kbd size="xs">↑</Kbd> <Kbd size="xs">↓</Kbd> wählen · <Kbd size="xs">⏎</Kbd> öffnen · <Kbd size="xs">Esc</Kbd> schließen</Text>
+        </Group>
+      </Modal>
+    </>
   );
 }
 
@@ -139,9 +181,18 @@ function TaskBadge({ onOpen }: { onOpen: () => void }): JSX.Element {
 
 function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<void> }): JSX.Element {
   const [active, setActiveState] = useState<string>(hashKey);
+  // Fokus-Sprungziel aus der globalen Suche (navKey + Beleg-ID): die Zielseite öffnet
+  // direkt den Beleg. Manuelle Navigation (Sidebar/Badges) löscht den Fokus.
+  const [focus, setFocus] = useState<{ navKey: string; id: string } | null>(null);
   const setActive = useCallback((k: string) => {
     setActiveState(k);
+    setFocus(null);
     if (typeof location !== "undefined") location.hash = k;
+  }, []);
+  const goToHit = useCallback((hit: SearchHit) => {
+    setActiveState(hit.navKey);
+    setFocus({ navKey: hit.navKey, id: hit.id });
+    if (typeof location !== "undefined") location.hash = hit.navKey;
   }, []);
 
   // Genauer Seitentitel je Bereich (Web Interface Guidelines: accurate page titles).
@@ -158,7 +209,7 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<voi
             <Title order={4}>TEXMA&nbsp;ERP</Title>
             <Badge size="sm" color="amber">Demo</Badge>
           </Group>
-          <GlobalSearch onNavigate={setActive} />
+          <GlobalSearch onSelect={goToHit} />
           <Group gap="sm">
             <TaskBadge onOpen={() => setActive("tasks")} />
             <NotificationBell onNavigate={setActive} />
@@ -183,19 +234,20 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<voi
       </AppShell.Navbar>
 
       <AppShell.Main>
-        <Page k={active} role={user.role} userName={user.name} onNavigate={setActive} />
+        <Page k={active} role={user.role} userName={user.name} onNavigate={setActive}
+          focusId={focus && focus.navKey === active ? focus.id : undefined} />
       </AppShell.Main>
     </AppShell>
   );
 }
 
-function Page({ k, role, userName, onNavigate }: { k: string; role: string; userName: string; onNavigate: (k: string) => void }): ReactNode {
+function Page({ k, role, userName, onNavigate, focusId }: { k: string; role: string; userName: string; onNavigate: (k: string) => void; focusId?: string }): ReactNode {
   switch (k) {
     case "home": return <HomePage userName={userName} onNavigate={onNavigate} />;
     case "dashboard": return <Dashboard />;
     case "dashboards": return <DashboardsPage />;
-    case "orders": return <OrdersPage role={role} />;
-    case "companies": return <CompaniesPage />;
+    case "orders": return <OrdersPage role={role} focusId={focusId} />;
+    case "companies": return <CompaniesPage focusId={focusId} />;
     case "leads": return <LeadsPage />;
     case "inquiries": return <InquiriesPage />;
     case "quotes": return <QuotesPage />;

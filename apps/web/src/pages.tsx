@@ -1026,7 +1026,7 @@ function ConnectionsPanel({ orderId, role, onChanged }: { orderId: string; role:
   );
 }
 
-export function OrdersPage({ role }: { role: string }): JSX.Element {
+export function OrdersPage({ role, focusId }: { role: string; focusId?: string }): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [err, setErr] = useState<string | null>(null);
   // Terminierungs-Panel (B9): Auftrag + zugesagter Liefertermin + Rückwärts-Vorschau.
@@ -1043,6 +1043,8 @@ export function OrdersPage({ role }: { role: string }): JSX.Element {
     catch (e) { setErr(errMsg(e)); }
   }, []);
   useEffect(() => { void load(); }, [load]);
+  // Direkter Sprung aus der globalen Suche: das Detail-/Belegketten-Panel des Auftrags öffnen.
+  useEffect(() => { if (focusId) setTermOrder(focusId); }, [focusId]);
 
   const canAct = role === "ADMIN" || role === "BUERO";
 
@@ -1258,7 +1260,7 @@ function CompanyContactsPanel({ companyId, companies }: { companyId: string; com
   );
 }
 
-export function CompaniesPage(): JSX.Element {
+export function CompaniesPage({ focusId }: { focusId?: string } = {}): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [name, setName] = useState("");
   const [branche, setBranche] = useState("");
@@ -1273,6 +1275,8 @@ export function CompaniesPage(): JSX.Element {
     catch (e) { setErr(errMsg(e)); }
   }, []);
   useEffect(() => { void load(); }, [load]);
+  // Direkter Sprung aus der globalen Suche: Detailpanel des gesuchten Kunden öffnen.
+  useEffect(() => { if (focusId) setOpenCompany(focusId); }, [focusId]);
 
   return (
     <>
