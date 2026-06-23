@@ -58,10 +58,19 @@ export class MailIntakeService {
 
 // ── Ausgang (SMTP) ──────────────────────────────────────────────────────────
 
+export interface MailAttachment {
+  filename: string;
+  /** Inhalt base64-kodiert. */
+  contentBase64: string;
+  contentType?: string;
+}
+
 export interface OutgoingMail {
   to: string;
   subject: string;
   body: string;
+  /** Optionale Dateianhänge (z. B. Beleg-PDF). */
+  attachments?: MailAttachment[];
 }
 
 /** SMTP-Port: konkrete Implementierung (nodemailer o. Ä.) als Worker-Adapter. */

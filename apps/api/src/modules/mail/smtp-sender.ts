@@ -90,17 +90,52 @@ function b64(s: string): string {
 }
 
 function buildMessage(from: string, mail: OutgoingMail): string {
+  // Punkt-Stuffing: Zeilen, die mit "." beginnen, verdoppeln (RFC 5321).
+  const body = mail.body.replace(/\r?\n/g, CRLF).replace(/^\./gm, "..");
+  const atts = mail.attachments ?? [];
+
+  if (atts.length === 0) {
+    const headers = [
+      `From: ${from}`,
+      `To: ${mail.to}`,
+      `Subject: ${encodeHeader(mail.subject)}`,
+      "MIME-Version: 1.0",
+      'Content-Type: text/plain; charset="utf-8"',
+      "Content-Transfer-Encoding: 8bit",
+    ];
+    return headers.join(CRLF) + CRLF + CRLF + body;
+  }
+
+  // Mehrteilige Nachricht (Text + Anhänge) als multipart/mixed.
+  const boundary = `texma_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
   const headers = [
     `From: ${from}`,
     `To: ${mail.to}`,
     `Subject: ${encodeHeader(mail.subject)}`,
     "MIME-Version: 1.0",
+    `Content-Type: multipart/mixed; boundary="${boundary}"`,
+  ];
+  const textPart = [
+    `--${boundary}`,
     'Content-Type: text/plain; charset="utf-8"',
     "Content-Transfer-Encoding: 8bit",
-  ];
-  // Punkt-Stuffing: Zeilen, die mit "." beginnen, verdoppeln (RFC 5321).
-  const body = mail.body.replace(/\r?\n/g, CRLF).replace(/^\./gm, "..");
-  return headers.join(CRLF) + CRLF + CRLF + body;
+    "",
+    body,
+  ].join(CRLF);
+  const attParts = atts.map((a) => [
+    `--${boundary}`,
+    `Content-Type: ${a.contentType ?? "application/octet-stream"}; name="${a.filename}"`,
+    "Content-Transfer-Encoding: base64",
+    `Content-Disposition: attachment; filename="${a.filename}"`,
+    "",
+    wrapBase64(a.contentBase64),
+  ].join(CRLF));
+  return headers.join(CRLF) + CRLF + CRLF + [textPart, ...attParts, `--${boundary}--`].join(CRLF);
+}
+
+/** Base64 auf 76-Zeichen-Zeilen umbrechen (RFC 2045). */
+function wrapBase64(b64s: string): string {
+  return (b64s.match(/.{1,76}/g) ?? [b64s]).join(CRLF);
 }
 
 /** Nicht-ASCII-Betreff RFC-2047 (UTF-8, Base64) kodieren. */

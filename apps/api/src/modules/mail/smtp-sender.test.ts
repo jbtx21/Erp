@@ -63,6 +63,20 @@ describe("SmtpMailSender (IONOS, ohne Fremdbibliothek)", () => {
     expect(sock.written.join("")).toContain("=?UTF-8?B?");
   });
 
+  it("baut eine multipart/mixed-Nachricht mit PDF-Anhang", async () => {
+    const sock = new FakeSocket(OK_SCRIPT);
+    const pdfB64 = Buffer.from("%PDF-1.7 dummy").toString("base64");
+    await new SmtpMailSender(cfg, async () => sock as unknown as Duplex).send({
+      to: "kunde@example.de", subject: "Angebot", body: "Anbei das Angebot.",
+      attachments: [{ filename: "Angebot-AN-1.pdf", contentBase64: pdfB64, contentType: "application/pdf" }],
+    });
+    const sent = sock.written.join("");
+    expect(sent).toContain("Content-Type: multipart/mixed; boundary=");
+    expect(sent).toContain('Content-Disposition: attachment; filename="Angebot-AN-1.pdf"');
+    expect(sent).toContain("Content-Transfer-Encoding: base64");
+    expect(sent).toContain(pdfB64);
+  });
+
   it("wirft bei unerwartetem Statuscode (z. B. Auth-Fehler)", async () => {
     const bad = [...OK_SCRIPT];
     bad[3] = "535 5.7.8 Authentication failed\r\n"; // pass → Fehler

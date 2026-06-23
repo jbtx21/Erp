@@ -733,12 +733,20 @@ export function QuotesPage(): JSX.Element {
     try { const r = await trpc.print.quote.query({ quoteId }); downloadBase64(r.filename, r.base64, "application/pdf"); }
     catch (e) { setErr(errMsg(e)); }
   };
+  const mailPdf = async (quoteId: string): Promise<void> => {
+    const to = typeof window !== "undefined" ? window.prompt("Angebot per E-Mail senden an:") : null;
+    if (!to) return;
+    setErr(null);
+    try { const r = await trpc.mail.sendBeleg.mutate({ kind: "QUOTE", id: quoteId, to }); window.alert(`„${r.filename}" an ${to} gesendet.`); }
+    catch (e) { setErr(errMsg(e)); }
+  };
 
   const actionsFor = (r: Row): ReactNode => {
     const id = String(r.id); const status = String(r.status);
     return (
       <Group gap={4} justify="flex-end" wrap="nowrap">
         <Button size="compact-xs" variant="subtle" onClick={() => void printPdf(id)}>PDF</Button>
+        <Button size="compact-xs" variant="subtle" onClick={() => void mailPdf(id)}>Mail</Button>
         {status === "ENTWURF" && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.quotes.transition.mutate({ id, to: "VERSENDET" }))}>→ Versendet</Button>}
         {(status === "VERSENDET" || status === "NACHFASSEN") && <Button size="compact-xs" color="green" onClick={() => void act(() => trpc.quotes.transition.mutate({ id, to: "ANGENOMMEN" }))}>Angenommen</Button>}
         {status === "ANGENOMMEN" && <Button size="compact-xs" color="blue" onClick={() => void act(async () => { const r = await trpc.sales.convertQuote.mutate({ quoteId: id }); window.alert(`Auftrag ${r.number} angelegt.`); })}>→ Auftrag</Button>}
@@ -1178,6 +1186,13 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
                 try { const r = await trpc.print.auftragsbestaetigung.query({ orderId: termOrder }); downloadBase64(r.filename, r.base64, "application/pdf"); }
                 catch (e) { setErr(errMsg(e)); }
               }}>Auftragsbestätigung (PDF)</Button>
+              <Button size="xs" variant="default" onClick={async () => {
+                const to = typeof window !== "undefined" ? window.prompt("Auftragsbestätigung per E-Mail senden an:") : null;
+                if (!to) return;
+                setErr(null);
+                try { const r = await trpc.mail.sendBeleg.mutate({ kind: "AUFTRAGSBESTAETIGUNG", id: termOrder, to }); window.alert(`„${r.filename}" an ${to} gesendet.`); }
+                catch (e) { setErr(errMsg(e)); }
+              }}>AB per Mail</Button>
             </Group>
           )}
           {termOrder && (
