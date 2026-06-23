@@ -14,13 +14,18 @@ export class PrismaQuoteRepository implements QuoteRepository {
   async list(): Promise<QuoteRow[]> {
     const rows = await prisma.quote.findMany({
       orderBy: { createdAt: "desc" },
-      select: { id: true, number: true, companyId: true, status: true, orderType: true, quotationTo: true, gueltigBisAm: true, createdAt: true, company: { select: { name: true } }, lines: { select: { qty: true, unitNetCents: true } } },
+      select: { id: true, number: true, companyId: true, status: true, orderType: true, quotationTo: true, gueltigBisAm: true, createdAt: true, company: { select: { name: true } }, lines: { select: { qty: true, unitNetCents: true, dbCents: true, isAlternative: true } } },
     });
-    return rows.map((q) => ({
-      id: q.id, number: q.number, companyId: q.companyId, companyName: q.company.name, status: q.status as QuoteStatus,
-      orderType: q.orderType, quotationTo: q.quotationTo, gueltigBisAm: q.gueltigBisAm, createdAt: q.createdAt,
-      totalNetCents: q.lines.reduce((s, l) => s + l.qty * l.unitNetCents, 0),
-    }));
+    return rows.map((q) => {
+      const main = q.lines.filter((l) => !l.isAlternative);
+      const dbLines = main.filter((l) => l.dbCents !== null);
+      return {
+        id: q.id, number: q.number, companyId: q.companyId, companyName: q.company.name, status: q.status as QuoteStatus,
+        orderType: q.orderType, quotationTo: q.quotationTo, gueltigBisAm: q.gueltigBisAm, createdAt: q.createdAt,
+        totalNetCents: main.reduce((s, l) => s + l.qty * l.unitNetCents, 0),
+        totalDbCents: dbLines.length ? dbLines.reduce((s, l) => s + l.qty * (l.dbCents ?? 0), 0) : null,
+      };
+    });
   }
 
   async create(input: CreateQuoteInput & { number: string }): Promise<{ id: string }> {
@@ -32,7 +37,7 @@ export class PrismaQuoteRepository implements QuoteRepository {
         orderType: input.orderType ?? "SALES",
         quotationTo: input.quotationTo ?? "CUSTOMER",
         terms: input.terms ?? null,
-        lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, kind: (l.kind ?? "TEXTIL") as never, articleId: l.articleId ?? null, variantId: l.variantId ?? null, isAlternative: l.isAlternative ?? false })) },
+        lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, dbCents: l.dbCents ?? null, kind: (l.kind ?? "TEXTIL") as never, articleId: l.articleId ?? null, variantId: l.variantId ?? null, isAlternative: l.isAlternative ?? false })) },
       },
       select: { id: true },
     });

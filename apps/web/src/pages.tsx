@@ -717,7 +717,7 @@ export type PositionKind = "TEXTIL" | "VEREDELUNG" | "SONSTIGE";
 // Eine Position kann auf eine konkrete Variante (variantId) ODER nur auf einen
 // Hauptartikel (articleId, Farbe×Größe noch offen) verweisen; isAlternative kennzeichnet
 // ein unverbindliches Alternativangebot (wird beim Wandeln in den Auftrag weggelassen).
-export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind; variantId?: string; articleId?: string; isAlternative?: boolean }
+export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind; variantId?: string; articleId?: string; isAlternative?: boolean; ekEuro?: number }
 
 // Artikel-Picker: durchsuchbare Auswahl aus dem Artikelstamm (ERPNext „Link field").
 // Bei Auswahl wird eine Position vorbefüllt (Bezeichnung, Standardpreis, Variante).
@@ -853,17 +853,32 @@ export function SupplierPicker({ value, onChange, label, w = 200 }: { value: str
   );
 }
 
-export function LinesEditor({ lines, onChange, quoteMode = false }: { lines: EditorLine[]; onChange: (l: EditorLine[]) => void; quoteMode?: boolean }): JSX.Element {
+// Deckungsbeitrag je Position (VK − EK) × Menge in Cent; null wenn kein EK bekannt.
+const lineDbCents = (l: EditorLine): number | null =>
+  l.ekEuro === undefined ? null : Math.round((l.euro - l.ekEuro) * 100) * l.qty;
+
+export function LinesEditor({ lines, onChange, quoteMode = false, companyId }: { lines: EditorLine[]; onChange: (l: EditorLine[]) => void; quoteMode?: boolean; companyId?: string }): JSX.Element {
   const set = (i: number, patch: Partial<EditorLine>): void => onChange(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
-  // Erste leere Zeile ersetzen, sonst anhängen.
-  const addLine = (line: EditorLine): void => {
+  // Erste leere Zeile ersetzen, sonst anhängen; gibt den Zielindex zurück.
+  const addLine = (line: EditorLine): number => {
     const idx = lines.findIndex((l) => !l.description.trim());
     onChange(idx >= 0 ? lines.map((l, j) => (j === idx ? line : l)) : [...lines, line]);
+    return idx >= 0 ? idx : lines.length;
   };
-  const addFromCatalog = (e: { label: string; unitNetCents: number; variantId: string }): void =>
-    addLine({ description: e.label, qty: 1, euro: e.unitNetCents / 100, kind: "TEXTIL", variantId: e.variantId });
+  // Staffelpreis + Lieferanten-EK (→ Deckungsbeitrag) für eine Variante des Kunden ziehen.
+  const resolve = async (variantId: string, qty: number): Promise<{ euro?: number; ekEuro?: number }> => {
+    if (!companyId) return {};
+    try {
+      const r = await trpc.pricing.resolve.query({ companyId, variantId, menge: Math.max(1, qty) });
+      return { euro: r.netCents / 100, ...(r.ekCents != null ? { ekEuro: r.ekCents / 100 } : {}) };
+    } catch { return {}; }
+  };
+  const addFromCatalog = (e: { label: string; unitNetCents: number; variantId: string }): void => {
+    const idx = addLine({ description: e.label, qty: 1, euro: e.unitNetCents / 100, kind: "TEXTIL", variantId: e.variantId });
+    void resolve(e.variantId, 1).then((p) => { if (p.euro !== undefined || p.ekEuro !== undefined) set(idx, p); });
+  };
   const addHauptartikel = (e: { articleId: string; articleName: string; unitNetCents: number }): void =>
-    addLine({ description: e.articleName, qty: 1, euro: e.unitNetCents / 100, kind: "TEXTIL", articleId: e.articleId });
+    void addLine({ description: e.articleName, qty: 1, euro: e.unitNetCents / 100, kind: "TEXTIL", articleId: e.articleId });
   return (
     <Box>
       <Group gap="xs" mb={6}>
@@ -871,46 +886,65 @@ export function LinesEditor({ lines, onChange, quoteMode = false }: { lines: Edi
         {quoteMode && <HauptartikelPicker onPick={addHauptartikel} />}
         <Text size="xs" c="dimmed">{quoteMode ? "Variante wählen, Hauptartikel (Farbe/Größe offen) oder unten frei erfassen" : "aus dem Artikelstamm wählen oder unten frei erfassen"}</Text>
       </Group>
-      {lines.map((l, i) => (
+      {lines.map((l, i) => {
+        const db = lineDbCents(l);
+        const margePct = db !== null && l.euro > 0 ? (l.euro - (l.ekEuro ?? 0)) / l.euro : null;
+        return (
         <Group key={i} gap="xs" mt={4} align="end">
-          <Select label={i === 0 ? "Art" : undefined} w={130} value={l.kind} onChange={(v) => v && set(i, { kind: v as PositionKind })}
+          <Select label={i === 0 ? "Art" : undefined} w={120} value={l.kind} onChange={(v) => v && set(i, { kind: v as PositionKind })}
             data={[{ value: "TEXTIL", label: "Textil" }, { value: "VEREDELUNG", label: "Veredelung" }, { value: "SONSTIGE", label: "Sonstiges" }]} />
-          <TextInput label={i === 0 ? "Beschreibung" : undefined} value={l.description} onChange={(e) => set(i, { description: e.currentTarget.value })} placeholder="200 Polos bestickt" w={240} />
-          <NumberInput label={i === 0 ? "Menge" : undefined} value={l.qty} onChange={(v) => set(i, { qty: Number(v) || 1 })} min={1} w={90} />
-          <NumberInput label={i === 0 ? "Einzel (€)" : undefined} value={l.euro} onChange={(v) => set(i, { euro: Number(v) || 0 })} min={0} decimalScale={2} w={110} />
+          <TextInput label={i === 0 ? "Beschreibung" : undefined} value={l.description} onChange={(e) => set(i, { description: e.currentTarget.value })} placeholder="200 Polos bestickt" w={220} />
+          <NumberInput label={i === 0 ? "Menge" : undefined} value={l.qty} onChange={(v) => set(i, { qty: Number(v) || 1 })}
+            onBlur={() => { if (companyId && l.variantId) void resolve(l.variantId, l.qty).then((p) => { if (p.euro !== undefined || p.ekEuro !== undefined) set(i, p); }); }}
+            min={1} w={80} />
+          <NumberInput label={i === 0 ? "Einzel (€)" : undefined} value={l.euro} onChange={(v) => set(i, { euro: Number(v) || 0 })} min={0} decimalScale={2} w={100} />
+          <NumberInput label={i === 0 ? "EK (€)" : undefined} value={l.ekEuro ?? ""} onChange={(v) => set(i, { ekEuro: v === "" ? undefined : Number(v) })} min={0} decimalScale={2} w={90} placeholder="—" />
+          {db !== null && <Badge color={db >= 0 ? "teal" : "red"} variant="light" size="sm" title="Deckungsbeitrag (VK − EK) × Menge">DB {euro(db)}{margePct !== null ? ` · ${(margePct * 100).toFixed(0)}%` : ""}</Badge>}
           {quoteMode && l.articleId && !l.variantId && <Badge color="orange" variant="light" size="sm" title="Farbe & Größe werden beim Wandeln in den Auftrag abgefragt">Variante offen</Badge>}
           {quoteMode && <Switch size="xs" label="Alt." checked={!!l.isAlternative} onChange={(e) => set(i, { isAlternative: e.currentTarget.checked })} title="Alternativposition — wird beim Wandeln in den Auftrag nicht übernommen" />}
           <Button size="compact-sm" variant="subtle" color="red" disabled={lines.length === 1} onClick={() => onChange(lines.filter((_, j) => j !== i))}>✕</Button>
         </Group>
-      ))}
+        );
+      })}
       <Button size="compact-xs" variant="light" mt="xs" onClick={() => onChange([...lines, { description: "", qty: 1, euro: 0, kind: "VEREDELUNG" }])}>+ Position</Button>
       <LineTotals lines={lines} />
     </Box>
   );
 }
 
-// Auto-berechnete Summen (Netto/USt/Brutto) aus den Positionen — read-only (ERPNext-Muster).
+// Auto-berechnete Summen (Netto/USt/Brutto + Deckungsbeitrag) aus den Positionen — read-only (ERPNext-Muster).
 function LineTotals({ lines }: { lines: EditorLine[] }): JSX.Element {
   // Alternativpositionen zählen nicht zur Angebotssumme (unverbindlich).
-  const netCents = lines.filter((l) => l.description.trim() && !l.isAlternative).reduce((s, l) => s + Math.round(l.qty * l.euro * 100), 0);
+  const main = lines.filter((l) => l.description.trim() && !l.isAlternative);
+  const netCents = main.reduce((s, l) => s + Math.round(l.qty * l.euro * 100), 0);
   const taxCents = Math.round(netCents * 0.19);
+  const dbLines = main.filter((l) => l.ekEuro !== undefined);
+  const dbCents = dbLines.reduce((s, l) => s + (lineDbCents(l) ?? 0), 0);
+  const dbMargePct = dbLines.length && netCents > 0 ? dbCents / main.reduce((s, l) => s + Math.round(l.qty * l.euro * 100), 0) : null;
   return (
     <Group gap="lg" mt="sm" justify="flex-end">
+      {dbLines.length > 0 && <Text size="sm" c={dbCents >= 0 ? "teal" : "red"}>DB: <b>{euro(dbCents)}</b>{dbMargePct !== null ? ` (${(dbMargePct * 100).toFixed(0)} %)` : ""}</Text>}
       <Text size="sm" c="dimmed">Netto: <b>{euro(netCents)}</b></Text>
       <Text size="sm" c="dimmed">USt 19 %: <b>{euro(taxCents)}</b></Text>
       <Text size="sm">Brutto: <b>{euro(netCents + taxCents)}</b></Text>
     </Group>
   );
 }
-export const toApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; kind: PositionKind }[] =>
-  lines.filter((l) => l.description.trim()).map((l) => ({ description: l.description.trim(), qty: l.qty, unitNetCents: Math.round(l.euro * 100), kind: l.kind }));
+export const toApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; kind: PositionKind; variantId?: string; dbCents?: number }[] =>
+  lines.filter((l) => l.description.trim()).map((l) => {
+    const dbPerUnit = l.ekEuro === undefined ? undefined : Math.round((l.euro - l.ekEuro) * 100);
+    return { description: l.description.trim(), qty: l.qty, unitNetCents: Math.round(l.euro * 100), kind: l.kind, ...(l.variantId ? { variantId: l.variantId } : {}), ...(dbPerUnit !== undefined ? { dbCents: dbPerUnit } : {}) };
+  });
 
 // Wie toApiLines, aber inkl. Artikel-/Varianten-Referenz und Alternativ-Kennzeichen (Angebot).
-export const toQuoteApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; kind: PositionKind; articleId?: string; variantId?: string; isAlternative?: boolean }[] =>
-  lines.filter((l) => l.description.trim()).map((l) => ({
-    description: l.description.trim(), qty: l.qty, unitNetCents: Math.round(l.euro * 100), kind: l.kind,
-    ...(l.articleId ? { articleId: l.articleId } : {}), ...(l.variantId ? { variantId: l.variantId } : {}), ...(l.isAlternative ? { isAlternative: true } : {}),
-  }));
+export const toQuoteApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; kind: PositionKind; articleId?: string; variantId?: string; isAlternative?: boolean; dbCents?: number }[] =>
+  lines.filter((l) => l.description.trim()).map((l) => {
+    const dbPerUnit = l.ekEuro === undefined ? undefined : Math.round((l.euro - l.ekEuro) * 100);
+    return {
+      description: l.description.trim(), qty: l.qty, unitNetCents: Math.round(l.euro * 100), kind: l.kind,
+      ...(l.articleId ? { articleId: l.articleId } : {}), ...(l.variantId ? { variantId: l.variantId } : {}), ...(l.isAlternative ? { isAlternative: true } : {}), ...(dbPerUnit !== undefined ? { dbCents: dbPerUnit } : {}),
+    };
+  });
 
 // Angebot → Auftrag: fragt für Hauptartikel ohne Variante (needsVariant) die genaue
 // Farbe×Größe ab und übergibt die Auflösung an convertQuote. Alternativen werden vom
@@ -1083,7 +1117,7 @@ export function QuotesPage(): JSX.Element {
               <Text size="sm" c="dimmed">Währung: <b>EUR</b> · Preisfindung über Preisgruppe des Kunden + Mengenstaffeln (B4).</Text>
             </Collapsible>
             <Title order={5} mt="lg">Artikel</Title>
-            <LinesEditor lines={lines} onChange={setLines} quoteMode />
+            <LinesEditor lines={lines} onChange={setLines} quoteMode companyId={companyId || undefined} />
             <Title order={5} mt="lg">Steuern und Gebühren</Title>
             <Checkbox mt="xs" label="Kunde ist von der Umsatzsteuer befreit (innergemeinschaftlich / Reverse-Charge)" checked={exempt} onChange={(e) => setExempt(e.currentTarget.checked)} />
             <Text size="xs" c="dimmed" mt={4}>USt-Satz: {exempt ? "0 % (steuerfrei)" : "19 % Standard"} — Steuer- und Summenfelder werden automatisch berechnet (read-only).</Text>
@@ -1162,7 +1196,7 @@ export function QuotesPage(): JSX.Element {
             <Table.Tr>
               <Table.Th>ID</Table.Th><Table.Th>Angebot für</Table.Th><Table.Th>Kundenname</Table.Th>
               <Table.Th>Datum</Table.Th><Table.Th>Bestellart</Table.Th><Table.Th>Status</Table.Th>
-              <Table.Th ta="right">Gesamtbetrag</Table.Th><Table.Th></Table.Th>
+              <Table.Th ta="right">Gesamtbetrag</Table.Th><Table.Th ta="right">DB</Table.Th><Table.Th></Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -1175,10 +1209,11 @@ export function QuotesPage(): JSX.Element {
                 <Table.Td>{ORDER_TYPE_LABEL[r.orderType] ?? r.orderType}</Table.Td>
                 <Table.Td><Badge size="sm" variant="light" color={QUOTE_STATUS_COLOR[r.status] ?? "gray"}>{QUOTE_STATUS_LABEL[r.status] ?? r.status}</Badge></Table.Td>
                 <Table.Td ta="right">{euro(r.totalNetCents)}</Table.Td>
+                <Table.Td ta="right">{r.totalDbCents !== null ? <Text size="sm" c={r.totalDbCents >= 0 ? "teal" : "red"}>{euro(r.totalDbCents)}</Text> : <Text size="sm" c="dimmed">—</Text>}</Table.Td>
                 <Table.Td>{rowActions(r)}</Table.Td>
               </Table.Tr>
             ))}
-            {visible.length === 0 && <Table.Tr><Table.Td colSpan={8}><Text size="sm" c="dimmed">Kein Angebot passt zum Filter.</Text></Table.Td></Table.Tr>}
+            {visible.length === 0 && <Table.Tr><Table.Td colSpan={9}><Text size="sm" c="dimmed">Kein Angebot passt zum Filter.</Text></Table.Td></Table.Tr>}
           </Table.Tbody>
         </Table>
       )}
@@ -1525,7 +1560,7 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
           {showCreate && (
             <Box mt="xs" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
               <CompanyPicker value={newCompany} onChange={setNewCompany} w={240} />
-              <LinesEditor lines={newLines} onChange={setNewLines} />
+              <LinesEditor lines={newLines} onChange={setNewLines} companyId={newCompany || undefined} />
               <Button mt="sm" disabled={!newCompany.trim() || toApiLines(newLines).length === 0} onClick={async () => {
                 setErr(null);
                 try {

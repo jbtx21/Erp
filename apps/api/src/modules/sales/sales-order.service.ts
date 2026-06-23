@@ -12,6 +12,7 @@ export interface SalesLine {
   unitNetCents: number;
   kind?: PositionKind;
   variantId?: string;
+  dbCents?: number | null; // Deckungsbeitrag je Stück (VK − EK), Kap. 4.4
 }
 
 export interface CreatedSalesOrder {
@@ -30,6 +31,7 @@ export interface ConversionPlanLine {
   articleName: string | null;
   variantId: string | null;
   isAlternative: boolean;
+  dbCents: number | null; // Deckungsbeitrag je Stück (aus dem Angebot übernommen)
   /** true, wenn ein Hauptartikel ohne Variante (Farbe×Größe muss gewählt werden). */
   needsVariant: boolean;
 }
@@ -101,7 +103,7 @@ export class SalesOrderService {
         if (l.articleId && !variantId) {
           throw new SalesOrderError(`Position ${l.position} „${l.articleName ?? l.description}": Farbe & Größe wählen.`);
         }
-        return { description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, kind: l.kind, variantId };
+        return { description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, kind: l.kind, variantId, dbCents: l.dbCents };
       });
     validateLines(lines);
 

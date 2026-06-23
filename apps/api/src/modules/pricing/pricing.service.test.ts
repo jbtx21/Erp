@@ -22,19 +22,26 @@ function setup(): { repo: InMemoryPricingRepository; audit: MemoryAuditSink; svc
 describe("PricingService.resolve (T-15, Präzedenz + Stufe)", () => {
   it("Menge 5: keine Kundenstaffel (min 10) → Gruppen-Staffel Stufe 1 (1000)", async () => {
     const { svc } = setup();
-    expect(await svc.resolve("co1", "v1", 5)).toEqual({ netCents: 1000, source: "GRUPPE_STAFFEL", minMenge: 1 });
+    expect(await svc.resolve("co1", "v1", 5)).toEqual({ netCents: 1000, source: "GRUPPE_STAFFEL", minMenge: 1, ekCents: null, dbCents: null, dbMargePct: null });
   });
 
   it("Menge 10: kundenindividuelle Staffel sticht (800)", async () => {
     const { svc } = setup();
-    expect(await svc.resolve("co1", "v1", 10)).toEqual({ netCents: 800, source: "KUNDE", minMenge: 10 });
+    expect(await svc.resolve("co1", "v1", 10)).toEqual({ netCents: 800, source: "KUNDE", minMenge: 10, ekCents: null, dbCents: null, dbMargePct: null });
   });
 
   it("ohne jede Staffel: Einzelpreis der Gruppe", async () => {
     const repo = new InMemoryPricingRepository();
     repo.set("co1", "v1", { group: "STANDARD", customerTiers: [], groupTiers: [], groupPrices: [{ priceGroup: "STANDARD", netCents: 1200 }] });
     const svc = new PricingService(repo, new MemoryAuditSink());
-    expect(await svc.resolve("co1", "v1", 3)).toEqual({ netCents: 1200, source: "GRUPPE_EINZEL", minMenge: null });
+    expect(await svc.resolve("co1", "v1", 3)).toEqual({ netCents: 1200, source: "GRUPPE_EINZEL", minMenge: null, ekCents: null, dbCents: null, dbMargePct: null });
+  });
+
+  it("Deckungsbeitrag: mit Lieferanten-EK liefert DB + Marge (Kap. 4.4)", async () => {
+    const { repo, svc } = setup();
+    repo.setEk("v1", 600); // bester EK 6,00 €
+    // Menge 10 → Kundenstaffel 800. DB = 800 − 600 = 200; Marge = 200/800 = 0,25.
+    expect(await svc.resolve("co1", "v1", 10)).toMatchObject({ netCents: 800, ekCents: 600, dbCents: 200, dbMargePct: 0.25 });
   });
 
   it("Pflegefehler (kein Preis) wird sichtbar geworfen (T-08)", async () => {

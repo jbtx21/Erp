@@ -4,9 +4,14 @@ import type { PriceContext, PricingRepository, TierView } from "../modules/prici
 
 export class InMemoryPricingRepository implements PricingRepository {
   private readonly contexts = new Map<string, PriceContext>();
+  private readonly ek = new Map<string, number>();
 
   set(companyId: string, variantId: string, ctx: PriceContext): void {
     this.contexts.set(`${companyId}:${variantId}`, ctx);
+  }
+
+  setEk(variantId: string, ekCents: number): void {
+    this.ek.set(variantId, ekCents);
   }
 
   private ensure(companyId: string, variantId: string): PriceContext {
@@ -33,5 +38,9 @@ export class InMemoryPricingRepository implements PricingRepository {
     const existing = ctx.groupTiers.find((t) => t.minMenge === minMenge);
     if (existing) existing.netCents = netCents;
     else ctx.groupTiers.push({ minMenge, netCents });
+  }
+
+  async bestEkCents(variantId: string): Promise<number | null> {
+    return this.ek.get(variantId) ?? null;
   }
 }

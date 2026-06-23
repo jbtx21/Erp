@@ -15,6 +15,7 @@ export interface MemQuoteLine {
   articleName?: string | null;
   variantId?: string | null;
   isAlternative?: boolean;
+  dbCents?: number | null;
 }
 interface MemQuote { id: string; companyId: string; accepted: boolean; lines: MemQuoteLine[] }
 
@@ -50,6 +51,7 @@ export class InMemorySalesOrderRepository implements SalesOrderRepository {
         articleName: l.articleName ?? null,
         variantId: l.variantId ?? null,
         isAlternative: l.isAlternative ?? false,
+        dbCents: l.dbCents ?? null,
         needsVariant: !!l.articleId && !l.variantId && !l.isAlternative,
       })),
     };

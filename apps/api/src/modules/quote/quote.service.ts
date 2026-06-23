@@ -22,6 +22,7 @@ export interface QuoteRow {
   gueltigBisAm: Date | null;
   createdAt: Date;
   totalNetCents: number;
+  totalDbCents: number | null; // Summe Deckungsbeitrag (null, wenn keine Position EK hat)
 }
 
 export interface CreateQuoteInput {
@@ -30,7 +31,7 @@ export interface CreateQuoteInput {
   orderType?: string;
   quotationTo?: string;
   terms?: string | null;
-  lines: Array<{ description: string; qty: number; unitNetCents: number; kind?: import("@texma/shared").PositionKind; articleId?: string | null; variantId?: string | null; isAlternative?: boolean }>;
+  lines: Array<{ description: string; qty: number; unitNetCents: number; kind?: import("@texma/shared").PositionKind; articleId?: string | null; variantId?: string | null; isAlternative?: boolean; dbCents?: number | null }>;
 }
 
 export type QuoteTransition = "VERSENDET" | "NACHFASSEN" | "ANGENOMMEN";

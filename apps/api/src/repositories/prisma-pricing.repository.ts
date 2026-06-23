@@ -71,4 +71,9 @@ export class PrismaPricingRepository implements PricingRepository {
       create: { variantId, priceGroupId: company.priceGroupId, minMenge, netCents },
     });
   }
+
+  async bestEkCents(variantId: string): Promise<number | null> {
+    const r = await prisma.supplierItem.aggregate({ where: { variantId }, _min: { ekCents: true } });
+    return r._min.ekCents ?? null;
+  }
 }

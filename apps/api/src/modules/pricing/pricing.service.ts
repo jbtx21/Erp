@@ -4,6 +4,8 @@
 // Eine Pipeline, klare Präzedenz — kein paralleler Mechanismus.
 
 import {
+  deckungsbeitrag,
+  dbMarge,
   resolveBasePrice,
   selectTier,
   type Cents,
@@ -25,6 +27,11 @@ export interface ResolvedPrice {
   netCents: Cents;
   source: "KUNDE" | "GRUPPE_STAFFEL" | "GRUPPE_EINZEL";
   minMenge: number | null; // greifende Staffelstufe (null = Einzelpreis ohne Staffel)
+  // Deckungsbeitrag (Kap. 4.4: DB bereits im Angebot sichtbar). EK = bester Lieferanten-
+  // Einkaufspreis; null wenn kein Lieferantenpreis hinterlegt → DB/Marge nicht ermittelbar.
+  ekCents: Cents | null;
+  dbCents: Cents | null;
+  dbMargePct: number | null; // 0..1
 }
 
 export interface TierView {
@@ -39,6 +46,8 @@ export interface PricingRepository {
   listTiers(companyId: string, variantId: string): Promise<TierView>;
   /** Legt/aktualisiert eine Preisgruppen-Staffelstufe der Gruppe der Firma an (B4). */
   upsertGroupTier(companyId: string, variantId: string, minMenge: number, netCents: number): Promise<void>;
+  /** Bester (niedrigster) Lieferanten-EK je Variante in Cent; null wenn keiner gepflegt. */
+  bestEkCents(variantId: string): Promise<number | null>;
 }
 
 export class PricingService {
@@ -47,16 +56,23 @@ export class PricingService {
     private readonly audit: AuditSink
   ) {}
 
-  /** Netto-Basis-VK je Stück für die Bestellmenge (T-15), mit Herkunft der Stufe. */
+  /** Netto-Basis-VK je Stück für die Bestellmenge (T-15), mit Herkunft + Deckungsbeitrag. */
   async resolve(companyId: string, variantId: string, menge: number): Promise<ResolvedPrice> {
     const ctx = await this.repo.loadPriceContext(companyId, variantId);
+    let netCents: Cents;
+    let source: ResolvedPrice["source"];
+    let minMenge: number | null;
     const customer = selectTier(ctx.customerTiers, menge);
-    if (customer) return { netCents: customer.netCents, source: "KUNDE", minMenge: customer.minMenge };
     const group = selectTier(ctx.groupTiers, menge);
-    if (group) return { netCents: group.netCents, source: "GRUPPE_STAFFEL", minMenge: group.minMenge };
+    if (customer) { netCents = customer.netCents; source = "KUNDE"; minMenge = customer.minMenge; }
+    else if (group) { netCents = group.netCents; source = "GRUPPE_STAFFEL"; minMenge = group.minMenge; }
     // Kein Staffeltreffer → Einzelpreis der Gruppe (wirft sichtbar bei Pflegefehler, T-08).
-    const netCents = resolveBasePrice(ctx, ctx.group, menge);
-    return { netCents, source: "GRUPPE_EINZEL", minMenge: null };
+    else { netCents = resolveBasePrice(ctx, ctx.group, menge); source = "GRUPPE_EINZEL"; minMenge = null; }
+
+    const ekCents = await this.repo.bestEkCents(variantId);
+    const dbCents = ekCents === null ? null : deckungsbeitrag(netCents, ekCents);
+    const dbMargePct = ekCents === null ? null : dbMarge(netCents, ekCents);
+    return { netCents, source, minMenge, ekCents, dbCents, dbMargePct };
   }
 
   /** Reiner Netto-Preis je Stück (T-15) — schlanke Variante ohne Herkunft. */
