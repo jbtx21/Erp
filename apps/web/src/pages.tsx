@@ -1673,3 +1673,126 @@ export function OpportunitiesPage(): JSX.Element {
     </>
   );
 }
+
+// Büro-Kalender (Terminmanagement): Termine/Urlaub/Abwesenheiten, eigene + geteilte.
+const CAL_KINDS = [
+  { value: "TERMIN", label: "Termin", color: "blue" },
+  { value: "URLAUB", label: "Urlaub", color: "green" },
+  { value: "ABWESENHEIT", label: "Abwesenheit", color: "orange" },
+  { value: "SONSTIGES", label: "Sonstiges", color: "gray" },
+] as const;
+
+export function CalendarPage(): JSX.Element {
+  const [items, setItems] = useState<Row[]>([]);
+  const [title, setTitle] = useState("");
+  const [kind, setKind] = useState<string>("TERMIN");
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
+  const [shared, setShared] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    const from = new Date(); from.setDate(from.getDate() - 7);
+    const to = new Date(); to.setDate(to.getDate() + 120);
+    try { setItems((await trpc.calendar.list.query({ from: from.toISOString(), to: to.toISOString() })) as Row[]); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  const fmt = (d: unknown): string => new Date(String(d)).toLocaleString("de-DE", { dateStyle: "medium", timeStyle: "short" });
+
+  return (
+    <>
+      <Title order={3}>Kalender</Title>
+      <Text size="sm" c="dimmed" mt={4}>Büro-Termine, Urlaub und Abwesenheiten. „Geteilt" = für alle sichtbar. Externe Sync (CalDAV/Google) als Add-on vorgesehen.</Text>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+
+      <Group gap="xs" align="end" mt="md" wrap="wrap">
+        <TextInput label="Titel" value={title} onChange={(e) => setTitle(e.currentTarget.value)} w={200} />
+        <Select label="Art" value={kind} onChange={(v) => v && setKind(v)} data={CAL_KINDS.map((k) => ({ value: k.value, label: k.label }))} w={150} />
+        <TextInput label="Von" type="datetime-local" value={start} onChange={(e) => setStart(e.currentTarget.value)} w={200} />
+        <TextInput label="Bis" type="datetime-local" value={end} onChange={(e) => setEnd(e.currentTarget.value)} w={200} />
+        <Switch label="Geteilt" checked={shared} onChange={(e) => setShared(e.currentTarget.checked)} mb={8} />
+        <Button disabled={!title.trim() || !start || !end} onClick={async () => {
+          setErr(null);
+          try {
+            await trpc.calendar.create.mutate({ title, kind: kind as "TERMIN", shared, start: new Date(start).toISOString(), end: new Date(end).toISOString(), allDay: false });
+            setTitle(""); setStart(""); setEnd(""); setShared(false); await load();
+          } catch (e) { setErr(errMsg(e)); }
+        }}>Eintragen</Button>
+      </Group>
+
+      <Title order={4} mt="xl">Anstehend</Title>
+      {items.length === 0 ? <Text size="sm" c="dimmed" mt="xs">Keine Einträge im Zeitraum.</Text> : (
+        <Box mt="xs">
+          {items.map((e) => {
+            const k = CAL_KINDS.find((x) => x.value === String(e.kind));
+            return (
+              <Group key={String(e.id)} gap="sm" py={6} style={{ borderBottom: "1px solid var(--mantine-color-gray-2)" }}>
+                <Badge color={k?.color ?? "gray"} variant="light" w={120}>{k?.label}</Badge>
+                <Text size="sm" fw={600} style={{ flex: 1 }}>{String(e.title)}{e.ownerEmail ? "" : " · geteilt"}</Text>
+                <Text size="sm" c="dimmed">{fmt(e.start)} – {fmt(e.end)}</Text>
+                <Button size="compact-xs" variant="subtle" color="red" onClick={async () => { try { await trpc.calendar.remove.mutate({ id: String(e.id) }); await load(); } catch (er) { setErr(errMsg(er)); } }}>✕</Button>
+              </Group>
+            );
+          })}
+        </Box>
+      )}
+    </>
+  );
+}
+
+// Mitarbeiter-Nachrichtenportal: internes Postfach (Eingang/Ausgang).
+export function MessagesPage(): JSX.Element {
+  const [tab, setTab] = useState<"inbox" | "sent">("inbox");
+  const [items, setItems] = useState<Row[]>([]);
+  const [to, setTo] = useState("");
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try { setItems((await (tab === "inbox" ? trpc.messages.inbox : trpc.messages.sent).query()) as Row[]); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
+  }, [tab]);
+  useEffect(() => { void load(); }, [load]);
+
+  const fmt = (d: unknown): string => new Date(String(d)).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" });
+
+  return (
+    <>
+      <Title order={3}>Nachrichten</Title>
+      <Text size="sm" c="dimmed" mt={4}>Internes Mitarbeiter-Postfach (kein E-Mail-Versand).</Text>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+
+      <Title order={4} mt="md">Neue Nachricht</Title>
+      <Group gap="xs" align="end" mt="xs" wrap="wrap">
+        <TextInput label="An (E-Mail)" value={to} onChange={(e) => setTo(e.currentTarget.value)} w={220} placeholder="kollege@texma.de" />
+        <TextInput label="Betreff" value={subject} onChange={(e) => setSubject(e.currentTarget.value)} w={240} />
+      </Group>
+      <Textarea label="Text" value={body} onChange={(e) => setBody(e.currentTarget.value)} autosize minRows={3} mt="xs" />
+      <Button mt="sm" disabled={!to.trim() || !subject.trim()} onClick={async () => {
+        setErr(null);
+        try { await trpc.messages.send.mutate({ toEmail: to, subject, body }); setTo(""); setSubject(""); setBody(""); setTab("sent"); }
+        catch (e) { setErr(errMsg(e)); }
+      }}>Senden</Button>
+
+      <Group mt="xl" gap="xs">
+        <Button size="compact-sm" variant={tab === "inbox" ? "filled" : "default"} onClick={() => setTab("inbox")}>Posteingang</Button>
+        <Button size="compact-sm" variant={tab === "sent" ? "filled" : "default"} onClick={() => setTab("sent")}>Gesendet</Button>
+      </Group>
+      <Box mt="sm">
+        {items.length === 0 ? <Text size="sm" c="dimmed">Keine Nachrichten.</Text> : items.map((m) => (
+          <Box key={String(m.id)} py={8} style={{ borderBottom: "1px solid var(--mantine-color-gray-2)", cursor: tab === "inbox" && !m.read ? "pointer" : "default" }}
+            onClick={async () => { if (tab === "inbox" && !m.read) { try { await trpc.messages.markRead.mutate({ id: String(m.id) }); await load(); } catch (e) { setErr(errMsg(e)); } } }}>
+            <Group justify="space-between">
+              <Text size="sm" fw={m.read ? 400 : 700}>{String(m.subject)} {tab === "inbox" && !m.read ? <Badge size="xs" color="red" ml={4}>neu</Badge> : null}</Text>
+              <Text size="xs" c="dimmed">{tab === "inbox" ? `von ${String(m.fromEmail)}` : `an ${String(m.toEmail)}`} · {fmt(m.createdAt)}</Text>
+            </Group>
+            {m.body ? <Text size="sm" c="dimmed">{String(m.body)}</Text> : null}
+          </Box>
+        ))}
+      </Box>
+    </>
+  );
+}

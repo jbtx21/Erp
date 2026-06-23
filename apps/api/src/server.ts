@@ -97,6 +97,10 @@ import { PrismaNewsletterRepository } from "./repositories/prisma-newsletter.rep
 import { OpportunityService, StubCrmProvider } from "./modules/opportunity/opportunity.service.js";
 import { HubspotCrmProvider } from "./modules/opportunity/hubspot-provider.js";
 import { PrismaOpportunityRepository } from "./repositories/prisma-opportunity.repository.js";
+import { CalendarService } from "./modules/calendar/calendar.service.js";
+import { PrismaCalendarRepository } from "./repositories/prisma-calendar.repository.js";
+import { MessageService } from "./modules/messages/messages.service.js";
+import { PrismaMessageRepository } from "./repositories/prisma-messages.repository.js";
 import { appRouter } from "./trpc/router.js";
 import type { Context } from "./trpc/trpc.js";
 import { portalAppRouter } from "./trpc/portal-router.js";
@@ -197,6 +201,8 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const newsletter = new NewsletterService(new PrismaNewsletterRepository(), newsletterProvider, new PrismaAuditSink());
   const crmProvider = process.env.HUBSPOT_TOKEN ? new HubspotCrmProvider(process.env.HUBSPOT_TOKEN) : new StubCrmProvider();
   const opportunities = new OpportunityService(new PrismaOpportunityRepository(), new PrismaAuditSink(), crmProvider);
+  const calendar = new CalendarService(new PrismaCalendarRepository(), new PrismaAuditSink());
+  const messages = new MessageService(new PrismaMessageRepository(), new PrismaAuditSink());
   const auth = new AuthService(
     new PrismaUserRepository(),
     new PrismaSessionRepository(),
@@ -304,6 +310,8 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           mailIntake,
           newsletter,
           opportunities,
+          calendar,
+          messages,
           auth,
           user,
           sessionToken,

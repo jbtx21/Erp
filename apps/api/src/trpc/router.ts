@@ -906,6 +906,48 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => { try { await ctx.opportunities.markLost(input.id, input.reason); return { ok: true as const }; } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); } }),
   }),
 
+  // Büro-Kalender (Terminmanagement): Termine/Urlaub/Abwesenheiten — eigene + geteilte.
+  calendar: router({
+    list: protectedProcedure
+      .input(z.object({ from: z.string().datetime(), to: z.string().datetime() }))
+      .query(({ input, ctx }) => ctx.calendar.listForUser(ctx.user.email, new Date(input.from), new Date(input.to))),
+    create: protectedProcedure
+      .input(z.object({
+        title: z.string().min(1), shared: z.boolean().default(false),
+        kind: z.enum(["TERMIN", "URLAUB", "ABWESENHEIT", "SONSTIGES"]).default("TERMIN"),
+        start: z.string().datetime(), end: z.string().datetime(), allDay: z.boolean().default(false), note: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.calendar.create({ ...input, ownerEmail: ctx.user.email, start: new Date(input.start), end: new Date(input.end) }); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    remove: protectedProcedure
+      .input(z.object({ id: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.calendar.remove(input.id, ctx.user.email); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
+      }),
+  }),
+
+  // Mitarbeiter-Nachrichtenportal: internes Postfach (Eingang/Ausgang, gelesen).
+  messages: router({
+    inbox: protectedProcedure.query(({ ctx }) => ctx.messages.inbox(ctx.user.email)),
+    sent: protectedProcedure.query(({ ctx }) => ctx.messages.sent(ctx.user.email)),
+    unreadCount: protectedProcedure.query(({ ctx }) => ctx.messages.unreadCount(ctx.user.email)),
+    send: protectedProcedure
+      .input(z.object({ toEmail: z.string().min(1), subject: z.string().min(1), body: z.string().default("") }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.messages.send(ctx.user.email, input.toEmail, input.subject, input.body); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    markRead: protectedProcedure
+      .input(z.object({ id: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.messages.markRead(input.id, ctx.user.email); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
+      }),
+  }),
+
   // Newsletter (Brevo): Kampagnen anlegen + an Opt-in-Kontakte versenden (DSGVO).
   // Kundendaten/Marketing → kein PRODUKTION-Zugriff (Kap. 12).
   newsletter: router({

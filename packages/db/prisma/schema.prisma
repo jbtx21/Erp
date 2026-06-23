@@ -1475,3 +1475,42 @@ enum OpportunityStatus {
   GEWONNEN
   VERLOREN
 }
+
+// Büro-Kalender (Terminmanagement): Termine, Urlaub, Abwesenheiten. ownerEmail =
+// persönlich; null = für alle sichtbar. Externe Sync (CalDAV/Google) als Provider-Port.
+model CalendarEvent {
+  id         String            @id @default(cuid())
+  title      String
+  ownerEmail String? // null = geteilt/Büro-weit
+  kind       CalendarEventKind @default(TERMIN)
+  start      DateTime
+  end        DateTime
+  allDay     Boolean           @default(false)
+  note       String?
+  providerRef String? // externe Kalender-ID (Sync)
+  createdAt  DateTime          @default(now())
+
+  @@index([ownerEmail])
+  @@index([start])
+}
+
+enum CalendarEventKind {
+  TERMIN
+  URLAUB
+  ABWESENHEIT
+  SONSTIGES
+}
+
+// Mitarbeiter-Nachrichtenportal: interne Nachrichten zwischen Mitarbeitern.
+model InternalMessage {
+  id         String   @id @default(cuid())
+  fromEmail  String
+  toEmail    String
+  subject    String
+  body       String
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([toEmail, read])
+  @@index([fromEmail])
+}

@@ -9,14 +9,14 @@ import { Differentiators } from "./Differentiators.js";
 import { Banking } from "./Banking.js";
 import {
   CompaniesPage, CostCentersPage, DunningPage, InquiriesPage, IncomingInvoicesPage, LeadsPage, OrdersPage, ProcurementPage, ProductionReportingPage,
-  ProductsPage, PricingPage, EmailTemplatesPage, DashboardsPage, DataIoPage, NewsletterPage, OpportunitiesPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
+  ProductsPage, PricingPage, EmailTemplatesPage, DashboardsPage, DataIoPage, NewsletterPage, OpportunitiesPage, CalendarPage, MessagesPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
 } from "./pages.js";
 import { trpc } from "./trpc.js";
 
 interface AuthUser { id: string; email: string; name: string; role: string; totpEnabled: boolean; }
 
 const NAV: ReadonlyArray<{ group: string; items: ReadonlyArray<{ key: string; label: string }> }> = [
-  { group: "Übersicht", items: [{ key: "dashboard", label: "Dashboard" }, { key: "dashboards", label: "Dashboards (G-7)" }] },
+  { group: "Übersicht", items: [{ key: "dashboard", label: "Dashboard" }, { key: "dashboards", label: "Dashboards (G-7)" }, { key: "calendar", label: "Kalender" }, { key: "messages", label: "Nachrichten" }] },
   { group: "Vertrieb", items: [{ key: "companies", label: "Firmen/Kunden" }, { key: "leads", label: "Leads" }, { key: "opportunities", label: "Verkaufschancen" }, { key: "inquiries", label: "Anfragen" }, { key: "quotes", label: "Angebote" }, { key: "orders", label: "Aufträge" }, { key: "reklamation", label: "Reklamation" }] },
   { group: "Beschaffung", items: [
     { key: "suppliers", label: "Lieferanten" }, { key: "incoming", label: "Eingangsrechnungen" },
@@ -195,6 +195,8 @@ function Page({ k, role }: { k: string; role: string }): ReactNode {
     case "dataio": return <DataIoPage />;
     case "newsletter": return <NewsletterPage />;
     case "opportunities": return <OpportunitiesPage />;
+    case "calendar": return <CalendarPage />;
+    case "messages": return <MessagesPage />;
     case "differentiators": return <Differentiators role={role} />;
     case "subproduction": return <SubproductionPage />;
     case "prodreport": return <ProductionReportingPage />;
