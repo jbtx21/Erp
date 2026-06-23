@@ -22,7 +22,23 @@ export interface CreateCompanyInput {
   priceGroupKind: PriceGroupKind;
 }
 
-export interface UpdateCompanyInput {
+/** Erweiterte Stammdaten (Rechnungsadresse, Steuer, Zahlungs-/Lieferbedingungen) — Paket 1. */
+export interface CompanyStammdaten {
+  street: string | null;
+  zip: string | null;
+  city: string | null;
+  country: string | null;
+  vatId: string | null;
+  taxNumber: string | null;
+  skontoPercent: number | null;
+  skontoDays: number | null;
+  paymentMethod: string | null;
+  lieferbedingung: string | null;
+  notiz: string | null;
+  kreditlimitCents: number | null;
+}
+
+export interface UpdateCompanyInput extends Partial<CompanyStammdaten> {
   id: string;
   name?: string;
   branche?: string | null;
@@ -32,7 +48,7 @@ export interface UpdateCompanyInput {
 
 /** Kunden-Detail + Historie (klickbar im Kundenstamm). */
 export interface CompanyOverview {
-  company: CompanyRow & { fromLead: boolean };
+  company: CompanyRow & { fromLead: boolean } & CompanyStammdaten;
   contactsCount: number;
   orders: Array<{ id: string; number: string; status: string; createdAt: Date }>;
   quotes: Array<{ id: string; number: string; status: string; createdAt: Date }>;

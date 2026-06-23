@@ -1217,14 +1217,102 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
   );
 }
 
+// Stammdaten-360° je Kunde (Paket 1): Rechnungsadresse, USt-IdNr./Steuernr.,
+// Zahlungs-/Lieferbedingungen, Kreditlimit, Notiz — Anzeige + Inline-Bearbeitung.
+type CompanyDetail = NonNullable<Awaited<ReturnType<typeof trpc.companies.overview.query>>>["company"];
+interface SDForm {
+  street: string; zip: string; city: string; country: string; vatId: string; taxNumber: string;
+  skontoPercent: string; skontoDays: string; paymentMethod: string; lieferbedingung: string; kreditEuro: string; notiz: string;
+}
+function CompanyStammdaten({ company, onSaved }: { company: CompanyDetail; onSaved: () => void }): JSX.Element {
+  const [edit, setEdit] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const init = (): SDForm => ({
+    street: company.street ?? "", zip: company.zip ?? "", city: company.city ?? "", country: company.country ?? "DE",
+    vatId: company.vatId ?? "", taxNumber: company.taxNumber ?? "",
+    skontoPercent: company.skontoPercent?.toString() ?? "", skontoDays: company.skontoDays?.toString() ?? "",
+    paymentMethod: company.paymentMethod ?? "", lieferbedingung: company.lieferbedingung ?? "",
+    kreditEuro: company.kreditlimitCents != null ? (company.kreditlimitCents / 100).toString() : "", notiz: company.notiz ?? "",
+  });
+  const [f, setF] = useState<SDForm>(init);
+  const set = (k: keyof SDForm) => (v: string): void => setF((s) => ({ ...s, [k]: v }));
+  const numOrNull = (s: string): number | null => (s.trim() === "" ? null : Number(s));
+
+  const save = async (): Promise<void> => {
+    setBusy(true); setErr(null);
+    try {
+      await trpc.companies.update.mutate({
+        id: company.id,
+        street: f.street.trim() || null, zip: f.zip.trim() || null, city: f.city.trim() || null, country: f.country.trim() || "DE",
+        vatId: f.vatId.trim() || null, taxNumber: f.taxNumber.trim() || null,
+        skontoPercent: numOrNull(f.skontoPercent), skontoDays: numOrNull(f.skontoDays),
+        paymentMethod: (f.paymentMethod || null) as "UEBERWEISUNG" | "LASTSCHRIFT" | "BAR" | null,
+        lieferbedingung: f.lieferbedingung.trim() || null,
+        kreditlimitCents: f.kreditEuro.trim() === "" ? null : Math.round(Number(f.kreditEuro) * 100),
+        notiz: f.notiz.trim() || null,
+      });
+      setEdit(false); onSaved();
+    } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+
+  if (!edit) {
+    const addr = [company.street, [company.zip, company.city].filter(Boolean).join(" "), company.country].filter(Boolean).join(", ");
+    const skonto = company.skontoPercent != null ? `${company.skontoPercent} % / ${company.skontoDays ?? "?"} T` : "—";
+    return (
+      <Box mt="sm" p="xs" style={{ background: "var(--mantine-color-gray-0)", borderRadius: 6 }}>
+        <Group justify="space-between" mb={4}><Text size="xs" fw={700} tt="uppercase" c="dimmed">Stammdaten</Text>
+          <Button size="compact-xs" variant="subtle" onClick={() => { setF(init()); setEdit(true); }}>Bearbeiten</Button></Group>
+        <Group gap="lg" wrap="wrap">
+          <Text size="sm">Rechnungsadresse: <b>{addr || "—"}</b></Text>
+          <Text size="sm">USt-IdNr.: <b>{company.vatId || "—"}</b></Text>
+          <Text size="sm">Steuernr.: <b>{company.taxNumber || "—"}</b></Text>
+          <Text size="sm">Skonto: <b>{skonto}</b></Text>
+          <Text size="sm">Zahlart: <b>{company.paymentMethod || "—"}</b></Text>
+          <Text size="sm">Lieferbedingung: <b>{company.lieferbedingung || "—"}</b></Text>
+          <Text size="sm">Kreditlimit: <b>{company.kreditlimitCents != null ? euro(company.kreditlimitCents) : "—"}</b></Text>
+        </Group>
+        {company.notiz ? <Text size="sm" mt={4}>Notiz: {company.notiz}</Text> : null}
+      </Box>
+    );
+  }
+  return (
+    <Box mt="sm" p="xs" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 6 }}>
+      {err && <Alert color="red" mb="xs">{err}</Alert>}
+      <Text size="xs" fw={700} tt="uppercase" c="dimmed" mb={6}>Stammdaten bearbeiten</Text>
+      <Group gap="xs" align="end" wrap="wrap">
+        <TextInput size="xs" label="Straße" w={220} value={f.street} onChange={(e) => set("street")(e.currentTarget.value)} />
+        <TextInput size="xs" label="PLZ" w={80} value={f.zip} onChange={(e) => set("zip")(e.currentTarget.value)} />
+        <TextInput size="xs" label="Ort" w={160} value={f.city} onChange={(e) => set("city")(e.currentTarget.value)} />
+        <TextInput size="xs" label="Land" w={70} value={f.country} onChange={(e) => set("country")(e.currentTarget.value)} />
+      </Group>
+      <Group gap="xs" align="end" wrap="wrap" mt={6}>
+        <TextInput size="xs" label="USt-IdNr." w={160} value={f.vatId} onChange={(e) => set("vatId")(e.currentTarget.value)} />
+        <TextInput size="xs" label="Steuernummer" w={150} value={f.taxNumber} onChange={(e) => set("taxNumber")(e.currentTarget.value)} />
+        <NumberInput size="xs" label="Skonto %" w={90} min={0} max={100} value={f.skontoPercent === "" ? "" : Number(f.skontoPercent)} onChange={(v) => set("skontoPercent")(v === "" ? "" : String(v))} />
+        <NumberInput size="xs" label="Skonto-Tage" w={100} min={0} max={180} value={f.skontoDays === "" ? "" : Number(f.skontoDays)} onChange={(v) => set("skontoDays")(v === "" ? "" : String(v))} />
+        <Select size="xs" label="Zahlart" w={150} clearable data={["UEBERWEISUNG", "LASTSCHRIFT", "BAR"]} value={f.paymentMethod || null} onChange={(v) => set("paymentMethod")(v ?? "")} />
+      </Group>
+      <Group gap="xs" align="end" wrap="wrap" mt={6}>
+        <TextInput size="xs" label="Lieferbedingung" w={220} value={f.lieferbedingung} onChange={(e) => set("lieferbedingung")(e.currentTarget.value)} />
+        <NumberInput size="xs" label="Kreditlimit (€)" w={140} min={0} value={f.kreditEuro === "" ? "" : Number(f.kreditEuro)} onChange={(v) => set("kreditEuro")(v === "" ? "" : String(v))} />
+        <TextInput size="xs" label="Notiz" w={280} value={f.notiz} onChange={(e) => set("notiz")(e.currentTarget.value)} />
+      </Group>
+      <Group gap="xs" mt="sm">
+        <Button size="compact-xs" loading={busy} onClick={() => void save()}>Speichern</Button>
+        <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setEdit(false)}>Abbrechen</Button>
+      </Group>
+    </Box>
+  );
+}
+
 // Kunden-Detail + Historie (klickbar im Kundenstamm): Stammdaten, offene Summe und
 // die verknüpften Belege (Aufträge, Angebote, Rechnungen, Muster-Leihgut).
 function CompanyDetailPanel({ companyId, onNavigate }: { companyId: string; onNavigate?: (k: string) => void }): JSX.Element {
   const [ov, setOv] = useState<Awaited<ReturnType<typeof trpc.companies.overview.query>> | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  useEffect(() => {
-    void trpc.companies.overview.query({ companyId }).then(setOv).catch((e) => setErr(errMsg(e)));
-  }, [companyId]);
+  const reload = useCallback(() => { void trpc.companies.overview.query({ companyId }).then(setOv).catch((e) => setErr(errMsg(e))); }, [companyId]);
+  useEffect(() => { reload(); }, [reload]);
   if (err) return <Alert color="red" mt="md">{err}</Alert>;
   if (!ov) return <Text size="sm" c="dimmed" mt="md">lädt…</Text>;
   const d = (x: string | Date): string => new Date(x).toLocaleDateString("de-DE");
@@ -1251,6 +1339,7 @@ function CompanyDetailPanel({ companyId, onNavigate }: { companyId: string; onNa
         </Group>
       </Group>
       <Text size="xs" c="dimmed" mt={2}>{ov.company.branche ?? "—"} · {ov.contactsCount} Kontakt(e)</Text>
+      <CompanyStammdaten company={ov.company} onSaved={reload} />
       <Group align="flex-start" gap="lg" mt="sm" wrap="wrap">
         {histGroup("Aufträge", "orders", ov.orders.map((o) => ({ id: o.id, label: o.number, sub: o.status })))}
         {histGroup("Angebote", "quotes", ov.quotes.map((q) => ({ id: q.id, label: q.number, sub: q.status })))}

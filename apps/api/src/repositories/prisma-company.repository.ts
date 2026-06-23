@@ -46,13 +46,15 @@ export class PrismaCompanyRepository implements CompanyRepository {
   }
 
   async update(input: UpdateCompanyInput): Promise<void> {
+    const pick = (k: keyof UpdateCompanyInput): object => (input[k] !== undefined ? { [k]: input[k] } : {});
     await prisma.company.update({
       where: { id: input.id },
       data: {
-        ...(input.name !== undefined ? { name: input.name } : {}),
-        ...(input.branche !== undefined ? { branche: input.branche } : {}),
-        ...(input.zahlungszielTage !== undefined ? { zahlungszielTage: input.zahlungszielTage } : {}),
-        ...(input.mahnsperre !== undefined ? { mahnsperre: input.mahnsperre } : {}),
+        ...pick("name"), ...pick("branche"), ...pick("zahlungszielTage"), ...pick("mahnsperre"),
+        ...pick("street"), ...pick("zip"), ...pick("city"), ...pick("country"),
+        ...pick("vatId"), ...pick("taxNumber"),
+        ...pick("skontoPercent"), ...pick("skontoDays"), ...pick("paymentMethod"),
+        ...pick("lieferbedingung"), ...pick("notiz"), ...pick("kreditlimitCents"),
       },
     });
   }
@@ -62,6 +64,8 @@ export class PrismaCompanyRepository implements CompanyRepository {
       where: { id: companyId },
       select: {
         id: true, name: true, branche: true, zahlungszielTage: true, mahnsperre: true, gesperrtAm: true,
+        street: true, zip: true, city: true, country: true, vatId: true, taxNumber: true,
+        skontoPercent: true, skontoDays: true, paymentMethod: true, lieferbedingung: true, notiz: true, kreditlimitCents: true,
         priceGroup: { select: { kind: true } },
         lead: { select: { id: true } },
         _count: { select: { contacts: true } },
@@ -76,6 +80,9 @@ export class PrismaCompanyRepository implements CompanyRepository {
       company: {
         id: c.id, name: c.name, branche: c.branche, zahlungszielTage: c.zahlungszielTage, mahnsperre: c.mahnsperre,
         priceGroupKind: c.priceGroup.kind as PriceGroupKind, gesperrt: c.gesperrtAm !== null, fromLead: c.lead !== null,
+        street: c.street, zip: c.zip, city: c.city, country: c.country, vatId: c.vatId, taxNumber: c.taxNumber,
+        skontoPercent: c.skontoPercent, skontoDays: c.skontoDays, paymentMethod: c.paymentMethod,
+        lieferbedingung: c.lieferbedingung, notiz: c.notiz, kreditlimitCents: c.kreditlimitCents,
       },
       contactsCount: c._count.contacts,
       orders: c.orders.map((o) => ({ id: o.id, number: o.number, status: o.status, createdAt: o.createdAt })),

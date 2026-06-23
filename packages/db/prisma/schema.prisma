@@ -101,6 +101,21 @@ model Company {
   anonymisiertAm DateTime?   // DSGVO-Anonymisierung (B12)
   zahlungszielTage Int        @default(14)
   mahnsperre   Boolean       @default(false) // Kap. 9.5
+  // Rechnungsadresse (Pflicht auf Rechnung, § 14 UStG) + Steuerangaben (Paket 1)
+  street       String?
+  zip          String?
+  city         String?
+  country      String        @default("DE")
+  vatId        String? // USt-IdNr. (B2B/innergemeinschaftlich)
+  taxNumber    String? // Steuernummer
+  // Zahlungsbedingungen
+  skontoPercent Int? // Skonto-% (z. B. 2)
+  skontoDays    Int? // Skonto-Frist (Tage)
+  paymentMethod String? // UEBERWEISUNG | LASTSCHRIFT | BAR
+  // Lieferbedingungen + interne Vermerke + Bonität
+  lieferbedingung String? // z. B. Versandart/Incoterm
+  notiz         String?
+  kreditlimitCents Int? // Kreditlimit (AR-Risiko)
   priceGroupId String
   priceGroup   PriceGroup    @relation(fields: [priceGroupId], references: [id])
   // Stickerei-Partnerlogik (Kap. 5.4 / Custom): Partner + Stickdatei steuern Direkt- vs. Angebotsprozess

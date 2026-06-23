@@ -1423,6 +1423,19 @@ export const appRouter = router({
         branche: z.string().optional(),
         zahlungszielTage: z.number().int().min(0).max(180).optional(),
         mahnsperre: z.boolean().optional(),
+        // Stammdaten 360° (Paket 1) — null = Feld leeren.
+        street: z.string().nullable().optional(),
+        zip: z.string().nullable().optional(),
+        city: z.string().nullable().optional(),
+        country: z.string().nullable().optional(),
+        vatId: z.string().nullable().optional(),
+        taxNumber: z.string().nullable().optional(),
+        skontoPercent: z.number().int().min(0).max(100).nullable().optional(),
+        skontoDays: z.number().int().min(0).max(180).nullable().optional(),
+        paymentMethod: z.enum(["UEBERWEISUNG", "LASTSCHRIFT", "BAR"]).nullable().optional(),
+        lieferbedingung: z.string().nullable().optional(),
+        notiz: z.string().nullable().optional(),
+        kreditlimitCents: z.number().int().min(0).nullable().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         try { await ctx.companies.update(input); return { ok: true as const }; } catch (e) { throw toTrpcError(e); }
