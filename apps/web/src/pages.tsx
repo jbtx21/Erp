@@ -20,6 +20,21 @@ function downloadBase64Pdf(filename: string, base64: string): void {
   URL.revokeObjectURL(url);
 }
 
+function downloadText(filename: string, text: string, type = "text/plain"): void {
+  const url = URL.createObjectURL(new Blob([text], { type: `${type};charset=utf-8` }));
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadBase64(filename: string, base64: string, type: string): void {
+  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  const url = URL.createObjectURL(new Blob([bytes], { type }));
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
 // Deutsche Spaltenbezeichnungen statt roher Feldnamen ("Don't ship the schema").
 const COL_LABELS: Record<string, string> = {
   id: "ID", number: "Nr.", name: "Name", status: "Status", kind: "Art", quelle: "Quelle",
@@ -2392,6 +2407,104 @@ export function SecurityPage({ userName, onProfileUpdated }: { userName?: string
           </Group>
         </Box>
       )}
+    </>
+  );
+}
+
+const BELEGARTEN = ["RECHNUNG", "GUTSCHRIFT", "EINGANGSRECHNUNG", "BUCHUNGSBELEG", "LIEFERSCHEIN", "AUFTRAGSBESTAETIGUNG", "ANGEBOT", "GESCHAEFTSBRIEF", "LOGO", "SONSTIGES"] as const;
+
+// GoBD-Belegarchiv (Kap. 10): unveränderbare WORM-Ablage + GDPdU-„Z3"-Export. Nur
+// Büro/Buchhaltung/Admin (finanzrelevant). Export nur Admin/Buchhaltung.
+export function ArchivePage({ role }: { role?: string } = {}): JSX.Element {
+  const [docs, setDocs] = useState<Awaited<ReturnType<typeof trpc.archive.list.query>>>([]);
+  const [belegart, setBelegart] = useState<string>("RECHNUNG");
+  const [sourceEntity, setSourceEntity] = useState("Invoice");
+  const [sourceId, setSourceId] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const canExport = role === "ADMIN" || role === "BUCHHALTUNG";
+
+  const refresh = useCallback(async () => {
+    try { setDocs(await trpc.archive.list.query({ limit: 100 })); } catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void refresh(); }, [refresh]);
+
+  const archive = async () => {
+    setErr(null); setMsg(null);
+    if (!file || !sourceId.trim()) { setErr("Datei und Quell-ID sind erforderlich."); return; }
+    try {
+      const buf = new Uint8Array(await file.arrayBuffer());
+      let bin = ""; for (const b of buf) bin += String.fromCharCode(b);
+      await trpc.archive.archive.mutate({
+        belegart: belegart as (typeof BELEGARTEN)[number], sourceEntity: sourceEntity.trim(), sourceId: sourceId.trim(),
+        fileName: file.name, contentType: file.type || "application/octet-stream", dataBase64: btoa(bin),
+      });
+      setMsg(`„${file.name}" archiviert (WORM).`); setFile(null); setSourceId(""); await refresh();
+    } catch (e) { setErr(errMsg(e)); }
+  };
+
+  const download = async (id: string, fileName: string, contentType: string) => {
+    try { const r = await trpc.archive.get.query({ id }); downloadBase64(fileName, r.dataBase64, contentType); }
+    catch (e) { setErr(errMsg(e)); }
+  };
+
+  const gobdExport = async () => {
+    setErr(null);
+    try {
+      const exp = await trpc.archive.gobdExport.query();
+      downloadText("index.xml", exp.indexXml, "application/xml");
+      downloadText("manifest.csv", exp.manifestCsv, "text/csv");
+      setMsg(`GoBD-Z3-Export: ${exp.count} Beleg(e) (index.xml + manifest.csv).`);
+    } catch (e) { setErr(errMsg(e)); }
+  };
+
+  const fmtDate = (d: string | Date): string => new Date(d).toLocaleDateString("de-DE");
+
+  return (
+    <>
+      <Title order={3}>GoBD-Belegarchiv</Title>
+      <Text size="sm" c="dimmed" mt={4}>Unveränderbare (WORM) Ablage finalisierter Belege — inhaltsadressiert (SHA-256), mit gesetzlicher Aufbewahrungsfrist (6/10 Jahre) und GDPdU-„Z3"-Export für die Betriebsprüfung (Kap. 10).</Text>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      {msg && <Alert color="green" mt="sm">{msg}</Alert>}
+
+      <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, maxWidth: 640 }}>
+        <Text fw={600}>Beleg archivieren</Text>
+        <Group mt="xs" align="end" gap="xs">
+          <Select label="Belegart" data={BELEGARTEN as unknown as string[]} value={belegart} onChange={(v) => setBelegart(v ?? "RECHNUNG")} w={200} />
+          <TextInput label="Quelle" value={sourceEntity} onChange={(e) => setSourceEntity(e.currentTarget.value)} w={140} />
+          <TextInput label="Quell-ID (z. B. RE-2026-0001)" value={sourceId} onChange={(e) => setSourceId(e.currentTarget.value)} w={220} />
+        </Group>
+        <input type="file" style={{ marginTop: 10 }} onChange={(e) => setFile(e.currentTarget.files?.[0] ?? null)} />
+        <Group mt="sm">
+          <Button onClick={() => void archive()} disabled={!file || !sourceId.trim()}>Archivieren (WORM)</Button>
+          {canExport && <Button variant="default" onClick={() => void gobdExport()}>GoBD-Z3-Export</Button>}
+        </Group>
+      </Box>
+
+      <Title order={5} mt="lg">Archivierte Belege ({docs.length})</Title>
+      <Table mt="xs" striped withTableBorder>
+        <Table.Thead>
+          <Table.Tr>
+            <Table.Th>Belegart</Table.Th><Table.Th>Quelle</Table.Th><Table.Th>Datei</Table.Th>
+            <Table.Th>Ver.</Table.Th><Table.Th>Aufbewahrung bis</Table.Th><Table.Th>SHA-256</Table.Th><Table.Th></Table.Th>
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
+          {docs.map((d) => (
+            <Table.Tr key={d.id}>
+              <Table.Td><Badge variant="light">{d.belegart}</Badge></Table.Td>
+              <Table.Td>{d.sourceEntity} · {d.sourceId}</Table.Td>
+              <Table.Td>{d.fileName}</Table.Td>
+              <Table.Td>{d.version}</Table.Td>
+              <Table.Td>{fmtDate(d.earliestDeletion)}{d.legalHold ? " 🔒" : ""}</Table.Td>
+              <Table.Td><Text size="xs" ff="monospace" c="dimmed">{d.sha256.slice(0, 12)}…</Text></Table.Td>
+              <Table.Td><Button size="compact-xs" variant="subtle" onClick={() => void download(d.id, d.fileName, d.contentType)}>Laden</Button></Table.Td>
+            </Table.Tr>
+          ))}
+          {docs.length === 0 && <Table.Tr><Table.Td colSpan={7}><Text size="sm" c="dimmed">Noch keine Belege archiviert.</Text></Table.Td></Table.Tr>}
+        </Table.Tbody>
+      </Table>
     </>
   );
 }

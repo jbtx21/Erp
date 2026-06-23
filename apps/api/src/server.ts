@@ -113,6 +113,9 @@ import { InventoryService } from "./modules/inventory/inventory.service.js";
 import { HrService } from "./modules/hr/hr.service.js";
 import { PrismaHrRepository } from "./repositories/prisma-hr.repository.js";
 import { IntegrationsService } from "./modules/integrations/integrations.service.js";
+import { ArchiveService } from "./modules/archive/archive.service.js";
+import { FsWormObjectStore } from "./modules/archive/object-store.js";
+import { PrismaArchiveRepository } from "./repositories/prisma-archive.repository.js";
 import { PrismaIntegrationsRepository } from "./repositories/prisma-integrations.repository.js";
 import { HttpSlackSender } from "./modules/integrations/slack-provider.js";
 import { appRouter } from "./trpc/router.js";
@@ -225,6 +228,10 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const inventory = new InventoryService(stock);
   const hr = new HrService(new PrismaHrRepository(), new PrismaAuditSink());
   const integrations = new IntegrationsService(new PrismaIntegrationsRepository(), new PrismaAuditSink(), new HttpSlackSender());
+  // GoBD-Belegarchiv (Kap. 10): WORM-Objektspeicher. Lokal Dateisystem (Read-only-Dateien);
+  // in Produktion S3 mit Object-Lock (ARCHIVE_S3_*). Pfad via ARCHIVE_DIR (Default ./var/archive).
+  const archiveStore = new FsWormObjectStore(process.env.ARCHIVE_DIR ?? "./var/archive");
+  const archive = new ArchiveService(archiveStore, new PrismaArchiveRepository(), new PrismaAuditSink());
   const auth = new AuthService(
     new PrismaUserRepository(),
     new PrismaSessionRepository(),
@@ -347,6 +354,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           inventory,
           hr,
           integrations,
+          archive,
           auth,
           user,
           sessionToken,

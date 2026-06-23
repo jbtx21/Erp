@@ -1624,3 +1624,28 @@ model PasswordResetToken {
 
   @@index([userId])
 }
+
+// GoBD-Belegarchiv (Kap. 10): unveränderbares Register zum WORM-Objektspeicher. Die
+// Bytes liegen inhaltsadressiert (storageKey = sha256) im Objektspeicher; hier nur
+// Metadaten + Aufbewahrungsfrist + Legal Hold. Append-only (kein In-place-Update der Bytes).
+model ArchivedDocument {
+  id               String   @id @default(cuid())
+  belegart         String
+  sourceEntity     String
+  sourceId         String
+  fileName         String
+  contentType      String
+  sha256           String
+  size             Int
+  version          Int      @default(1)
+  storageKey       String // = sha256 (inhaltsadressiert)
+  retentionClass   String // BOOKING_10Y | BUSINESS_6Y
+  earliestDeletion DateTime
+  legalHold        Boolean  @default(false)
+  archivedAt       DateTime @default(now())
+  archivedBy       String?
+
+  @@unique([sourceEntity, sourceId, sha256])
+  @@index([belegart])
+  @@index([archivedAt])
+}

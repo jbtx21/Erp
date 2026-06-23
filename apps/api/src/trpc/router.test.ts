@@ -73,6 +73,9 @@ import { HrService } from "../modules/hr/hr.service.js";
 import { InMemoryHrRepository } from "../repositories/in-memory-hr.repository.js";
 import { IntegrationsService, LoggingSlackSender } from "../modules/integrations/integrations.service.js";
 import { InMemoryIntegrationsRepository } from "../repositories/in-memory-integrations.repository.js";
+import { ArchiveService } from "../modules/archive/archive.service.js";
+import { InMemoryObjectStore } from "../modules/archive/object-store.js";
+import { InMemoryArchiveRepository } from "../repositories/in-memory-archive.repository.js";
 import { DeliveryService } from "../modules/delivery/delivery.service.js";
 import { InMemoryDeliveryRepository } from "../repositories/in-memory-delivery.repository.js";
 import { NumberingService } from "../modules/numbering/numbering.service.js";
@@ -309,6 +312,7 @@ function setup(user: AuthUser | null = BUERO) {
     inventory: new InventoryService(new StockService(new InMemoryStockRepository(), new MemoryAuditSink())),
     hr: new HrService(new InMemoryHrRepository(), new MemoryAuditSink()),
     integrations: new IntegrationsService(new InMemoryIntegrationsRepository(), new MemoryAuditSink(), new LoggingSlackSender()),
+    archive: new ArchiveService(new InMemoryObjectStore(), new InMemoryArchiveRepository(), new MemoryAuditSink()),
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -422,6 +426,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       inventory: {} as Context["inventory"],
       hr: {} as Context["hr"],
       integrations: {} as Context["integrations"],
+      archive: {} as Context["archive"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",
@@ -981,5 +986,37 @@ describe("tRPC productionReporting — operative KPIs (Kap. 29/35)", () => {
     await expect(
       caller.productionReporting.leadTime({ granularity: "MONTH" })
     ).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+  });
+});
+
+describe("tRPC archive — GoBD-Belegarchiv (Kap. 10)", () => {
+  const b64 = (s: string) => Buffer.from(s).toString("base64");
+
+  it("archiviert einen Beleg und liest ihn wieder (BUERO)", async () => {
+    const { caller } = setup();
+    const meta = await caller.archive.archive({ belegart: "RECHNUNG", sourceEntity: "Invoice", sourceId: "RE-9", fileName: "re.pdf", contentType: "application/pdf", dataBase64: b64("inhalt") });
+    expect(meta.version).toBe(1);
+    const got = await caller.archive.get({ id: meta.id });
+    expect(Buffer.from(got.dataBase64, "base64").toString()).toBe("inhalt");
+  });
+
+  it("GoBD-Export liefert index.xml + manifest.csv (BUCHHALTUNG)", async () => {
+    const { caller } = setup(BUCHHALTUNG);
+    await caller.archive.archive({ belegart: "ANGEBOT", sourceEntity: "Quote", sourceId: "AN-9", fileName: "an.pdf", contentType: "application/pdf", dataBase64: b64("x") });
+    const exp = await caller.archive.gobdExport();
+    expect(exp.count).toBe(1);
+    expect(exp.indexXml).toContain("gdpdu-01-09-2004.dtd");
+  });
+
+  it("PRODUKTION darf nicht archivieren (FORBIDDEN)", async () => {
+    const { caller } = setup(PRODUKTION);
+    await expect(
+      caller.archive.archive({ belegart: "RECHNUNG", sourceEntity: "Invoice", sourceId: "RE-1", fileName: "x", contentType: "application/pdf", dataBase64: b64("y") })
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("nur ADMIN/BUCHHALTUNG dürfen den GoBD-Export ziehen (BUERO → FORBIDDEN)", async () => {
+    const { caller } = setup();
+    await expect(caller.archive.gobdExport()).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });

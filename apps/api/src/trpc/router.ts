@@ -1408,6 +1408,59 @@ export const appRouter = router({
       .input(z.object({ id: z.string().min(1) }))
       .mutation(({ input, ctx }) => ctx.costCenters.remove(input.id)),
   }),
+
+  // GoBD-Belegarchiv (Kap. 10): WORM-Ablage + Z3-Export. Finanzrelevant → kein PRODUKTION.
+  archive: router({
+    list: roleProcedure(...supplierRoles)
+      .input(z.object({ limit: z.number().int().positive().max(500) }).optional())
+      .query(({ input, ctx }) => ctx.archive.list(input?.limit ?? 50)),
+
+    /** Beleg unveränderbar archivieren (Datei base64-kodiert). */
+    archive: roleProcedure(...supplierRoles)
+      .input(z.object({
+        belegart: z.enum(["RECHNUNG", "GUTSCHRIFT", "EINGANGSRECHNUNG", "BUCHUNGSBELEG", "LIEFERSCHEIN", "AUFTRAGSBESTAETIGUNG", "ANGEBOT", "GESCHAEFTSBRIEF", "LOGO", "SONSTIGES"]),
+        sourceEntity: z.string().min(1),
+        sourceId: z.string().min(1),
+        fileName: z.string().min(1),
+        contentType: z.string().min(1),
+        dataBase64: z.string().min(1),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await ctx.archive.archive({
+            belegart: input.belegart,
+            sourceEntity: input.sourceEntity,
+            sourceId: input.sourceId,
+            fileName: input.fileName,
+            contentType: input.contentType,
+            data: new Uint8Array(Buffer.from(input.dataBase64, "base64")),
+            userId: ctx.user.id,
+          });
+        } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+
+    /** Beleg samt Bytes (base64) lesen — Hash wird beim Lesen geprüft. */
+    get: roleProcedure(...supplierRoles)
+      .input(z.object({ id: z.string().min(1) }))
+      .query(async ({ input, ctx }) => {
+        const res = await ctx.archive.retrieve(input.id);
+        if (!res) throw new TRPCError({ code: "NOT_FOUND", message: "Beleg nicht gefunden." });
+        return { meta: res.meta, dataBase64: Buffer.from(res.data).toString("base64") };
+      }),
+
+    /** Legal Hold setzen/aufheben (nur Geschäftsleitung). */
+    setLegalHold: roleProcedure("ADMIN", "BUCHHALTUNG")
+      .input(z.object({ id: z.string().min(1), hold: z.boolean() }))
+      .mutation(async ({ input, ctx }) => { await ctx.archive.setLegalHold(input.id, input.hold, ctx.user.id); return { ok: true as const }; }),
+
+    /** GoBD/GDPdU-„Z3"-Export (index.xml + manifest.csv) über einen Zeitraum. */
+    gobdExport: roleProcedure("ADMIN", "BUCHHALTUNG")
+      .input(z.object({ from: z.string().datetime().optional(), to: z.string().datetime().optional() }).optional())
+      .query(({ input, ctx }) => ctx.archive.buildGobdExport({
+        from: input?.from ? new Date(input.from) : undefined,
+        to: input?.to ? new Date(input.to) : undefined,
+      })),
+  }),
 });
 
 export type AppRouter = typeof appRouter;
