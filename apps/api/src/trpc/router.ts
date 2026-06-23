@@ -909,6 +909,27 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => { try { await ctx.opportunities.markLost(input.id, input.reason); return { ok: true as const }; } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); } }),
   }),
 
+  // Connector-Plattform: zentrale Registry aller Fremdsystem-Anbindungen. Nur ADMIN.
+  integrations: router({
+    list: roleProcedure("ADMIN").query(({ ctx }) => ctx.integrations.list()),
+    configure: roleProcedure("ADMIN")
+      .input(z.object({
+        kind: z.enum(["WOOCOMMERCE", "DPD", "BREVO", "HUBSPOT", "SLACK", "SUPPLIER", "CALDAV"]),
+        enabled: z.boolean(),
+        config: z.record(z.string(), z.string()),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.integrations.configure(input.kind, input.enabled, input.config); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    test: roleProcedure("ADMIN")
+      .input(z.object({ kind: z.enum(["WOOCOMMERCE", "DPD", "BREVO", "HUBSPOT", "SLACK", "SUPPLIER", "CALDAV"]) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.integrations.test(input.kind); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+  }),
+
   // Personalwesen (HR): Mitarbeiter + Urlaubsanträge. Nur Geschäftsleitung (ADMIN).
   hr: router({
     employees: roleProcedure("ADMIN").query(({ ctx }) => ctx.hr.listEmployees()),

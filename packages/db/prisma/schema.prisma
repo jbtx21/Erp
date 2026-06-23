@@ -1600,3 +1600,13 @@ enum VacationStatus {
   GENEHMIGT
   ABGELEHNT
 }
+
+// Connector-Plattform: pro Fremdsystem die Aktivierung + Konfiguration (JSON;
+// Geheimnisse maskiert). Ergänzt die env-/Worker-basierten Connectoren um eine
+// im Portal pflegbare Registry.
+model IntegrationSetting {
+  kind       String   @id // ConnectorKind
+  enabled    Boolean  @default(false)
+  configJson String? // JSON der Konfig-Felder
+  updatedAt  DateTime @updatedAt
+}

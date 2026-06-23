@@ -2124,3 +2124,68 @@ export function HrPage(): JSX.Element {
     </>
   );
 }
+
+// Connector-Plattform (Integrations-Registry, nur ADMIN): Katalog aller Fremdsystem-
+// Anbindungen mit Status; portal-pflegbare konfigurieren + Slack testen.
+export function IntegrationsPage(): JSX.Element {
+  const [list, setList] = useState<Awaited<ReturnType<typeof trpc.integrations.list.query>>>([]);
+  const [drafts, setDrafts] = useState<Record<string, Record<string, string>>>({});
+  const [enabled, setEnabled] = useState<Record<string, boolean>>({});
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const l = await trpc.integrations.list.query();
+      setList(l);
+      setDrafts(Object.fromEntries(l.map((c) => [c.kind, { ...c.config }])));
+      setEnabled(Object.fromEntries(l.map((c) => [c.kind, c.enabled])));
+      setErr(null);
+    } catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  return (
+    <>
+      <Title order={3}>Schnittstellen (Connector-Plattform)</Title>
+      <Text size="sm" c="dimmed" mt={4}>Zentrale Registry aller Anbindungen. Portal-pflegbare (Brevo, HubSpot, Slack, CalDAV) hier konfigurieren; Shop/Versand/Lieferanten laufen über die Worker-/ENV-Konfiguration.</Text>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      {msg && <Alert color="green" mt="sm">{msg}</Alert>}
+
+      <Group mt="md" gap="md" align="stretch" wrap="wrap">
+        {list.map((c) => (
+          <Box key={c.kind} p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, width: 340 }}>
+            <Group justify="space-between">
+              <Text fw={700}>{c.name}</Text>
+              <Badge color={c.configured ? "green" : "gray"} variant="light">{c.configured ? "konfiguriert" : "offen"}</Badge>
+            </Group>
+            <Text size="xs" c="dimmed" mt={2}>{c.category} · {c.description}</Text>
+            {c.portalConfigurable ? (
+              <>
+                {c.fields.map((f) => (
+                  <TextInput key={f.key} label={f.label} size="xs" mt={6} type={f.secret ? "password" : "text"}
+                    value={drafts[c.kind]?.[f.key] ?? ""} onChange={(e) => setDrafts((d) => ({ ...d, [c.kind]: { ...d[c.kind], [f.key]: e.currentTarget.value } }))} />
+                ))}
+                <Group mt="sm" gap="xs">
+                  <Switch label="Aktiv" checked={enabled[c.kind] ?? false} onChange={(e) => setEnabled((x) => ({ ...x, [c.kind]: e.currentTarget.checked }))} />
+                  <Button size="compact-xs" onClick={async () => {
+                    setErr(null); setMsg(null);
+                    try { await trpc.integrations.configure.mutate({ kind: c.kind, enabled: enabled[c.kind] ?? false, config: drafts[c.kind] ?? {} }); setMsg(`${c.name} gespeichert.`); await load(); }
+                    catch (e) { setErr(errMsg(e)); }
+                  }}>Speichern</Button>
+                  {c.kind === "SLACK" && (
+                    <Button size="compact-xs" variant="light" onClick={async () => {
+                      setErr(null); setMsg(null);
+                      try { const r = await trpc.integrations.test.mutate({ kind: "SLACK" }); setMsg(r.message); }
+                      catch (e) { setErr(errMsg(e)); }
+                    }}>Testen</Button>
+                  )}
+                </Group>
+              </>
+            ) : <Text size="xs" c="dimmed" mt="sm">Konfiguration über Worker/ENV.</Text>}
+          </Box>
+        ))}
+      </Group>
+    </>
+  );
+}
