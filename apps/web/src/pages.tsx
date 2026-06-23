@@ -3,7 +3,7 @@
 // Bereiche mit wenig Code anbindbar sind. Interaktive Aktionen (Versand bestätigen,
 // Mahnlauf, Reorder→Bestellungen) sind je Seite ergänzt.
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Alert, Badge, Box, Button, Checkbox, Group, Loader, NumberInput, Select, Switch, Table, Text, Textarea, TextInput, Title } from "@mantine/core";
+import { Alert, Badge, Box, Button, Checkbox, Group, Loader, NumberInput, Select, Switch, Table, Tabs, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { trpc } from "./trpc.js";
 import { euro, numTd, statusMantineColor } from "./theme.js";
@@ -577,26 +577,49 @@ export function ArticlePicker({ onPick }: { onPick: (e: { label: string; unitNet
 }
 
 // Kunden-Picker: durchsuchbare Auswahl aus dem Kundenstamm (statt Firmen-ID tippen).
+// Kein Treffer → „+ anlegen" erstellt den Kunden inline (ERPNext „Create a new…").
 export function CompanyPicker({ value, onChange, label = "Kunde", w = 240, allowEmpty = false }: { value: string; onChange: (id: string) => void; label?: string; w?: number; allowEmpty?: boolean }): JSX.Element {
   const [companies, setCompanies] = useState<Awaited<ReturnType<typeof trpc.companies.list.query>>>([]);
-  useEffect(() => { void trpc.companies.list.query().then(setCompanies).catch(() => undefined); }, []);
+  const [search, setSearch] = useState("");
+  const reload = useCallback(async () => { try { setCompanies(await trpc.companies.list.query()); } catch { /* ignore */ } }, []);
+  useEffect(() => { void reload(); }, [reload]);
+  const exact = companies.some((c) => c.name.toLowerCase() === search.trim().toLowerCase());
   return (
-    <Select label={label} searchable clearable={allowEmpty} placeholder="Kunde suchen…" w={w}
-      value={value || null} onChange={(v) => onChange(v ?? "")}
-      nothingFoundMessage="Kein Kunde — im Kundenstamm anlegen"
-      data={companies.map((c) => ({ value: c.id, label: `${c.name}${c.branche ? ` · ${c.branche}` : ""}` }))} />
+    <Box>
+      <Select label={label} searchable clearable={allowEmpty} placeholder="Kunde suchen…" w={w}
+        value={value || null} onChange={(v) => onChange(v ?? "")} searchValue={search} onSearchChange={setSearch}
+        nothingFoundMessage="Kein Treffer — unten anlegen"
+        data={companies.map((c) => ({ value: c.id, label: `${c.name}${c.branche ? ` · ${c.branche}` : ""}` }))} />
+      {search.trim().length >= 2 && !exact && (
+        <Button size="compact-xs" variant="light" mt={4} onClick={async () => {
+          try { const r = await trpc.companies.create.mutate({ name: search.trim(), priceGroupKind: "STANDARD" }); await reload(); onChange(r.id); setSearch(""); }
+          catch { /* ignore */ }
+        }}>+ „{search.trim()}" als Kunde anlegen</Button>
+      )}
+    </Box>
   );
 }
 
-// Lieferanten-Picker: durchsuchbare Auswahl aus dem Lieferantenstamm.
+// Lieferanten-Picker: durchsuchbare Auswahl aus dem Lieferantenstamm; kein Treffer → inline anlegen.
 export function SupplierPicker({ value, onChange, label, w = 200 }: { value: string; onChange: (id: string) => void; label?: string; w?: number }): JSX.Element {
   const [suppliers, setSuppliers] = useState<Awaited<ReturnType<typeof trpc.suppliers.listAll.query>>>([]);
-  useEffect(() => { void trpc.suppliers.listAll.query().then(setSuppliers).catch(() => undefined); }, []);
+  const [search, setSearch] = useState("");
+  const reload = useCallback(async () => { try { setSuppliers(await trpc.suppliers.listAll.query()); } catch { /* ignore */ } }, []);
+  useEffect(() => { void reload(); }, [reload]);
+  const exact = suppliers.some((s) => s.name.toLowerCase() === search.trim().toLowerCase());
   return (
-    <Select label={label} size={label ? undefined : "xs"} searchable clearable placeholder="Lieferant suchen…" w={w}
-      value={value || null} onChange={(v) => onChange(v ?? "")}
-      nothingFoundMessage="Kein Lieferant — im Lieferantenstamm anlegen"
-      data={suppliers.map((s) => ({ value: s.id, label: s.name }))} />
+    <Box>
+      <Select label={label} size={label ? undefined : "xs"} searchable clearable placeholder="Lieferant suchen…" w={w}
+        value={value || null} onChange={(v) => onChange(v ?? "")} searchValue={search} onSearchChange={setSearch}
+        nothingFoundMessage="Kein Treffer — unten anlegen"
+        data={suppliers.map((s) => ({ value: s.id, label: s.name }))} />
+      {search.trim().length >= 2 && !exact && (
+        <Button size="compact-xs" variant="light" mt={4} onClick={async () => {
+          try { const r = await trpc.suppliers.create.mutate({ name: search.trim() }); await reload(); onChange(r.id); setSearch(""); }
+          catch { /* ignore */ }
+        }}>+ „{search.trim()}" als Lieferant anlegen</Button>
+      )}
+    </Box>
   );
 }
 
@@ -1080,12 +1103,22 @@ export function OrdersPage({ role }: { role: string }): JSX.Element {
               </Text>
             </>
           )}
-          {termOrder && <ConnectionsPanel orderId={termOrder} role={role} onChanged={() => void load()} />}
-          {termOrder && <AssignTaskBox entity="Order" entityId={termOrder} navKey="orders" />}
-          {termOrder && <WorkflowPanel orderId={termOrder} />}
-          {termOrder && <LinksPanel orderId={termOrder} />}
-          {termOrder && <DeliveryPanel orderId={termOrder} onChanged={() => void load()} />}
-          {termOrder && <RecordPanel entity="Order" entityId={termOrder} />}
+          {termOrder && (
+            <Tabs defaultValue="belegkette" mt="md" keepMounted={false}>
+              <Tabs.List>
+                <Tabs.Tab value="belegkette">Belegkette</Tabs.Tab>
+                <Tabs.Tab value="aufgaben">Aufgaben</Tabs.Tab>
+                <Tabs.Tab value="workflow">Workflow</Tabs.Tab>
+                <Tabs.Tab value="lieferung">Lieferung &amp; Druckdaten</Tabs.Tab>
+                <Tabs.Tab value="notizen">Notizen &amp; Dateien</Tabs.Tab>
+              </Tabs.List>
+              <Tabs.Panel value="belegkette"><ConnectionsPanel orderId={termOrder} role={role} onChanged={() => void load()} /></Tabs.Panel>
+              <Tabs.Panel value="aufgaben"><AssignTaskBox entity="Order" entityId={termOrder} navKey="orders" /></Tabs.Panel>
+              <Tabs.Panel value="workflow"><WorkflowPanel orderId={termOrder} /></Tabs.Panel>
+              <Tabs.Panel value="lieferung"><LinksPanel orderId={termOrder} /><DeliveryPanel orderId={termOrder} onChanged={() => void load()} /></Tabs.Panel>
+              <Tabs.Panel value="notizen"><RecordPanel entity="Order" entityId={termOrder} /></Tabs.Panel>
+            </Tabs>
+          )}
         </>
       )}
     </>
@@ -2886,11 +2919,35 @@ export function AssignTaskBox({ entity, entityId, navKey }: { entity: string; en
 
 // ERPNext-artige Home-Workspace: KPI-Kacheln + Schnellzugriffe mit Zählern + gruppierte
 // „Berichte & Stammdaten"-Sprungkarten. Zähler clientseitig aus den vorhandenen Listen.
+// Schnellzugriff-Definitionen (key, Label, Zielmodul, optional Zähler-Feld).
+const HOME_SHORTCUTS: ReadonlyArray<{ key: string; label: string; nav: string; countKey?: string }> = [
+  { key: "companies", label: "Firmen/Kunden", nav: "companies", countKey: "companies" },
+  { key: "orders", label: "Aufträge", nav: "orders", countKey: "orders" },
+  { key: "quotes", label: "Angebote", nav: "quotes", countKey: "quotes" },
+  { key: "leads", label: "Leads", nav: "leads", countKey: "leads" },
+  { key: "invoices", label: "Rechnungen", nav: "dunning", countKey: "invoices" },
+  { key: "suppliers", label: "Lieferanten", nav: "suppliers", countKey: "suppliers" },
+  { key: "articles", label: "Artikel", nav: "products", countKey: "articles" },
+  { key: "archive", label: "GoBD-Archiv", nav: "archive" },
+  { key: "tasks", label: "Meine Aufgaben", nav: "tasks", countKey: "tasks" },
+  { key: "calendar", label: "Kalender", nav: "calendar" },
+  { key: "automation", label: "Automationen", nav: "automation" },
+];
+const HOME_LAYOUT_KEY = "texma.home.shortcuts.v1";
+interface HomeLayout { order: string[]; hidden: string[] }
+function loadHomeLayout(): HomeLayout {
+  try { const raw = localStorage.getItem(HOME_LAYOUT_KEY); if (raw) return JSON.parse(raw) as HomeLayout; } catch { /* ignore */ }
+  return { order: HOME_SHORTCUTS.map((s) => s.key), hidden: [] };
+}
+
 export function HomePage({ userName, onNavigate }: { userName?: string; onNavigate: (k: string) => void }): JSX.Element {
   const [n, setN] = useState<Record<string, number>>({});
   const [openOrders, setOpenOrders] = useState(0);
   const [openQuotes, setOpenQuotes] = useState(0);
   const [tasks, setTasks] = useState(0);
+  const [layout, setLayout] = useState<HomeLayout>(() => (typeof localStorage !== "undefined" ? loadHomeLayout() : { order: HOME_SHORTCUTS.map((s) => s.key), hidden: [] }));
+  const [edit, setEdit] = useState(false);
+  const saveLayout = (l: HomeLayout): void => { setLayout(l); try { localStorage.setItem(HOME_LAYOUT_KEY, JSON.stringify(l)); } catch { /* ignore */ } };
   useEffect(() => {
     void (async () => {
       const safe = async <T,>(p: Promise<T>, f: T): Promise<T> => { try { return await p; } catch { return f; } };
@@ -2917,9 +2974,20 @@ export function HomePage({ userName, onNavigate }: { userName?: string; onNaviga
       <Text fz={28} fw={700} c={color} mt={4}>{value}</Text>
     </Box>
   );
-  const shortcut = (label: string, count: number | undefined, navKey: string): JSX.Element => (
-    <Button key={navKey} variant="default" onClick={() => onNavigate(navKey)} rightSection={count !== undefined ? <Badge size="sm" variant="light">{count}</Badge> : null}>{label}</Button>
-  );
+  const counts: Record<string, number> = { ...n, tasks };
+  // Sichtbare Schnellzugriffe in gespeicherter Reihenfolge; unbekannte Keys ignorieren.
+  const ordered = layout.order.map((k) => HOME_SHORTCUTS.find((s) => s.key === k)).filter((s): s is (typeof HOME_SHORTCUTS)[number] => !!s);
+  const visible = ordered.filter((s) => !layout.hidden.includes(s.key));
+  const hiddenDefs = HOME_SHORTCUTS.filter((s) => layout.hidden.includes(s.key));
+  const move = (key: string, dir: -1 | 1): void => {
+    const order = [...layout.order];
+    const i = order.indexOf(key); const j = i + dir;
+    if (i < 0 || j < 0 || j >= order.length) return;
+    [order[i], order[j]] = [order[j]!, order[i]!];
+    saveLayout({ ...layout, order });
+  };
+  const hide = (key: string): void => saveLayout({ ...layout, hidden: [...layout.hidden, key] });
+  const show = (key: string): void => saveLayout({ ...layout, hidden: layout.hidden.filter((k) => k !== key) });
   const card = (title: string, items: { label: string; navKey: string }[]): JSX.Element => (
     <Box style={{ flex: "1 1 240px", minWidth: 220 }}>
       <Text size="sm" fw={700} mb={6}>{title}</Text>
@@ -2941,17 +3009,28 @@ export function HomePage({ userName, onNavigate }: { userName?: string; onNaviga
         {kpi("Meine Aufgaben", tasks, tasks > 0 ? "orange" : "gray", "tasks")}
       </Group>
 
-      <Title order={5} mt="xl">Schnellzugriffe</Title>
-      <Group mt="xs" gap="xs" wrap="wrap">
-        {shortcut("Firmen/Kunden", n.companies, "companies")}
-        {shortcut("Aufträge", n.orders, "orders")}
-        {shortcut("Angebote", n.quotes, "quotes")}
-        {shortcut("Leads", n.leads, "leads")}
-        {shortcut("Rechnungen", n.invoices, "dunning")}
-        {shortcut("Lieferanten", n.suppliers, "suppliers")}
-        {shortcut("Artikel", n.articles, "products")}
-        {shortcut("GoBD-Archiv", undefined, "archive")}
+      <Group mt="xl" justify="space-between">
+        <Title order={5}>Schnellzugriffe</Title>
+        <Button size="compact-xs" variant={edit ? "filled" : "subtle"} onClick={() => setEdit((e) => !e)}>{edit ? "Fertig" : "Bearbeiten"}</Button>
       </Group>
+      <Group mt="xs" gap="xs" wrap="wrap">
+        {visible.map((s) => (
+          <Group key={s.key} gap={2} wrap="nowrap" style={{ border: edit ? "1px dashed var(--mantine-color-gray-4)" : undefined, borderRadius: 8, padding: edit ? 2 : 0 }}>
+            <Button variant="default" onClick={() => !edit && onNavigate(s.nav)} rightSection={s.countKey ? <Badge size="sm" variant="light">{counts[s.countKey] ?? 0}</Badge> : null}>{s.label}</Button>
+            {edit && <>
+              <Button size="compact-xs" variant="subtle" px={4} onClick={() => move(s.key, -1)}>←</Button>
+              <Button size="compact-xs" variant="subtle" px={4} onClick={() => move(s.key, 1)}>→</Button>
+              <Button size="compact-xs" variant="subtle" color="red" px={4} onClick={() => hide(s.key)}>✕</Button>
+            </>}
+          </Group>
+        ))}
+      </Group>
+      {edit && hiddenDefs.length > 0 && (
+        <Group mt="xs" gap="xs" wrap="wrap">
+          <Text size="xs" c="dimmed">Ausgeblendet:</Text>
+          {hiddenDefs.map((s) => <Button key={s.key} size="compact-xs" variant="light" onClick={() => show(s.key)}>+ {s.label}</Button>)}
+        </Group>
+      )}
 
       <Title order={5} mt="xl">Berichte &amp; Stammdaten</Title>
       <Group mt="xs" gap="xl" align="flex-start" wrap="wrap">
