@@ -909,6 +909,26 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => { try { await ctx.opportunities.markLost(input.id, input.reason); return { ok: true as const }; } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); } }),
   }),
 
+  // Schlanke Lagerhaltung + Inventur (F4-Ledger): Bestandsübersicht je Lager,
+  // manuelle Bewegung (Zugang/Abgang), Inventur-Zählung (bucht Differenz).
+  stock: router({
+    list: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.stock.listBalances()),
+    move: roleProcedure(...supplierRoles)
+      .input(z.object({
+        variantId: z.string().min(1), deltaQty: z.number().int(),
+        lager: z.enum(["HAUPT", "MUSTER", "SHOWROOM", "TRANSFERDRUCK"]).default("HAUPT"),
+        grund: z.enum(["EROEFFNUNG", "WARENEINGANG", "VERBRAUCH", "INVENTUR", "KORREKTUR", "MUSTER"]).default("KORREKTUR"),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.stock.post(input); } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    inventur: roleProcedure(...supplierRoles)
+      .input(z.object({ variantId: z.string().min(1), countedQty: z.number().int().min(0), lager: z.enum(["HAUPT", "MUSTER", "SHOWROOM", "TRANSFERDRUCK"]).default("SHOWROOM") }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.inventory.recordCount(input); } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+  }),
+
   // Admin-Portal: zentrale Einstellungen (Briefkopf, Freigabeschwellen, Aufschlag).
   // Nur ADMIN (Geschäftsleitung).
   settings: router({

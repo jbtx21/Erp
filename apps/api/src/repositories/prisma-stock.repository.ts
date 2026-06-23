@@ -6,6 +6,7 @@ import { prisma } from "@texma/db";
 import type { StockLager } from "@texma/shared";
 import type {
   PostedMove,
+  StockBalanceRow,
   StockMoveInput,
   StockRepository,
 } from "../modules/stock/stock.service.js";
@@ -53,5 +54,25 @@ export class PrismaStockRepository implements StockRepository {
       where: { variantId },
       select: { deltaQty: true, lager: true },
     });
+  }
+
+  async listBalances(): Promise<StockBalanceRow[]> {
+    const grouped = await prisma.stockMove.groupBy({
+      by: ["variantId", "lager"],
+      _sum: { deltaQty: true },
+    });
+    const variantIds = [...new Set(grouped.map((g) => g.variantId))];
+    const variants = await prisma.variant.findMany({ where: { id: { in: variantIds } }, select: { id: true, sku: true, article: { select: { name: true } } } });
+    const meta = new Map(variants.map((v) => [v.id, { sku: v.sku, name: v.article.name }]));
+    const byVariant = new Map<string, StockBalanceRow>();
+    for (const g of grouped) {
+      const row = byVariant.get(g.variantId) ?? {
+        variantId: g.variantId, sku: meta.get(g.variantId)?.sku ?? g.variantId, name: meta.get(g.variantId)?.name ?? "",
+        balances: { HAUPT: 0, MUSTER: 0, SHOWROOM: 0, TRANSFERDRUCK: 0 },
+      };
+      row.balances[g.lager as StockLager] = g._sum.deltaQty ?? 0;
+      byVariant.set(g.variantId, row);
+    }
+    return [...byVariant.values()].sort((a, b) => a.sku.localeCompare(b.sku));
   }
 }

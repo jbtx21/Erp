@@ -66,6 +66,9 @@ import { WorkflowService } from "../modules/workflow/workflow.service.js";
 import { InMemoryWorkflowRepository } from "../repositories/in-memory-workflow.repository.js";
 import { SettingsService } from "../modules/settings/settings.service.js";
 import { InMemorySettingsRepository } from "../repositories/in-memory-settings.repository.js";
+import { StockService } from "../modules/stock/stock.service.js";
+import { InMemoryStockRepository } from "../repositories/in-memory-stock.repository.js";
+import { InventoryService } from "../modules/inventory/inventory.service.js";
 import { DeliveryService } from "../modules/delivery/delivery.service.js";
 import { InMemoryDeliveryRepository } from "../repositories/in-memory-delivery.repository.js";
 import { NumberingService } from "../modules/numbering/numbering.service.js";
@@ -297,6 +300,8 @@ function setup(user: AuthUser | null = BUERO) {
     messages: new MessageService(new InMemoryMessageRepository(), new MemoryAuditSink()),
     workflow: new WorkflowService(new InMemoryWorkflowRepository(), new MemoryAuditSink()),
     settings: new SettingsService(new InMemorySettingsRepository(), new MemoryAuditSink()),
+    stock: new StockService(new InMemoryStockRepository(), new MemoryAuditSink()),
+    inventory: new InventoryService(new StockService(new InMemoryStockRepository(), new MemoryAuditSink())),
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -405,6 +410,8 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       messages: {} as Context["messages"],
       workflow: {} as Context["workflow"],
       settings: {} as Context["settings"],
+      stock: {} as Context["stock"],
+      inventory: {} as Context["inventory"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",

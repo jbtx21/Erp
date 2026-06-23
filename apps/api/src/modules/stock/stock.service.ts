@@ -24,11 +24,20 @@ export interface PostedMove {
   balanceHaupt: number;
 }
 
+export interface StockBalanceRow {
+  variantId: string;
+  sku: string;
+  name: string;
+  balances: Record<StockLager, number>;
+}
+
 export interface StockRepository {
   /** Schreibt eine Bewegung (append-only) und aktualisiert den StockLevel-Cache atomar. */
   postMove(move: StockMoveInput): Promise<PostedMove>;
   /** Alle Bewegungen einer Variante (für Saldo/Audit). */
   movesByVariant(variantId: string): Promise<Array<{ deltaQty: number; lager: StockLager }>>;
+  /** Bestandsübersicht je Variante × Lager (für Lager-/Inventur-Ansicht). */
+  listBalances(): Promise<StockBalanceRow[]>;
 }
 
 export class StockService {
@@ -36,6 +45,9 @@ export class StockService {
     private readonly repo: StockRepository,
     private readonly audit: AuditSink
   ) {}
+
+  /** Bestandsübersicht je Variante × Lager. */
+  listBalances(): Promise<StockBalanceRow[]> { return this.repo.listBalances(); }
 
   /** Bucht eine Bestandsbewegung und protokolliert sie im Audit-Trail. */
   async post(move: StockMoveInput): Promise<PostedMove> {

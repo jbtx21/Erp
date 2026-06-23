@@ -1974,3 +1974,86 @@ export function AdminPage(): JSX.Element {
     </>
   );
 }
+
+// Schlanke Lagerhaltung + Inventur (F4-Ledger): Bestand je Lager, Zugang/Abgang,
+// Inventur-Zählung (bucht Differenz). Showroom + Transferdrucke als eigene Lager.
+const LAGER = [
+  { value: "HAUPT", label: "Hauptlager" },
+  { value: "MUSTER", label: "Muster" },
+  { value: "SHOWROOM", label: "Showroom" },
+  { value: "TRANSFERDRUCK", label: "Transferdrucke" },
+] as const;
+
+export function LagerPage(): JSX.Element {
+  const [rows, setRows] = useState<Awaited<ReturnType<typeof trpc.stock.list.query>>>([]);
+  const [variantId, setVariantId] = useState("");
+  const [lager, setLager] = useState<string>("TRANSFERDRUCK");
+  const [delta, setDelta] = useState(0);
+  const [countVariant, setCountVariant] = useState("");
+  const [countLager, setCountLager] = useState<string>("SHOWROOM");
+  const [counted, setCounted] = useState(0);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try { setRows(await trpc.stock.list.query()); setErr(null); } catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  return (
+    <>
+      <Title order={3}>Lager & Inventur</Title>
+      <Text size="sm" c="dimmed" mt={4}>Schlanke Lagerführung über Bewegungen (F4): Bestand = Summe der Buchungen. Showroom + Transferdrucke als eigene Lager. Inventur bucht die Differenz (Ist − Soll) als Korrektur.</Text>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      {msg && <Alert color="green" mt="sm">{msg}</Alert>}
+
+      <Group gap="md" mt="md" align="end" wrap="wrap">
+        <Box p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+          <Text size="sm" fw={600}>Zugang / Abgang (Transferdrucke etc.)</Text>
+          <Group gap="xs" align="end" mt="xs">
+            <TextInput label="Varianten-ID" value={variantId} onChange={(e) => setVariantId(e.currentTarget.value)} w={170} />
+            <Select label="Lager" value={lager} onChange={(v) => v && setLager(v)} data={LAGER.map((l) => ({ value: l.value, label: l.label }))} w={150} />
+            <NumberInput label="Menge (+/−)" value={delta} onChange={(v) => setDelta(Number(v) || 0)} w={120} />
+            <Button disabled={!variantId.trim() || delta === 0} onClick={async () => {
+              setErr(null); setMsg(null);
+              try { await trpc.stock.move.mutate({ variantId, deltaQty: delta, lager: lager as "HAUPT", grund: delta > 0 ? "WARENEINGANG" : "VERBRAUCH" }); setMsg("Bewegung gebucht."); setDelta(0); await load(); }
+              catch (e) { setErr(errMsg(e)); }
+            }}>Buchen</Button>
+          </Group>
+        </Box>
+
+        <Box p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+          <Text size="sm" fw={600}>Inventur (Showroom)</Text>
+          <Group gap="xs" align="end" mt="xs">
+            <TextInput label="Varianten-ID" value={countVariant} onChange={(e) => setCountVariant(e.currentTarget.value)} w={170} />
+            <Select label="Lager" value={countLager} onChange={(v) => v && setCountLager(v)} data={LAGER.map((l) => ({ value: l.value, label: l.label }))} w={150} />
+            <NumberInput label="Gezählt" value={counted} onChange={(v) => setCounted(Number(v) || 0)} min={0} w={110} />
+            <Button disabled={!countVariant.trim()} onClick={async () => {
+              setErr(null); setMsg(null);
+              try { const r = await trpc.stock.inventur.mutate({ variantId: countVariant, countedQty: counted, lager: countLager as "SHOWROOM" }); setMsg(r.corrected ? `Korrektur gebucht: Delta ${r.delta}.` : "Keine Abweichung — keine Korrektur nötig."); await load(); }
+              catch (e) { setErr(errMsg(e)); }
+            }}>Zählung erfassen</Button>
+          </Group>
+        </Box>
+      </Group>
+
+      <Title order={4} mt="xl">Bestandsübersicht</Title>
+      {rows.length === 0 ? <Text size="sm" c="dimmed" mt="xs">Noch keine Lagerbewegungen.</Text> : (
+        <Table mt="xs" withTableBorder withColumnBorders>
+          <Table.Thead><Table.Tr>
+            <Table.Th>SKU</Table.Th><Table.Th>Artikel</Table.Th>
+            {LAGER.map((l) => <Table.Th key={l.value} ta="right">{l.label}</Table.Th>)}
+          </Table.Tr></Table.Thead>
+          <Table.Tbody>
+            {rows.map((r) => (
+              <Table.Tr key={r.variantId}>
+                <Table.Td>{r.sku}</Table.Td><Table.Td>{r.name}</Table.Td>
+                {LAGER.map((l) => <Table.Td key={l.value} ta="right">{r.balances[l.value]}</Table.Td>)}
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      )}
+    </>
+  );
+}

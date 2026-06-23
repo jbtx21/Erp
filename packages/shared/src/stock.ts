@@ -2,7 +2,16 @@
 // Reine, IO-freie Saldo-Logik: der Bestand ist die Summe der Bewegungen; er wird
 // nie direkt gesetzt. Korrekturen (Inventur) erzeugen wieder eine Bewegung.
 
-export type StockLager = "HAUPT" | "MUSTER";
+// Lagerorte: Hauptlager, Muster, Showroom (Inventur Showroomartikel),
+// Transferdrucke (schlankes Kleinstlager der vorgefertigten Drucke).
+export type StockLager = "HAUPT" | "MUSTER" | "SHOWROOM" | "TRANSFERDRUCK";
+
+export const STOCK_LAGER: ReadonlyArray<{ value: StockLager; label: string }> = [
+  { value: "HAUPT", label: "Hauptlager" },
+  { value: "MUSTER", label: "Muster" },
+  { value: "SHOWROOM", label: "Showroom" },
+  { value: "TRANSFERDRUCK", label: "Transferdrucke" },
+];
 
 export type StockMoveReason =
   | "EROEFFNUNG"
@@ -26,7 +35,7 @@ export function currentBalance(moves: ReadonlyArray<StockMoveLike>): number {
 export function balanceByLager(
   moves: ReadonlyArray<StockMoveLike>
 ): Record<StockLager, number> {
-  const out: Record<StockLager, number> = { HAUPT: 0, MUSTER: 0 };
+  const out: Record<StockLager, number> = { HAUPT: 0, MUSTER: 0, SHOWROOM: 0, TRANSFERDRUCK: 0 };
   for (const m of moves) out[m.lager ?? "HAUPT"] += m.deltaQty;
   return out;
 }

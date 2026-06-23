@@ -1,9 +1,10 @@
 // In-Memory-Bewegungs-Ledger für Unit-Tests/Dev. Hält die Bewegungen je Variante
 // und den HAUPT-Cache analog zur Prisma-Implementierung.
 
-import type { StockLager } from "@texma/shared";
+import { balanceByLager, type StockLager } from "@texma/shared";
 import type {
   PostedMove,
+  StockBalanceRow,
   StockMoveInput,
   StockRepository,
 } from "../modules/stock/stock.service.js";
@@ -30,5 +31,11 @@ export class InMemoryStockRepository implements StockRepository {
 
   async movesByVariant(variantId: string): Promise<Row[]> {
     return [...(this.moves.get(variantId) ?? [])];
+  }
+
+  async listBalances(): Promise<StockBalanceRow[]> {
+    return [...this.moves.entries()].map(([variantId, rows]) => ({
+      variantId, sku: variantId, name: variantId, balances: balanceByLager(rows),
+    }));
   }
 }

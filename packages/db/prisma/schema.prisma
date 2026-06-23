@@ -1104,6 +1104,8 @@ enum StockMoveReason {
 enum StockLager {
   HAUPT
   MUSTER
+  SHOWROOM
+  TRANSFERDRUCK
 }
 
 model StockMove {

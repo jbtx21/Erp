@@ -9,7 +9,7 @@ import { Differentiators } from "./Differentiators.js";
 import { Banking } from "./Banking.js";
 import {
   CompaniesPage, CostCentersPage, DunningPage, InquiriesPage, IncomingInvoicesPage, LeadsPage, OrdersPage, ProcurementPage, ProductionReportingPage,
-  ProductsPage, PricingPage, EmailTemplatesPage, DashboardsPage, DataIoPage, NewsletterPage, OpportunitiesPage, CalendarPage, MessagesPage, AdminPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
+  ProductsPage, PricingPage, EmailTemplatesPage, DashboardsPage, DataIoPage, NewsletterPage, OpportunitiesPage, CalendarPage, MessagesPage, AdminPage, LagerPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
 } from "./pages.js";
 import { trpc } from "./trpc.js";
 
@@ -21,7 +21,7 @@ const NAV: ReadonlyArray<{ group: string; items: ReadonlyArray<{ key: string; la
   { group: "Beschaffung", items: [
     { key: "suppliers", label: "Lieferanten" }, { key: "incoming", label: "Eingangsrechnungen" },
     { key: "procurement", label: "Beschaffung" }, { key: "reorder", label: "Nachbestellung" },
-    { key: "samples", label: "Muster-Leihgut" },
+    { key: "samples", label: "Muster-Leihgut" }, { key: "lager", label: "Lager & Inventur" },
   ] },
   { group: "Stammdaten", items: [{ key: "products", label: "Artikel/Varianten" }, { key: "pricing", label: "Preise/Staffel" }] },
   { group: "Produktion", items: [{ key: "differentiators", label: "Differenzierer" }, { key: "subproduction", label: "Fremdvergabe" }, { key: "prodreport", label: "Produktions-Reporting" }] },
@@ -198,6 +198,7 @@ function Page({ k, role }: { k: string; role: string }): ReactNode {
     case "calendar": return <CalendarPage />;
     case "messages": return <MessagesPage />;
     case "admin": return <AdminPage />;
+    case "lager": return <LagerPage />;
     case "differentiators": return <Differentiators role={role} />;
     case "subproduction": return <SubproductionPage />;
     case "prodreport": return <ProductionReportingPage />;
