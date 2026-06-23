@@ -9,14 +9,14 @@ import { Differentiators } from "./Differentiators.js";
 import { Banking } from "./Banking.js";
 import {
   CompaniesPage, CostCentersPage, DunningPage, InquiriesPage, IncomingInvoicesPage, LeadsPage, OrdersPage, ProcurementPage, ProductionReportingPage,
-  ProductsPage, PricingPage, EmailTemplatesPage, DashboardsPage, DataIoPage, NewsletterPage, OpportunitiesPage, CalendarPage, MessagesPage, AdminPage, ArchivePage, AutomationPage, TasksPage, LagerPage, HrPage, IntegrationsPage, SecurityPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
+  ProductsPage, PricingPage, EmailTemplatesPage, DashboardsPage, DataIoPage, NewsletterPage, OpportunitiesPage, CalendarPage, MessagesPage, AdminPage, ArchivePage, AutomationPage, TasksPage, HomePage, LagerPage, HrPage, IntegrationsPage, SecurityPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
 } from "./pages.js";
 import { trpc } from "./trpc.js";
 
 interface AuthUser { id: string; email: string; name: string; role: string; totpEnabled: boolean; }
 
 const NAV: ReadonlyArray<{ group: string; items: ReadonlyArray<{ key: string; label: string }> }> = [
-  { group: "Übersicht", items: [{ key: "dashboard", label: "Dashboard" }, { key: "dashboards", label: "Dashboards (G-7)" }, { key: "calendar", label: "Kalender" }, { key: "tasks", label: "Meine Aufgaben" }, { key: "messages", label: "Nachrichten" }, { key: "security", label: "Mein Konto (2FA)" }] },
+  { group: "Übersicht", items: [{ key: "home", label: "Start" }, { key: "dashboard", label: "Termin-Ampel" }, { key: "dashboards", label: "Dashboards (G-7)" }, { key: "calendar", label: "Kalender" }, { key: "tasks", label: "Meine Aufgaben" }, { key: "messages", label: "Nachrichten" }, { key: "security", label: "Mein Konto (2FA)" }] },
   { group: "Vertrieb", items: [{ key: "companies", label: "Firmen/Kunden" }, { key: "leads", label: "Leads" }, { key: "opportunities", label: "Verkaufschancen" }, { key: "inquiries", label: "Anfragen" }, { key: "quotes", label: "Angebote" }, { key: "orders", label: "Aufträge" }, { key: "reklamation", label: "Reklamation" }] },
   { group: "Beschaffung", items: [
     { key: "suppliers", label: "Lieferanten" }, { key: "incoming", label: "Eingangsrechnungen" },
@@ -35,7 +35,7 @@ const NAV: ReadonlyArray<{ group: string; items: ReadonlyArray<{ key: string; la
 const ALL_KEYS = NAV.flatMap((g) => g.items.map((i) => i.key));
 const hashKey = (): string => {
   const h = typeof location !== "undefined" ? location.hash.replace("#", "") : "";
-  return ALL_KEYS.includes(h) ? h : "dashboard";
+  return ALL_KEYS.includes(h) ? h : "home";
 };
 
 export function App(): JSX.Element {
@@ -191,6 +191,7 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<voi
 
 function Page({ k, role, userName, onNavigate }: { k: string; role: string; userName: string; onNavigate: (k: string) => void }): ReactNode {
   switch (k) {
+    case "home": return <HomePage userName={userName} onNavigate={onNavigate} />;
     case "dashboard": return <Dashboard />;
     case "dashboards": return <DashboardsPage />;
     case "orders": return <OrdersPage role={role} />;

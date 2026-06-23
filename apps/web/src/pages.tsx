@@ -367,7 +367,11 @@ export function SampleLoansPage(): JSX.Element {
       <Text size="sm" c="dimmed" mt={4}>Ausgabe als Leihgut; Rückgabe unter 21 Tagen → keine Rechnung, sonst Musterrechnung zum Listenpreis (B5).</Text>
       <Group mt="sm" gap="xs" align="end">
         <CompanyPicker value={companyId} onChange={setCompanyId} w={200} />
-        <TextInput label="Varianten-ID" value={variantId} onChange={(e) => setVariantId(e.currentTarget.value)} w={170} />
+        <Box>
+          <Text size="sm" fw={500} mb={2}>Artikel/Variante</Text>
+          <ArticlePicker onPick={(e) => setVariantId(e.variantId)} />
+          {variantId ? <Text size="xs" c="dimmed" mt={2}>gewählt: {variantId}</Text> : null}
+        </Box>
         <NumberInput label="Menge" value={menge} onChange={(v) => setMenge(Number(v) || 1)} min={1} w={90} />
         <Button loading={busy} onClick={async () => {
           setBusy(true); setErr(null);
@@ -391,7 +395,7 @@ export function SampleLoansPage(): JSX.Element {
         {multiLines.map((l, i) => (
           <Group key={i} gap="xs" mt={4} align="end">
             <TextInput label={i === 0 ? "Artikel" : undefined} value={l.description} onChange={(e) => setMultiLines((ls) => ls.map((x, j) => j === i ? { ...x, description: e.currentTarget.value } : x))} w={240} placeholder="Polo blau M" />
-            <TextInput label={i === 0 ? "Lieferant-ID" : undefined} value={l.supplierId} onChange={(e) => setMultiLines((ls) => ls.map((x, j) => j === i ? { ...x, supplierId: e.currentTarget.value } : x))} w={150} />
+            <Box>{i === 0 ? <Text size="sm" fw={500} mb={2}>Lieferant</Text> : null}<SupplierPicker value={l.supplierId} onChange={(id) => setMultiLines((ls) => ls.map((x, j) => j === i ? { ...x, supplierId: id } : x))} w={180} /></Box>
             <NumberInput label={i === 0 ? "Menge" : undefined} value={l.menge} onChange={(v) => setMultiLines((ls) => ls.map((x, j) => j === i ? { ...x, menge: Number(v) || 1 } : x))} min={1} w={90} />
             <Button size="compact-sm" variant="subtle" color="red" disabled={multiLines.length === 1} onClick={() => setMultiLines((ls) => ls.filter((_, j) => j !== i))}>✕</Button>
           </Group>
@@ -581,6 +585,18 @@ export function CompanyPicker({ value, onChange, label = "Kunde", w = 240, allow
       value={value || null} onChange={(v) => onChange(v ?? "")}
       nothingFoundMessage="Kein Kunde — im Kundenstamm anlegen"
       data={companies.map((c) => ({ value: c.id, label: `${c.name}${c.branche ? ` · ${c.branche}` : ""}` }))} />
+  );
+}
+
+// Lieferanten-Picker: durchsuchbare Auswahl aus dem Lieferantenstamm.
+export function SupplierPicker({ value, onChange, label, w = 200 }: { value: string; onChange: (id: string) => void; label?: string; w?: number }): JSX.Element {
+  const [suppliers, setSuppliers] = useState<Awaited<ReturnType<typeof trpc.suppliers.listAll.query>>>([]);
+  useEffect(() => { void trpc.suppliers.listAll.query().then(setSuppliers).catch(() => undefined); }, []);
+  return (
+    <Select label={label} size={label ? undefined : "xs"} searchable clearable placeholder="Lieferant suchen…" w={w}
+      value={value || null} onChange={(v) => onChange(v ?? "")}
+      nothingFoundMessage="Kein Lieferant — im Lieferantenstamm anlegen"
+      data={suppliers.map((s) => ({ value: s.id, label: s.name }))} />
   );
 }
 
@@ -2865,5 +2881,85 @@ export function AssignTaskBox({ entity, entityId, navKey }: { entity: string; en
         }}>Zuweisen</Button>
       </Group>
     </Box>
+  );
+}
+
+// ERPNext-artige Home-Workspace: KPI-Kacheln + Schnellzugriffe mit Zählern + gruppierte
+// „Berichte & Stammdaten"-Sprungkarten. Zähler clientseitig aus den vorhandenen Listen.
+export function HomePage({ userName, onNavigate }: { userName?: string; onNavigate: (k: string) => void }): JSX.Element {
+  const [n, setN] = useState<Record<string, number>>({});
+  const [openOrders, setOpenOrders] = useState(0);
+  const [openQuotes, setOpenQuotes] = useState(0);
+  const [tasks, setTasks] = useState(0);
+  useEffect(() => {
+    void (async () => {
+      const safe = async <T,>(p: Promise<T>, f: T): Promise<T> => { try { return await p; } catch { return f; } };
+      const [companies, orders, quotes, leads, invoices, suppliers, articles, taskCount] = await Promise.all([
+        safe(trpc.companies.list.query(), [] as unknown[]),
+        safe(trpc.shopOrders.list.query({ limit: 200 }), [] as { status?: string }[]),
+        safe(trpc.quotes.list.query(), [] as { status?: string }[]),
+        safe(trpc.leads.list.query(), [] as unknown[]),
+        safe(trpc.invoices.list.query(), [] as unknown[]),
+        safe(trpc.suppliers.listAll.query(), [] as unknown[]),
+        safe(trpc.products.listArticles.query(), [] as unknown[]),
+        safe(trpc.tasks.openCount.query(), 0),
+      ]);
+      setN({ companies: companies.length, orders: orders.length, quotes: quotes.length, leads: leads.length, invoices: invoices.length, suppliers: suppliers.length, articles: articles.length });
+      setOpenOrders(orders.filter((o) => !["ABGESCHLOSSEN", "STORNIERT"].includes(String(o.status))).length);
+      setOpenQuotes(quotes.filter((q) => !["ANGENOMMEN", "ABGELEHNT", "VERWORFEN"].includes(String(q.status))).length);
+      setTasks(taskCount);
+    })();
+  }, []);
+
+  const kpi = (label: string, value: number | string, color: string, navKey: string): JSX.Element => (
+    <Box onClick={() => onNavigate(navKey)} style={{ flex: "1 1 180px", minWidth: 160, cursor: "pointer", border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, padding: 16 }}>
+      <Text size="xs" fw={700} tt="uppercase" c="dimmed">{label}</Text>
+      <Text fz={28} fw={700} c={color} mt={4}>{value}</Text>
+    </Box>
+  );
+  const shortcut = (label: string, count: number | undefined, navKey: string): JSX.Element => (
+    <Button key={navKey} variant="default" onClick={() => onNavigate(navKey)} rightSection={count !== undefined ? <Badge size="sm" variant="light">{count}</Badge> : null}>{label}</Button>
+  );
+  const card = (title: string, items: { label: string; navKey: string }[]): JSX.Element => (
+    <Box style={{ flex: "1 1 240px", minWidth: 220 }}>
+      <Text size="sm" fw={700} mb={6}>{title}</Text>
+      {items.map((i) => (
+        <Text key={i.navKey + i.label} size="sm" mb={3} c="blue" style={{ cursor: "pointer" }} onClick={() => onNavigate(i.navKey)}>↗ {i.label}</Text>
+      ))}
+    </Box>
+  );
+
+  return (
+    <>
+      <Title order={3}>Willkommen{userName ? `, ${userName}` : ""}</Title>
+      <Text size="sm" c="dimmed" mt={4}>Startübersicht — zentrale Kennzahlen, Schnellzugriffe und Sprungbretter in alle Module.</Text>
+
+      <Group mt="md" gap="sm" align="stretch" wrap="wrap">
+        {kpi("Offene Aufträge", openOrders, "navy", "orders")}
+        {kpi("Offene Angebote", openQuotes, "teal", "quotes")}
+        {kpi("Kunden", n.companies ?? 0, "blue", "companies")}
+        {kpi("Meine Aufgaben", tasks, tasks > 0 ? "orange" : "gray", "tasks")}
+      </Group>
+
+      <Title order={5} mt="xl">Schnellzugriffe</Title>
+      <Group mt="xs" gap="xs" wrap="wrap">
+        {shortcut("Firmen/Kunden", n.companies, "companies")}
+        {shortcut("Aufträge", n.orders, "orders")}
+        {shortcut("Angebote", n.quotes, "quotes")}
+        {shortcut("Leads", n.leads, "leads")}
+        {shortcut("Rechnungen", n.invoices, "dunning")}
+        {shortcut("Lieferanten", n.suppliers, "suppliers")}
+        {shortcut("Artikel", n.articles, "products")}
+        {shortcut("GoBD-Archiv", undefined, "archive")}
+      </Group>
+
+      <Title order={5} mt="xl">Berichte &amp; Stammdaten</Title>
+      <Group mt="xs" gap="xl" align="flex-start" wrap="wrap">
+        {card("Vertrieb", [{ label: "Firmen/Kunden", navKey: "companies" }, { label: "Leads", navKey: "leads" }, { label: "Verkaufschancen", navKey: "opportunities" }, { label: "Angebote", navKey: "quotes" }, { label: "Aufträge", navKey: "orders" }])}
+        {card("Beschaffung", [{ label: "Lieferanten", navKey: "suppliers" }, { label: "Eingangsrechnungen", navKey: "incoming" }, { label: "Nachbestellung", navKey: "reorder" }, { label: "Muster-Leihgut", navKey: "samples" }, { label: "Lager & Inventur", navKey: "lager" }])}
+        {card("Finanzen", [{ label: "Mahnwesen", navKey: "dunning" }, { label: "Banking", navKey: "banking" }, { label: "Auswertungen", navKey: "reporting" }, { label: "GoBD-Archiv", navKey: "archive" }, { label: "Kostenstellen", navKey: "costcenters" }])}
+        {card("Produktion & System", [{ label: "Produktions-Reporting", navKey: "prodreport" }, { label: "Fremdvergabe", navKey: "subproduction" }, { label: "Automationen", navKey: "automation" }, { label: "Einstellungen", navKey: "admin" }, { label: "Personalwesen", navKey: "hr" }])}
+      </Group>
+    </>
   );
 }
