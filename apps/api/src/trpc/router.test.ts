@@ -94,6 +94,8 @@ import { EanImportService } from "../modules/ean-import/ean-import.service.js";
 import { InMemoryEanImportRepository } from "../repositories/in-memory-ean-import.repository.js";
 import { FinanceReportService } from "../modules/finance-report/finance-report.service.js";
 import { InMemoryFinanceReportRepository } from "../repositories/in-memory-finance-report.repository.js";
+import { GoodsReceiptService } from "../modules/goods-receipt/goods-receipt.service.js";
+import { InMemoryGoodsReceiptRepository } from "../repositories/in-memory-goods-receipt.repository.js";
 import { DeliveryService } from "../modules/delivery/delivery.service.js";
 import { InMemoryDeliveryRepository } from "../repositories/in-memory-delivery.repository.js";
 import { NumberingService } from "../modules/numbering/numbering.service.js";
@@ -340,6 +342,7 @@ function setup(user: AuthUser | null = BUERO) {
     auditLog: new AuditQueryService(new InMemoryAuditLogRepository()),
     eanImport: new EanImportService(new InMemoryEanImportRepository(), new MemoryAuditSink()),
     financeReport: new FinanceReportService(new InMemoryFinanceReportRepository()),
+    goodsReceipts: new GoodsReceiptService(new InMemoryGoodsReceiptRepository(), new MemoryAuditSink()),
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -463,6 +466,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       auditLog: {} as Context["auditLog"],
       eanImport: {} as Context["eanImport"],
       financeReport: {} as Context["financeReport"],
+      goodsReceipts: {} as Context["goodsReceipts"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",
@@ -1144,5 +1148,18 @@ describe("tRPC financeReport — OP-Aging/DSO nur für nicht-PRODUKTION", () => 
   it("PRODUKTION darf das Finanz-Reporting nicht lesen (FORBIDDEN)", async () => {
     const { caller } = setup(PRODUKTION);
     await expect(caller.financeReport.aging()).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+describe("tRPC goodsReceipts — Wareneingang gegen Bestellung (T-05)", () => {
+  it("BUERO darf offene Bestellungen lesen", async () => {
+    const { caller } = setup(BUERO);
+    expect(await caller.goodsReceipts.listOpen()).toEqual([]);
+  });
+
+  it("PRODUKTION darf keinen Wareneingang buchen (FORBIDDEN)", async () => {
+    const { caller } = setup(PRODUKTION);
+    await expect(caller.goodsReceipts.record({ purchaseOrderId: "po1", lines: [{ variantId: "v1", receivedQty: 5 }] }))
+      .rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });

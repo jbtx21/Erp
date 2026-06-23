@@ -2318,6 +2318,129 @@ export function FinanceReportingPage(): JSX.Element {
   );
 }
 
+// Wareneingang gegen Bestellung (Kap. 6.3 / T-05): offene Bestellungen, Mengen je Position
+// buchen, Status BESTELLT → teilweise → vollständig; plus Produktionsstart-Gate (T-05).
+function WareneingangPo({ po, onBooked, onErr }: {
+  po: Awaited<ReturnType<typeof trpc.goodsReceipts.listOpen.query>>[number];
+  onBooked: (msg: string) => void; onErr: (msg: string) => void;
+}): JSX.Element {
+  const [qty, setQty] = useState<Record<string, number>>(() =>
+    Object.fromEntries(po.lines.map((l) => [l.variantId, Math.max(0, l.orderedQty - l.receivedQty)])));
+  const [busy, setBusy] = useState(false);
+  const statusColor = po.status === "TEILWEISE_ERHALTEN" ? "yellow" : po.status === "ERHALTEN" ? "teal" : "blue";
+
+  const book = async (): Promise<void> => {
+    const lines = po.lines.map((l) => ({ variantId: l.variantId, receivedQty: qty[l.variantId] ?? 0 })).filter((l) => l.receivedQty > 0);
+    if (lines.length === 0) { onErr("Keine Eingangsmenge erfasst."); return; }
+    setBusy(true);
+    try {
+      const r = await trpc.goodsReceipts.record.mutate({ purchaseOrderId: po.id, lines });
+      onBooked(`Wareneingang gebucht — ${po.number}: Status ${r.status}.`);
+    } catch (e) { onErr(errMsg(e)); } finally { setBusy(false); }
+  };
+
+  return (
+    <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+      <Group justify="space-between">
+        <Text fw={600}>{po.number} · {po.supplierName}{po.productionId ? ` · PA ${po.productionId}` : ""}</Text>
+        <Badge variant="light" color={statusColor}>{po.status}</Badge>
+      </Group>
+      <Table mt="xs" withTableBorder verticalSpacing="xs" fz="sm">
+        <Table.Thead><Table.Tr>
+          <Table.Th>Artikel</Table.Th><Table.Th ta="right">Bestellt</Table.Th><Table.Th ta="right">Erhalten</Table.Th>
+          <Table.Th ta="right">Offen</Table.Th><Table.Th>Jetzt erhalten</Table.Th>
+        </Table.Tr></Table.Thead>
+        <Table.Tbody>
+          {po.lines.map((l) => {
+            const open = Math.max(0, l.orderedQty - l.receivedQty);
+            return (
+              <Table.Tr key={l.variantId}>
+                <Table.Td>{l.label}</Table.Td>
+                <Table.Td ta="right">{l.orderedQty}</Table.Td>
+                <Table.Td ta="right">{l.receivedQty}</Table.Td>
+                <Table.Td ta="right" c={open > 0 ? "orange" : "dimmed"}>{open}</Table.Td>
+                <Table.Td>
+                  <NumberInput size="xs" w={100} min={0} value={qty[l.variantId] ?? 0}
+                    onChange={(v) => setQty((s) => ({ ...s, [l.variantId]: Number(v) || 0 }))} />
+                </Table.Td>
+              </Table.Tr>
+            );
+          })}
+        </Table.Tbody>
+      </Table>
+      <Button mt="sm" size="xs" loading={busy} onClick={() => void book()}>Wareneingang buchen</Button>
+    </Box>
+  );
+}
+
+function ProductionStartGate(): JSX.Element {
+  const [pid, setPid] = useState("");
+  const [data, setData] = useState<Awaited<ReturnType<typeof trpc.procurement.productionStartStatus.query>> | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const check = async (): Promise<void> => {
+    setErr(null);
+    try { setData(await trpc.procurement.productionStartStatus.query({ productionId: pid.trim() })); }
+    catch (e) { setErr(errMsg(e)); }
+  };
+  return (
+    <Box mt="xl">
+      <Title order={4}>Produktionsstart-Gate (T-05)</Title>
+      <Text size="sm" c="dimmed" mt={4}>Prüft, ob alle benötigten Komponenten eines Produktionsauftrags vollständig im Wareneingang gebucht sind (Multi-Lieferant-Gate, Kap. 5.6).</Text>
+      <Group align="end" gap="xs" mt="xs">
+        <TextInput label="Produktionsauftrags-ID" value={pid} onChange={(e) => setPid(e.currentTarget.value)} w={240} placeholder="pa-1" />
+        <Button variant="default" disabled={!pid.trim()} onClick={() => void check()}>Prüfen</Button>
+      </Group>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      {data && (
+        <>
+          <Alert color={data.canStart ? "green" : "orange"} mt="sm">
+            {data.canStart ? "Produktionsstart frei — alle Komponenten vollständig im Wareneingang." : "Noch nicht startklar — Komponenten unvollständig."}
+          </Alert>
+          <Table mt="xs" withTableBorder verticalSpacing="xs" fz="sm" w="auto">
+            <Table.Thead><Table.Tr>
+              <Table.Th>Variante</Table.Th><Table.Th ta="right">Benötigt</Table.Th><Table.Th ta="right">Erhalten</Table.Th><Table.Th>Vollständig</Table.Th>
+            </Table.Tr></Table.Thead>
+            <Table.Tbody>
+              {data.components.map((c) => (
+                <Table.Tr key={`${c.variantId}-${c.supplierId}`}>
+                  <Table.Td><Text size="xs" ff="monospace">{c.variantId}</Text></Table.Td>
+                  <Table.Td ta="right">{c.requiredQty}</Table.Td>
+                  <Table.Td ta="right">{c.receivedQty}</Table.Td>
+                  <Table.Td>{c.complete ? "✓" : <Text span c="orange">offen</Text>}</Table.Td>
+                </Table.Tr>
+              ))}
+              {data.components.length === 0 && <Table.Tr><Table.Td colSpan={4}><Text size="sm" c="dimmed">Keine Komponenten für diesen Produktionsauftrag.</Text></Table.Td></Table.Tr>}
+            </Table.Tbody>
+          </Table>
+        </>
+      )}
+    </Box>
+  );
+}
+
+export function WareneingangPage(): JSX.Element {
+  const [pos, setPos] = useState<Awaited<ReturnType<typeof trpc.goodsReceipts.listOpen.query>>>([]);
+  const [err, setErr] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    try { setPos(await trpc.goodsReceipts.listOpen.query()); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  return (
+    <>
+      <Title order={3}>Wareneingang</Title>
+      <Text size="sm" c="dimmed" mt={4}>Eingegangene Mengen je Bestellposition buchen (Kap. 6.3). Der Bestellstatus läuft BESTELLT → teilweise → vollständig; erst bei vollständigem Eingang aller benötigten Komponenten ist der Produktionsstart frei (T-05).</Text>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      {msg && <Alert color="green" mt="sm">{msg}</Alert>}
+      {pos.length === 0 && <Text c="dimmed" mt="md">Keine offenen Bestellungen.</Text>}
+      {pos.map((po) => <WareneingangPo key={po.id} po={po} onBooked={(m) => { setMsg(m); setErr(null); void load(); }} onErr={(m) => { setErr(m); setMsg(null); }} />)}
+      <ProductionStartGate />
+    </>
+  );
+}
+
 // Newsletter (Brevo): Kampagnen anlegen + an Opt-in-Kontakte versenden (DSGVO).
 export function NewsletterPage(): JSX.Element {
   const [list, setList] = useState<Row[]>([]);

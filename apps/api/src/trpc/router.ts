@@ -396,6 +396,19 @@ export const appRouter = router({
       .query(async ({ input, ctx }) => ctx.procurement.productionStartStatus(input.productionId)),
   }),
 
+  // Wareneingang gegen Bestellung (Kap. 6.3 / T-05): offene Bestellungen + Beleg buchen.
+  goodsReceipts: router({
+    listOpen: roleProcedure("ADMIN", "BUERO").query(({ ctx }) => ctx.goodsReceipts.listOpen()),
+    record: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({
+        purchaseOrderId: z.string().min(1),
+        lines: z.array(z.object({ variantId: z.string().min(1), receivedQty: z.number().int().nonnegative() })).min(1),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.goodsReceipts.record(input); } catch (e) { throw toTrpcError(e); }
+      }),
+  }),
+
   subproduction: router({
     /** Schaltet eine Fremdvergabe-Stufe weiter (Beistellung/Rücklauf/Abschluss, T-04). */
     advance: roleProcedure("ADMIN", "BUERO")
