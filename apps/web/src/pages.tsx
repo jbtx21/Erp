@@ -2981,11 +2981,16 @@ const HOME_SHORTCUTS: ReadonlyArray<{ key: string; label: string; nav: string; c
   { key: "calendar", label: "Kalender", nav: "calendar" },
   { key: "automation", label: "Automationen", nav: "automation" },
 ];
-const HOME_LAYOUT_KEY = "texma.home.shortcuts.v1";
+const HOME_LAYOUT_KEY = "texma.home.shortcuts.v1"; // localStorage-Cache (sofortige Anzeige)
+const HOME_LAYOUT_PREF_KEY = "home.shortcuts.v1"; // Server-Schlüssel (geräteübergreifend)
 interface HomeLayout { order: string[]; hidden: string[] }
+const defaultHomeLayout = (): HomeLayout => ({ order: HOME_SHORTCUTS.map((s) => s.key), hidden: [] });
+function isHomeLayout(v: unknown): v is HomeLayout {
+  return !!v && typeof v === "object" && Array.isArray((v as HomeLayout).order) && Array.isArray((v as HomeLayout).hidden);
+}
 function loadHomeLayout(): HomeLayout {
-  try { const raw = localStorage.getItem(HOME_LAYOUT_KEY); if (raw) return JSON.parse(raw) as HomeLayout; } catch { /* ignore */ }
-  return { order: HOME_SHORTCUTS.map((s) => s.key), hidden: [] };
+  try { const raw = localStorage.getItem(HOME_LAYOUT_KEY); if (raw) { const v = JSON.parse(raw) as unknown; if (isHomeLayout(v)) return v; } } catch { /* ignore */ }
+  return defaultHomeLayout();
 }
 
 export function HomePage({ userName, onNavigate }: { userName?: string; onNavigate: (k: string) => void }): JSX.Element {
@@ -2993,9 +2998,30 @@ export function HomePage({ userName, onNavigate }: { userName?: string; onNaviga
   const [openOrders, setOpenOrders] = useState(0);
   const [openQuotes, setOpenQuotes] = useState(0);
   const [tasks, setTasks] = useState(0);
-  const [layout, setLayout] = useState<HomeLayout>(() => (typeof localStorage !== "undefined" ? loadHomeLayout() : { order: HOME_SHORTCUTS.map((s) => s.key), hidden: [] }));
+  const [layout, setLayout] = useState<HomeLayout>(() => (typeof localStorage !== "undefined" ? loadHomeLayout() : defaultHomeLayout()));
   const [edit, setEdit] = useState(false);
-  const saveLayout = (l: HomeLayout): void => { setLayout(l); try { localStorage.setItem(HOME_LAYOUT_KEY, JSON.stringify(l)); } catch { /* ignore */ } };
+  // Layout speichern: lokaler Cache (sofort) + serverseitig je Nutzer (geräteübergreifend).
+  const saveLayout = (l: HomeLayout): void => {
+    setLayout(l);
+    try { localStorage.setItem(HOME_LAYOUT_KEY, JSON.stringify(l)); } catch { /* ignore */ }
+    void trpc.preferences.set.mutate({ key: HOME_LAYOUT_PREF_KEY, value: l }).catch(() => undefined);
+  };
+  // Beim Laden das serverseitige Layout holen; vorhanden → übernehmen (+ Cache),
+  // sonst den lokalen Cache einmalig auf den Server migrieren.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const remote = await trpc.preferences.get.query({ key: HOME_LAYOUT_PREF_KEY });
+        if (isHomeLayout(remote)) {
+          setLayout(remote);
+          try { localStorage.setItem(HOME_LAYOUT_KEY, JSON.stringify(remote)); } catch { /* ignore */ }
+        } else {
+          const local = typeof localStorage !== "undefined" ? loadHomeLayout() : defaultHomeLayout();
+          await trpc.preferences.set.mutate({ key: HOME_LAYOUT_PREF_KEY, value: local });
+        }
+      } catch { /* offline/kein Login → lokaler Cache bleibt */ }
+    })();
+  }, []);
   useEffect(() => {
     void (async () => {
       const safe = async <T,>(p: Promise<T>, f: T): Promise<T> => { try { return await p; } catch { return f; } };

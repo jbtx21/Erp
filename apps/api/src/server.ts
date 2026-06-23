@@ -128,6 +128,8 @@ import { AutomationService, type ActionHandler } from "./modules/automation/auto
 import { PrismaAutomationRepository } from "./repositories/prisma-automation.repository.js";
 import { TaskService } from "./modules/task/task.service.js";
 import { PrismaTaskRepository } from "./repositories/prisma-task.repository.js";
+import { PreferencesService } from "./modules/preferences/preferences.service.js";
+import { PrismaUserPreferenceRepository } from "./repositories/prisma-user-preference.repository.js";
 import { PrismaIntegrationsRepository } from "./repositories/prisma-integrations.repository.js";
 import { HttpSlackSender } from "./modules/integrations/slack-provider.js";
 import { appRouter } from "./trpc/router.js";
@@ -260,6 +262,8 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const contactLinks = new ContactLinkService(new PrismaContactLinkRepository(), new PrismaAuditSink());
   // Aufgaben/Zuweisung (Assigned To/ToDo): persönliche Arbeitsliste.
   const tasks = new TaskService(new PrismaTaskRepository(), new PrismaAuditSink());
+  // Persönliche UI-Einstellungen je Nutzer (z. B. Home-Workspace-Layout, geräteübergreifend).
+  const preferences = new PreferencesService(new PrismaUserPreferenceRepository());
   // Regel-Engine: Aktions-Handler bündeln vorhandene Seiteneffekte (In-App, Mail, Aufgabe).
   // Weitere Handler (Slack o. Ä.) lassen sich hier ohne Engine-Änderung ergänzen.
   const automationHandlers: Record<string, ActionHandler> = {
@@ -416,6 +420,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           contactLinks,
           automation,
           tasks,
+          preferences,
           auth,
           user,
           sessionToken,

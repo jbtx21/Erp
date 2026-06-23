@@ -1484,6 +1484,16 @@ export const appRouter = router({
       }),
   }),
 
+  // Persönliche UI-Einstellungen je Nutzer (z. B. Home-Workspace-Layout, geräteübergreifend).
+  preferences: router({
+    get: protectedProcedure
+      .input(z.object({ key: z.string().min(1) }))
+      .query(({ input, ctx }) => ctx.preferences.get(ctx.user.id, input.key)),
+    set: protectedProcedure
+      .input(z.object({ key: z.string().min(1), value: z.unknown() }))
+      .mutation(async ({ input, ctx }) => { await ctx.preferences.set(ctx.user.id, input.key, input.value); return { ok: true as const }; }),
+  }),
+
   // Regel-Engine (Event → Bedingung → Aktion). Konfiguration nur Admin.
   automation: router({
     meta: roleProcedure("ADMIN").query(({ ctx }) => ({ triggers: ctx.automation.knownTriggers(), actions: ctx.automation.knownActions() })),

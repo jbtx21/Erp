@@ -55,6 +55,7 @@ import type { ConnectionsService } from "../modules/connections/connections.serv
 import type { ContactLinkService } from "../modules/contact/contact-link.service.js";
 import type { AutomationService } from "../modules/automation/automation.service.js";
 import type { TaskService } from "../modules/task/task.service.js";
+import type { PreferencesService } from "../modules/preferences/preferences.service.js";
 import type {
   BankingQueryRepository,
   DunningQueryRepository,
@@ -125,6 +126,7 @@ export interface Context {
   contactLinks: ContactLinkService;
   automation: AutomationService;
   tasks: TaskService;
+  preferences: PreferencesService;
   auth: AuthService;
   user: AuthUser | null;
   /** Roh-Token aus dem Cookie (für den 2FA-Zwischenschritt/Logout, wenn user noch null ist). */

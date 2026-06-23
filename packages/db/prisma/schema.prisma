@@ -41,6 +41,7 @@ model User {
   auditEntries AuditLog[]
   accessLogs   AccessLog[]
   resetTokens  PasswordResetToken[]
+  preferences  UserPreference[]
 }
 
 // Server-seitige Session (Kap. 14). tokenHash = SHA-256 des Cookie-Tokens — der
@@ -1644,6 +1645,18 @@ model Task {
 
   @@index([assigneeEmail, status])
   @@index([entity, entityId])
+}
+
+// Persönliche UI-Einstellungen je Nutzer (Key-Value, Wert = JSON-String). Trägt z. B.
+// das Home-Workspace-Layout, damit es geräteübergreifend gleich ist (statt localStorage).
+model UserPreference {
+  userId    String
+  key       String // z. B. "home.shortcuts.v1"
+  value     String // JSON-Wert (frei strukturiert)
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, key])
 }
 
 // Automations-/Regel-Engine (Event → Bedingung → Aktion): im Admin-Portal konfigurierbar,
