@@ -11,6 +11,7 @@ export interface SalesLine {
   qty: number;
   unitNetCents: number;
   kind?: PositionKind;
+  variantId?: string;
 }
 
 export interface CreatedSalesOrder {
@@ -18,10 +19,31 @@ export interface CreatedSalesOrder {
   number: string;
 }
 
+/** Angebotsposition für die Auftragswandlung (mit Artikel-/Varianten-/Alternativ-Info). */
+export interface ConversionPlanLine {
+  position: number;
+  description: string;
+  qty: number;
+  unitNetCents: number;
+  kind: PositionKind;
+  articleId: string | null;
+  articleName: string | null;
+  variantId: string | null;
+  isAlternative: boolean;
+  /** true, wenn ein Hauptartikel ohne Variante (Farbe×Größe muss gewählt werden). */
+  needsVariant: boolean;
+}
+
+export interface ConversionPlan {
+  companyId: string;
+  existingOrderId: string | null;
+  lines: ConversionPlanLine[];
+}
+
 export interface SalesOrderRepository {
   createOrder(input: { number: string; companyId: string; quoteId?: string; lines: SalesLine[] }): Promise<{ id: string }>;
-  /** Angebotsdaten für die Umwandlung; null wenn unbekannt. */
-  quoteForConversion(quoteId: string): Promise<{ companyId: string; existingOrderId: string | null; lines: SalesLine[] } | null>;
+  /** Angebotsdaten für die Umwandlung (inkl. Artikel-/Varianten-/Alternativ-Info); null wenn unbekannt. */
+  conversionPlan(quoteId: string): Promise<ConversionPlan | null>;
   markQuoteAccepted(quoteId: string): Promise<void>;
   companyExists(companyId: string): Promise<boolean>;
 }
@@ -55,16 +77,41 @@ export class SalesOrderService {
     return { id, number };
   }
 
-  /** Angebot → Auftrag: übernimmt Positionen, verknüpft das Angebot, setzt es auf angenommen. */
-  async convertQuote(quoteId: string): Promise<CreatedSalesOrder> {
-    const q = await this.repo.quoteForConversion(quoteId);
-    if (!q) throw new SalesOrderError("Angebot nicht gefunden.");
-    if (q.existingOrderId) throw new SalesOrderError("Angebot wurde bereits in einen Auftrag umgewandelt.");
-    validateLines(q.lines);
+  /** Angebotspositionen für die Umwandlung (Hauptartikel ohne Variante = needsVariant). */
+  async conversionPlan(quoteId: string): Promise<ConversionPlan> {
+    const plan = await this.repo.conversionPlan(quoteId);
+    if (!plan) throw new SalesOrderError("Angebot nicht gefunden.");
+    return plan;
+  }
+
+  /**
+   * Angebot → Auftrag: übernimmt Positionen, verknüpft das Angebot, setzt es auf angenommen.
+   * Alternativpositionen werden NICHT übernommen; für Hauptartikel ohne Variante muss die
+   * gewählte Variante in `resolutions` (Position → variantId) mitgegeben werden.
+   */
+  async convertQuote(quoteId: string, resolutions: Record<number, string> = {}): Promise<CreatedSalesOrder> {
+    const plan = await this.repo.conversionPlan(quoteId);
+    if (!plan) throw new SalesOrderError("Angebot nicht gefunden.");
+    if (plan.existingOrderId) throw new SalesOrderError("Angebot wurde bereits in einen Auftrag umgewandelt.");
+
+    const lines: SalesLine[] = plan.lines
+      .filter((l) => !l.isAlternative)
+      .map((l) => {
+        const variantId = l.variantId ?? resolutions[l.position];
+        if (l.articleId && !variantId) {
+          throw new SalesOrderError(`Position ${l.position} „${l.articleName ?? l.description}": Farbe & Größe wählen.`);
+        }
+        return { description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, kind: l.kind, variantId };
+      });
+    validateLines(lines);
+
     const number = await this.numbering.next("ORDER");
-    const { id } = await this.repo.createOrder({ number, companyId: q.companyId, quoteId, lines: q.lines });
+    const { id } = await this.repo.createOrder({ number, companyId: plan.companyId, quoteId, lines });
     await this.repo.markQuoteAccepted(quoteId);
-    await this.audit.append(buildEntry({ entity: "Order", entityId: id, action: "CREATE", after: { number, fromQuote: quoteId, lineCount: q.lines.length } }));
+    await this.audit.append(buildEntry({
+      entity: "Order", entityId: id, action: "CREATE",
+      after: { number, fromQuote: quoteId, lineCount: lines.length, droppedAlternatives: plan.lines.filter((l) => l.isAlternative).length },
+    }));
     return { id, number };
   }
 }

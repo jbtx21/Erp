@@ -60,7 +60,7 @@ export class InMemoryProductRepository implements ProductRepository {
       const a = this.articles.get(v.articleId);
       const attrs = v.attributes.map((x) => x.value).join(" / ");
       const label = `${a?.name ?? v.articleId}${attrs ? ` — ${attrs}` : ""} (${v.sku})`;
-      return { variantId: v.id, articleId: v.articleId, sku: v.sku, label, unitNetCents: 0 };
+      return { variantId: v.id, articleId: v.articleId, articleName: a?.name ?? v.articleId, sku: v.sku, label, unitNetCents: 0 };
     });
   }
 }

@@ -38,6 +38,8 @@ export interface CreateVariantInput {
 export interface CatalogEntry {
   variantId: string;
   articleId: string;
+  /** Artikelname ohne Varianten-Merkmale (für den Hauptartikel-Picker). */
+  articleName: string;
   /** Varianten-SKU. */
   sku: string;
   /** Anzeigetext: Artikelname + Varianten-Merkmale. */
@@ -140,6 +142,6 @@ export class ProductService {
     const v = await this.createVariant({ articleId: art.id, sku: variantSku, attributes });
     const attrText = attributes.map((a) => a.value.trim()).join(" / ");
     const label = `${input.name.trim()}${attrText ? ` — ${attrText}` : ""} (${variantSku})`;
-    return { variantId: v.id, articleId: art.id, sku: variantSku, label, unitNetCents: 0 };
+    return { variantId: v.id, articleId: art.id, articleName: input.name.trim(), sku: variantSku, label, unitNetCents: 0 };
   }
 }

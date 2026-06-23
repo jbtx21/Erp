@@ -640,6 +640,12 @@ model QuoteLine {
   unitNetCents Int // jede Veredelung als eigene Position, kein Pauschalpreis (Kap. 4.4)
   dbCents     Int? // Deckungsbeitrag bereits im Angebot sichtbar (Kap. 4.4)
   kind        PositionKind @default(TEXTIL) // Textil- vs. Veredelungsposition (Kap. 4.4/11)
+  // Bezug: Hauptartikel (articleId, Variante offen) ODER konkrete Variante (variantId).
+  // Bei der Auftragswandlung wird für reine Hauptartikel die Farbe×Größe abgefragt.
+  articleId   String?
+  variantId   String?
+  // Alternativposition (Kunde wählt eine Variante) — wird bei der Auftragswandlung NICHT übernommen.
+  isAlternative Boolean @default(false)
 }
 
 enum OrderStatus {

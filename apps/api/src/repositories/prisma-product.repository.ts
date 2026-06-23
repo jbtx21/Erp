@@ -61,7 +61,7 @@ export class PrismaProductRepository implements ProductRepository {
     return rows.map((v) => {
       const attrs = v.attributes.map((a) => a.value).join(" / ");
       const label = `${v.article.name}${attrs ? ` — ${attrs}` : ""} (${v.sku})`;
-      return { variantId: v.id, articleId: v.articleId, sku: v.sku, label, unitNetCents: v.prices[0]?.netCents ?? 0 };
+      return { variantId: v.id, articleId: v.articleId, articleName: v.article.name, sku: v.sku, label, unitNetCents: v.prices[0]?.netCents ?? 0 };
     });
   }
 

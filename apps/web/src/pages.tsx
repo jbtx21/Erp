@@ -3,7 +3,7 @@
 // Bereiche mit wenig Code anbindbar sind. Interaktive Aktionen (Versand bestätigen,
 // Mahnlauf, Reorder→Bestellungen) sind je Seite ergänzt.
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Alert, Badge, Box, Button, Checkbox, Group, Loader, NumberInput, Select, Switch, Table, Tabs, Text, Textarea, TextInput, Title } from "@mantine/core";
+import { Alert, Badge, Box, Button, Checkbox, Group, Loader, Modal, NumberInput, Select, Switch, Table, Tabs, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { trpc } from "./trpc.js";
 import { euro, numTd, statusMantineColor } from "./theme.js";
@@ -714,7 +714,10 @@ export function ProductsPage({ focusId }: { focusId?: string } = {}): JSX.Elemen
 // Wiederverwendbarer Mehrzeilen-Positionseditor (Anfrage/Angebot/Auftrag-Erstellung):
 // Beschreibung, Menge, Einzelpreis (€) je Zeile; Zeilen hinzufügen/entfernen.
 export type PositionKind = "TEXTIL" | "VEREDELUNG" | "SONSTIGE";
-export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind; variantId?: string }
+// Eine Position kann auf eine konkrete Variante (variantId) ODER nur auf einen
+// Hauptartikel (articleId, Farbe×Größe noch offen) verweisen; isAlternative kennzeichnet
+// ein unverbindliches Alternativangebot (wird beim Wandeln in den Auftrag weggelassen).
+export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind; variantId?: string; articleId?: string; isAlternative?: boolean }
 
 // Artikel-Picker: durchsuchbare Auswahl aus dem Artikelstamm (ERPNext „Link field").
 // Bei Auswahl wird eine Position vorbefüllt (Bezeichnung, Standardpreis, Variante).
@@ -782,6 +785,27 @@ export function ArticlePicker({ onPick }: { onPick: (e: { label: string; unitNet
   );
 }
 
+// Hauptartikel-Picker: wählt einen Artikel OHNE Festlegung auf Farbe×Größe (für
+// Angebote, wenn die genaue Variante noch offen ist). Beim Wandeln in den Auftrag wird
+// die Variante dann abgefragt. Aggregiert den Varianten-Katalog auf Artikel-Ebene.
+export function HauptartikelPicker({ onPick }: { onPick: (e: { articleId: string; articleName: string; unitNetCents: number }) => void }): JSX.Element {
+  const [catalog, setCatalog] = useState<Awaited<ReturnType<typeof trpc.products.catalog.query>>>([]);
+  const [value, setValue] = useState<string | null>(null);
+  useEffect(() => { void (async () => { try { setCatalog(await trpc.products.catalog.query()); } catch { /* ignore */ } })(); }, []);
+  // Auf Artikel-Ebene aggregieren (erste Variante liefert den Richtpreis).
+  const articles = new Map<string, { articleName: string; unitNetCents: number }>();
+  for (const c of catalog) if (!articles.has(c.articleId)) articles.set(c.articleId, { articleName: c.articleName, unitNetCents: c.unitNetCents });
+  return (
+    <Select size="xs" searchable clearable placeholder="+ Hauptartikel (Farbe/Größe offen)…" w={300} value={value}
+      data={[...articles.entries()].map(([id, a]) => ({ value: id, label: a.articleName }))}
+      onChange={(v) => {
+        const a = v ? articles.get(v) : null;
+        if (v && a) onPick({ articleId: v, articleName: a.articleName, unitNetCents: a.unitNetCents });
+        setValue(null);
+      }} />
+  );
+}
+
 // Kunden-Picker: durchsuchbare Auswahl aus dem Kundenstamm (statt Firmen-ID tippen).
 // Kein Treffer → „+ anlegen" erstellt den Kunden inline (ERPNext „Create a new…").
 export function CompanyPicker({ value, onChange, label = "Kunde", w = 240, allowEmpty = false }: { value: string; onChange: (id: string) => void; label?: string; w?: number; allowEmpty?: boolean }): JSX.Element {
@@ -829,17 +853,24 @@ export function SupplierPicker({ value, onChange, label, w = 200 }: { value: str
   );
 }
 
-export function LinesEditor({ lines, onChange }: { lines: EditorLine[]; onChange: (l: EditorLine[]) => void }): JSX.Element {
+export function LinesEditor({ lines, onChange, quoteMode = false }: { lines: EditorLine[]; onChange: (l: EditorLine[]) => void; quoteMode?: boolean }): JSX.Element {
   const set = (i: number, patch: Partial<EditorLine>): void => onChange(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
-  const addFromCatalog = (e: { label: string; unitNetCents: number; variantId: string }): void => {
-    const line: EditorLine = { description: e.label, qty: 1, euro: e.unitNetCents / 100, kind: "TEXTIL", variantId: e.variantId };
-    // Erste leere Zeile ersetzen, sonst anhängen.
+  // Erste leere Zeile ersetzen, sonst anhängen.
+  const addLine = (line: EditorLine): void => {
     const idx = lines.findIndex((l) => !l.description.trim());
     onChange(idx >= 0 ? lines.map((l, j) => (j === idx ? line : l)) : [...lines, line]);
   };
+  const addFromCatalog = (e: { label: string; unitNetCents: number; variantId: string }): void =>
+    addLine({ description: e.label, qty: 1, euro: e.unitNetCents / 100, kind: "TEXTIL", variantId: e.variantId });
+  const addHauptartikel = (e: { articleId: string; articleName: string; unitNetCents: number }): void =>
+    addLine({ description: e.articleName, qty: 1, euro: e.unitNetCents / 100, kind: "TEXTIL", articleId: e.articleId });
   return (
     <Box>
-      <Group gap="xs" mb={6}><ArticlePicker onPick={addFromCatalog} /><Text size="xs" c="dimmed">aus dem Artikelstamm wählen oder unten frei erfassen</Text></Group>
+      <Group gap="xs" mb={6}>
+        <ArticlePicker onPick={addFromCatalog} />
+        {quoteMode && <HauptartikelPicker onPick={addHauptartikel} />}
+        <Text size="xs" c="dimmed">{quoteMode ? "Variante wählen, Hauptartikel (Farbe/Größe offen) oder unten frei erfassen" : "aus dem Artikelstamm wählen oder unten frei erfassen"}</Text>
+      </Group>
       {lines.map((l, i) => (
         <Group key={i} gap="xs" mt={4} align="end">
           <Select label={i === 0 ? "Art" : undefined} w={130} value={l.kind} onChange={(v) => v && set(i, { kind: v as PositionKind })}
@@ -847,6 +878,8 @@ export function LinesEditor({ lines, onChange }: { lines: EditorLine[]; onChange
           <TextInput label={i === 0 ? "Beschreibung" : undefined} value={l.description} onChange={(e) => set(i, { description: e.currentTarget.value })} placeholder="200 Polos bestickt" w={240} />
           <NumberInput label={i === 0 ? "Menge" : undefined} value={l.qty} onChange={(v) => set(i, { qty: Number(v) || 1 })} min={1} w={90} />
           <NumberInput label={i === 0 ? "Einzel (€)" : undefined} value={l.euro} onChange={(v) => set(i, { euro: Number(v) || 0 })} min={0} decimalScale={2} w={110} />
+          {quoteMode && l.articleId && !l.variantId && <Badge color="orange" variant="light" size="sm" title="Farbe & Größe werden beim Wandeln in den Auftrag abgefragt">Variante offen</Badge>}
+          {quoteMode && <Switch size="xs" label="Alt." checked={!!l.isAlternative} onChange={(e) => set(i, { isAlternative: e.currentTarget.checked })} title="Alternativposition — wird beim Wandeln in den Auftrag nicht übernommen" />}
           <Button size="compact-sm" variant="subtle" color="red" disabled={lines.length === 1} onClick={() => onChange(lines.filter((_, j) => j !== i))}>✕</Button>
         </Group>
       ))}
@@ -858,7 +891,8 @@ export function LinesEditor({ lines, onChange }: { lines: EditorLine[]; onChange
 
 // Auto-berechnete Summen (Netto/USt/Brutto) aus den Positionen — read-only (ERPNext-Muster).
 function LineTotals({ lines }: { lines: EditorLine[] }): JSX.Element {
-  const netCents = lines.filter((l) => l.description.trim()).reduce((s, l) => s + Math.round(l.qty * l.euro * 100), 0);
+  // Alternativpositionen zählen nicht zur Angebotssumme (unverbindlich).
+  const netCents = lines.filter((l) => l.description.trim() && !l.isAlternative).reduce((s, l) => s + Math.round(l.qty * l.euro * 100), 0);
   const taxCents = Math.round(netCents * 0.19);
   return (
     <Group gap="lg" mt="sm" justify="flex-end">
@@ -871,10 +905,79 @@ function LineTotals({ lines }: { lines: EditorLine[] }): JSX.Element {
 export const toApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; kind: PositionKind }[] =>
   lines.filter((l) => l.description.trim()).map((l) => ({ description: l.description.trim(), qty: l.qty, unitNetCents: Math.round(l.euro * 100), kind: l.kind }));
 
+// Wie toApiLines, aber inkl. Artikel-/Varianten-Referenz und Alternativ-Kennzeichen (Angebot).
+export const toQuoteApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; kind: PositionKind; articleId?: string; variantId?: string; isAlternative?: boolean }[] =>
+  lines.filter((l) => l.description.trim()).map((l) => ({
+    description: l.description.trim(), qty: l.qty, unitNetCents: Math.round(l.euro * 100), kind: l.kind,
+    ...(l.articleId ? { articleId: l.articleId } : {}), ...(l.variantId ? { variantId: l.variantId } : {}), ...(l.isAlternative ? { isAlternative: true } : {}),
+  }));
+
+// Angebot → Auftrag: fragt für Hauptartikel ohne Variante (needsVariant) die genaue
+// Farbe×Größe ab und übergibt die Auflösung an convertQuote. Alternativen werden vom
+// Server weggelassen. Ohne offene Varianten wird direkt gewandelt (kein Dialog).
+function ConvertQuoteDialog({ quoteId, onDone, onClose }: { quoteId: string; onDone: (orderNo: string) => void; onClose: () => void }): JSX.Element {
+  type Plan = Awaited<ReturnType<typeof trpc.sales.conversionPlan.query>>;
+  const [plan, setPlan] = useState<Plan | null>(null);
+  const [catalog, setCatalog] = useState<Awaited<ReturnType<typeof trpc.products.catalog.query>>>([]);
+  const [picks, setPicks] = useState<Record<number, string>>({});
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { void (async () => {
+    try {
+      const [p, c] = await Promise.all([trpc.sales.conversionPlan.query({ quoteId }), trpc.products.catalog.query()]);
+      setPlan(p); setCatalog(c);
+    } catch (e) { setErr(errMsg(e)); }
+  })(); }, [quoteId]);
+
+  const open = plan ? plan.lines.filter((l) => l.needsVariant) : [];
+  const allResolved = open.every((l) => picks[l.position]);
+  const convert = async (): Promise<void> => {
+    setBusy(true); setErr(null);
+    try {
+      const o = await trpc.sales.convertQuote.mutate({ quoteId, resolutions: open.length ? Object.fromEntries(open.map((l) => [String(l.position), picks[l.position] ?? ""])) : undefined });
+      onDone(o.number);
+    } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+
+  return (
+    <Modal opened onClose={onClose} title="Angebot in Auftrag wandeln" size="lg">
+      {err && <Alert color="red" mb="sm">{err}</Alert>}
+      {!plan && <Loader size="sm" />}
+      {plan && (
+        <>
+          {plan.lines.some((l) => l.isAlternative) && (
+            <Alert color="gray" variant="light" mb="sm">Alternativpositionen werden nicht in den Auftrag übernommen.</Alert>
+          )}
+          {open.length === 0 && <Text size="sm" mb="sm">Alle Positionen sind eindeutig — der Auftrag kann direkt angelegt werden.</Text>}
+          {open.length > 0 && <Text size="sm" mb="sm">Für folgende Hauptartikel bitte Farbe &amp; Größe wählen:</Text>}
+          {open.map((l) => {
+            const variants = catalog.filter((c) => c.articleId === l.articleId);
+            return (
+              <Group key={l.position} gap="xs" mb={6} align="end">
+                <Text size="sm" w={220} truncate>Pos. {l.position}: {l.articleName ?? l.description}</Text>
+                <Select size="xs" searchable placeholder="Variante (Farbe × Größe)…" w={300}
+                  value={picks[l.position] ?? null}
+                  data={variants.map((v) => ({ value: v.variantId, label: v.label }))}
+                  onChange={(v) => setPicks((p) => ({ ...p, [l.position]: v ?? "" }))} />
+              </Group>
+            );
+          })}
+          <Group justify="flex-end" mt="md">
+            <Button variant="default" onClick={onClose}>Abbrechen</Button>
+            <Button color="blue" loading={busy} disabled={!allResolved} onClick={() => void convert()}>Auftrag anlegen</Button>
+          </Group>
+        </>
+      )}
+    </Modal>
+  );
+}
+
 export function QuotesPage(): JSX.Element {
   type QuoteListRow = Awaited<ReturnType<typeof trpc.quotes.list.query>>[number];
   const [rows, setRows] = useState<QuoteListRow[]>([]);
   const [view, setView] = useState<"list" | "create">("list");
+  const [convertId, setConvertId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   // Anlage-Formular
   const [companyId, setCompanyId] = useState("");
@@ -921,7 +1024,7 @@ export function QuotesPage(): JSX.Element {
         <Button size="compact-xs" variant="subtle" onClick={() => void mailPdf(id)}>Mail</Button>
         {status === "ENTWURF" && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.quotes.transition.mutate({ id, to: "VERSENDET" }))}>→ Versendet</Button>}
         {(status === "VERSENDET" || status === "NACHFASSEN") && <Button size="compact-xs" color="green" onClick={() => void act(() => trpc.quotes.transition.mutate({ id, to: "ANGENOMMEN" }))}>Angenommen</Button>}
-        {status === "ANGENOMMEN" && <Button size="compact-xs" color="blue" onClick={() => void act(async () => { const o = await trpc.sales.convertQuote.mutate({ quoteId: id }); window.alert(`Auftrag ${o.number} angelegt.`); })}>→ Auftrag</Button>}
+        {status === "ANGENOMMEN" && <Button size="compact-xs" color="blue" onClick={() => setConvertId(id)}>→ Auftrag</Button>}
         {status !== "ANGENOMMEN" && status !== "ABGELEHNT" && (
           <Button size="compact-xs" color="red" variant="light" onClick={() => {
             const grund = typeof window !== "undefined" ? window.prompt("Ablehnen — Verlustgrund?") : null;
@@ -936,7 +1039,7 @@ export function QuotesPage(): JSX.Element {
     setBusy(true); setErr(null);
     try {
       await trpc.quotes.create.mutate({
-        companyId, lines: toApiLines(lines),
+        companyId, lines: toQuoteApiLines(lines),
         gueltigBisAm: gueltigBis ? `${gueltigBis}T00:00:00.000Z` : undefined,
         orderType: orderType as "SALES" | "MAINTENANCE" | "SHOPPING_CART",
         quotationTo: quotationTo as "CUSTOMER" | "LEAD",
@@ -980,7 +1083,7 @@ export function QuotesPage(): JSX.Element {
               <Text size="sm" c="dimmed">Währung: <b>EUR</b> · Preisfindung über Preisgruppe des Kunden + Mengenstaffeln (B4).</Text>
             </Collapsible>
             <Title order={5} mt="lg">Artikel</Title>
-            <LinesEditor lines={lines} onChange={setLines} />
+            <LinesEditor lines={lines} onChange={setLines} quoteMode />
             <Title order={5} mt="lg">Steuern und Gebühren</Title>
             <Checkbox mt="xs" label="Kunde ist von der Umsatzsteuer befreit (innergemeinschaftlich / Reverse-Charge)" checked={exempt} onChange={(e) => setExempt(e.currentTarget.checked)} />
             <Text size="xs" c="dimmed" mt={4}>USt-Satz: {exempt ? "0 % (steuerfrei)" : "19 % Standard"} — Steuer- und Summenfelder werden automatisch berechnet (read-only).</Text>
@@ -1025,6 +1128,7 @@ export function QuotesPage(): JSX.Element {
 
   return (
     <>
+      {convertId && <ConvertQuoteDialog quoteId={convertId} onClose={() => setConvertId(null)} onDone={(no) => { setConvertId(null); window.alert(`Auftrag ${no} angelegt.`); void load(); }} />}
       <Group justify="space-between" align="center">
         <Text size="sm" c="dimmed">⌂ Vertrieb / <b>Angebot</b></Text>
         <Group gap="xs">

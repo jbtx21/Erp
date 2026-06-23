@@ -928,7 +928,7 @@ export const appRouter = router({
         orderType: z.enum(["SALES", "MAINTENANCE", "SHOPPING_CART"]).optional(),
         quotationTo: z.enum(["CUSTOMER", "LEAD"]).optional(),
         terms: z.string().optional(),
-        lines: z.array(z.object({ description: z.string().min(1), qty: z.number().int().positive(), unitNetCents: z.number().int().nonnegative(), kind: z.enum(["TEXTIL", "VEREDELUNG", "SONSTIGE"]).optional() })).min(1),
+        lines: z.array(z.object({ description: z.string().min(1), qty: z.number().int().positive(), unitNetCents: z.number().int().nonnegative(), kind: z.enum(["TEXTIL", "VEREDELUNG", "SONSTIGE"]).optional(), articleId: z.string().optional(), variantId: z.string().optional(), isAlternative: z.boolean().optional() })).min(1),
       }))
       .mutation(async ({ input, ctx }) => {
         try { return await ctx.quotes.create({ ...input, gueltigBisAm: input.gueltigBisAm ? new Date(input.gueltigBisAm) : null }); }
@@ -1297,10 +1297,27 @@ export const appRouter = router({
         try { return await ctx.salesOrders.createManual(input.companyId, input.lines); }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
-    convertQuote: roleProcedure("ADMIN", "BUERO")
+    // Umwandlungs-Plan: zeigt je Position, ob ein Hauptartikel (Farbe×Größe noch offen)
+    // oder eine konkrete Variante vorliegt; Alternativen sind als solche markiert.
+    conversionPlan: roleProcedure("ADMIN", "BUERO")
       .input(z.object({ quoteId: z.string().min(1) }))
+      .query(async ({ input, ctx }) => {
+        try { return await ctx.salesOrders.conversionPlan(input.quoteId); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    convertQuote: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({
+        quoteId: z.string().min(1),
+        // Position → gewählte Variante für Hauptartikel ohne vorgegebene Variante.
+        resolutions: z.record(z.string(), z.string()).optional(),
+      }))
       .mutation(async ({ input, ctx }) => {
-        try { return await ctx.salesOrders.convertQuote(input.quoteId); }
+        try {
+          const resolutions = input.resolutions
+            ? Object.fromEntries(Object.entries(input.resolutions).map(([k, v]) => [Number(k), v]))
+            : undefined;
+          return await ctx.salesOrders.convertQuote(input.quoteId, resolutions);
+        }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
   }),

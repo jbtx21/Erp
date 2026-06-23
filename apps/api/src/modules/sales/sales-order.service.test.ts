@@ -45,4 +45,47 @@ describe("SalesOrderService (Auftragserstellung)", () => {
     await svc.convertQuote("q-1");
     await expect(svc.convertQuote("q-1")).rejects.toBeInstanceOf(SalesOrderError);
   });
+
+  it("fragt bei Hauptartikel ohne Variante Farbe×Größe ab (resolutions)", async () => {
+    const { svc, repo } = setup();
+    repo.addQuote({
+      id: "q-1", companyId: "co-1", accepted: false,
+      lines: [{ position: 1, description: "Polo HAKRO", qty: 10, unitNetCents: 1200, articleId: "art-1", articleName: "Polo HAKRO" }],
+    });
+    // ohne Auflösung → Fehler
+    await expect(svc.convertQuote("q-1")).rejects.toBeInstanceOf(SalesOrderError);
+    // mit Auflösung → Variante landet am Auftrag
+    const res = await svc.convertQuote("q-1", { 1: "var-rot-l" });
+    expect(res.number).toMatch(/^AB-/);
+    expect(repo.orders[0]?.lines[0]?.variantId).toBe("var-rot-l");
+  });
+
+  it("übernimmt konkrete Varianten direkt und lässt Alternativen weg", async () => {
+    const { svc, repo } = setup();
+    repo.addQuote({
+      id: "q-1", companyId: "co-1", accepted: false,
+      lines: [
+        { position: 1, description: "Polo rot L", qty: 5, unitNetCents: 1200, variantId: "var-rot-l" },
+        { position: 2, description: "Alternative: Polo blau L", qty: 5, unitNetCents: 1100, variantId: "var-blau-l", isAlternative: true },
+      ],
+    });
+    const res = await svc.convertQuote("q-1");
+    expect(res.number).toMatch(/^AB-/);
+    expect(repo.orders[0]?.lines).toHaveLength(1);
+    expect(repo.orders[0]?.lines[0]?.variantId).toBe("var-rot-l");
+  });
+
+  it("liefert einen Umwandlungs-Plan mit needsVariant-Markierung", async () => {
+    const { svc, repo } = setup();
+    repo.addQuote({
+      id: "q-1", companyId: "co-1", accepted: false,
+      lines: [
+        { position: 1, description: "Polo HAKRO", qty: 10, unitNetCents: 1200, articleId: "art-1", articleName: "Polo HAKRO" },
+        { position: 2, description: "Cap rot", qty: 3, unitNetCents: 900, variantId: "var-cap-rot" },
+      ],
+    });
+    const plan = await svc.conversionPlan("q-1");
+    expect(plan.lines[0]?.needsVariant).toBe(true);
+    expect(plan.lines[1]?.needsVariant).toBe(false);
+  });
 });
