@@ -182,6 +182,11 @@ export const appRouter = router({
       .input(z.object({ orderId: z.string().min(1) }))
       .query(({ input, ctx }) => ctx.orders.orderLines(input.orderId)),
 
+    /** Belegkette/Connections (ERPNext-Muster): Vorgänger + Nachfolger, nach Phase gruppiert. */
+    connections: protectedProcedure
+      .input(z.object({ orderId: z.string().min(1) }))
+      .query(({ input, ctx }) => ctx.connections.orderConnections(input.orderId)),
+
     /** Auftrags-Status weiterschalten (F2-geprüft, Kap. 35.2). */
     transition: roleProcedure("ADMIN", "BUERO")
       .input(z.object({

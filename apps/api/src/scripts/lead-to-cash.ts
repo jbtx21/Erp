@@ -18,6 +18,8 @@ import { SalesOrderService } from "../modules/sales/sales-order.service.js";
 import { PrismaSalesOrderRepository } from "../repositories/prisma-sales-order.repository.js";
 import { InvoiceService } from "../modules/invoice/invoice.service.js";
 import { PrismaInvoiceRepository } from "../repositories/prisma-invoice.repository.js";
+import { ConnectionsService } from "../modules/connections/connections.service.js";
+import { PrismaConnectionsRepository } from "../repositories/prisma-connections.repository.js";
 
 const eur = (c: number): string => `${(c / 100).toFixed(2)} €`;
 const log = (s: string): void => console.log(s);
@@ -74,9 +76,14 @@ async function main(): Promise<void> {
   await prisma.openItem.update({ where: { id: openItem.id }, data: { openCents: 0 } });
   log(`6. Zahlung     ${payment.externalRef}  ${eur(payment.amountCents)}  → offener Posten ${eur(0)} (BEZAHLT)`);
 
-  // Belegkette (Connections) + ausgeglichene Buchungssätze für den Steuerberater (DATEV)
-  log("\n--- Connections (Belegkette) ---");
-  log(`Lead „${lead?.name}" → ${quoteNo} → ${orderNo} → ${inv.number} → ${payment.externalRef}   (Kunde: ${company?.name})`);
+  // Belegkette (Connections) aus dem echten Read-Repo + ausgeglichene DATEV-Buchungssätze
+  log("\n--- Connections (Belegkette, phasen-gruppiert) ---");
+  const connections = new ConnectionsService(new PrismaConnectionsRepository());
+  const graph = await connections.orderConnections(orderId);
+  log(`Anker: ${graph?.anchor.entity} ${graph?.anchor.label} (${graph?.anchor.status})`);
+  for (const g of graph?.groups ?? []) {
+    log(`  ${g.phase}: ${g.nodes.map((n) => `${n.entity} ${n.label}${n.status ? ` (${n.status})` : ""}`).join(", ")}`);
+  }
 
   log("\n--- DATEV-Buchungssätze (ausgeglichen, Soll=Haben) — ERP führt kein eigenes Hauptbuch (G1) ---");
   const totals = buildInvoiceTotals([line]);

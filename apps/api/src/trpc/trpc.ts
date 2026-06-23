@@ -51,6 +51,7 @@ import type { HrService } from "../modules/hr/hr.service.js";
 import type { IntegrationsService } from "../modules/integrations/integrations.service.js";
 import type { ArchiveService } from "../modules/archive/archive.service.js";
 import type { InvoiceService } from "../modules/invoice/invoice.service.js";
+import type { ConnectionsService } from "../modules/connections/connections.service.js";
 import type {
   BankingQueryRepository,
   DunningQueryRepository,
@@ -117,6 +118,7 @@ export interface Context {
   integrations: IntegrationsService;
   archive: ArchiveService;
   invoices: InvoiceService;
+  connections: ConnectionsService;
   auth: AuthService;
   user: AuthUser | null;
   /** Roh-Token aus dem Cookie (für den 2FA-Zwischenschritt/Logout, wenn user noch null ist). */

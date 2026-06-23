@@ -835,6 +835,72 @@ function DeliveryPanel({ orderId, onChanged }: { orderId: string; onChanged: () 
   );
 }
 
+// Belegkette/Connections (ERPNext-Muster): phasen-gruppierter Belegbaum eines Auftrags
+// + „Create"-Folgebeleg-Aktionen (Rechnung erzeugen / Storno per Gutschrift).
+function ConnectionsPanel({ orderId, role, onChanged }: { orderId: string; role: string; onChanged: () => void }): JSX.Element {
+  const [graph, setGraph] = useState<Awaited<ReturnType<typeof trpc.shopOrders.connections.query>> | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const canFinance = role === "ADMIN" || role === "BUERO" || role === "BUCHHALTUNG";
+
+  const load = useCallback(async () => {
+    try { setGraph(await trpc.shopOrders.connections.query({ orderId })); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
+  }, [orderId]);
+  useEffect(() => { void load(); }, [load]);
+
+  const invoiceNode = graph?.groups.flatMap((g) => g.nodes).find((n) => n.entity === "Invoice");
+  const phaseColor: Record<string, string> = { Vertrieb: "blue", Fulfillment: "teal", Zahlung: "green", Produktion: "orange", Reklamation: "red" };
+
+  return (
+    <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+      <Group justify="space-between">
+        <Text fw={600}>Belegkette {graph ? `· ${graph.anchor.label}` : ""}</Text>
+        {canFinance && (
+          <Group gap="xs">
+            {!invoiceNode && (
+              <Button size="compact-xs" onClick={async () => {
+                setErr(null); setMsg(null);
+                try { const r = await trpc.invoices.createFromOrder.mutate({ orderId }); setMsg(`Rechnung ${r.number} erzeugt.`); await load(); onChanged(); }
+                catch (e) { setErr(errMsg(e)); }
+              }}>Rechnung erzeugen</Button>
+            )}
+            {invoiceNode && (role === "ADMIN" || role === "BUCHHALTUNG") && (
+              <Button size="compact-xs" variant="light" color="red" onClick={async () => {
+                const reason = window.prompt("Gutschriftsgrund (Storno der Rechnung):");
+                if (!reason) return;
+                setErr(null); setMsg(null);
+                try { const r = await trpc.invoices.cancelByCreditNote.mutate({ invoiceId: invoiceNode.id, reason }); setMsg(`Gutschrift ${r.number} gebucht (Rechnung bleibt WORM).`); await load(); onChanged(); }
+                catch (e) { setErr(errMsg(e)); }
+              }}>Storno per Gutschrift</Button>
+            )}
+          </Group>
+        )}
+      </Group>
+      {err && <Alert color="red" mt="xs">{err}</Alert>}
+      {msg && <Alert color="green" mt="xs">{msg}</Alert>}
+      {!graph || graph.groups.length === 0 ? (
+        <Text size="sm" c="dimmed" mt="xs">Noch keine Folgebelege.</Text>
+      ) : (
+        <Group align="flex-start" gap="lg" mt="sm" wrap="wrap">
+          {graph.groups.map((g) => (
+            <Box key={g.phase} miw={180}>
+              <Text size="xs" fw={700} tt="uppercase" c="dimmed" mb={4}>{g.phase} ({g.nodes.length})</Text>
+              {g.nodes.map((n) => (
+                <Group key={n.id} gap={6} mb={3} wrap="nowrap">
+                  <Badge size="xs" color={phaseColor[g.phase] ?? "gray"} variant="light">{n.entity}</Badge>
+                  <Text size="sm">{n.label}</Text>
+                  {n.status ? <Text size="xs" c="dimmed">· {n.status}</Text> : null}
+                </Group>
+              ))}
+            </Box>
+          ))}
+        </Group>
+      )}
+    </Box>
+  );
+}
+
 export function OrdersPage({ role }: { role: string }): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -960,6 +1026,7 @@ export function OrdersPage({ role }: { role: string }): JSX.Element {
               </Text>
             </>
           )}
+          {termOrder && <ConnectionsPanel orderId={termOrder} role={role} onChanged={() => void load()} />}
           {termOrder && <WorkflowPanel orderId={termOrder} />}
           {termOrder && <LinksPanel orderId={termOrder} />}
           {termOrder && <DeliveryPanel orderId={termOrder} onChanged={() => void load()} />}
