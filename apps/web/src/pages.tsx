@@ -1636,7 +1636,7 @@ function ConnectionsPanel({ orderId, role, onChanged }: { orderId: string; role:
           {canProd && prod && !prod.productionId && (
             <Button size="compact-xs" color="orange" disabled={!prod.freigegeben} title={prod.freigegeben ? "" : "Auftrag erst freigeben"} onClick={async () => {
               setErr(null); setMsg(null);
-              try { const r = await trpc.production.createFromOrder.mutate({ orderId }); setMsg(`Produktionsauftrag ${r.number} erzeugt (${r.bomItemCount} Stücklisten-Positionen).`); await load(); onChanged(); }
+              try { const r = await trpc.production.createFromOrder.mutate({ orderId }); const term = r.dueDate ? ` · Produktionstermin (rückwärts) ${new Date(r.dueDate).toLocaleDateString("de-DE")}` : ""; setMsg(`Produktionsauftrag ${r.number} erzeugt (${r.bomItemCount} Stücklisten-Positionen)${term}.`); await load(); onChanged(); }
               catch (e) { setErr(errMsg(e)); }
             }}>Produktionsauftrag erzeugen</Button>
           )}

@@ -10,6 +10,10 @@ import type {
   ProductionStatus,
 } from "../modules/production/production.service.js";
 
+// 8-h-Arbeitstag: Sollminuten der Veredelung → Durchlauftage (mind. 1), wie in der
+// Rückwärtsterminierung (B9). Grobe Startwerte (K-09), später verfeinerbar.
+const WORK_MINUTES_PER_DAY = 480;
+
 export class PrismaProductionRepository implements ProductionRepository {
   async loadOrderForProduction(orderId: string): Promise<OrderForProduction | null> {
     const o = await prisma.order.findUnique({
@@ -33,8 +37,12 @@ export class PrismaProductionRepository implements ProductionRepository {
       : [];
     const byId = new Map(variants.map((v) => [v.id, v]));
 
+    // Veredelungs-Durchlaufzeiten als Lead-Stufen (Basis der Rückwärtsterminierung, Kap. 35.2).
+    const times = await prisma.finishingTargetTime.findMany({ select: { kind: true, targetMinutes: true }, orderBy: { kind: "asc" } });
+    const stages = times.map((t) => ({ label: t.kind, durationDays: Math.max(1, Math.ceil(t.targetMinutes / WORK_MINUTES_PER_DAY)) }));
+
     return {
-      id: o.id, number: o.number, freigegeben: o.freigegeben, dueDate: o.zugesagterLiefertermin,
+      id: o.id, number: o.number, freigegeben: o.freigegeben, deliveryDate: o.zugesagterLiefertermin, stages,
       existingProductionId: o.production?.id ?? null,
       existingProductionNumber: o.production?.number ?? null,
       lines: o.lines.map((l) => {

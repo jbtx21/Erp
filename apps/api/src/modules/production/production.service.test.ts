@@ -6,13 +6,13 @@ import { InMemoryNumberingRepository } from "../../repositories/in-memory-number
 class MemAudit { entries: unknown[] = []; async append(e: unknown): Promise<void> { this.entries.push(e); } }
 
 class FakeRepo implements ProductionRepository {
-  created: { number: string; orderId: string; bomItems: { description: string; qty: number; variantId: string | null }[] }[] = [];
+  created: { number: string; orderId: string; dueDate: Date | null; bomItems: { description: string; qty: number; variantId: string | null }[] }[] = [];
   inProduction: string[] = [];
   released: string[] = [];
   constructor(private order: OrderForProduction | null) {}
   async loadOrderForProduction(): Promise<OrderForProduction | null> { return this.order; }
   async createProductionOrder(input: { number: string; orderId: string; dueDate: Date | null; bomItems: { description: string; qty: number; variantId: string | null }[] }): Promise<{ id: string }> {
-    this.created.push({ number: input.number, orderId: input.orderId, bomItems: input.bomItems });
+    this.created.push({ number: input.number, orderId: input.orderId, dueDate: input.dueDate, bomItems: input.bomItems });
     if (this.order) this.order = { ...this.order, existingProductionId: "pa_1", existingProductionNumber: input.number };
     return { id: "pa_1" };
   }
@@ -30,7 +30,7 @@ function svcFor(order: OrderForProduction | null): { svc: ProductionService; rep
 }
 
 const baseOrder = (over: Partial<OrderForProduction> = {}): OrderForProduction => ({
-  id: "ord_1", number: "AB-2026-0001", freigegeben: true, dueDate: null, existingProductionId: null, existingProductionNumber: null,
+  id: "ord_1", number: "AB-2026-0001", freigegeben: true, deliveryDate: null, stages: [], existingProductionId: null, existingProductionNumber: null,
   lines: [{ description: "240 Polos", qty: 240, variantId: "v_polo", isBundle: false, components: [] }],
   ...over,
 });
@@ -62,6 +62,22 @@ describe("ProductionService — Auftrag → Produktionsauftrag (Kap. 5.2)", () =
       { description: "Polo rot M", qty: 50, variantId: "v_polo" },
       { description: "Stick Brust links", qty: 50, variantId: null },
     ]);
+  });
+
+  it("setzt die PA-Fälligkeit per Rückwärtsterminierung (Liefertermin − Veredelungsstufen)", async () => {
+    const delivery = new Date("2026-07-20T00:00:00.000Z");
+    const { svc, repo } = svcFor(baseOrder({ deliveryDate: delivery, stages: [{ label: "Stick", durationDays: 3 }, { label: "Versand", durationDays: 2 }] }));
+    const res = await svc.createFromOrder("ord_1");
+    // 5 Tage vor dem Liefertermin
+    expect(res.dueDate?.toISOString()).toBe("2026-07-15T00:00:00.000Z");
+    expect(repo.created[0]?.dueDate?.toISOString()).toBe("2026-07-15T00:00:00.000Z");
+  });
+
+  it("ohne Stufen ist die PA-Fälligkeit der Liefertermin selbst", async () => {
+    const delivery = new Date("2026-07-20T00:00:00.000Z");
+    const { svc } = svcFor(baseOrder({ deliveryDate: delivery, stages: [] }));
+    const res = await svc.createFromOrder("ord_1");
+    expect(res.dueDate?.toISOString()).toBe(delivery.toISOString());
   });
 
   it("verlangt Freigabe (kein Produktionsstart ohne Freigabe)", async () => {

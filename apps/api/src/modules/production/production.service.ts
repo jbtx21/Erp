@@ -5,7 +5,7 @@
 // (Kap. 5.2/7.2). Der Laufzettel-PDF wird anschließend über den ProductionSheetService
 // (T-11) aus dem PA gerendert.
 
-import { explodeComponents, type VariantComponentDef } from "@texma/shared";
+import { backwardStart, explodeComponents, type LeadStage, type VariantComponentDef } from "@texma/shared";
 import { buildEntry, type AuditSink } from "@texma/audit";
 import type { NumberingService } from "../numbering/numbering.service.js";
 
@@ -22,7 +22,10 @@ export interface OrderForProduction {
   id: string;
   number: string;
   freigegeben: boolean;
-  dueDate: Date | null;
+  /** Zugesagter Liefertermin (Basis der Rückwärtsterminierung); null = kein Termin. */
+  deliveryDate: Date | null;
+  /** Sequenzielle (Veredelungs-)Stufen mit Durchlaufzeit für die Rückwärtsterminierung. */
+  stages: LeadStage[];
   existingProductionId: string | null;
   existingProductionNumber: string | null;
   lines: ProductionOrderLine[];
@@ -95,7 +98,17 @@ export class ProductionService {
    * Auftrag auf IN_PRODUKTION. Wirft, wenn der Auftrag nicht freigegeben ist oder bereits
    * ein PA existiert (1 Auftrag = 1 PA).
    */
-  async createFromOrder(orderId: string): Promise<{ id: string; number: string; bomItemCount: number }> {
+  /**
+   * Produktions-Fälligkeit aus der Rückwärtsterminierung (Kap. 35.2): der interne
+   * Produktionstermin liegt um die Summe der nachgelagerten (Veredelungs-)Durchlaufzeiten
+   * VOR dem zugesagten Liefertermin. Ohne Termin/Stufen = der Liefertermin selbst (bzw. null).
+   */
+  static plannedDueDate(deliveryDate: Date | null, stages: LeadStage[]): Date | null {
+    if (!deliveryDate) return null;
+    return stages.length > 0 ? backwardStart(deliveryDate, stages) : deliveryDate;
+  }
+
+  async createFromOrder(orderId: string): Promise<{ id: string; number: string; bomItemCount: number; dueDate: Date | null }> {
     const order = await this.repo.loadOrderForProduction(orderId);
     if (!order) throw new ProductionError("Auftrag nicht gefunden.");
     if (order.existingProductionId) throw new ProductionError(`Produktionsauftrag ${order.existingProductionNumber ?? ""} existiert bereits.`);
@@ -103,13 +116,14 @@ export class ProductionService {
     if (order.lines.length === 0) throw new ProductionError("Auftrag ohne Positionen kann nicht in Produktion gehen.");
 
     const bomItems = ProductionService.buildBomItems(order.lines);
+    const dueDate = ProductionService.plannedDueDate(order.deliveryDate, order.stages);
     const number = await this.numbering.next("PRODUCTION_ORDER");
-    const { id } = await this.repo.createProductionOrder({ number, orderId, dueDate: order.dueDate, bomItems });
+    const { id } = await this.repo.createProductionOrder({ number, orderId, dueDate, bomItems });
     await this.repo.setOrderInProduction(orderId);
     await this.audit.append(buildEntry({
       entity: "ProductionOrder", entityId: id, action: "CREATE",
-      after: { number, orderNumber: order.number, bomItems: bomItems.length },
+      after: { number, orderNumber: order.number, bomItems: bomItems.length, liefertermin: order.deliveryDate, produktionsFaelligkeit: dueDate },
     }));
-    return { id, number, bomItemCount: bomItems.length };
+    return { id, number, bomItemCount: bomItems.length, dueDate };
   }
 }

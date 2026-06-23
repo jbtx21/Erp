@@ -52,6 +52,7 @@ if (!dbConfigured) {
       ] } } });
       await prisma.order.create({ data: {
         id: ORD, number: "AB-PRODTEST", companyId: CO, status: "ANGELEGT", freigegeben: false,
+        zugesagterLiefertermin: new Date("2026-09-30T00:00:00.000Z"),
         lines: { create: [{ position: 1, description: "Vereins-Set", qty: 50, unitNetCents: 4500, variantId: SET }] },
       } });
     });
@@ -69,6 +70,13 @@ if (!dbConfigured) {
       expect(items).toHaveLength(2);
       expect(items.every((i) => i.qty === 50)).toBe(true);
       expect(items.find((i) => i.variantId === COMP)?.description).toBe("Polo rot M");
+
+      // PA-Fälligkeit aus der Rückwärtsterminierung: nicht nach dem Liefertermin.
+      const delivery = new Date("2026-09-30T00:00:00.000Z");
+      expect(res.dueDate).not.toBeNull();
+      expect(res.dueDate!.getTime()).toBeLessThanOrEqual(delivery.getTime());
+      const pa = await prisma.productionOrder.findUnique({ where: { orderId: ORD }, select: { dueDate: true } });
+      expect(pa?.dueDate?.getTime()).toBe(res.dueDate!.getTime());
 
       const order = await prisma.order.findUnique({ where: { id: ORD }, select: { status: true } });
       expect(order?.status).toBe("IN_PRODUKTION");
