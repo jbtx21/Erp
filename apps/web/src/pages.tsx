@@ -1875,11 +1875,68 @@ export const ReklamationPage = (): JSX.Element => {
       )}
       {status && <Text size="sm" mt="xs" c="dimmed">{status}</Text>}
       {err && <Alert color="red" mt="sm">{err}</Alert>}
-      {orderId && <ListPage key={`${orderId}-${reload}`} title={`Reklamationen zu ${orderId}`}
-        load={() => trpc.reklamation.listByOrder.query({ orderId }) as Promise<Row[]>} />}
+      {orderId && <ComplaintsPanel orderId={orderId} reloadKey={reload} />}
     </>
   );
 };
+
+// Reklamationsliste mit Folgevorgang-Auslösung (B11): je Reklamation „→ Gutschrift" bzw.
+// „→ Nachproduktion" (aus dem hinterlegten followUp), ruft reklamation.executeFollowUp.
+function ComplaintsPanel({ orderId, reloadKey }: { orderId: string; reloadKey: number }): JSX.Element {
+  const [items, setItems] = useState<Awaited<ReturnType<typeof trpc.reklamation.listByOrder.query>>>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    try { setItems(await trpc.reklamation.listByOrder.query({ orderId })); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
+  }, [orderId]);
+  useEffect(() => { void load(); }, [load, reloadKey]);
+
+  const followLabel = (f: string): string | null =>
+    f === "GUTSCHRIFT" ? "→ Gutschrift erstellen" : (f === "NACHPRODUKTION" || f === "EXPRESS_NACHPRODUKTION") ? "→ Nachproduktion anlegen" : null;
+
+  const run = async (id: string): Promise<void> => {
+    setBusy(id); setMsg(null); setErr(null);
+    try {
+      const r = await trpc.reklamation.executeFollowUp.mutate({ complaintId: id });
+      setMsg(r.type === "CREDIT_NOTE" ? `Gutschrift ${r.number} über ${euro(r.amountCents)} erstellt.`
+        : r.type === "REPRODUCTION" ? `Nachproduktions-Auftrag ${r.number} angelegt${r.express ? " (Express)" : ""}.`
+        : "Kein Folgevorgang hinterlegt.");
+      await load();
+    } catch (e) { setErr(errMsg(e)); } finally { setBusy(null); }
+  };
+
+  return (
+    <Box mt="lg">
+      <Title order={5}>Reklamationen zu {orderId}</Title>
+      {msg && <Alert color="green" mt="xs">{msg}</Alert>}
+      {err && <Alert color="red" mt="xs">{err}</Alert>}
+      <Table mt="xs" striped withTableBorder verticalSpacing="xs" fz="sm">
+        <Table.Thead><Table.Tr>
+          <Table.Th>Position</Table.Th><Table.Th>Ursache</Table.Th><Table.Th>Kostenträger</Table.Th>
+          <Table.Th>Folgevorgang</Table.Th><Table.Th ta="right">Kosten</Table.Th><Table.Th></Table.Th>
+        </Table.Tr></Table.Thead>
+        <Table.Tbody>
+          {items.map((c) => {
+            const label = followLabel(c.followUp);
+            return (
+              <Table.Tr key={c.id}>
+                <Table.Td><Text size="xs" ff="monospace">{c.orderLineId}</Text></Table.Td>
+                <Table.Td>{c.cause}</Table.Td>
+                <Table.Td><Badge variant="light">{c.costBearer}</Badge></Table.Td>
+                <Table.Td>{c.followUp}</Table.Td>
+                <Table.Td ta="right">{euro(c.costCents)}</Table.Td>
+                <Table.Td>{label && <Button size="compact-xs" loading={busy === c.id} onClick={() => void run(c.id)}>{label}</Button>}</Table.Td>
+              </Table.Tr>
+            );
+          })}
+          {items.length === 0 && <Table.Tr><Table.Td colSpan={6}><Text size="sm" c="dimmed">Keine Reklamationen.</Text></Table.Td></Table.Tr>}
+        </Table.Tbody>
+      </Table>
+    </Box>
+  );
+}
 
 // ── Fertigung: mehrstufige Fremdvergabe / Lohnveredelung (T-04, Kap. 5.3) ─────
 type SubStatus = "OFFEN" | "BEISTELLUNG_VERSANDT" | "RUECKLAUF_ERHALTEN" | "ABGESCHLOSSEN";

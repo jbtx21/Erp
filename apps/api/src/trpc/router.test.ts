@@ -793,6 +793,11 @@ describe("tRPC reklamation — Workflow C (Kap. 20)", () => {
       caller.reklamation.create({ orderId: "o1", orderLineId: "l1", cause: "INTERN", followUp: "NACHPRODUKTION", costCents: 0 })
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
+
+  it("PRODUKTION darf keinen Folgevorgang auslösen (FORBIDDEN)", async () => {
+    const { caller } = setup(PRODUKTION);
+    await expect(caller.reklamation.executeFollowUp({ complaintId: "c1" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
 });
 
 describe("tRPC ampel — Terminübersicht (Kap. 35.4)", () => {

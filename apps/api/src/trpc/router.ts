@@ -498,6 +498,20 @@ export const appRouter = router({
     listByOrder: roleProcedure(...supplierRoles)
       .input(z.object({ orderId: z.string().min(1), limit: z.number().int().positive().max(200).optional() }))
       .query(async ({ input, ctx }) => ctx.reklamation.listByOrder(input.orderId, input.limit ?? 50)),
+
+    /** Folgevorgang auslösen (B11): Gutschrift bzw. Nachproduktions-Auftrag. Nur ADMIN/Büro. */
+    executeFollowUp: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ complaintId: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await ctx.reklamation.executeFollowUp(input.complaintId);
+        } catch (err) {
+          if (err instanceof ReklamationValidationError) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: err.message });
+          }
+          throw err;
+        }
+      }),
   }),
 
   ampel: router({
