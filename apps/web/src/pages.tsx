@@ -2166,6 +2166,90 @@ export function EanImportPage(): JSX.Element {
   );
 }
 
+// Finanz-Reporting (B19, Kap. 29): OP-Aging (Fälligkeits-Buckets) + DSO über die offenen
+// Posten. Reine Auswertung (G1, keine Buchung). Nur Büro/Buchhaltung/Admin.
+export function FinanceReportingPage(): JSX.Element {
+  const yearStart = `${new Date().getFullYear()}-01-01`;
+  const today = new Date().toISOString().slice(0, 10);
+  const [from, setFrom] = useState(yearStart);
+  const [asOf, setAsOf] = useState(today);
+  const [data, setData] = useState<Awaited<ReturnType<typeof trpc.financeReport.agingWithDso.query>> | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setErr(null);
+    try {
+      setData(await trpc.financeReport.agingWithDso.query({ from: `${from}T00:00:00.000Z`, asOf: `${asOf}T23:59:59.999Z` }));
+    } catch (e) { setErr(errMsg(e)); }
+  }, [from, asOf]);
+  useEffect(() => { void load(); }, [load]);
+
+  const buckets: Array<{ label: string; key: keyof NonNullable<typeof data>; color: string }> = [
+    { label: "Nicht fällig", key: "notDue", color: "var(--mantine-color-teal-6)" },
+    { label: "0–30 T überfällig", key: "d0_30", color: "var(--mantine-color-yellow-6)" },
+    { label: "31–60 T", key: "d31_60", color: "var(--mantine-color-orange-6)" },
+    { label: "61–90 T", key: "d61_90", color: "var(--mantine-color-red-6)" },
+    { label: "> 90 T", key: "d90plus", color: "var(--mantine-color-red-9)" },
+  ];
+  const total = data?.total ?? 0;
+  const overdue = data ? data.d0_30 + data.d31_60 + data.d61_90 + data.d90plus : 0;
+
+  const exportCsv = (): void => {
+    if (!data) return;
+    const lines = ["Bucket;Betrag (EUR)", ...buckets.map((b) => `${b.label};${(Number(data[b.key]) / 100).toFixed(2)}`), `Gesamt;${(total / 100).toFixed(2)}`];
+    downloadText(`op-aging-${asOf}.csv`, "﻿" + lines.join("\n"), "text/csv");
+  };
+
+  const card = (label: string, value: string, hint?: string, color?: string): JSX.Element => (
+    <Box style={{ flex: "1 1 200px", minWidth: 180, border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, padding: 16 }}>
+      <Text size="xs" fw={700} tt="uppercase" c="dimmed">{label}</Text>
+      <Text fz={28} fw={700} mt={4} c={color}>{value}</Text>
+      {hint && <Text size="xs" c="dimmed" mt={2}>{hint}</Text>}
+    </Box>
+  );
+
+  return (
+    <>
+      <Title order={3}>Finanz-Reporting — Offene Posten</Title>
+      <Text size="sm" c="dimmed" mt={4}>OP-Aging (Fälligkeits-Buckets) und DSO (durchschnittliche Forderungslaufzeit) über die offenen Rechnungen. Auswertung, keine Buchung (G1). DSO bezieht den Umsatz im gewählten Zeitraum ein.</Text>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+
+      <Group align="end" gap="sm" mt="md">
+        <TextInput label="Umsatz-Zeitraum ab (für DSO)" type="date" value={from} onChange={(e) => setFrom(e.currentTarget.value)} />
+        <TextInput label="Stichtag" type="date" value={asOf} onChange={(e) => setAsOf(e.currentTarget.value)} />
+        <Button variant="default" onClick={() => void load()}>Aktualisieren</Button>
+        <Button variant="light" disabled={!data} onClick={exportCsv}>CSV</Button>
+      </Group>
+
+      {data && (
+        <>
+          <Group mt="md" gap="md" wrap="wrap">
+            {card("Gesamt offen", euro(total))}
+            {card("Davon überfällig", euro(overdue), total > 0 ? `${Math.round((overdue / total) * 100)} % der offenen Posten` : undefined, overdue > 0 ? "red.7" : undefined)}
+            {card("DSO", `${Math.round(data.dsoDays)} Tage`, "Ø Forderungslaufzeit")}
+          </Group>
+
+          <Box mt="lg" style={{ maxWidth: 560 }}>
+            {buckets.map((b) => {
+              const v = Number(data[b.key]);
+              const pct = total > 0 ? (v / total) * 100 : 0;
+              return (
+                <Group key={b.key} gap="sm" mb={6} wrap="nowrap">
+                  <Text size="sm" w={130} style={{ flexShrink: 0 }}>{b.label}</Text>
+                  <Box style={{ flex: 1, background: "var(--mantine-color-gray-1)", borderRadius: 4, height: 22, position: "relative" }}>
+                    <Box style={{ width: `${pct}%`, background: b.color, height: "100%", borderRadius: 4, minWidth: v > 0 ? 2 : 0 }} />
+                  </Box>
+                  <Text size="sm" w={110} ta="right" style={{ flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{euro(v)}</Text>
+                </Group>
+              );
+            })}
+          </Box>
+        </>
+      )}
+    </>
+  );
+}
+
 // Newsletter (Brevo): Kampagnen anlegen + an Opt-in-Kontakte versenden (DSGVO).
 export function NewsletterPage(): JSX.Element {
   const [list, setList] = useState<Row[]>([]);

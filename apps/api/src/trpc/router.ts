@@ -1554,6 +1554,16 @@ export const appRouter = router({
       .mutation(({ input, ctx }) => ctx.eanImport.apply(input.csv, input.options)),
   }),
 
+  // Finanz-Reporting (B19, Kap. 29): OP-Aging + DSO. Finanzdaten → kein PRODUKTION-Zugriff.
+  financeReport: router({
+    aging: roleProcedure(...supplierRoles)
+      .input(z.object({ asOf: z.string().datetime().optional() }).optional())
+      .query(({ input, ctx }) => ctx.financeReport.agingReport(input?.asOf ? new Date(input.asOf) : new Date())),
+    agingWithDso: roleProcedure(...supplierRoles)
+      .input(z.object({ from: z.string().datetime(), asOf: z.string().datetime().optional() }))
+      .query(({ input, ctx }) => ctx.financeReport.agingWithDso(new Date(input.from), input.asOf ? new Date(input.asOf) : new Date())),
+  }),
+
   // Regel-Engine (Event → Bedingung → Aktion). Konfiguration nur Admin.
   automation: router({
     meta: roleProcedure("ADMIN").query(({ ctx }) => ({ triggers: ctx.automation.knownTriggers(), actions: ctx.automation.knownActions() })),

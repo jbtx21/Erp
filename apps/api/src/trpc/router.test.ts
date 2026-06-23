@@ -92,6 +92,8 @@ import { AuditQueryService } from "../modules/audit-log/audit-query.service.js";
 import { InMemoryAuditLogRepository } from "../repositories/in-memory-audit-log.repository.js";
 import { EanImportService } from "../modules/ean-import/ean-import.service.js";
 import { InMemoryEanImportRepository } from "../repositories/in-memory-ean-import.repository.js";
+import { FinanceReportService } from "../modules/finance-report/finance-report.service.js";
+import { InMemoryFinanceReportRepository } from "../repositories/in-memory-finance-report.repository.js";
 import { DeliveryService } from "../modules/delivery/delivery.service.js";
 import { InMemoryDeliveryRepository } from "../repositories/in-memory-delivery.repository.js";
 import { NumberingService } from "../modules/numbering/numbering.service.js";
@@ -337,6 +339,7 @@ function setup(user: AuthUser | null = BUERO) {
     preferences: new PreferencesService(new InMemoryUserPreferenceRepository()),
     auditLog: new AuditQueryService(new InMemoryAuditLogRepository()),
     eanImport: new EanImportService(new InMemoryEanImportRepository(), new MemoryAuditSink()),
+    financeReport: new FinanceReportService(new InMemoryFinanceReportRepository()),
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -459,6 +462,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       preferences: {} as Context["preferences"],
       auditLog: {} as Context["auditLog"],
       eanImport: {} as Context["eanImport"],
+      financeReport: {} as Context["financeReport"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",
@@ -1121,5 +1125,19 @@ describe("tRPC eanImport — Massenimport mit EAN-Abgleich", () => {
   it("PRODUKTION darf nicht importieren (FORBIDDEN)", async () => {
     const { caller } = setup(PRODUKTION);
     await expect(caller.eanImport.preview({ csv })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+describe("tRPC financeReport — OP-Aging/DSO nur für nicht-PRODUKTION", () => {
+  it("BUCHHALTUNG erhält das OP-Aging", async () => {
+    const { caller } = setup(BUCHHALTUNG);
+    const r = await caller.financeReport.aging();
+    expect(r).toHaveProperty("total");
+    expect(r).toHaveProperty("d90plus");
+  });
+
+  it("PRODUKTION darf das Finanz-Reporting nicht lesen (FORBIDDEN)", async () => {
+    const { caller } = setup(PRODUKTION);
+    await expect(caller.financeReport.aging()).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });

@@ -9,7 +9,7 @@ import { Differentiators } from "./Differentiators.js";
 import { Banking } from "./Banking.js";
 import {
   CompaniesPage, CostCentersPage, DunningPage, InquiriesPage, IncomingInvoicesPage, LeadsPage, OrdersPage, ProcurementPage, ProductionReportingPage,
-  ProductsPage, PricingPage, EmailTemplatesPage, DashboardsPage, DataIoPage, EanImportPage, NewsletterPage, OpportunitiesPage, CalendarPage, MessagesPage, AdminPage, ArchivePage, AuditLogPage, AutomationPage, TasksPage, HomePage, LagerPage, HrPage, IntegrationsPage, SecurityPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
+  ProductsPage, PricingPage, EmailTemplatesPage, DashboardsPage, DataIoPage, EanImportPage, FinanceReportingPage, NewsletterPage, OpportunitiesPage, CalendarPage, MessagesPage, AdminPage, ArchivePage, AuditLogPage, AutomationPage, TasksPage, HomePage, LagerPage, HrPage, IntegrationsPage, SecurityPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
 } from "./pages.js";
 import { trpc } from "./trpc.js";
 
@@ -28,7 +28,7 @@ const NAV: ReadonlyArray<{ group: string; items: ReadonlyArray<{ key: string; la
   { group: "Logistik & Finanzen", items: [
     { key: "shipments", label: "Versand" }, { key: "dunning", label: "Mahnwesen" },
     { key: "banking", label: "Banking" }, { key: "costcenters", label: "Kostenstellen" },
-    { key: "reporting", label: "Auswertungen" },
+    { key: "reporting", label: "Auswertungen" }, { key: "finance", label: "Offene Posten (OP-Aging)" },
   ] },
   { group: "System", items: [{ key: "emailtemplates", label: "E-Mail-Vorlagen" }, { key: "dataio", label: "Import/Export" }, { key: "newsletter", label: "Newsletter" }, { key: "archive", label: "GoBD-Archiv" }, { key: "auditlog", label: "Audit-Protokoll" }, { key: "automation", label: "Automationen" }, { key: "admin", label: "Einstellungen" }, { key: "hr", label: "Personalwesen" }, { key: "integrations", label: "Schnittstellen" }] },
 ];
@@ -283,6 +283,7 @@ function Page({ k, role, userName, onNavigate, focusId }: { k: string; role: str
     case "banking": return <Banking role={role} />;
     case "costcenters": return <CostCentersPage />;
     case "reporting": return <Reporting role={role} />;
+    case "finance": return <FinanceReportingPage />;
     default: return <Text>Unbekannter Bereich.</Text>;
   }
 }
