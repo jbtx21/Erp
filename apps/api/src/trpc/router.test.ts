@@ -88,6 +88,8 @@ import { TaskService } from "../modules/task/task.service.js";
 import { InMemoryTaskRepository } from "../repositories/in-memory-task.repository.js";
 import { PreferencesService } from "../modules/preferences/preferences.service.js";
 import { InMemoryUserPreferenceRepository } from "../repositories/in-memory-user-preference.repository.js";
+import { AuditQueryService } from "../modules/audit-log/audit-query.service.js";
+import { InMemoryAuditLogRepository } from "../repositories/in-memory-audit-log.repository.js";
 import { DeliveryService } from "../modules/delivery/delivery.service.js";
 import { InMemoryDeliveryRepository } from "../repositories/in-memory-delivery.repository.js";
 import { NumberingService } from "../modules/numbering/numbering.service.js";
@@ -331,6 +333,7 @@ function setup(user: AuthUser | null = BUERO) {
     automation: new AutomationService(new InMemoryAutomationRepository(), { notify: async () => undefined }, new MemoryAuditSink()),
     tasks: new TaskService(new InMemoryTaskRepository(), new MemoryAuditSink()),
     preferences: new PreferencesService(new InMemoryUserPreferenceRepository()),
+    auditLog: new AuditQueryService(new InMemoryAuditLogRepository()),
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -451,6 +454,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       automation: {} as Context["automation"],
       tasks: {} as Context["tasks"],
       preferences: {} as Context["preferences"],
+      auditLog: {} as Context["auditLog"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",
@@ -1078,5 +1082,25 @@ describe("tRPC tasks — Aufgaben/Zuweisung", () => {
   it("erfordert eine Anmeldung (UNAUTHORIZED)", async () => {
     const { caller } = setup(null);
     await expect(caller.tasks.mine()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
+  });
+});
+
+describe("tRPC auditLog — GoBD-Protokoll nur für Admin", () => {
+  const ADMIN: AuthUser = { id: "u0", email: "admin@texma.de", name: "Admin", role: "ADMIN", totpEnabled: false };
+
+  it("ADMIN darf das Protokoll lesen", async () => {
+    const { caller } = setup(ADMIN);
+    expect(await caller.auditLog.list()).toEqual([]);
+    expect(await caller.auditLog.entities()).toEqual([]);
+  });
+
+  it("BUERO darf das Protokoll nicht lesen (FORBIDDEN)", async () => {
+    const { caller } = setup(BUERO);
+    await expect(caller.auditLog.list()).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("PRODUKTION darf das Protokoll nicht lesen (FORBIDDEN)", async () => {
+    const { caller } = setup(PRODUKTION);
+    await expect(caller.auditLog.list()).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });

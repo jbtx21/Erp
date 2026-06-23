@@ -130,6 +130,8 @@ import { TaskService } from "./modules/task/task.service.js";
 import { PrismaTaskRepository } from "./repositories/prisma-task.repository.js";
 import { PreferencesService } from "./modules/preferences/preferences.service.js";
 import { PrismaUserPreferenceRepository } from "./repositories/prisma-user-preference.repository.js";
+import { AuditQueryService } from "./modules/audit-log/audit-query.service.js";
+import { PrismaAuditLogRepository } from "./repositories/prisma-audit-log.repository.js";
 import { PrismaIntegrationsRepository } from "./repositories/prisma-integrations.repository.js";
 import { HttpSlackSender } from "./modules/integrations/slack-provider.js";
 import { appRouter } from "./trpc/router.js";
@@ -264,6 +266,8 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const tasks = new TaskService(new PrismaTaskRepository(), new PrismaAuditSink());
   // Persönliche UI-Einstellungen je Nutzer (z. B. Home-Workspace-Layout, geräteübergreifend).
   const preferences = new PreferencesService(new PrismaUserPreferenceRepository());
+  // Audit-Log-Viewer (GoBD): read-only Abfrage des append-only AuditLog.
+  const auditLog = new AuditQueryService(new PrismaAuditLogRepository());
   // Regel-Engine: Aktions-Handler bündeln vorhandene Seiteneffekte (In-App, Mail, Aufgabe).
   // Weitere Handler (Slack o. Ä.) lassen sich hier ohne Engine-Änderung ergänzen.
   const automationHandlers: Record<string, ActionHandler> = {
@@ -421,6 +425,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           automation,
           tasks,
           preferences,
+          auditLog,
           auth,
           user,
           sessionToken,

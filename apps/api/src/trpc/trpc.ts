@@ -56,6 +56,7 @@ import type { ContactLinkService } from "../modules/contact/contact-link.service
 import type { AutomationService } from "../modules/automation/automation.service.js";
 import type { TaskService } from "../modules/task/task.service.js";
 import type { PreferencesService } from "../modules/preferences/preferences.service.js";
+import type { AuditQueryService } from "../modules/audit-log/audit-query.service.js";
 import type {
   BankingQueryRepository,
   DunningQueryRepository,
@@ -127,6 +128,7 @@ export interface Context {
   automation: AutomationService;
   tasks: TaskService;
   preferences: PreferencesService;
+  auditLog: AuditQueryService;
   auth: AuthService;
   user: AuthUser | null;
   /** Roh-Token aus dem Cookie (für den 2FA-Zwischenschritt/Logout, wenn user noch null ist). */

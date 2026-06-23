@@ -2,7 +2,7 @@
 // AutoTable rendert jede Liste robust (Cent→€, Datum, Status-Badge), sodass neue
 // Bereiche mit wenig Code anbindbar sind. Interaktive Aktionen (Versand bestätigen,
 // Mahnlauf, Reorder→Bestellungen) sind je Seite ergänzt.
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useState, type ReactNode } from "react";
 import { Alert, Badge, Box, Button, Checkbox, Group, Loader, NumberInput, Select, Switch, Table, Tabs, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { trpc } from "./trpc.js";
@@ -2797,6 +2797,91 @@ export function ArchivePage({ role }: { role?: string } = {}): JSX.Element {
             </Table.Tr>
           ))}
           {docs.length === 0 && <Table.Tr><Table.Td colSpan={7}><Text size="sm" c="dimmed">Noch keine Belege archiviert.</Text></Table.Td></Table.Tr>}
+        </Table.Tbody>
+      </Table>
+    </>
+  );
+}
+
+// Audit-Log-Viewer (GoBD, Kap. 10): „wer hat wann was geändert" — read-only, Admin.
+// Filter nach Entität/Beleg/Aktion/Nutzer/Zeitraum; Zeile aufklappen zeigt before→after.
+const AUDIT_ACTION_COLOR: Record<string, string> = { CREATE: "green", UPDATE: "blue", FINALIZE: "violet", STORNO: "red", DELETE: "red" };
+export function AuditLogPage(): JSX.Element {
+  const [rows, setRows] = useState<Awaited<ReturnType<typeof trpc.auditLog.list.query>>>([]);
+  const [entities, setEntities] = useState<string[]>([]);
+  const [entity, setEntity] = useState<string>("");
+  const [action, setAction] = useState<string>("");
+  const [userEmail, setUserEmail] = useState("");
+  const [entityId, setEntityId] = useState("");
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setErr(null);
+    try {
+      setRows(await trpc.auditLog.list.query({
+        entity: entity || undefined, action: action || undefined,
+        userEmail: userEmail.trim() || undefined, entityId: entityId.trim() || undefined, limit: 200,
+      }));
+    } catch (e) { setErr(errMsg(e)); }
+  }, [entity, action, userEmail, entityId]);
+  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => { void trpc.auditLog.entities.query().then(setEntities).catch(() => undefined); }, []);
+
+  const fmt = (d: string | Date): string => new Date(d).toLocaleString("de-DE");
+  const json = (v: unknown): string => (v == null ? "—" : JSON.stringify(v, null, 2));
+
+  return (
+    <>
+      <Title order={3}>Audit-Protokoll</Title>
+      <Text size="sm" c="dimmed" mt={4}>Unveränderbares Änderungsprotokoll (GoBD, Kap. 10): wer hat wann welchen Beleg angelegt, geändert, finalisiert oder storniert. Nur lesbar. Zeile anklicken zeigt vorher → nachher.</Text>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+
+      <Group mt="md" align="end" gap="xs">
+        <Select label="Entität" placeholder="alle" clearable data={entities} value={entity || null} onChange={(v) => setEntity(v ?? "")} w={170} />
+        <Select label="Aktion" placeholder="alle" clearable data={["CREATE", "UPDATE", "FINALIZE", "STORNO", "DELETE"]} value={action || null} onChange={(v) => setAction(v ?? "")} w={140} />
+        <TextInput label="Nutzer (E-Mail)" placeholder="enthält…" value={userEmail} onChange={(e) => setUserEmail(e.currentTarget.value)} w={200} />
+        <TextInput label="Beleg-ID" placeholder="z. B. RE-2026-0001" value={entityId} onChange={(e) => setEntityId(e.currentTarget.value)} w={200} />
+        <Button variant="default" onClick={() => void refresh()}>Aktualisieren</Button>
+      </Group>
+
+      <Title order={5} mt="lg">Einträge ({rows.length})</Title>
+      <Table mt="xs" striped withTableBorder highlightOnHover>
+        <Table.Thead>
+          <Table.Tr>
+            <Table.Th>Zeitpunkt</Table.Th><Table.Th>Nutzer</Table.Th><Table.Th>Entität</Table.Th>
+            <Table.Th>Beleg-ID</Table.Th><Table.Th>Aktion</Table.Th>
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
+          {rows.map((r) => (
+            <Fragment key={r.id}>
+              <Table.Tr style={{ cursor: "pointer" }} onClick={() => setExpanded(expanded === r.id ? null : r.id)}>
+                <Table.Td>{fmt(r.createdAt)}</Table.Td>
+                <Table.Td>{r.userEmail ?? <Text size="xs" c="dimmed">System</Text>}</Table.Td>
+                <Table.Td>{r.entity}</Table.Td>
+                <Table.Td><Text size="xs" ff="monospace">{r.entityId}</Text></Table.Td>
+                <Table.Td><Badge variant="light" color={AUDIT_ACTION_COLOR[r.action] ?? "gray"}>{r.action}</Badge></Table.Td>
+              </Table.Tr>
+              {expanded === r.id && (
+                <Table.Tr>
+                  <Table.Td colSpan={5}>
+                    <Group align="start" gap="lg" wrap="nowrap">
+                      <Box style={{ flex: 1, minWidth: 0 }}>
+                        <Text size="xs" fw={700} c="dimmed">Vorher</Text>
+                        <Text component="pre" size="xs" ff="monospace" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{json(r.before)}</Text>
+                      </Box>
+                      <Box style={{ flex: 1, minWidth: 0 }}>
+                        <Text size="xs" fw={700} c="dimmed">Nachher</Text>
+                        <Text component="pre" size="xs" ff="monospace" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{json(r.after)}</Text>
+                      </Box>
+                    </Group>
+                  </Table.Td>
+                </Table.Tr>
+              )}
+            </Fragment>
+          ))}
+          {rows.length === 0 && <Table.Tr><Table.Td colSpan={5}><Text size="sm" c="dimmed">Keine Einträge für diesen Filter.</Text></Table.Td></Table.Tr>}
         </Table.Tbody>
       </Table>
     </>

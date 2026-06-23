@@ -1494,6 +1494,27 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => { await ctx.preferences.set(ctx.user.id, input.key, input.value); return { ok: true as const }; }),
   }),
 
+  // Audit-Log-Viewer (GoBD, Kap. 10): „wer hat wann was geändert". Nur Admin (before/after
+  // können Preis-/Kundendaten enthalten → kein Zugriff für andere Rollen).
+  auditLog: router({
+    entities: roleProcedure("ADMIN").query(({ ctx }) => ctx.auditLog.entities()),
+    list: roleProcedure("ADMIN")
+      .input(z.object({
+        entity: z.string().optional(),
+        entityId: z.string().optional(),
+        action: z.string().optional(),
+        userEmail: z.string().optional(),
+        from: z.string().datetime().optional(),
+        to: z.string().datetime().optional(),
+        limit: z.number().int().positive().optional(),
+      }).optional())
+      .query(({ input, ctx }) => ctx.auditLog.list({
+        ...input,
+        from: input?.from ? new Date(input.from) : undefined,
+        to: input?.to ? new Date(input.to) : undefined,
+      })),
+  }),
+
   // Regel-Engine (Event → Bedingung → Aktion). Konfiguration nur Admin.
   automation: router({
     meta: roleProcedure("ADMIN").query(({ ctx }) => ({ triggers: ctx.automation.knownTriggers(), actions: ctx.automation.knownActions() })),
