@@ -22,7 +22,17 @@ bash scripts/dev-db-up.sh
 Beide Wege ergeben dieselbe Verbindung wie in `packages/db/.env`:
 `postgresql://texma:texma@localhost:5432/texma?schema=public`.
 
-## 2. Schema + Demo-Daten
+## 2. DB-Verbindung (.env) — Pflicht vor db:setup
+
+`packages/db/.env` ist **gitignored** und daher NICHT im Clone. Einmalig aus der
+Vorlage anlegen (sonst: `Error: Environment variable not found: DATABASE_URL`):
+
+```bash
+cp packages/db/.env.example packages/db/.env            # Linux/macOS
+# PowerShell:  Copy-Item packages\db\.env.example packages\db\.env
+```
+
+## 3. Schema + Demo-Daten
 
 ```bash
 pnpm db:setup    # = prisma generate + migrate:deploy + seed
@@ -32,7 +42,7 @@ Der Seed (`apps/api/src/scripts/seed.ts`, idempotent) legt an: Preisgruppen, 2 F
 einen Shop-Connector, Artikel + 3 Varianten, 2 Lieferanten, 4 Aufträge, 3 Produktions-
 aufträge inkl. 2 Fremdvergabe-Stufen, 2 Angebote (Ampel), 2 Eingangs-/2 Ausgangsrechnungen.
 
-## 3. API + UI starten
+## 4. API + UI starten
 
 ```bash
 node apps/api/dist/scripts/dev-server.js   # API auf :3000 (fester Demo-ADMIN, kein Login)
@@ -44,7 +54,7 @@ Module ohne Login-Reibung gegen echte Daten lesen/schreiben. Für Rollen-Tests
 (z. B. PRODUKTION-Redaktion) stattdessen den echten Login-Flow nutzen und mit
 `apps/api/src/scripts/seed-admin.ts` einen User anlegen.
 
-## 4. Schnelltest ohne UI (tRPC über HTTP)
+## 5. Schnelltest ohne UI (tRPC über HTTP)
 
 ```bash
 curl -s localhost:3000/health                 # {"ok":true}
