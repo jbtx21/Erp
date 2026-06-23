@@ -57,6 +57,16 @@ interface AiSummary {
   aiGenerated: boolean;
   narrative: string;
 }
+interface QuoteConversion {
+  total: number;
+  won: number;
+  lost: number;
+  open: number;
+  winRatePercent: number;
+  quotedNetCents: number;
+  wonNetCents: number;
+  lossReasons: Array<{ reason: string; count: number }>;
+}
 
 const pct = (p: number | null) => (p == null ? "—" : `${p > 0 ? "+" : ""}${p} %`);
 const ratePct = (p: number | null) => (p == null ? "—" : `${p} %`);
@@ -95,6 +105,7 @@ export function Reporting({ role }: { role: string }): JSX.Element {
   const [leadTime, setLeadTime] = useState<LeadTimeOverview | null>(null);
   const [defects, setDefects] = useState<DefectOverview | null>(null);
   const [onTime, setOnTime] = useState<OnTimeOverview | null>(null);
+  const [quoteConv, setQuoteConv] = useState<QuoteConversion | null>(null);
   const [ai, setAi] = useState<AiSummary | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -114,13 +125,14 @@ export function Reporting({ role }: { role: string }): JSX.Element {
       setOnTime(ot as OnTimeOverview);
 
       if (!isProduction) {
-        const [rev, ord, cmp, shop, pg, art] = await Promise.all([
+        const [rev, ord, cmp, shop, pg, art, qc] = await Promise.all([
           trpc.reporting.revenueOverview.query({ granularity, ...range }),
           trpc.reporting.orderOverview.query({ granularity, ...range }),
           trpc.reporting.compareRevenue.query({ granularity }),
           trpc.reporting.revenueByShop.query(range),
           trpc.reporting.revenueByPriceGroup.query(range),
           trpc.reporting.revenueByArticle.query(range),
+          trpc.reporting.quoteConversion.query(range),
         ]);
         setRevenue(rev as RevenueOverview);
         setOrders(ord as OrderOverview);
@@ -128,6 +140,7 @@ export function Reporting({ role }: { role: string }): JSX.Element {
         setByShop(shop as BreakdownItem[]);
         setByPriceGroup(pg as BreakdownItem[]);
         setByArticle(art as BreakdownItem[]);
+        setQuoteConv(qc as QuoteConversion);
       }
     } catch (err) {
       setStatus(`Fehler: ${(err as Error).message}`);
@@ -251,6 +264,39 @@ export function Reporting({ role }: { role: string }): JSX.Element {
                 {ai.aiGenerated ? "KI-generiert (Claude)" : "Automatische Heuristik (keine KI verfügbar)"}
               </Text>
             </Paper>
+          )}
+        </Card>
+      )}
+
+      {!isProduction && quoteConv && (
+        <Card withBorder padding="md">
+          <CardHead
+            title="Angebots-Erfolgsquote (Conversion)"
+            onCsv={() => downloadCsv("angebots-erfolgsquote.csv",
+              ["Kennzahl", "Wert"],
+              [["Win-Rate %", String(quoteConv.winRatePercent)], ["Gewonnen", String(quoteConv.won)], ["Verloren", String(quoteConv.lost)], ["Offen", String(quoteConv.open)],
+               ["Angebotswert gesamt (Cent)", String(quoteConv.quotedNetCents)], ["Gewonnener Wert (Cent)", String(quoteConv.wonNetCents)],
+               ...quoteConv.lossReasons.map((r) => [`Verlustgrund: ${r.reason}`, String(r.count)] as [string, string])])}
+          />
+          <Group gap="lg">
+            <Text size="sm">Win-Rate: <b>{quoteConv.winRatePercent} %</b></Text>
+            <Text size="sm">Gewonnen: <b>{quoteConv.won}</b></Text>
+            <Text size="sm">Verloren: <b>{quoteConv.lost}</b></Text>
+            <Text size="sm">Offen: <b>{quoteConv.open}</b></Text>
+            <Text size="sm">Gewonnener Wert: <b>{euro(quoteConv.wonNetCents)}</b> / {euro(quoteConv.quotedNetCents)}</Text>
+          </Group>
+          {quoteConv.lossReasons.length > 0 && (
+            <>
+              <Text size="sm" fw={600} mt="sm" mb={4}>Verlustgründe</Text>
+              <Table striped withTableBorder verticalSpacing="xs" w="auto">
+                <Table.Thead><Table.Tr><Table.Th>Grund</Table.Th><Table.Th ta="right">Anzahl</Table.Th></Table.Tr></Table.Thead>
+                <Table.Tbody>
+                  {quoteConv.lossReasons.map((r) => (
+                    <Table.Tr key={r.reason}><Table.Td>{r.reason}</Table.Td><Table.Td style={numTd}>{r.count}</Table.Td></Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </>
           )}
         </Card>
       )}

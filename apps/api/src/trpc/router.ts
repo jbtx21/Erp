@@ -670,6 +670,11 @@ export const appRouter = router({
       .input(z.object({ ...rangeShape }).optional())
       .query(async ({ input, ctx }) => ctx.reporting.revenueByArticle(toRange(input ?? {}))),
 
+    /** Angebots-Erfolgsquote / Conversion (Kap. 35.1): gewonnen/verloren/offen + Verlustgründe. */
+    quoteConversion: roleProcedure(...supplierRoles)
+      .input(z.object({ ...rangeShape }).optional())
+      .query(async ({ input, ctx }) => ctx.reporting.quoteConversion(toRange(input ?? {}))),
+
     /** Periodenvergleich Umsatz: aktuell vs. Vorperiode (Kap. 29). */
     compareRevenue: roleProcedure(...supplierRoles)
       .input(z.object({ granularity: granularityEnum, reference: z.string().datetime().optional() }))

@@ -10,12 +10,15 @@ import {
   bucketRevenue,
   comparePeriods,
   filterByRange,
+  summarizeQuoteConversion,
   totalRevenueCents,
   type DateRange,
   type Granularity,
   type LabeledRevenuePoint,
   type OrderPoint,
   type PeriodComparison,
+  type QuoteConversion,
+  type QuotePoint,
   type RevenueBreakdownItem,
   type RevenueBucket,
   type RevenuePoint,
@@ -36,6 +39,8 @@ export interface ReportingRepository {
   revenueByPriceGroupPoints(): Promise<LabeledRevenuePoint[]>;
   /** Auftragswert je Position mit Artikel-/Veredelungs-Dimension (OrderLine.description). */
   revenueByArticlePoints(): Promise<LabeledRevenuePoint[]>;
+  /** Ein Datenpunkt je Angebot: Datum, Status, Verlustgrund, Angebotswert (Conversion). */
+  quotePoints(): Promise<QuotePoint[]>;
 }
 
 /**
@@ -118,6 +123,11 @@ export class ReportingService {
    */
   async revenueByArticle(range?: DateRange): Promise<RevenueBreakdownItem[]> {
     return breakdownRevenue(filterByRange(await this.repo.revenueByArticlePoints(), range));
+  }
+
+  /** Angebots-Erfolgsquote / Conversion (Kap. 35.1): gewonnen/verloren/offen + Verlustgründe. */
+  async quoteConversion(range?: DateRange): Promise<QuoteConversion> {
+    return summarizeQuoteConversion(await this.repo.quotePoints(), range);
   }
 
   /** Umsatz: aktuelle vs. vorhergehende Periode (Tag/Woche/Monat/Jahr). */

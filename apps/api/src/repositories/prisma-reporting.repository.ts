@@ -3,7 +3,7 @@
 // (Auftragsdatum + Summe der Positionen). Read-only — keine Mutationen.
 
 import { prisma } from "@texma/db";
-import type { LabeledRevenuePoint, OrderPoint, RevenuePoint } from "@texma/shared";
+import type { LabeledRevenuePoint, OrderPoint, QuotePoint, RevenuePoint } from "@texma/shared";
 import type { ReportingRepository } from "../modules/reporting/reporting.service.js";
 
 export class PrismaReportingRepository implements ReportingRepository {
@@ -62,6 +62,18 @@ export class PrismaReportingRepository implements ReportingRepository {
       label: l.description,
       name: l.description,
       netCents: l.qty * l.unitNetCents,
+    }));
+  }
+
+  async quotePoints(): Promise<QuotePoint[]> {
+    const quotes = await prisma.quote.findMany({
+      select: { createdAt: true, status: true, verlustgrund: true, lines: { select: { qty: true, unitNetCents: true } } },
+    });
+    return quotes.map((q) => ({
+      at: q.createdAt,
+      status: q.status,
+      verlustgrund: q.verlustgrund,
+      netCents: q.lines.reduce((sum, l) => sum + l.qty * l.unitNetCents, 0),
     }));
   }
 }
