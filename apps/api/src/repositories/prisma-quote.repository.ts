@@ -14,11 +14,11 @@ export class PrismaQuoteRepository implements QuoteRepository {
   async list(): Promise<QuoteRow[]> {
     const rows = await prisma.quote.findMany({
       orderBy: { createdAt: "desc" },
-      select: { id: true, number: true, companyId: true, status: true, gueltigBisAm: true, lines: { select: { qty: true, unitNetCents: true } } },
+      select: { id: true, number: true, companyId: true, status: true, orderType: true, quotationTo: true, gueltigBisAm: true, createdAt: true, company: { select: { name: true } }, lines: { select: { qty: true, unitNetCents: true } } },
     });
     return rows.map((q) => ({
-      id: q.id, number: q.number, companyId: q.companyId, status: q.status as QuoteStatus,
-      gueltigBisAm: q.gueltigBisAm,
+      id: q.id, number: q.number, companyId: q.companyId, companyName: q.company.name, status: q.status as QuoteStatus,
+      orderType: q.orderType, quotationTo: q.quotationTo, gueltigBisAm: q.gueltigBisAm, createdAt: q.createdAt,
       totalNetCents: q.lines.reduce((s, l) => s + l.qty * l.unitNetCents, 0),
     }));
   }
@@ -29,6 +29,9 @@ export class PrismaQuoteRepository implements QuoteRepository {
         number: input.number,
         companyId: input.companyId,
         gueltigBisAm: input.gueltigBisAm ?? null,
+        orderType: input.orderType ?? "SALES",
+        quotationTo: input.quotationTo ?? "CUSTOMER",
+        terms: input.terms ?? null,
         lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, kind: (l.kind ?? "TEXTIL") as never })) },
       },
       select: { id: true },

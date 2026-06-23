@@ -525,6 +525,9 @@ model Quote {
   companyId String
   company   Company     @relation(fields: [companyId], references: [id])
   status    QuoteStatus @default(ENTWURF)
+  orderType String      @default("SALES") // Bestellart: SALES | MAINTENANCE | SHOPPING_CART
+  quotationTo String    @default("CUSTOMER") // Angebot für: CUSTOMER | LEAD
+  terms     String? // Geschäftsbedingungen (AGB-Text)
   workflowStage QuoteWorkflowStage @default(ANGEBOT_ANGELEGT) // Feinstatus (Workflow)
   wiedervorlageAm DateTime? // Nachfass-Termin (Kap. 35.1)
   gueltigBisAm DateTime? // Angebotsverfall (B8, Kap. 35.1)

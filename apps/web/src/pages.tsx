@@ -872,16 +872,26 @@ export const toApiLines = (lines: EditorLine[]): { description: string; qty: num
   lines.filter((l) => l.description.trim()).map((l) => ({ description: l.description.trim(), qty: l.qty, unitNetCents: Math.round(l.euro * 100), kind: l.kind }));
 
 export function QuotesPage(): JSX.Element {
-  const [rows, setRows] = useState<Row[]>([]);
-  const [companyId, setCompanyId] = useState("co-muster");
-  const [lines, setLines] = useState<EditorLine[]>([{ description: "", qty: 10, euro: 12.9, kind: "TEXTIL" }]);
-  // Gültig bis (Valid Till): 30 Tage in die Zukunft vorbelegt (ERPNext-Default).
-  const [gueltigBis, setGueltigBis] = useState<string>(() => new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10));
+  type QuoteListRow = Awaited<ReturnType<typeof trpc.quotes.list.query>>[number];
+  const [rows, setRows] = useState<QuoteListRow[]>([]);
+  const [view, setView] = useState<"list" | "create">("list");
   const [err, setErr] = useState<string | null>(null);
+  // Anlage-Formular
+  const [companyId, setCompanyId] = useState("");
+  const [lines, setLines] = useState<EditorLine[]>([{ description: "", qty: 10, euro: 12.9, kind: "TEXTIL" }]);
+  const datum = new Date().toISOString().slice(0, 10);
+  const [gueltigBis, setGueltigBis] = useState<string>(() => new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10));
+  const [orderType, setOrderType] = useState("SALES");
+  const [quotationTo, setQuotationTo] = useState("CUSTOMER");
+  const [terms, setTerms] = useState("");
+  const [exempt, setExempt] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Quick-Filter + Sortierung (clientseitig)
+  const [fId, setFId] = useState(""); const [fAngebotFuer, setFAngebotFuer] = useState(""); const [fKunde, setFKunde] = useState(""); const [fArt, setFArt] = useState(""); const [fStatus, setFStatus] = useState("");
+  const [sortBy, setSortBy] = useState("createdAt"); const [sortDesc, setSortDesc] = useState(true);
 
   const load = useCallback(async () => {
-    try { setRows((await trpc.quotes.list.query()) as Row[]); setErr(null); }
+    try { setRows(await trpc.quotes.list.query()); setErr(null); }
     catch (e) { setErr(errMsg(e)); }
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -890,7 +900,6 @@ export function QuotesPage(): JSX.Element {
     setErr(null);
     try { await fn(); await load(); } catch (e) { setErr(errMsg(e)); }
   };
-
   const printPdf = async (quoteId: string): Promise<void> => {
     setErr(null);
     try { const r = await trpc.print.quote.query({ quoteId }); downloadBase64(r.filename, r.base64, "application/pdf"); }
@@ -904,16 +913,15 @@ export function QuotesPage(): JSX.Element {
     catch (e) { setErr(errMsg(e)); }
   };
 
-  const actionsFor = (r: Row): ReactNode => {
-    const id = String(r.id); const status = String(r.status);
+  const rowActions = (r: QuoteListRow): JSX.Element => {
+    const id = r.id; const status = r.status;
     return (
-      <Group gap={4} justify="flex-end" wrap="nowrap">
+      <Group gap={4} justify="flex-end" wrap="nowrap" onClick={(e) => e.stopPropagation()}>
         <Button size="compact-xs" variant="subtle" onClick={() => void printPdf(id)}>PDF</Button>
         <Button size="compact-xs" variant="subtle" onClick={() => void mailPdf(id)}>Mail</Button>
         {status === "ENTWURF" && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.quotes.transition.mutate({ id, to: "VERSENDET" }))}>→ Versendet</Button>}
         {(status === "VERSENDET" || status === "NACHFASSEN") && <Button size="compact-xs" color="green" onClick={() => void act(() => trpc.quotes.transition.mutate({ id, to: "ANGENOMMEN" }))}>Angenommen</Button>}
-        {status === "ANGENOMMEN" && <Button size="compact-xs" color="blue" onClick={() => void act(async () => { const r = await trpc.sales.convertQuote.mutate({ quoteId: id }); window.alert(`Auftrag ${r.number} angelegt.`); })}>→ Auftrag</Button>}
-        {status === "ANGENOMMEN" && <Button size="compact-xs" variant="light" color="grape" onClick={() => void act(async () => { await trpc.sampleLoans.convertQuote.mutate({ quoteId: id }); window.alert("Muster/Anprobe-Leihe aus Angebot angelegt."); })}>→ Leihgut</Button>}
+        {status === "ANGENOMMEN" && <Button size="compact-xs" color="blue" onClick={() => void act(async () => { const o = await trpc.sales.convertQuote.mutate({ quoteId: id }); window.alert(`Auftrag ${o.number} angelegt.`); })}>→ Auftrag</Button>}
         {status !== "ANGENOMMEN" && status !== "ABGELEHNT" && (
           <Button size="compact-xs" color="red" variant="light" onClick={() => {
             const grund = typeof window !== "undefined" ? window.prompt("Ablehnen — Verlustgrund?") : null;
@@ -924,25 +932,187 @@ export function QuotesPage(): JSX.Element {
     );
   };
 
+  const saveQuote = async (): Promise<void> => {
+    setBusy(true); setErr(null);
+    try {
+      await trpc.quotes.create.mutate({
+        companyId, lines: toApiLines(lines),
+        gueltigBisAm: gueltigBis ? `${gueltigBis}T00:00:00.000Z` : undefined,
+        orderType: orderType as "SALES" | "MAINTENANCE" | "SHOPPING_CART",
+        quotationTo: quotationTo as "CUSTOMER" | "LEAD",
+        terms: terms.trim() || undefined,
+      });
+      setLines([{ description: "", qty: 10, euro: 12.9, kind: "TEXTIL" }]); setCompanyId(""); setTerms("");
+      setView("list"); await load();
+    } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+
+  // ── Anlage-Formular (4 Tabs, ERPNext-Stil) ────────────────────────────────
+  if (view === "create") {
+    return (
+      <>
+        <Group justify="space-between" align="center">
+          <Text size="sm" c="dimmed">Vertrieb / Angebot / <b>Neu Angebot</b> <Badge color="orange" variant="light" ml={6}>Nicht gespeichert</Badge></Text>
+          <Group gap="xs">
+            <Button variant="default" onClick={() => setView("list")}>Abbrechen</Button>
+            <Button color="dark" loading={busy} disabled={!companyId.trim() || toApiLines(lines).length === 0} onClick={() => void saveQuote()}>Speichern</Button>
+          </Group>
+        </Group>
+        {err && <Alert color="red" mt="sm">{err}</Alert>}
+        <Tabs defaultValue="details" mt="md" keepMounted={false}>
+          <Tabs.List>
+            <Tabs.Tab value="details">Details</Tabs.Tab>
+            <Tabs.Tab value="adresse">Adresse &amp; Kontakt</Tabs.Tab>
+            <Tabs.Tab value="terms">Geschäftsbedingungen</Tabs.Tab>
+            <Tabs.Tab value="more">Weitere Informationen</Tabs.Tab>
+          </Tabs.List>
+
+          <Tabs.Panel value="details" pt="md">
+            <Group gap="md" align="end" wrap="wrap">
+              <TextInput label="Nummernkreis" value="AN-.JJJJ.-" readOnly w={160} />
+              <TextInput label="Datum" type="date" value={datum} readOnly w={150} />
+              <Select label="Bestellart" w={170} data={[{ value: "SALES", label: "Vertrieb" }, { value: "MAINTENANCE", label: "Wartung" }, { value: "SHOPPING_CART", label: "Warenkorb" }]} value={orderType} onChange={(v) => v && setOrderType(v)} />
+              <Select label="Angebot für" w={140} data={[{ value: "CUSTOMER", label: "Kunde" }, { value: "LEAD", label: "Lead" }]} value={quotationTo} onChange={(v) => v && setQuotationTo(v)} />
+              <TextInput label="Gültig bis" type="date" value={gueltigBis} onChange={(e) => setGueltigBis(e.currentTarget.value)} w={150} />
+              <CompanyPicker value={companyId} onChange={setCompanyId} w={240} />
+            </Group>
+            <Collapsible title="Währung und Preisliste">
+              <Text size="sm" c="dimmed">Währung: <b>EUR</b> · Preisfindung über Preisgruppe des Kunden + Mengenstaffeln (B4).</Text>
+            </Collapsible>
+            <Title order={5} mt="lg">Artikel</Title>
+            <LinesEditor lines={lines} onChange={setLines} />
+            <Title order={5} mt="lg">Steuern und Gebühren</Title>
+            <Checkbox mt="xs" label="Kunde ist von der Umsatzsteuer befreit (innergemeinschaftlich / Reverse-Charge)" checked={exempt} onChange={(e) => setExempt(e.currentTarget.checked)} />
+            <Text size="xs" c="dimmed" mt={4}>USt-Satz: {exempt ? "0 % (steuerfrei)" : "19 % Standard"} — Steuer- und Summenfelder werden automatisch berechnet (read-only).</Text>
+          </Tabs.Panel>
+
+          <Tabs.Panel value="adresse" pt="md">
+            {companyId ? <CompanyStammdatenReadonly companyId={companyId} /> : <Text size="sm" c="dimmed">Bitte zuerst im Tab „Details" einen Kunden wählen — Rechnungs-/Lieferadresse stammen aus dem Kundenstamm (Paket 1).</Text>}
+          </Tabs.Panel>
+
+          <Tabs.Panel value="terms" pt="md">
+            <Title order={5}>Zahlungsbedingungen</Title>
+            <Text size="sm" c="dimmed" mt={4}>Standard: Zahlungsziel des Kunden (Kundenstamm). Ratenpläne folgen als nächste Slice.</Text>
+            <Title order={5} mt="lg">Allgemeine Geschäftsbedingungen</Title>
+            <Textarea label="Details der Geschäftsbedingungen" autosize minRows={4} maxRows={12} mt="xs" value={terms} onChange={(e) => setTerms(e.currentTarget.value)} placeholder="AGB-/Bedingungstext für dieses Angebot…" />
+          </Tabs.Panel>
+
+          <Tabs.Panel value="more" pt="md">
+            <Collapsible title="Druckeinstellungen"><Text size="sm" c="dimmed">Briefkopf/Druckvorlage stammen aus den Einstellungen (Admin).</Text></Collapsible>
+            <Collapsible title="Gründe für Verlust"><Text size="sm" c="dimmed">Verlustgrund wird beim Ablehnen erfasst (Lost Reason).</Text></Collapsible>
+            <Collapsible title="Zusätzliche Information"><Text size="sm" c="dimmed">Kampagne/Quelle/Auto-Wiederholung — folgt.</Text></Collapsible>
+          </Tabs.Panel>
+        </Tabs>
+      </>
+    );
+  }
+
+  // ── Listenansicht (ERPNext-Stil) ──────────────────────────────────────────
+  const visible = rows
+    .filter((r) => (fId ? r.number.toLowerCase().includes(fId.toLowerCase()) : true))
+    .filter((r) => (fAngebotFuer ? QUOTATION_TO_LABEL[r.quotationTo]?.toLowerCase().includes(fAngebotFuer.toLowerCase()) : true))
+    .filter((r) => (fKunde ? r.companyName.toLowerCase().includes(fKunde.toLowerCase()) : true))
+    .filter((r) => (fArt ? r.orderType === fArt : true))
+    .filter((r) => (fStatus ? r.status === fStatus : true))
+    .sort((a, b) => {
+      const dir = sortDesc ? -1 : 1;
+      if (sortBy === "companyName") return dir * a.companyName.localeCompare(b.companyName);
+      if (sortBy === "number") return dir * a.number.localeCompare(b.number);
+      if (sortBy === "totalNetCents") return dir * (a.totalNetCents - b.totalNetCents);
+      return dir * (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    });
+  const resetFilters = (): void => { setFId(""); setFAngebotFuer(""); setFKunde(""); setFArt(""); setFStatus(""); };
+
   return (
     <>
-      <Title order={3}>Angebote</Title>
-      <Text size="sm" c="dimmed" mt={4}>Mehrzeiliges Angebot anlegen → Versendet → Angenommen → „→ Auftrag" wandelt es in einen Auftrag um (B8, AN-Nummer aus F1).</Text>
-      <Group mt="sm" gap="xs" align="end">
-        <CompanyPicker value={companyId} onChange={setCompanyId} w={240} />
-        <TextInput label="Gültig bis" type="date" value={gueltigBis} onChange={(e) => setGueltigBis(e.currentTarget.value)} w={150} />
+      <Group justify="space-between" align="center">
+        <Text size="sm" c="dimmed">⌂ Vertrieb / <b>Angebot</b></Text>
+        <Group gap="xs">
+          <Select size="xs" w={190} data={[{ value: "createdAt", label: "Erstellt am" }, { value: "companyName", label: "Kundenname" }, { value: "number", label: "ID" }, { value: "totalNetCents", label: "Gesamtbetrag" }]} value={sortBy} onChange={(v) => v && setSortBy(v)} />
+          <Button size="xs" variant="default" onClick={() => setSortDesc((d) => !d)}>{sortDesc ? "↓" : "↑"}</Button>
+          <Button size="xs" variant="default" onClick={() => void load()}>Aktualisieren</Button>
+          <Button size="xs" color="dark" onClick={() => setView("create")}>+ Angebot hinzufügen</Button>
+        </Group>
       </Group>
-      <LinesEditor lines={lines} onChange={setLines} />
-      <Button mt="sm" loading={busy} disabled={!companyId.trim() || toApiLines(lines).length === 0} onClick={async () => {
-        setBusy(true); setErr(null);
-        try {
-          await trpc.quotes.create.mutate({ companyId, lines: toApiLines(lines), gueltigBisAm: gueltigBis ? `${gueltigBis}T00:00:00.000Z` : undefined });
-          setLines([{ description: "", qty: 10, euro: 12.9, kind: "TEXTIL" }]); await load();
-        } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
-      }}>Angebot anlegen</Button>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
-      <AutoTable rows={rows} action={actionsFor} />
+
+      {/* Quick-Filter-Leiste */}
+      <Group gap="xs" mt="md" wrap="wrap" align="end">
+        <TextInput size="xs" label="ID" placeholder="≈ enthält" w={140} value={fId} onChange={(e) => setFId(e.currentTarget.value)} />
+        <TextInput size="xs" label="Angebot für" placeholder="Kunde/Lead" w={130} value={fAngebotFuer} onChange={(e) => setFAngebotFuer(e.currentTarget.value)} />
+        <TextInput size="xs" label="Kundenname" placeholder="≈ enthält" w={170} value={fKunde} onChange={(e) => setFKunde(e.currentTarget.value)} />
+        <Select size="xs" label="Bestellart" placeholder="alle" clearable w={140} data={[{ value: "SALES", label: "Vertrieb" }, { value: "MAINTENANCE", label: "Wartung" }, { value: "SHOPPING_CART", label: "Warenkorb" }]} value={fArt || null} onChange={(v) => setFArt(v ?? "")} />
+        <Select size="xs" label="Status" placeholder="alle" clearable w={150} data={Object.keys(QUOTE_STATUS_LABEL).map((k) => ({ value: k, label: QUOTE_STATUS_LABEL[k]! }))} value={fStatus || null} onChange={(v) => setFStatus(v ?? "")} />
+        {(fId || fAngebotFuer || fKunde || fArt || fStatus) && <Button size="compact-xs" variant="subtle" color="gray" onClick={resetFilters}>× Filter zurücksetzen</Button>}
+      </Group>
+
+      {rows.length === 0 ? (
+        <Box ta="center" py={60}>
+          <Text fz={48} c="gray.4">🗎</Text>
+          <Text c="dimmed" mt="sm">Sie haben noch kein Angebot erstellt</Text>
+          <Button mt="md" variant="default" onClick={() => setView("create")}>Erstellen Sie Ihr erstes Angebot</Button>
+        </Box>
+      ) : (
+        <Table mt="md" striped highlightOnHover withTableBorder verticalSpacing="xs" fz="sm">
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>ID</Table.Th><Table.Th>Angebot für</Table.Th><Table.Th>Kundenname</Table.Th>
+              <Table.Th>Datum</Table.Th><Table.Th>Bestellart</Table.Th><Table.Th>Status</Table.Th>
+              <Table.Th ta="right">Gesamtbetrag</Table.Th><Table.Th></Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {visible.map((r) => (
+              <Table.Tr key={r.id}>
+                <Table.Td><Text size="sm" fw={600} c="blue">{r.number}</Text></Table.Td>
+                <Table.Td>{QUOTATION_TO_LABEL[r.quotationTo] ?? r.quotationTo}</Table.Td>
+                <Table.Td>{r.companyName}</Table.Td>
+                <Table.Td>{new Date(r.createdAt).toLocaleDateString("de-DE")}</Table.Td>
+                <Table.Td>{ORDER_TYPE_LABEL[r.orderType] ?? r.orderType}</Table.Td>
+                <Table.Td><Badge size="sm" variant="light" color={QUOTE_STATUS_COLOR[r.status] ?? "gray"}>{QUOTE_STATUS_LABEL[r.status] ?? r.status}</Badge></Table.Td>
+                <Table.Td ta="right">{euro(r.totalNetCents)}</Table.Td>
+                <Table.Td>{rowActions(r)}</Table.Td>
+              </Table.Tr>
+            ))}
+            {visible.length === 0 && <Table.Tr><Table.Td colSpan={8}><Text size="sm" c="dimmed">Kein Angebot passt zum Filter.</Text></Table.Td></Table.Tr>}
+          </Table.Tbody>
+        </Table>
+      )}
+      <Text size="xs" c="dimmed" mt="xs">{visible.length} von {rows.length} Angebot(en)</Text>
     </>
+  );
+}
+
+const ORDER_TYPE_LABEL: Record<string, string> = { SALES: "Vertrieb", MAINTENANCE: "Wartung", SHOPPING_CART: "Warenkorb" };
+const QUOTATION_TO_LABEL: Record<string, string> = { CUSTOMER: "Kunde", LEAD: "Lead" };
+const QUOTE_STATUS_COLOR: Record<string, string> = { ENTWURF: "gray", VERSENDET: "blue", NACHFASSEN: "yellow", ANGENOMMEN: "green", ABGELEHNT: "red" };
+const QUOTE_STATUS_LABEL: Record<string, string> = { ENTWURF: "Entwurf", VERSENDET: "Offen", NACHFASSEN: "Nachfassen", ANGENOMMEN: "Beauftragt", ABGELEHNT: "Verloren" };
+
+// Aufklappbarer Abschnitt (ERPNext-Sektionen).
+function Collapsible({ title, children }: { title: string; children: ReactNode }): JSX.Element {
+  const [open, setOpen] = useState(false);
+  return (
+    <Box mt="sm" style={{ borderTop: "1px solid var(--mantine-color-gray-2)" }}>
+      <Button variant="subtle" color="gray" size="compact-sm" onClick={() => setOpen((o) => !o)} mt={4}>{open ? "▾" : "▸"} {title}</Button>
+      {open && <Box p="xs">{children}</Box>}
+    </Box>
+  );
+}
+
+// Rechnungs-/Lieferadresse des gewählten Kunden (read-only, aus dem Kundenstamm).
+function CompanyStammdatenReadonly({ companyId }: { companyId: string }): JSX.Element {
+  const [ov, setOv] = useState<Awaited<ReturnType<typeof trpc.companies.overview.query>> | null>(null);
+  useEffect(() => { void trpc.companies.overview.query({ companyId }).then(setOv).catch(() => undefined); }, [companyId]);
+  if (!ov) return <Text size="sm" c="dimmed">lädt…</Text>;
+  const c = ov.company;
+  const addr = [c.street, [c.zip, c.city].filter(Boolean).join(" "), c.country].filter(Boolean).join(", ");
+  return (
+    <Box>
+      <Text size="xs" fw={700} tt="uppercase" c="dimmed">Rechnungsadresse</Text>
+      <Text size="sm">{c.name}</Text>
+      <Text size="sm">{addr || "— keine Rechnungsadresse hinterlegt (im Kundenstamm ergänzen)"}</Text>
+      {c.vatId ? <Text size="sm">USt-IdNr.: {c.vatId}</Text> : null}
+    </Box>
   );
 }
 

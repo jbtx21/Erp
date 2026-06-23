@@ -15,14 +15,21 @@ export interface QuoteRow {
   id: string;
   number: string;
   companyId: string;
+  companyName: string;
   status: QuoteStatus;
+  orderType: string;
+  quotationTo: string;
   gueltigBisAm: Date | null;
+  createdAt: Date;
   totalNetCents: number;
 }
 
 export interface CreateQuoteInput {
   companyId: string;
   gueltigBisAm?: Date | null;
+  orderType?: string;
+  quotationTo?: string;
+  terms?: string | null;
   lines: Array<{ description: string; qty: number; unitNetCents: number; kind?: import("@texma/shared").PositionKind }>;
 }
 

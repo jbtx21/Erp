@@ -8,7 +8,10 @@ interface Quote {
   number: string;
   companyId: string;
   status: QuoteStatus;
+  orderType: string;
+  quotationTo: string;
   gueltigBisAm: Date | null;
+  createdAt: Date;
   verlustgrund: string | null;
   totalNetCents: number;
   hasDueItem: boolean;
@@ -20,7 +23,8 @@ export class InMemoryQuoteRepository implements QuoteRepository {
 
   async list(): Promise<QuoteRow[]> {
     return [...this.quotes.values()].map((q) => ({
-      id: q.id, number: q.number, companyId: q.companyId, status: q.status, gueltigBisAm: q.gueltigBisAm, totalNetCents: q.totalNetCents,
+      id: q.id, number: q.number, companyId: q.companyId, companyName: q.companyId, status: q.status,
+      orderType: q.orderType, quotationTo: q.quotationTo, gueltigBisAm: q.gueltigBisAm, createdAt: q.createdAt, totalNetCents: q.totalNetCents,
     }));
   }
 
@@ -28,7 +32,8 @@ export class InMemoryQuoteRepository implements QuoteRepository {
     const id = `quote_${++this.seq}`;
     this.quotes.set(id, {
       id, number: input.number, companyId: input.companyId, status: "ENTWURF",
-      gueltigBisAm: input.gueltigBisAm ?? null, verlustgrund: null,
+      orderType: input.orderType ?? "SALES", quotationTo: input.quotationTo ?? "CUSTOMER",
+      gueltigBisAm: input.gueltigBisAm ?? null, createdAt: new Date(), verlustgrund: null,
       totalNetCents: input.lines.reduce((s, l) => s + l.qty * l.unitNetCents, 0), hasDueItem: false,
     });
     return { id };
@@ -40,7 +45,7 @@ export class InMemoryQuoteRepository implements QuoteRepository {
   }
 
   seed(id: string, status: QuoteStatus, gueltigBisAm: Date | null = null): void {
-    this.quotes.set(id, { id, number: id, companyId: "co", status, gueltigBisAm, verlustgrund: null, totalNetCents: 0, hasDueItem: false });
+    this.quotes.set(id, { id, number: id, companyId: "co", status, orderType: "SALES", quotationTo: "CUSTOMER", gueltigBisAm, createdAt: new Date(), verlustgrund: null, totalNetCents: 0, hasDueItem: false });
   }
 
   get(id: string): Quote | undefined {

@@ -925,6 +925,9 @@ export const appRouter = router({
       .input(z.object({
         companyId: z.string().min(1),
         gueltigBisAm: z.string().datetime().optional(),
+        orderType: z.enum(["SALES", "MAINTENANCE", "SHOPPING_CART"]).optional(),
+        quotationTo: z.enum(["CUSTOMER", "LEAD"]).optional(),
+        terms: z.string().optional(),
         lines: z.array(z.object({ description: z.string().min(1), qty: z.number().int().positive(), unitNetCents: z.number().int().nonnegative(), kind: z.enum(["TEXTIL", "VEREDELUNG", "SONSTIGE"]).optional() })).min(1),
       }))
       .mutation(async ({ input, ctx }) => {
