@@ -5,6 +5,7 @@ import type {
   OrderForProduction,
   ProductionRepository,
   ProductionStatus,
+  SubOrderInput,
 } from "../modules/production/production.service.js";
 
 export class InMemoryProductionRepository implements ProductionRepository {
@@ -18,11 +19,14 @@ export class InMemoryProductionRepository implements ProductionRepository {
     return this.orders.get(orderId) ?? null;
   }
 
-  async createProductionOrder(input: { number: string; orderId: string; dueDate: Date | null; finishingProfile: string | null; bomItems: BomItemInput[] }): Promise<{ id: string }> {
+  readonly lastSubOrders = new Map<string, SubOrderInput[]>();
+
+  async createProductionOrder(input: { number: string; orderId: string; dueDate: Date | null; finishingProfile: string | null; bomItems: BomItemInput[]; subOrders: SubOrderInput[] }): Promise<{ id: string }> {
     const id = `pa_${++this.seq}`;
     const o = this.orders.get(input.orderId);
     if (o) { o.existingProductionId = id; o.existingProductionNumber = input.number; }
     this.meta.set(input.orderId, { finishingProfile: input.finishingProfile as ProductionStatus["finishingProfile"], dueDate: input.dueDate });
+    this.lastSubOrders.set(id, input.subOrders);
     return { id };
   }
 

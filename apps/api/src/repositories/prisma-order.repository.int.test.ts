@@ -9,9 +9,9 @@ import { MemoryAuditSink } from "../audit/memory-audit-sink.js";
 import { PrismaOrderRepository } from "./prisma-order.repository.js";
 import { OrderImportService } from "../modules/shop-import/order-import.service.js";
 
-const PG = "pg_test_standard";
 const CO = "co_test_acme";
 const SC = "sc_test_acme";
+const PG = "pg_test_standard";
 
 const woo = (number: string, first: string) => ({
   id: Number(number.replace(/\D/g, "")),

@@ -12,6 +12,7 @@ import { ProductionError, ProductionService } from "../modules/production/produc
 
 const PG = "pg_prodtest";
 const CO = "co_prodtest";
+const SUP = "sup_prodtest";
 const ART = "art_prodtest";
 const SET = "var_prodtest_set";
 const COMP = "var_prodtest_comp";
@@ -29,6 +30,7 @@ if (!dbConfigured) {
     const svc = new ProductionService(repo, new NumberingService(new PrismaNumberingRepository()), new MemoryAuditSink());
 
     async function cleanup() {
+      await prisma.subProductionOrder.deleteMany({ where: { production: { orderId: ORD } } });
       await prisma.bomItem.deleteMany({ where: { production: { orderId: ORD } } });
       await prisma.productionOrder.deleteMany({ where: { orderId: ORD } });
       await prisma.orderLine.deleteMany({ where: { orderId: ORD } });
@@ -37,14 +39,17 @@ if (!dbConfigured) {
       await prisma.variant.deleteMany({ where: { id: { in: [SET, COMP] } } });
       await prisma.article.deleteMany({ where: { id: ART } });
       await prisma.company.deleteMany({ where: { id: CO } });
+      await prisma.supplier.deleteMany({ where: { id: SUP } });
       await prisma.priceGroup.deleteMany({ where: { id: PG } });
     }
 
     beforeAll(async () => {
       await cleanup();
-      await prisma.priceGroup.create({ data: { id: PG, kind: "WIEDERVERKAEUFER", name: "Prodtest" } });
+      // Disjunkter Enum-Wert (PREMIUM) — kein anderer Integrationstest nutzt ihn (kind @unique).
+      await prisma.priceGroup.create({ data: { id: PG, kind: "PREMIUM", name: "Prodtest" } });
       await prisma.company.create({ data: { id: CO, name: "Prodtest GmbH", priceGroupId: PG } });
-      await prisma.article.create({ data: { id: ART, sku: "PRODSET", name: "Vereins-Set" } });
+      await prisma.supplier.create({ data: { id: SUP, name: "Veredler Prodtest" } });
+      await prisma.article.create({ data: { id: ART, sku: "PRODSET", name: "Vereins-Set", veredlerId: SUP } });
       await prisma.variant.create({ data: { id: COMP, articleId: ART, sku: "PROD-POLO" } });
       await prisma.variant.create({ data: { id: SET, articleId: ART, sku: "PROD-SET", isBundle: true, bundleComponents: { create: [
         { description: "Polo rot M", qty: 1, componentVariantId: COMP, position: 1 },
@@ -72,7 +77,11 @@ if (!dbConfigured) {
       const res = await svc.createFromOrder(ORD, { dueDate: confirmed, profile: "EXTERN_STICK_SIEBDRUCK" });
       expect(res.number).toMatch(/^PA-/);
       expect(res.bomItemCount).toBe(2);
+      expect(res.subOrderCount).toBe(1); // externer PA → Fremdvergabe an den Veredler des Artikels
       expect(res.dueDate?.getTime()).toBe(confirmed.getTime());
+
+      const subs = await prisma.subProductionOrder.findMany({ where: { production: { orderId: ORD } }, select: { supplierId: true, sequence: true } });
+      expect(subs).toEqual([{ supplierId: SUP, sequence: 1 }]);
 
       const st = await svc.status(ORD);
       expect(st.finishingProfile).toBe("EXTERN_STICK_SIEBDRUCK");

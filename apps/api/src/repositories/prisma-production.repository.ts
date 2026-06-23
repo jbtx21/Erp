@@ -8,6 +8,7 @@ import type {
   OrderForProduction,
   ProductionRepository,
   ProductionStatus,
+  SubOrderInput,
 } from "../modules/production/production.service.js";
 
 export class PrismaProductionRepository implements ProductionRepository {
@@ -28,7 +29,11 @@ export class PrismaProductionRepository implements ProductionRepository {
     const variants = variantIds.length
       ? await prisma.variant.findMany({
           where: { id: { in: variantIds } },
-          select: { id: true, isBundle: true, bundleComponents: { orderBy: { position: "asc" }, select: { description: true, qty: true, componentVariantId: true } } },
+          select: {
+            id: true, isBundle: true,
+            article: { select: { veredlerId: true } },
+            bundleComponents: { orderBy: { position: "asc" }, select: { description: true, qty: true, componentVariantId: true } },
+          },
         })
       : [];
     const byId = new Map(variants.map((v) => [v.id, v]));
@@ -43,12 +48,13 @@ export class PrismaProductionRepository implements ProductionRepository {
           description: l.description, qty: l.qty, variantId: l.variantId,
           isBundle: v?.isBundle ?? false,
           components: (v?.bundleComponents ?? []).map((c) => ({ description: c.description, qty: c.qty, componentVariantId: c.componentVariantId })),
+          veredlerId: v?.article.veredlerId ?? null,
         };
       }),
     };
   }
 
-  async createProductionOrder(input: { number: string; orderId: string; dueDate: Date | null; finishingProfile: string | null; bomItems: BomItemInput[] }): Promise<{ id: string }> {
+  async createProductionOrder(input: { number: string; orderId: string; dueDate: Date | null; finishingProfile: string | null; bomItems: BomItemInput[]; subOrders: SubOrderInput[] }): Promise<{ id: string }> {
     return prisma.productionOrder.create({
       data: {
         number: input.number,
@@ -56,6 +62,7 @@ export class PrismaProductionRepository implements ProductionRepository {
         dueDate: input.dueDate,
         finishingProfile: input.finishingProfile,
         bomItems: { create: input.bomItems.map((b) => ({ description: b.description, qty: b.qty, variantId: b.variantId ?? null })) },
+        subOrders: { create: input.subOrders.map((s) => ({ number: s.number, sequence: s.sequence, supplier: { connect: { id: s.supplierId } } })) },
       },
       select: { id: true },
     });

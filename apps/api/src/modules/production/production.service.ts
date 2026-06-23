@@ -22,6 +22,15 @@ export interface ProductionOrderLine {
   isBundle: boolean;
   /** Stückliste der Set-Variante (leer, wenn keine Set-Position). */
   components: VariantComponentDef[];
+  /** Zugewiesener Veredler des (Veredelungs-)Artikels — Quelle der Fremdvergabe (T-04). */
+  veredlerId: string | null;
+}
+
+/** Auto-Fremdvergabe-Stufe (T-04), beim externen PA aus den Veredlern der Positionen. */
+export interface SubOrderInput {
+  number: string;
+  sequence: number;
+  supplierId: string;
 }
 
 export interface OrderForProduction {
@@ -64,7 +73,7 @@ export interface ProductionStatus {
 
 export interface ProductionRepository {
   loadOrderForProduction(orderId: string): Promise<OrderForProduction | null>;
-  createProductionOrder(input: { number: string; orderId: string; dueDate: Date | null; finishingProfile: string | null; bomItems: BomItemInput[] }): Promise<{ id: string }>;
+  createProductionOrder(input: { number: string; orderId: string; dueDate: Date | null; finishingProfile: string | null; bomItems: BomItemInput[]; subOrders: SubOrderInput[] }): Promise<{ id: string }>;
   /** Setzt den Auftrag auf IN_PRODUKTION (nur aus frühen Status). */
   setOrderInProduction(orderId: string): Promise<void>;
   /** Gibt den Auftrag für die Produktion frei (Kap. 5.2/7.2). */
@@ -135,7 +144,14 @@ export class ProductionService {
    * ein PA existiert (1 Auftrag = 1 PA). Der Produktionstermin (`dueDate`) wird vom
    * Innendienst manuell bestätigt übergeben; ohne Angabe gilt der zugesagte Liefertermin.
    */
-  async createFromOrder(orderId: string, opts: { dueDate?: Date | null; profile?: FinishingLeadProfile } = {}): Promise<{ id: string; number: string; bomItemCount: number; dueDate: Date | null }> {
+  /** Auto-Fremdvergabe (T-04): bei externem PA je distinktem Veredler der Positionen eine Stufe. */
+  static buildSubOrders(paNumber: string, profile: FinishingLeadProfile | null, lines: ProductionOrderLine[]): SubOrderInput[] {
+    if (!profile || !FINISHING_LEAD_PROFILES[profile].external) return [];
+    const veredler = [...new Set(lines.map((l) => l.veredlerId).filter((x): x is string => !!x))];
+    return veredler.map((supplierId, i) => ({ number: `${paNumber}-${String.fromCharCode(97 + i)}`, sequence: i + 1, supplierId }));
+  }
+
+  async createFromOrder(orderId: string, opts: { dueDate?: Date | null; profile?: FinishingLeadProfile } = {}): Promise<{ id: string; number: string; bomItemCount: number; subOrderCount: number; dueDate: Date | null }> {
     const order = await this.repo.loadOrderForProduction(orderId);
     if (!order) throw new ProductionError("Auftrag nicht gefunden.");
     if (order.existingProductionId) throw new ProductionError(`Produktionsauftrag ${order.existingProductionNumber ?? ""} existiert bereits.`);
@@ -146,12 +162,13 @@ export class ProductionService {
     const dueDate = "dueDate" in opts ? opts.dueDate ?? null : order.deliveryDate;
     const finishingProfile = opts.profile ?? null;
     const number = await this.numbering.next("PRODUCTION_ORDER");
-    const { id } = await this.repo.createProductionOrder({ number, orderId, dueDate, finishingProfile, bomItems });
+    const subOrders = ProductionService.buildSubOrders(number, finishingProfile, order.lines);
+    const { id } = await this.repo.createProductionOrder({ number, orderId, dueDate, finishingProfile, bomItems, subOrders });
     await this.repo.setOrderInProduction(orderId);
     await this.audit.append(buildEntry({
       entity: "ProductionOrder", entityId: id, action: "CREATE",
-      after: { number, orderNumber: order.number, bomItems: bomItems.length, liefertermin: order.deliveryDate, produktionstermin: dueDate, veredelungsweg: finishingProfile },
+      after: { number, orderNumber: order.number, bomItems: bomItems.length, fremdvergaben: subOrders.length, liefertermin: order.deliveryDate, produktionstermin: dueDate, veredelungsweg: finishingProfile },
     }));
-    return { id, number, bomItemCount: bomItems.length, dueDate };
+    return { id, number, bomItemCount: bomItems.length, subOrderCount: subOrders.length, dueDate };
   }
 }

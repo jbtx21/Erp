@@ -6,13 +6,13 @@ import { InMemoryNumberingRepository } from "../../repositories/in-memory-number
 class MemAudit { entries: unknown[] = []; async append(e: unknown): Promise<void> { this.entries.push(e); } }
 
 class FakeRepo implements ProductionRepository {
-  created: { number: string; orderId: string; dueDate: Date | null; finishingProfile: string | null; bomItems: { description: string; qty: number; variantId: string | null }[] }[] = [];
+  created: { number: string; orderId: string; dueDate: Date | null; finishingProfile: string | null; bomItems: { description: string; qty: number; variantId: string | null }[]; subOrders: { number: string; sequence: number; supplierId: string }[] }[] = [];
   inProduction: string[] = [];
   released: string[] = [];
   constructor(private order: OrderForProduction | null) {}
   async loadOrderForProduction(): Promise<OrderForProduction | null> { return this.order; }
-  async createProductionOrder(input: { number: string; orderId: string; dueDate: Date | null; finishingProfile: string | null; bomItems: { description: string; qty: number; variantId: string | null }[] }): Promise<{ id: string }> {
-    this.created.push({ number: input.number, orderId: input.orderId, dueDate: input.dueDate, finishingProfile: input.finishingProfile, bomItems: input.bomItems });
+  async createProductionOrder(input: { number: string; orderId: string; dueDate: Date | null; finishingProfile: string | null; bomItems: { description: string; qty: number; variantId: string | null }[]; subOrders: { number: string; sequence: number; supplierId: string }[] }): Promise<{ id: string }> {
+    this.created.push({ number: input.number, orderId: input.orderId, dueDate: input.dueDate, finishingProfile: input.finishingProfile, bomItems: input.bomItems, subOrders: input.subOrders });
     if (this.order) this.order = { ...this.order, existingProductionId: "pa_1", existingProductionNumber: input.number };
     return { id: "pa_1" };
   }
@@ -31,7 +31,7 @@ function svcFor(order: OrderForProduction | null): { svc: ProductionService; rep
 
 const baseOrder = (over: Partial<OrderForProduction> = {}): OrderForProduction => ({
   id: "ord_1", number: "AB-2026-0001", freigegeben: true, deliveryDate: null, existingProductionId: null, existingProductionNumber: null,
-  lines: [{ description: "240 Polos", qty: 240, variantId: "v_polo", isBundle: false, components: [] }],
+  lines: [{ description: "240 Polos", qty: 240, variantId: "v_polo", isBundle: false, components: [], veredlerId: null }],
   ...over,
 });
 
@@ -49,7 +49,7 @@ describe("ProductionService — Auftrag → Produktionsauftrag (Kap. 5.2)", () =
   it("expandiert Set-Positionen über die Komponenten-Stückliste × Menge", async () => {
     const { svc, repo } = svcFor(baseOrder({
       lines: [{
-        description: "Vereins-Set", qty: 50, variantId: "v_set", isBundle: true,
+        description: "Vereins-Set", qty: 50, variantId: "v_set", isBundle: true, veredlerId: null,
         components: [
           { description: "Polo rot M", qty: 1, componentVariantId: "v_polo" },
           { description: "Stick Brust links", qty: 1, componentVariantId: null },
@@ -90,6 +90,29 @@ describe("ProductionService — Auftrag → Produktionsauftrag (Kap. 5.2)", () =
     const { svc } = svcFor(baseOrder({ deliveryDate: delivery }));
     const res = await svc.createFromOrder("ord_1");
     expect(res.dueDate?.toISOString()).toBe(delivery.toISOString());
+  });
+
+  it("legt bei externem PA je Veredler eine Fremdvergabe-Stufe an (T-04)", async () => {
+    const { svc, repo } = svcFor(baseOrder({
+      lines: [
+        { description: "240 Polos", qty: 240, variantId: "v_polo", isBundle: false, components: [], veredlerId: null },
+        { description: "Logo Stick", qty: 240, variantId: "v_logo", isBundle: false, components: [], veredlerId: "sup_stick" },
+      ],
+    }));
+    const res = await svc.createFromOrder("ord_1", { profile: "EXTERN_STICK_SIEBDRUCK" });
+    expect(res.subOrderCount).toBe(1);
+    const subs = repo.created[0]?.subOrders ?? [];
+    expect(subs[0]).toMatchObject({ sequence: 1, supplierId: "sup_stick" });
+    expect(subs[0]?.number).toMatch(/-a$/);
+  });
+
+  it("legt bei internem PA keine Fremdvergabe an", async () => {
+    const { svc, repo } = svcFor(baseOrder({
+      lines: [{ description: "Logo Stick", qty: 240, variantId: "v_logo", isBundle: false, components: [], veredlerId: "sup_stick" }],
+    }));
+    const res = await svc.createFromOrder("ord_1", { profile: "INHOUSE_OHNE_TRANSFER" });
+    expect(res.subOrderCount).toBe(0);
+    expect(repo.created[0]?.subOrders).toHaveLength(0);
   });
 
   it("verlangt Freigabe (kein Produktionsstart ohne Freigabe)", async () => {

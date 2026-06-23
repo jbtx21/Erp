@@ -38,8 +38,8 @@ if (!dbConfigured) {
 
     beforeAll(async () => {
       await cleanup();
-      // STANDARD-Preisgruppe ggf. anlegen (Staffel hängt darunter).
-      await prisma.priceGroup.upsert({ where: { id: PG }, update: {}, create: { id: PG, kind: "STANDARD", name: "Standard (vtest)" } }).catch(() => {});
+      // STANDARD-Preisgruppe (Staffel hängt darunter) — eigene Instanz, in afterAll gelöscht.
+      await prisma.priceGroup.create({ data: { id: PG, kind: "STANDARD", name: "Standard (vtest)" } });
       await prisma.supplier.create({ data: { id: SUP, name: "Stick-Partner Nord (vtest)" } });
     });
     afterAll(cleanup);

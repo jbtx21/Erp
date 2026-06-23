@@ -1693,7 +1693,8 @@ function ProductionCreateDialog({ orderId, onClose, onDone }: { orderId: string;
     try {
       const r = await trpc.production.createFromOrder.mutate({ orderId, dueDate: dueDate ? `${dueDate}T00:00:00.000Z` : null, profile });
       const term = r.dueDate ? ` · Produktionstermin ${new Date(r.dueDate).toLocaleDateString("de-DE")}` : "";
-      onDone(`Produktionsauftrag ${r.number} erzeugt (${r.bomItemCount} Stücklisten-Positionen)${term}.`);
+      const fv = r.subOrderCount > 0 ? ` · ${r.subOrderCount} Fremdvergabe(n) an die Veredler` : "";
+      onDone(`Produktionsauftrag ${r.number} erzeugt (${r.bomItemCount} Stücklisten-Positionen)${fv}${term}.`);
     } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
   };
 
