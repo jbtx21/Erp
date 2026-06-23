@@ -20,6 +20,23 @@ function addressLines(companyName: string, addr: { street: string; zip: string; 
   return addr ? [companyName, addr.street, `${addr.zip} ${addr.city}`] : [companyName];
 }
 
+/** Empfängerblock aus der Kunden-Rechnungsadresse (Pflicht auf Rechnung, § 14 UStG);
+ *  fällt auf eine ggf. übergebene Lieferadresse bzw. den Namen zurück. USt-IdNr. ergänzt. */
+function recipientLines(
+  company: { name: string; street: string | null; zip: string | null; city: string | null; country: string | null; vatId: string | null },
+  fallbackAddr: { street: string; zip: string; city: string } | null
+): string[] {
+  const lines = [company.name];
+  if (company.street && company.zip && company.city) {
+    lines.push(company.street, `${company.zip} ${company.city}`);
+    if (company.country && company.country !== "DE") lines.push(company.country);
+  } else if (fallbackAddr) {
+    lines.push(fallbackAddr.street, `${fallbackAddr.zip} ${fallbackAddr.city}`);
+  }
+  if (company.vatId) lines.push(`USt-IdNr.: ${company.vatId}`);
+  return lines;
+}
+
 export class PrismaPrintRepository implements PrintRepository {
   async briefkopf(): Promise<string[]> {
     const row = await prisma.appSetting.findUnique({ where: { key: "briefkopf" } });
@@ -64,14 +81,14 @@ export class PrismaPrintRepository implements PrintRepository {
       where: { id },
       select: {
         number: true, issuedAt: true, netCents: true, taxCents: true, grossCents: true,
-        company: { select: { name: true } },
+        company: { select: { name: true, street: true, zip: true, city: true, country: true, vatId: true } },
         order: { select: { deliveryAddress: { select: { street: true, zip: true, city: true } }, lines: { orderBy: { position: "asc" }, select: { qty: true, description: true, unitNetCents: true } } } },
       },
     });
     if (!i) return null;
     return {
       number: i.number, issuedAt: i.issuedAt,
-      empfaenger: addressLines(i.company.name, i.order?.deliveryAddress ?? null),
+      empfaenger: recipientLines(i.company, i.order?.deliveryAddress ?? null),
       positionen: (i.order?.lines ?? []).map((l) => ({ menge: l.qty, bezeichnung: l.description, einzelpreisCents: l.unitNetCents })),
       netCents: i.netCents, taxCents: i.taxCents, grossCents: i.grossCents,
     };
@@ -82,13 +99,13 @@ export class PrismaPrintRepository implements PrintRepository {
       where: { id },
       select: {
         number: true, createdAt: true, gueltigBisAm: true,
-        company: { select: { name: true } },
+        company: { select: { name: true, street: true, zip: true, city: true, country: true, vatId: true } },
         lines: { orderBy: { position: "asc" }, select: { qty: true, description: true, unitNetCents: true } },
       },
     });
     if (!q) return null;
     const positionen: PricePrintLine[] = q.lines.map((l) => ({ menge: l.qty, bezeichnung: l.description, einzelpreisCents: l.unitNetCents }));
-    return { number: q.number, datum: q.createdAt, empfaenger: [q.company.name], positionen, ...totals(positionen), gueltigBis: q.gueltigBisAm };
+    return { number: q.number, datum: q.createdAt, empfaenger: recipientLines(q.company, null), positionen, ...totals(positionen), gueltigBis: q.gueltigBisAm };
   }
 
   async orderConfirmationForPrint(orderId: string): Promise<OrderConfirmationPrintData | null> {
@@ -96,7 +113,7 @@ export class PrismaPrintRepository implements PrintRepository {
       where: { id: orderId },
       select: {
         number: true, createdAt: true, zugesagterLiefertermin: true, externalNumber: true,
-        company: { select: { name: true } },
+        company: { select: { name: true, street: true, zip: true, city: true, country: true, vatId: true } },
         deliveryAddress: { select: { street: true, zip: true, city: true } },
         lines: { orderBy: { position: "asc" }, select: { qty: true, description: true, unitNetCents: true } },
       },
@@ -104,7 +121,7 @@ export class PrismaPrintRepository implements PrintRepository {
     if (!o) return null;
     const positionen: PricePrintLine[] = o.lines.map((l) => ({ menge: l.qty, bezeichnung: l.description, einzelpreisCents: l.unitNetCents }));
     return {
-      number: o.number, datum: o.createdAt, empfaenger: addressLines(o.company.name, o.deliveryAddress),
+      number: o.number, datum: o.createdAt, empfaenger: recipientLines(o.company, o.deliveryAddress),
       positionen, ...totals(positionen), liefertermin: o.zugesagterLiefertermin, bestellreferenz: o.externalNumber,
     };
   }
