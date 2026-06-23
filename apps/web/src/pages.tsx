@@ -851,7 +851,21 @@ export function LinesEditor({ lines, onChange }: { lines: EditorLine[]; onChange
         </Group>
       ))}
       <Button size="compact-xs" variant="light" mt="xs" onClick={() => onChange([...lines, { description: "", qty: 1, euro: 0, kind: "VEREDELUNG" }])}>+ Position</Button>
+      <LineTotals lines={lines} />
     </Box>
+  );
+}
+
+// Auto-berechnete Summen (Netto/USt/Brutto) aus den Positionen — read-only (ERPNext-Muster).
+function LineTotals({ lines }: { lines: EditorLine[] }): JSX.Element {
+  const netCents = lines.filter((l) => l.description.trim()).reduce((s, l) => s + Math.round(l.qty * l.euro * 100), 0);
+  const taxCents = Math.round(netCents * 0.19);
+  return (
+    <Group gap="lg" mt="sm" justify="flex-end">
+      <Text size="sm" c="dimmed">Netto: <b>{euro(netCents)}</b></Text>
+      <Text size="sm" c="dimmed">USt 19 %: <b>{euro(taxCents)}</b></Text>
+      <Text size="sm">Brutto: <b>{euro(netCents + taxCents)}</b></Text>
+    </Group>
   );
 }
 export const toApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; kind: PositionKind }[] =>
@@ -861,6 +875,8 @@ export function QuotesPage(): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [companyId, setCompanyId] = useState("co-muster");
   const [lines, setLines] = useState<EditorLine[]>([{ description: "", qty: 10, euro: 12.9, kind: "TEXTIL" }]);
+  // Gültig bis (Valid Till): 30 Tage in die Zukunft vorbelegt (ERPNext-Default).
+  const [gueltigBis, setGueltigBis] = useState<string>(() => new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10));
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -914,12 +930,13 @@ export function QuotesPage(): JSX.Element {
       <Text size="sm" c="dimmed" mt={4}>Mehrzeiliges Angebot anlegen → Versendet → Angenommen → „→ Auftrag" wandelt es in einen Auftrag um (B8, AN-Nummer aus F1).</Text>
       <Group mt="sm" gap="xs" align="end">
         <CompanyPicker value={companyId} onChange={setCompanyId} w={240} />
+        <TextInput label="Gültig bis" type="date" value={gueltigBis} onChange={(e) => setGueltigBis(e.currentTarget.value)} w={150} />
       </Group>
       <LinesEditor lines={lines} onChange={setLines} />
       <Button mt="sm" loading={busy} disabled={!companyId.trim() || toApiLines(lines).length === 0} onClick={async () => {
         setBusy(true); setErr(null);
         try {
-          await trpc.quotes.create.mutate({ companyId, lines: toApiLines(lines) });
+          await trpc.quotes.create.mutate({ companyId, lines: toApiLines(lines), gueltigBisAm: gueltigBis ? `${gueltigBis}T00:00:00.000Z` : undefined });
           setLines([{ description: "", qty: 10, euro: 12.9, kind: "TEXTIL" }]); await load();
         } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
       }}>Angebot anlegen</Button>
