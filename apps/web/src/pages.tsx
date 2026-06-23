@@ -2057,3 +2057,70 @@ export function LagerPage(): JSX.Element {
     </>
   );
 }
+
+// Personalwesen (HR, nur GL/ADMIN): Mitarbeiter + Urlaubsanträge.
+export function HrPage(): JSX.Element {
+  const [emps, setEmps] = useState<Awaited<ReturnType<typeof trpc.hr.employees.query>>>([]);
+  const [vacs, setVacs] = useState<Awaited<ReturnType<typeof trpc.hr.vacations.query>>>([]);
+  const [name, setName] = useState(""); const [email, setEmail] = useState(""); const [position, setPosition] = useState(""); const [urlaub, setUrlaub] = useState(30);
+  const [vacEmp, setVacEmp] = useState<string | null>(null); const [von, setVon] = useState(""); const [bis, setBis] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try { setEmps(await trpc.hr.employees.query()); setVacs(await trpc.hr.vacations.query()); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+  const act = async (fn: () => Promise<unknown>): Promise<void> => { setErr(null); try { await fn(); await load(); } catch (e) { setErr(errMsg(e)); } };
+  const d = (x: unknown): string => new Date(String(x)).toLocaleDateString("de-DE");
+
+  return (
+    <>
+      <Title order={3}>Personalwesen</Title>
+      <Text size="sm" c="dimmed" mt={4}>Nur Geschäftsleitung. Mitarbeiter-Stammdaten, Urlaubsanträge (Werktage automatisch), Genehmigung → geteilter Kalendereintrag.</Text>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+
+      <Title order={4} mt="md">Mitarbeiter</Title>
+      <Group gap="xs" align="end" mt="xs" wrap="wrap">
+        <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} w={170} />
+        <TextInput label="E-Mail" value={email} onChange={(e) => setEmail(e.currentTarget.value)} w={200} />
+        <TextInput label="Position" value={position} onChange={(e) => setPosition(e.currentTarget.value)} w={150} />
+        <NumberInput label="Urlaubstage/Jahr" value={urlaub} onChange={(v) => setUrlaub(Number(v) || 30)} min={0} w={140} />
+        <Button disabled={!name.trim() || !email.includes("@")} onClick={() => void act(async () => { await trpc.hr.addEmployee.mutate({ name, email, position: position || undefined, urlaubstageJahr: urlaub }); setName(""); setEmail(""); setPosition(""); })}>Anlegen</Button>
+      </Group>
+      <Table mt="sm" withTableBorder withColumnBorders>
+        <Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>E-Mail</Table.Th><Table.Th>Position</Table.Th><Table.Th ta="right">Anspruch</Table.Th><Table.Th ta="right">Genommen</Table.Th><Table.Th ta="right">Rest</Table.Th></Table.Tr></Table.Thead>
+        <Table.Tbody>
+          {emps.map((e) => (
+            <Table.Tr key={e.id}><Table.Td>{e.name}</Table.Td><Table.Td>{e.email}</Table.Td><Table.Td>{e.position}</Table.Td>
+              <Table.Td ta="right">{e.urlaubstageJahr}</Table.Td><Table.Td ta="right">{e.genehmigteTage}</Table.Td><Table.Td ta="right"><b>{e.resturlaub}</b></Table.Td></Table.Tr>
+          ))}
+        </Table.Tbody>
+      </Table>
+
+      <Title order={4} mt="xl">Urlaubsantrag</Title>
+      <Group gap="xs" align="end" mt="xs" wrap="wrap">
+        <Select label="Mitarbeiter" value={vacEmp} onChange={setVacEmp} data={emps.map((e) => ({ value: e.id, label: e.name }))} w={180} />
+        <TextInput label="Von" type="date" value={von} onChange={(e) => setVon(e.currentTarget.value)} w={160} />
+        <TextInput label="Bis" type="date" value={bis} onChange={(e) => setBis(e.currentTarget.value)} w={160} />
+        <Button disabled={!vacEmp || !von || !bis} onClick={() => void act(async () => { const r = await trpc.hr.requestVacation.mutate({ employeeId: vacEmp!, vonDatum: new Date(von).toISOString(), bisDatum: new Date(bis).toISOString() }); window.alert(`${r.tage} Werktage beantragt.`); setVon(""); setBis(""); })}>Beantragen</Button>
+      </Group>
+      <Table mt="sm" withTableBorder withColumnBorders>
+        <Table.Thead><Table.Tr><Table.Th>Mitarbeiter</Table.Th><Table.Th>Von</Table.Th><Table.Th>Bis</Table.Th><Table.Th ta="right">Tage</Table.Th><Table.Th>Status</Table.Th><Table.Th>Aktion</Table.Th></Table.Tr></Table.Thead>
+        <Table.Tbody>
+          {vacs.map((v) => (
+            <Table.Tr key={v.id}><Table.Td>{v.employeeName}</Table.Td><Table.Td>{d(v.vonDatum)}</Table.Td><Table.Td>{d(v.bisDatum)}</Table.Td><Table.Td ta="right">{v.tage}</Table.Td>
+              <Table.Td><Badge color={v.status === "GENEHMIGT" ? "green" : v.status === "ABGELEHNT" ? "red" : "yellow"} variant="light">{v.status}</Badge></Table.Td>
+              <Table.Td>{v.status === "BEANTRAGT" ? (
+                <Group gap={4}>
+                  <Button size="compact-xs" color="green" onClick={() => void act(() => trpc.hr.decideVacation.mutate({ id: v.id, approve: true }))}>Genehmigen</Button>
+                  <Button size="compact-xs" color="red" variant="light" onClick={() => void act(() => trpc.hr.decideVacation.mutate({ id: v.id, approve: false }))}>Ablehnen</Button>
+                </Group>
+              ) : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
+            </Table.Tr>
+          ))}
+        </Table.Tbody>
+      </Table>
+    </>
+  );
+}

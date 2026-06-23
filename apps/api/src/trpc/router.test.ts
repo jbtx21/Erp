@@ -69,6 +69,8 @@ import { InMemorySettingsRepository } from "../repositories/in-memory-settings.r
 import { StockService } from "../modules/stock/stock.service.js";
 import { InMemoryStockRepository } from "../repositories/in-memory-stock.repository.js";
 import { InventoryService } from "../modules/inventory/inventory.service.js";
+import { HrService } from "../modules/hr/hr.service.js";
+import { InMemoryHrRepository } from "../repositories/in-memory-hr.repository.js";
 import { DeliveryService } from "../modules/delivery/delivery.service.js";
 import { InMemoryDeliveryRepository } from "../repositories/in-memory-delivery.repository.js";
 import { NumberingService } from "../modules/numbering/numbering.service.js";
@@ -302,6 +304,7 @@ function setup(user: AuthUser | null = BUERO) {
     settings: new SettingsService(new InMemorySettingsRepository(), new MemoryAuditSink()),
     stock: new StockService(new InMemoryStockRepository(), new MemoryAuditSink()),
     inventory: new InventoryService(new StockService(new InMemoryStockRepository(), new MemoryAuditSink())),
+    hr: new HrService(new InMemoryHrRepository(), new MemoryAuditSink()),
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -412,6 +415,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       settings: {} as Context["settings"],
       stock: {} as Context["stock"],
       inventory: {} as Context["inventory"],
+      hr: {} as Context["hr"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",

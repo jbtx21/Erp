@@ -23,11 +23,11 @@ describe("currentBalance", () => {
 
 describe("balanceByLager", () => {
   it("trennt HAUPT- und MUSTER-Bestand", () => {
-    expect(balanceByLager(moves)).toEqual({ HAUPT: 120, MUSTER: 3 });
+    expect(balanceByLager(moves)).toEqual({ HAUPT: 120, MUSTER: 3, SHOWROOM: 0, TRANSFERDRUCK: 0 });
   });
 
   it("ordnet Bewegungen ohne Lager dem HAUPT-Lager zu", () => {
-    expect(balanceByLager([{ deltaQty: 7 }])).toEqual({ HAUPT: 7, MUSTER: 0 });
+    expect(balanceByLager([{ deltaQty: 7 }])).toEqual({ HAUPT: 7, MUSTER: 0, SHOWROOM: 0, TRANSFERDRUCK: 0 });
   });
 });
 

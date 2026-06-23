@@ -47,6 +47,7 @@ import type { WorkflowService } from "../modules/workflow/workflow.service.js";
 import type { SettingsService } from "../modules/settings/settings.service.js";
 import type { StockService } from "../modules/stock/stock.service.js";
 import type { InventoryService } from "../modules/inventory/inventory.service.js";
+import type { HrService } from "../modules/hr/hr.service.js";
 import type {
   BankingQueryRepository,
   DunningQueryRepository,
@@ -108,6 +109,7 @@ export interface Context {
   settings: SettingsService;
   stock: StockService;
   inventory: InventoryService;
+  hr: HrService;
   auth: AuthService;
   user: AuthUser | null;
   /** Roh-Token aus dem Cookie (für den 2FA-Zwischenschritt/Logout, wenn user noch null ist). */

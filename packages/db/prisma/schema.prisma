@@ -1566,3 +1566,37 @@ model AppSetting {
   value     String
   updatedAt DateTime @updatedAt
 }
+
+// Personalwesen (HR, nur Geschäftsleitung): Mitarbeiter-Stammdaten + Urlaubsanträge.
+model Employee {
+  id              String            @id @default(cuid())
+  name            String
+  email           String            @unique
+  position        String?
+  eintrittAm      DateTime?
+  urlaubstageJahr Int               @default(30)
+  aktiv           Boolean           @default(true)
+  vacations       VacationRequest[]
+  createdAt       DateTime          @default(now())
+}
+
+model VacationRequest {
+  id         String         @id @default(cuid())
+  employeeId String
+  employee   Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  vonDatum   DateTime
+  bisDatum   DateTime
+  tage       Int
+  status     VacationStatus @default(BEANTRAGT)
+  grund      String?
+  createdAt  DateTime       @default(now())
+
+  @@index([employeeId])
+  @@index([status])
+}
+
+enum VacationStatus {
+  BEANTRAGT
+  GENEHMIGT
+  ABGELEHNT
+}

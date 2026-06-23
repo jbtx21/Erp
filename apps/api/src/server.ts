@@ -108,6 +108,8 @@ import { PrismaSettingsRepository } from "./repositories/prisma-settings.reposit
 import { StockService } from "./modules/stock/stock.service.js";
 import { PrismaStockRepository } from "./repositories/prisma-stock.repository.js";
 import { InventoryService } from "./modules/inventory/inventory.service.js";
+import { HrService } from "./modules/hr/hr.service.js";
+import { PrismaHrRepository } from "./repositories/prisma-hr.repository.js";
 import { appRouter } from "./trpc/router.js";
 import type { Context } from "./trpc/trpc.js";
 import { portalAppRouter } from "./trpc/portal-router.js";
@@ -214,6 +216,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const settings = new SettingsService(new PrismaSettingsRepository(), new PrismaAuditSink());
   const stock = new StockService(new PrismaStockRepository(), new PrismaAuditSink());
   const inventory = new InventoryService(stock);
+  const hr = new HrService(new PrismaHrRepository(), new PrismaAuditSink());
   const auth = new AuthService(
     new PrismaUserRepository(),
     new PrismaSessionRepository(),
@@ -327,6 +330,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           settings,
           stock,
           inventory,
+          hr,
           auth,
           user,
           sessionToken,

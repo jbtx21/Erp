@@ -909,6 +909,29 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => { try { await ctx.opportunities.markLost(input.id, input.reason); return { ok: true as const }; } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); } }),
   }),
 
+  // Personalwesen (HR): Mitarbeiter + Urlaubsanträge. Nur Geschäftsleitung (ADMIN).
+  hr: router({
+    employees: roleProcedure("ADMIN").query(({ ctx }) => ctx.hr.listEmployees()),
+    addEmployee: roleProcedure("ADMIN")
+      .input(z.object({ name: z.string().min(1), email: z.string().min(3), position: z.string().optional(), urlaubstageJahr: z.number().int().min(0).optional() }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.hr.addEmployee(input); } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    vacations: roleProcedure("ADMIN").query(({ ctx }) => ctx.hr.listVacations()),
+    requestVacation: roleProcedure("ADMIN")
+      .input(z.object({ employeeId: z.string().min(1), vonDatum: z.string().datetime(), bisDatum: z.string().datetime(), grund: z.string().optional() }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.hr.requestVacation({ employeeId: input.employeeId, vonDatum: new Date(input.vonDatum), bisDatum: new Date(input.bisDatum), grund: input.grund }); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    decideVacation: roleProcedure("ADMIN")
+      .input(z.object({ id: z.string().min(1), approve: z.boolean() }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.hr.decideVacation(input.id, input.approve); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+  }),
+
   // Schlanke Lagerhaltung + Inventur (F4-Ledger): Bestandsübersicht je Lager,
   // manuelle Bewegung (Zugang/Abgang), Inventur-Zählung (bucht Differenz).
   stock: router({
