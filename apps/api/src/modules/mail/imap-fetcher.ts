@@ -8,8 +8,12 @@ import type { MailFetcher } from "./mail.service.js";
 
 export class ImapMailFetcher implements MailFetcher {
   private readonly configured: boolean;
+  // IONOS-Default: imap.ionos.de:993 (SSL/TLS), Benutzername = volle E-Mail-Adresse.
+  private readonly host = process.env.IMAP_HOST ?? "imap.ionos.de";
+  private readonly port = Number(process.env.IMAP_PORT ?? 993);
   constructor() {
-    this.configured = Boolean(process.env.IMAP_HOST && process.env.IMAP_USER && process.env.IMAP_PASS);
+    // Aktiv erst mit Zugangsdaten (USER/PASS); Host hat den IONOS-Default.
+    this.configured = Boolean(process.env.IMAP_USER && process.env.IMAP_PASS);
   }
   async fetchUnseen(): Promise<IncomingMail[]> {
     if (!this.configured) return []; // kein Postfach konfiguriert → nichts zu tun

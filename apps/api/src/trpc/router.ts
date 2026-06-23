@@ -1084,6 +1084,13 @@ export const appRouter = router({
   // kein PRODUKTION-Zugriff (Kap. 12).
   mail: router({
     pollInbox: roleProcedure("ADMIN", "BUERO").mutation(({ ctx }) => ctx.mailIntake.pollInbox()),
+    // Test-Versand über den konfigurierten SMTP-Zugang (IONOS) — Verbindungsprüfung.
+    sendTest: roleProcedure("ADMIN")
+      .input(z.object({ to: z.string().min(3), subject: z.string().default("TEXMA ERP — Testmail"), body: z.string().default("SMTP-Anbindung erfolgreich.") }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.mailSend.send({ to: input.to, subject: input.subject, body: input.body }); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
   }),
 
   // Auftragserstellung (Vertrieb): manueller Auftrag + Angebot→Auftrag. Schreibt

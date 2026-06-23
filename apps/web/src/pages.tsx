@@ -1980,6 +1980,7 @@ export function AdminPage(): JSX.Element {
   const [maxDiscount, setMaxDiscount] = useState<number | "">("");
   const [maxOrderValue, setMaxOrderValue] = useState<number | "">("");
   const [markup, setMarkup] = useState<number>(1.88);
+  const [testTo, setTestTo] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -2023,6 +2024,21 @@ export function AdminPage(): JSX.Element {
           setMsg("Einstellungen gespeichert."); await load();
         } catch (e) { setErr(errMsg(e)); }
       }}>Speichern</Button>
+
+      <Title order={4} mt="xl">E-Mail-Versand (SMTP / IONOS)</Title>
+      <Text size="sm" c="dimmed" mt={4}>
+        Server-Umgebungsvariablen: <code>SMTP_USER</code> (volle E-Mail-Adresse), <code>SMTP_PASS</code>,
+        optional <code>SMTP_HOST</code> (Default smtp.ionos.de), <code>SMTP_PORT</code> (587 STARTTLS / 465 SSL), <code>SMTP_FROM</code>.
+        Ohne Zugangsdaten wird nur protokolliert.
+      </Text>
+      <Group gap="xs" align="end" mt="xs">
+        <TextInput label="Testmail an" value={testTo} onChange={(e) => setTestTo(e.currentTarget.value)} w={260} placeholder="empfaenger@example.de" />
+        <Button disabled={!testTo.includes("@")} onClick={async () => {
+          setErr(null); setMsg(null);
+          try { await trpc.mail.sendTest.mutate({ to: testTo }); setMsg(`Testmail an ${testTo} ausgelöst (bei konfiguriertem SMTP).`); }
+          catch (e) { setErr(errMsg(e)); }
+        }}>Testmail senden</Button>
+      </Group>
     </>
   );
 }

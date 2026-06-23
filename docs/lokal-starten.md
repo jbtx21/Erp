@@ -69,3 +69,27 @@ curl -s localhost:3000/trpc/dashboards.metrics
   Verifiziert: **301/301 grün**. Unter Datei-Parallelität auf einer gemeinsamen DB
   kollidieren einige Fixtures (global-`@unique` Werte, geteilte Zeilen) → bekannte
   Flakiness; perspektivisch je Testdatei ein eigenes Schema/DB oder Transaktions-Rollback.
+
+## E-Mail-Anbindung (IONOS)
+
+Versand (SMTP) und Eingang (IMAP) werden über Umgebungsvariablen scharf geschaltet.
+IONOS-Standard: `smtp.ionos.de` (587 STARTTLS / 465 SSL), `imap.ionos.de` (993 SSL),
+Benutzername = volle E-Mail-Adresse.
+
+```bash
+# Versand (SMTP) — ohne diese Werte wird nur protokolliert
+export SMTP_USER="info@deine-domain.de"
+export SMTP_PASS="<postfach-passwort>"
+export SMTP_PORT=587            # 587 STARTTLS (Default) oder 465 SSL
+# optional: SMTP_HOST (Default smtp.ionos.de), SMTP_FROM (Default = SMTP_USER), SMTP_SECURE
+
+# Eingang (IMAP) — Maileingang -> Anfrage
+export IMAP_USER="info@deine-domain.de"
+export IMAP_PASS="<postfach-passwort>"
+# optional: IMAP_HOST (Default imap.ionos.de), IMAP_PORT (Default 993)
+```
+
+Test: **Einstellungen → E-Mail-Versand → „Testmail senden"** (oder tRPC `mail.sendTest`).
+Der SMTP-Client ist abhängigkeitsfrei (node:tls), unterstützt STARTTLS (587) und
+implizites TLS (465) mit AUTH LOGIN. Der IMAP-Eingangs-Client (imapflow) ist als
+Worker-Adapter vorgesehen; die Verarbeitungslogik ist bereits aktiv + getestet.

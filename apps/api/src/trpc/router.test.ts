@@ -52,7 +52,7 @@ import { PrintService } from "../modules/print/print.service.js";
 import { InMemoryPrintRepository } from "../repositories/in-memory-print.repository.js";
 import { SalesOrderService } from "../modules/sales/sales-order.service.js";
 import { InMemorySalesOrderRepository } from "../repositories/in-memory-sales-order.repository.js";
-import { MailIntakeService } from "../modules/mail/mail.service.js";
+import { MailIntakeService, MailSendService, LoggingMailSender } from "../modules/mail/mail.service.js";
 import { InMemoryMailFetcher, InMemoryMailIntakeRepository } from "../repositories/in-memory-mail.repository.js";
 import { NewsletterService, StubNewsletterProvider } from "../modules/newsletter/newsletter.service.js";
 import { InMemoryNewsletterRepository } from "../repositories/in-memory-newsletter.repository.js";
@@ -298,6 +298,7 @@ function setup(user: AuthUser | null = BUERO) {
     print: new PrintService(new InMemoryPrintRepository()),
     salesOrders: new SalesOrderService(new InMemorySalesOrderRepository(["company_acme"]), new NumberingService(new InMemoryNumberingRepository()), new MemoryAuditSink()),
     mailIntake: new MailIntakeService(new InMemoryMailFetcher(), new InMemoryMailIntakeRepository(), new NumberingService(new InMemoryNumberingRepository()), new MemoryAuditSink()),
+    mailSend: new MailSendService(new LoggingMailSender()),
     newsletter: new NewsletterService(new InMemoryNewsletterRepository(), new StubNewsletterProvider(), new MemoryAuditSink()),
     opportunities: new OpportunityService(new InMemoryOpportunityRepository(), new MemoryAuditSink(), new StubCrmProvider()),
     calendar: new CalendarService(new InMemoryCalendarRepository(), new MemoryAuditSink()),
@@ -410,6 +411,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       print: {} as Context["print"],
       salesOrders: {} as Context["salesOrders"],
       mailIntake: {} as Context["mailIntake"],
+      mailSend: {} as Context["mailSend"],
       newsletter: {} as Context["newsletter"],
       opportunities: {} as Context["opportunities"],
       calendar: {} as Context["calendar"],
