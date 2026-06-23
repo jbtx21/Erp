@@ -1486,6 +1486,20 @@ function CompanyDetailPanel({ companyId, onNavigate }: { companyId: string; onNa
         </Group>
       </Group>
       <Text size="xs" c="dimmed" mt={2}>{ov.company.branche ?? "—"} · {ov.contactsCount} Kontakt(e)</Text>
+      <Group gap="md" mt="sm" wrap="wrap">
+        <Box style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 6, padding: "6px 12px" }}>
+          <Text size="xs" c="dimmed" fw={700} tt="uppercase">Umsatz gesamt</Text><Text fz={20} fw={700}>{euro(ov.metrics.revenueGrossCents)}</Text>
+        </Box>
+        <Box style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 6, padding: "6px 12px" }}>
+          <Text size="xs" c="dimmed" fw={700} tt="uppercase">Umsatz {new Date().getFullYear()}</Text><Text fz={20} fw={700}>{euro(ov.metrics.revenueYtdGrossCents)}</Text>
+        </Box>
+        <Box style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 6, padding: "6px 12px" }}>
+          <Text size="xs" c="dimmed" fw={700} tt="uppercase">Ø Rechnung</Text><Text fz={20} fw={700}>{euro(ov.metrics.avgInvoiceGrossCents)}</Text>
+        </Box>
+        <Box style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 6, padding: "6px 12px" }}>
+          <Text size="xs" c="dimmed" fw={700} tt="uppercase">Aufträge / Rechnungen</Text><Text fz={20} fw={700}>{ov.metrics.orderCount} / {ov.metrics.invoiceCount}</Text>
+        </Box>
+      </Group>
       <CompanyStammdaten company={ov.company} onSaved={reload} />
       <Group align="flex-start" gap="lg" mt="sm" wrap="wrap">
         {histGroup("Aufträge", "orders", ov.orders.map((o) => ({ id: o.id, label: o.number, sub: o.status })))}

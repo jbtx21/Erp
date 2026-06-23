@@ -76,6 +76,14 @@ export class PrismaCompanyRepository implements CompanyRepository {
       },
     });
     if (!c) return null;
+    const yearStart = new Date(new Date().getFullYear(), 0, 1);
+    const [revAll, revYtd, orderCount] = await Promise.all([
+      prisma.invoice.aggregate({ where: { companyId, finalized: true }, _sum: { grossCents: true, netCents: true }, _count: true }),
+      prisma.invoice.aggregate({ where: { companyId, finalized: true, issuedAt: { gte: yearStart } }, _sum: { grossCents: true } }),
+      prisma.order.count({ where: { companyId } }),
+    ]);
+    const revenueGrossCents = revAll._sum.grossCents ?? 0;
+    const invoiceCount = revAll._count;
     return {
       company: {
         id: c.id, name: c.name, branche: c.branche, zahlungszielTage: c.zahlungszielTage, mahnsperre: c.mahnsperre,
@@ -90,6 +98,14 @@ export class PrismaCompanyRepository implements CompanyRepository {
       invoices: c.invoices.map((i) => ({ id: i.id, number: i.number, grossCents: i.grossCents, issuedAt: i.issuedAt })),
       sampleLoans: c.sampleLoans.map((s) => ({ id: s.id, status: s.status, ausgegebenAm: s.ausgegebenAm })),
       openCents: c.invoices.reduce((sum, i) => sum + (i.openItem?.openCents ?? 0), 0),
+      metrics: {
+        revenueNetCents: revAll._sum.netCents ?? 0,
+        revenueGrossCents,
+        revenueYtdGrossCents: revYtd._sum.grossCents ?? 0,
+        invoiceCount,
+        orderCount,
+        avgInvoiceGrossCents: invoiceCount > 0 ? Math.round(revenueGrossCents / invoiceCount) : 0,
+      },
     };
   }
 }

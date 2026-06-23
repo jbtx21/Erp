@@ -55,6 +55,15 @@ export interface CompanyOverview {
   invoices: Array<{ id: string; number: string; grossCents: number; issuedAt: Date }>;
   sampleLoans: Array<{ id: string; status: string; ausgegebenAm: Date }>;
   openCents: number;
+  /** Umsatz-/Aktivitätskennzahlen je Kunde (über alle finalisierten Rechnungen). */
+  metrics: {
+    revenueNetCents: number;
+    revenueGrossCents: number;
+    revenueYtdGrossCents: number;
+    invoiceCount: number;
+    orderCount: number;
+    avgInvoiceGrossCents: number;
+  };
 }
 
 export interface CompanyRepository {

@@ -59,6 +59,7 @@ export class InMemoryCompanyRepository implements CompanyRepository {
         lieferbedingung: sd("lieferbedingung", null), notiz: sd("notiz", null), kreditlimitCents: sd("kreditlimitCents", null),
       },
       contactsCount: 0, orders: [], quotes: [], invoices: [], sampleLoans: [], openCents: 0,
+      metrics: { revenueNetCents: 0, revenueGrossCents: 0, revenueYtdGrossCents: 0, invoiceCount: 0, orderCount: 0, avgInvoiceGrossCents: 0 },
     };
   }
 }
