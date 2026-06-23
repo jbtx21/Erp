@@ -2,6 +2,8 @@
 // Durchlaufzeiten der (Veredelungs-)Stufen den spätesten Starttermin ableiten. Rein,
 // IO-frei. Stufen laufen sequenziell; die letzte endet am Liefertermin.
 
+import { isBwHoliday } from "./holidays.js";
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Verschiebt ein Datum um `days` Tage (negativ = zurück). */
@@ -9,32 +11,32 @@ export function addDays(d: Date, days: number): Date {
   return new Date(d.getTime() + days * DAY_MS);
 }
 
-/** Sa/So = Wochenende (UTC). Feiertage sind bewusst nicht modelliert (manuelle Prüfung). */
-function isWeekend(d: Date): boolean {
+/** Kein Werktag: Sa/So oder gesetzlicher Feiertag in Baden-Württemberg. */
+function isNonWorkingDay(d: Date): boolean {
   const day = d.getUTCDay();
-  return day === 0 || day === 6;
+  return day === 0 || day === 6 || isBwHoliday(d);
 }
 
-/** Zieht `workingDays` Werktage (Mo–Fr) von `from` ab — für die Rückwärtsterminierung. */
+/** Zieht `workingDays` Werktage (Mo–Fr ohne BW-Feiertage) von `from` ab. */
 export function subtractWorkingDays(from: Date, workingDays: number): Date {
   if (workingDays < 0) throw new Error("workingDays must be >= 0");
   let d = new Date(from.getTime());
   let remaining = Math.floor(workingDays);
   while (remaining > 0) {
     d = addDays(d, -1);
-    if (!isWeekend(d)) remaining--;
+    if (!isNonWorkingDay(d)) remaining--;
   }
   return d;
 }
 
-/** Addiert `workingDays` Werktage (Mo–Fr) auf `from`. */
+/** Addiert `workingDays` Werktage (Mo–Fr ohne BW-Feiertage) auf `from`. */
 export function addWorkingDays(from: Date, workingDays: number): Date {
   if (workingDays < 0) throw new Error("workingDays must be >= 0");
   let d = new Date(from.getTime());
   let remaining = Math.floor(workingDays);
   while (remaining > 0) {
     d = addDays(d, 1);
-    if (!isWeekend(d)) remaining--;
+    if (!isNonWorkingDay(d)) remaining--;
   }
   return d;
 }

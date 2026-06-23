@@ -76,4 +76,17 @@ describe("Werktage-Terminierung (Veredelungs-Durchlaufzeiten)", () => {
   it("proposeProductionDueDate = Liefertermin − Werktage", () => {
     expect(proposeProductionDueDate(di, 5)).toEqual(subtractWorkingDays(di, 5));
   });
+
+  it("überspringt BW-Feiertage (Karfreitag/Ostermontag 2026)", () => {
+    // Di 07.04.2026 − 1 WT: Mo 06.04 ist Ostermontag (Feiertag) → Fr 03.04? Nein, 03.04
+    // ist Karfreitag. Also weiter: Do 02.04.2026.
+    const diNachOstern = new Date(Date.UTC(2026, 3, 7));
+    expect(subtractWorkingDays(diNachOstern, 1)).toEqual(new Date(Date.UTC(2026, 3, 2)));
+  });
+
+  it("überspringt Neujahr (BW) bei der Rückrechnung", () => {
+    // Fr 02.01.2026 − 1 WT: Do 01.01 = Neujahr (Feiertag) → Mi 31.12.2025.
+    const fr = new Date(Date.UTC(2026, 0, 2));
+    expect(subtractWorkingDays(fr, 1)).toEqual(new Date(Date.UTC(2025, 11, 31)));
+  });
 });
