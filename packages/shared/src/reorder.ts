@@ -47,6 +47,59 @@ export function computeReorderProposals(
   return proposals;
 }
 
+// ── Auftragsübergreifender Bedarf (Sammeln aus mehreren Aufträgen + Leihgut) ──────
+
+export interface DemandItem {
+  variantId: string;
+  qty: number;
+  source: "ORDER" | "LOAN";
+  ref: string;
+}
+export interface DemandStock { variantId: string; qty: number }
+export interface DemandSupplier { variantId: string; supplierId: string; ekCents: Cents }
+
+export interface DemandProposal {
+  variantId: string;
+  supplierId: string | null;
+  requiredQty: number;
+  stockQty: number;
+  /** Zu bestellende Menge = max(0, Bedarf − Bestand). */
+  orderQty: number;
+  ekCents: Cents;
+  sources: Array<{ source: "ORDER" | "LOAN"; ref: string; qty: number }>;
+}
+
+/**
+ * Aggregiert den Bedarf je Variante auftragsübergreifend (mehrere Aufträge + Leihgut),
+ * verrechnet den Bestand und ordnet den Hauptlieferanten zu. Nur Varianten mit
+ * Netto-Bedarf (> 0); Quellen je Variante werden mitgeführt (Nachvollziehbarkeit).
+ */
+export function aggregateDemand(
+  demand: ReadonlyArray<DemandItem>,
+  stock: ReadonlyArray<DemandStock>,
+  suppliers: ReadonlyArray<DemandSupplier>
+): DemandProposal[] {
+  const stockBy = new Map(stock.map((s) => [s.variantId, s.qty]));
+  const supBy = new Map(suppliers.map((s) => [s.variantId, s]));
+  const byVariant = new Map<string, { required: number; sources: DemandProposal["sources"] }>();
+  for (const d of demand) {
+    if (d.qty <= 0) continue;
+    const cur = byVariant.get(d.variantId) ?? { required: 0, sources: [] };
+    cur.required += d.qty;
+    cur.sources.push({ source: d.source, ref: d.ref, qty: d.qty });
+    byVariant.set(d.variantId, cur);
+  }
+  const out: DemandProposal[] = [];
+  for (const [variantId, agg] of byVariant) {
+    const stockQty = stockBy.get(variantId) ?? 0;
+    const orderQty = Math.max(0, agg.required - stockQty);
+    if (orderQty <= 0) continue;
+    const sup = supBy.get(variantId);
+    out.push({ variantId, supplierId: sup?.supplierId ?? null, requiredQty: agg.required, stockQty, orderQty, ekCents: sup?.ekCents ?? 0, sources: agg.sources });
+  }
+  return out.sort((a, b) => b.orderQty - a.orderQty);
+}
+
 /** Bündelt Bestellvorschläge je Lieferant (1 Klick = 1 Bestellung, Kap. 6.1). */
 export function groupReorderBySupplier(
   proposals: ReadonlyArray<ReorderProposal>

@@ -663,6 +663,7 @@ model OrderLine {
   qty         Int
   unitNetCents Int
   kind        PositionKind @default(TEXTIL) // Textil- vs. Veredelungsposition (Kap. 4.4/11)
+  variantId   String? // optionale Artikel-/Variantenverknüpfung (Bedarfsermittlung)
   rawPayload  Json? // Roh-Shopzeile für Replay/Traceability (Kap. 3)
   deliveryLines DeliveryNoteLine[] // gelieferte Teilmengen (Mehrfach-Teillieferung)
 }

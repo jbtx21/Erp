@@ -4,13 +4,39 @@
 // gebündelten Vorschlag wird je Lieferant eine Bestellung (status BESTELLT) erzeugt.
 
 import { prisma } from "@texma/db";
-import type { ReorderCandidate, SupplierReorder } from "@texma/shared";
+import type { DemandItem, DemandStock, DemandSupplier, ReorderCandidate, SupplierReorder } from "@texma/shared";
 import type {
   CreatedReorderPo,
   ReorderRepository,
 } from "../modules/reorder/reorder.service.js";
 
 export class PrismaReorderRepository implements ReorderRepository {
+  /** Offener Bedarf: variantenbezogene Positionen aus angelegten Aufträgen + aktiven Muster-Leihen. */
+  async openDemand(): Promise<DemandItem[]> {
+    const orderLines = await prisma.orderLine.findMany({
+      where: { variantId: { not: null }, order: { status: { in: ["ANGELEGT", "IN_PRODUKTION", "VERSANDBEREIT"] } } },
+      select: { variantId: true, qty: true, order: { select: { number: true } } },
+    });
+    const loanLines = await prisma.sampleLoanLine.findMany({
+      where: { variantId: { not: null }, sampleLoan: { status: "VERLIEHEN" } },
+      select: { variantId: true, menge: true, sampleLoanId: true },
+    });
+    return [
+      ...orderLines.map((l) => ({ variantId: l.variantId as string, qty: l.qty, source: "ORDER" as const, ref: l.order.number })),
+      ...loanLines.map((l) => ({ variantId: l.variantId as string, qty: l.menge, source: "LOAN" as const, ref: l.sampleLoanId })),
+    ];
+  }
+
+  async stockLevels(): Promise<DemandStock[]> {
+    const rows = await prisma.stockLevel.findMany({ select: { variantId: true, qty: true } });
+    return rows.map((r) => ({ variantId: r.variantId, qty: r.qty }));
+  }
+
+  async variantSuppliers(): Promise<DemandSupplier[]> {
+    const rows = await prisma.supplierItem.findMany({ where: { priority: 1 }, select: { variantId: true, supplierId: true, ekCents: true } });
+    return rows.map((r) => ({ variantId: r.variantId, supplierId: r.supplierId, ekCents: r.ekCents }));
+  }
+
   async belowMinStock(): Promise<ReorderCandidate[]> {
     const stocks = await prisma.stockLevel.findMany({
       where: { minStock: { gt: 0 } },

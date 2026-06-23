@@ -39,3 +39,23 @@ describe("ReorderService (T-12)", () => {
     expect(await service.createPurchaseOrders()).toHaveLength(0);
   });
 });
+
+import { InMemoryReorderRepository as DemandRepo } from "../../repositories/in-memory-reorder.repository.js";
+
+describe("ReorderService.demandProposals (auftragsübergreifend + Leihgut)", () => {
+  it("sammelt Bedarf aus mehreren Aufträgen + Leihgut und verrechnet Bestand", async () => {
+    const repo = new DemandRepo([]);
+    repo.demand = [
+      { variantId: "v1", qty: 10, source: "ORDER", ref: "AB-1" },
+      { variantId: "v1", qty: 8, source: "ORDER", ref: "AB-2" },
+      { variantId: "v1", qty: 2, source: "LOAN", ref: "Muster-1" },
+    ];
+    repo.stock = [{ variantId: "v1", qty: 5 }];
+    repo.suppliers = [{ variantId: "v1", supplierId: "sup-a", ekCents: 400 }];
+    const svc = new ReorderService(repo, { append: async () => {} });
+    const props = await svc.demandProposals();
+    expect(props).toHaveLength(1);
+    expect(props[0]).toMatchObject({ variantId: "v1", supplierId: "sup-a", requiredQty: 20, stockQty: 5, orderQty: 15 });
+    expect(props[0]?.sources).toHaveLength(3);
+  });
+});

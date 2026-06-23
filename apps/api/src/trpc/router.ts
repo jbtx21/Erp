@@ -555,6 +555,9 @@ export const appRouter = router({
     /** Bestellvorschlag je Lieferant aus unterschrittenen Mindestbeständen (T-12). */
     proposals: roleProcedure(...supplierRoles).query(async ({ ctx }) => ctx.reorder.proposals()),
 
+    /** Auftragsübergreifender Bedarf: gesammelt aus allen Aufträgen + Muster-Leihen. */
+    demandProposals: roleProcedure(...supplierRoles).query(async ({ ctx }) => ctx.reorder.demandProposals()),
+
     /** Erzeugt aus dem Vorschlag je Lieferant eine Bestellung (Kap. 6.1). */
     createPurchaseOrders: roleProcedure("ADMIN", "BUERO").mutation(async ({ ctx }) =>
       ctx.reorder.createPurchaseOrders()

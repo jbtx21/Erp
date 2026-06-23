@@ -161,11 +161,58 @@ export const IncomingInvoicesPage = (): JSX.Element => (
     load={() => trpc.incomingInvoices.list.query({ limit: 100 }) as Promise<Row[]>} />
 );
 
-export const ReorderPage = (): JSX.Element => (
-  <ListPage title="Nachbestellvorschläge (Reorder)" hint="Transferdruck-Mindestlager unterschritten → automatische Vorschläge (T-12)."
-    load={() => trpc.reorder.proposals.query() as Promise<Row[]>}
-    toolbar={(reload) => <CreatePOButton reload={reload} />} />
-);
+export function ReorderPage(): JSX.Element {
+  const [proposals, setProposals] = useState<Row[]>([]);
+  const [demand, setDemand] = useState<Awaited<ReturnType<typeof trpc.reorder.demandProposals.query>>>([]);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const reload = useCallback(async () => {
+    try {
+      setProposals((await trpc.reorder.proposals.query()) as Row[]);
+      setDemand(await trpc.reorder.demandProposals.query());
+      setErr(null);
+    } catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void reload(); }, [reload]);
+
+  return (
+    <>
+      <Title order={3}>Warenbestellvorschläge</Title>
+      <Text size="sm" c="dimmed" mt={4}>Mindestbestand-Vorschläge (T-12) und auftragsübergreifender Bedarf — gesammelt aus allen angelegten Aufträgen + Muster-Leihen, gegen Bestand verrechnet.</Text>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+
+      <Group mt="sm">
+        <Button size="xs" onClick={async () => { setMsg(null); try { const r = await trpc.reorder.createPurchaseOrders.mutate(); setMsg(`Bestellungen erzeugt: ${r.length}`); await reload(); } catch (e) { setMsg(errMsg(e)); } }}>Bestellungen aus Mindestbestand erzeugen</Button>
+        {msg && <Text size="xs" c="dimmed">{msg}</Text>}
+      </Group>
+
+      <Title order={4} mt="lg">Auftragsübergreifender Bedarf</Title>
+      {demand.length === 0 ? <Text size="sm" c="dimmed" mt="xs">Kein offener variantenbezogener Bedarf (Auftragspositionen mit Artikelverknüpfung nötig).</Text> : (
+        <Table mt="xs" withTableBorder withColumnBorders>
+          <Table.Thead><Table.Tr>
+            <Table.Th>Variante</Table.Th><Table.Th ta="right">Bedarf</Table.Th><Table.Th ta="right">Bestand</Table.Th><Table.Th ta="right">Bestellen</Table.Th><Table.Th>Lieferant</Table.Th><Table.Th>Quellen</Table.Th>
+          </Table.Tr></Table.Thead>
+          <Table.Tbody>
+            {demand.map((d) => (
+              <Table.Tr key={d.variantId}>
+                <Table.Td>{d.variantId}</Table.Td>
+                <Table.Td ta="right">{d.requiredQty}</Table.Td>
+                <Table.Td ta="right">{d.stockQty}</Table.Td>
+                <Table.Td ta="right"><b>{d.orderQty}</b></Table.Td>
+                <Table.Td>{d.supplierId ?? <Text span c="red" size="xs">kein Hauptlieferant</Text>}</Table.Td>
+                <Table.Td><Text size="xs" c="dimmed">{d.sources.map((s) => `${s.source === "ORDER" ? "Auftrag" : "Leihe"} ${s.ref}: ${s.qty}`).join(" · ")}</Text></Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      )}
+
+      <Title order={4} mt="xl">Mindestbestand-Vorschläge je Lieferant</Title>
+      <AutoTable rows={proposals} />
+    </>
+  );
+}
 
 function CreatePOButton({ reload }: { reload: () => Promise<void> }): JSX.Element {
   const [busy, setBusy] = useState(false);

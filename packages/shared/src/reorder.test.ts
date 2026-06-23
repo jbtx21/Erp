@@ -33,3 +33,33 @@ describe("groupReorderBySupplier (Kap. 6.1)", () => {
     expect(groups.find((g) => g.supplierId === "s2")?.totalEkCents).toBe(1500);
   });
 });
+
+import { aggregateDemand } from "./reorder.js";
+
+describe("aggregateDemand (auftragsübergreifend + Leihgut)", () => {
+  it("sammelt Bedarf je Variante aus mehreren Aufträgen + Leihgut, verrechnet Bestand", () => {
+    const props = aggregateDemand(
+      [
+        { variantId: "v1", qty: 10, source: "ORDER", ref: "AB-1" },
+        { variantId: "v1", qty: 5, source: "ORDER", ref: "AB-2" },
+        { variantId: "v1", qty: 2, source: "LOAN", ref: "Muster-1" },
+        { variantId: "v2", qty: 3, source: "ORDER", ref: "AB-1" },
+      ],
+      [{ variantId: "v1", qty: 8 }], // 8 auf Lager
+      [{ variantId: "v1", supplierId: "sup-a", ekCents: 500 }, { variantId: "v2", supplierId: "sup-b", ekCents: 300 }],
+    );
+    const v1 = props.find((p) => p.variantId === "v1")!;
+    expect(v1.requiredQty).toBe(17);
+    expect(v1.stockQty).toBe(8);
+    expect(v1.orderQty).toBe(9); // 17 − 8
+    expect(v1.supplierId).toBe("sup-a");
+    expect(v1.sources).toHaveLength(3);
+    const v2 = props.find((p) => p.variantId === "v2")!;
+    expect(v2.orderQty).toBe(3);
+  });
+
+  it("blendet Varianten ohne Netto-Bedarf aus (genug Bestand)", () => {
+    const props = aggregateDemand([{ variantId: "v1", qty: 5, source: "ORDER", ref: "AB-1" }], [{ variantId: "v1", qty: 10 }], []);
+    expect(props).toHaveLength(0);
+  });
+});
