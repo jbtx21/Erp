@@ -2,6 +2,7 @@
 
 import type { PriceGroupKind } from "@texma/shared";
 import type {
+  CompanyOverview,
   CompanyRepository,
   CompanyRow,
   CreateCompanyInput,
@@ -37,5 +38,11 @@ export class InMemoryCompanyRepository implements CompanyRepository {
     if (input.branche !== undefined) c.branche = input.branche;
     if (input.zahlungszielTage !== undefined) c.zahlungszielTage = input.zahlungszielTage;
     if (input.mahnsperre !== undefined) c.mahnsperre = input.mahnsperre;
+  }
+
+  async overview(companyId: string): Promise<CompanyOverview | null> {
+    const c = this.companies.get(companyId);
+    if (!c) return null;
+    return { company: { ...c, fromLead: false }, contactsCount: 0, orders: [], quotes: [], invoices: [], sampleLoans: [], openCents: 0 };
   }
 }

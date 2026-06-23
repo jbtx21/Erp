@@ -54,4 +54,13 @@ export class InMemoryProductRepository implements ProductRepository {
     this.variants.set(id, { id, articleId: input.articleId, sku: input.sku, attributes: input.attributes.map((a) => ({ ...a })) });
     return { id };
   }
+
+  async catalog(): Promise<import("../modules/product/product.service.js").CatalogEntry[]> {
+    return [...this.variants.values()].map((v) => {
+      const a = this.articles.get(v.articleId);
+      const attrs = v.attributes.map((x) => x.value).join(" / ");
+      const label = `${a?.name ?? v.articleId}${attrs ? ` — ${attrs}` : ""} (${v.sku})`;
+      return { variantId: v.id, articleId: v.articleId, sku: v.sku, label, unitNetCents: 0 };
+    });
+  }
 }

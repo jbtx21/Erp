@@ -30,10 +30,22 @@ export interface UpdateCompanyInput {
   mahnsperre?: boolean;
 }
 
+/** Kunden-Detail + Historie (klickbar im Kundenstamm). */
+export interface CompanyOverview {
+  company: CompanyRow & { fromLead: boolean };
+  contactsCount: number;
+  orders: Array<{ id: string; number: string; status: string; createdAt: Date }>;
+  quotes: Array<{ id: string; number: string; status: string; createdAt: Date }>;
+  invoices: Array<{ id: string; number: string; grossCents: number; issuedAt: Date }>;
+  sampleLoans: Array<{ id: string; status: string; ausgegebenAm: Date }>;
+  openCents: number;
+}
+
 export interface CompanyRepository {
   list(): Promise<CompanyRow[]>;
   create(input: Required<Pick<CreateCompanyInput, "name" | "priceGroupKind">> & CreateCompanyInput): Promise<{ id: string }>;
   update(input: UpdateCompanyInput): Promise<void>;
+  overview(companyId: string): Promise<CompanyOverview | null>;
 }
 
 export class CompanyError extends Error {}
@@ -46,6 +58,11 @@ export class CompanyService {
 
   async list(): Promise<CompanyRow[]> {
     return this.repo.list();
+  }
+
+  /** Kunden-Detail + Historie (Aufträge/Angebote/Rechnungen/Leihgut). */
+  overview(companyId: string): Promise<CompanyOverview | null> {
+    return this.repo.overview(companyId);
   }
 
   async create(input: CreateCompanyInput): Promise<{ id: string }> {

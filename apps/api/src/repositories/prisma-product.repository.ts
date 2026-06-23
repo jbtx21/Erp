@@ -48,6 +48,23 @@ export class PrismaProductRepository implements ProductRepository {
     return rows.map((v) => ({ id: v.id, sku: v.sku, attributes: v.attributes }));
   }
 
+  async catalog(): Promise<import("../modules/product/product.service.js").CatalogEntry[]> {
+    const rows = await prisma.variant.findMany({
+      orderBy: [{ article: { sku: "asc" } }, { sku: "asc" }],
+      select: {
+        id: true, sku: true, articleId: true,
+        article: { select: { name: true } },
+        attributes: { select: { name: true, value: true } },
+        prices: { where: { priceGroup: { kind: "STANDARD" } }, select: { netCents: true }, take: 1 },
+      },
+    });
+    return rows.map((v) => {
+      const attrs = v.attributes.map((a) => a.value).join(" / ");
+      const label = `${v.article.name}${attrs ? ` — ${attrs}` : ""} (${v.sku})`;
+      return { variantId: v.id, articleId: v.articleId, sku: v.sku, label, unitNetCents: v.prices[0]?.netCents ?? 0 };
+    });
+  }
+
   async createVariant(input: CreateVariantInput): Promise<{ id: string }> {
     return prisma.variant.create({
       data: {

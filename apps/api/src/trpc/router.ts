@@ -772,6 +772,8 @@ export const appRouter = router({
   // Artikel/Varianten-Stammdaten (B16): anlegen/auflisten (Farbe×Größe).
   products: router({
     listArticles: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.products.listArticles()),
+    /** Flacher Artikel-/Varianten-Katalog für den Picker in Angebot/Auftrag/Leihgut. */
+    catalog: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.products.catalog()),
     listVariants: roleProcedure(...supplierRoles)
       .input(z.object({ articleId: z.string().min(1) }))
       .query(({ input, ctx }) => ctx.products.listVariants(input.articleId)),
@@ -1292,6 +1294,10 @@ export const appRouter = router({
   // Firmen/Kunden-Stammdaten (B3): anlegen/auflisten/bearbeiten.
   companies: router({
     list: roleProcedure("ADMIN", "BUERO", "BUCHHALTUNG").query(({ ctx }) => ctx.companies.list()),
+    /** Kunden-Detail + Historie (klickbar im Kundenstamm). */
+    overview: roleProcedure("ADMIN", "BUERO", "BUCHHALTUNG")
+      .input(z.object({ companyId: z.string().min(1) }))
+      .query(({ input, ctx }) => ctx.companies.overview(input.companyId)),
     create: roleProcedure("ADMIN", "BUERO")
       .input(z.object({
         name: z.string().min(1),

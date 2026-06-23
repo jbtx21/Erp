@@ -34,10 +34,24 @@ export interface CreateVariantInput {
   attributes: Array<{ name: string; value: string }>;
 }
 
+/** Flacher Katalog-Eintrag je Variante — für den Artikel-Picker in Angebot/Auftrag/Leihgut. */
+export interface CatalogEntry {
+  variantId: string;
+  articleId: string;
+  /** Varianten-SKU. */
+  sku: string;
+  /** Anzeigetext: Artikelname + Varianten-Merkmale. */
+  label: string;
+  /** Standardpreis (Preisgruppe STANDARD) in Cent, 0 wenn nicht hinterlegt. */
+  unitNetCents: number;
+}
+
 export interface ProductRepository {
   listArticles(): Promise<Omit<ArticleRow, "completeness">[]>;
   createArticle(sku: string, name: string): Promise<{ id: string }>;
   listVariants(articleId: string): Promise<VariantRow[]>;
+  /** Flacher Varianten-Katalog (Artikelname + Merkmale + Standardpreis) für Picker. */
+  catalog(): Promise<CatalogEntry[]>;
   createVariant(input: CreateVariantInput): Promise<{ id: string }>;
   /** Aktualisiert die angegebenen Felder eines Artikels; @returns false wenn unbekannt. */
   updateArticle(id: string, patch: ArticlePatch): Promise<boolean>;
@@ -95,6 +109,11 @@ export class ProductService {
 
   async listVariants(articleId: string): Promise<VariantRow[]> {
     return this.repo.listVariants(articleId);
+  }
+
+  /** Flacher Artikel-/Varianten-Katalog für die Positionserfassung (Picker). */
+  catalog(): Promise<CatalogEntry[]> {
+    return this.repo.catalog();
   }
 
   async createVariant(input: CreateVariantInput): Promise<{ id: string }> {

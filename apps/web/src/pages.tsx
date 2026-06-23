@@ -66,7 +66,7 @@ function fmtCell(key: string, v: unknown): ReactNode {
   return String(v);
 }
 
-export function AutoTable({ rows, hide = [], action }: { rows: Row[]; hide?: string[]; action?: (r: Row) => ReactNode }): JSX.Element {
+export function AutoTable({ rows, hide = [], action, onRowClick }: { rows: Row[]; hide?: string[]; action?: (r: Row) => ReactNode; onRowClick?: (r: Row) => void }): JSX.Element {
   if (!rows || rows.length === 0) return <Text c="dimmed" mt="sm">Keine Daten.</Text>;
   const cols = Object.keys(rows[0] as object).filter((k) => !hide.includes(k));
   return (
@@ -79,8 +79,8 @@ export function AutoTable({ rows, hide = [], action }: { rows: Row[]; hide?: str
       </Table.Thead>
       <Table.Tbody>
         {rows.map((r, i) => (
-          <Table.Tr key={i}>
-            {cols.map((c) => <Table.Td key={c}>{fmtCell(c, r[c])}</Table.Td>)}
+          <Table.Tr key={i} style={onRowClick ? { cursor: "pointer" } : undefined}>
+            {cols.map((c) => <Table.Td key={c} onClick={onRowClick ? () => onRowClick(r) : undefined}>{fmtCell(c, r[c])}</Table.Td>)}
             {action && <Table.Td>{action(r)}</Table.Td>}
           </Table.Tr>
         ))}
@@ -366,7 +366,7 @@ export function SampleLoansPage(): JSX.Element {
       <Title order={3}>Muster-Leihgut</Title>
       <Text size="sm" c="dimmed" mt={4}>Ausgabe als Leihgut; Rückgabe unter 21 Tagen → keine Rechnung, sonst Musterrechnung zum Listenpreis (B5).</Text>
       <Group mt="sm" gap="xs" align="end">
-        <TextInput label="Firmen-ID" value={companyId} onChange={(e) => setCompanyId(e.currentTarget.value)} w={130} />
+        <CompanyPicker value={companyId} onChange={setCompanyId} w={200} />
         <TextInput label="Varianten-ID" value={variantId} onChange={(e) => setVariantId(e.currentTarget.value)} w={170} />
         <NumberInput label="Menge" value={menge} onChange={(v) => setMenge(Number(v) || 1)} min={1} w={90} />
         <Button loading={busy} onClick={async () => {
@@ -385,7 +385,7 @@ export function SampleLoansPage(): JSX.Element {
       <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
         <Text size="sm" fw={600}>Mehrartikel-Leihe (Muster/Anprobe, mehrere Lieferanten)</Text>
         <Group gap="xs" align="end" mt="xs">
-          <TextInput label="Firmen-ID" value={multiCompany} onChange={(e) => setMultiCompany(e.currentTarget.value)} w={130} />
+          <CompanyPicker value={multiCompany} onChange={setMultiCompany} w={200} />
           <TextInput label="Zweck" value={multiZweck} onChange={(e) => setMultiZweck(e.currentTarget.value)} w={140} />
         </Group>
         {multiLines.map((l, i) => (
@@ -552,11 +552,49 @@ export function ProductsPage(): JSX.Element {
 // Wiederverwendbarer Mehrzeilen-Positionseditor (Anfrage/Angebot/Auftrag-Erstellung):
 // Beschreibung, Menge, Einzelpreis (€) je Zeile; Zeilen hinzufügen/entfernen.
 export type PositionKind = "TEXTIL" | "VEREDELUNG" | "SONSTIGE";
-export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind }
+export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind; variantId?: string }
+
+// Artikel-Picker: durchsuchbare Auswahl aus dem Artikelstamm (ERPNext „Link field").
+// Bei Auswahl wird eine Position vorbefüllt (Bezeichnung, Standardpreis, Variante).
+export function ArticlePicker({ onPick }: { onPick: (e: { label: string; unitNetCents: number; variantId: string }) => void }): JSX.Element {
+  const [catalog, setCatalog] = useState<Awaited<ReturnType<typeof trpc.products.catalog.query>>>([]);
+  const [value, setValue] = useState<string | null>(null);
+  useEffect(() => { void trpc.products.catalog.query().then(setCatalog).catch(() => undefined); }, []);
+  return (
+    <Select size="xs" searchable clearable placeholder="+ Artikel aus Stamm…" w={300} value={value}
+      nothingFoundMessage="Kein Artikel — im Artikelstamm anlegen"
+      data={catalog.map((c) => ({ value: c.variantId, label: c.label }))}
+      onChange={(v) => {
+        const e = catalog.find((c) => c.variantId === v);
+        if (e) onPick({ label: e.label, unitNetCents: e.unitNetCents, variantId: e.variantId });
+        setValue(null);
+      }} />
+  );
+}
+
+// Kunden-Picker: durchsuchbare Auswahl aus dem Kundenstamm (statt Firmen-ID tippen).
+export function CompanyPicker({ value, onChange, label = "Kunde", w = 240, allowEmpty = false }: { value: string; onChange: (id: string) => void; label?: string; w?: number; allowEmpty?: boolean }): JSX.Element {
+  const [companies, setCompanies] = useState<Awaited<ReturnType<typeof trpc.companies.list.query>>>([]);
+  useEffect(() => { void trpc.companies.list.query().then(setCompanies).catch(() => undefined); }, []);
+  return (
+    <Select label={label} searchable clearable={allowEmpty} placeholder="Kunde suchen…" w={w}
+      value={value || null} onChange={(v) => onChange(v ?? "")}
+      nothingFoundMessage="Kein Kunde — im Kundenstamm anlegen"
+      data={companies.map((c) => ({ value: c.id, label: `${c.name}${c.branche ? ` · ${c.branche}` : ""}` }))} />
+  );
+}
+
 export function LinesEditor({ lines, onChange }: { lines: EditorLine[]; onChange: (l: EditorLine[]) => void }): JSX.Element {
   const set = (i: number, patch: Partial<EditorLine>): void => onChange(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+  const addFromCatalog = (e: { label: string; unitNetCents: number; variantId: string }): void => {
+    const line: EditorLine = { description: e.label, qty: 1, euro: e.unitNetCents / 100, kind: "TEXTIL", variantId: e.variantId };
+    // Erste leere Zeile ersetzen, sonst anhängen.
+    const idx = lines.findIndex((l) => !l.description.trim());
+    onChange(idx >= 0 ? lines.map((l, j) => (j === idx ? line : l)) : [...lines, line]);
+  };
   return (
     <Box>
+      <Group gap="xs" mb={6}><ArticlePicker onPick={addFromCatalog} /><Text size="xs" c="dimmed">aus dem Artikelstamm wählen oder unten frei erfassen</Text></Group>
       {lines.map((l, i) => (
         <Group key={i} gap="xs" mt={4} align="end">
           <Select label={i === 0 ? "Art" : undefined} w={130} value={l.kind} onChange={(v) => v && set(i, { kind: v as PositionKind })}
@@ -615,7 +653,7 @@ export function QuotesPage(): JSX.Element {
       <Title order={3}>Angebote</Title>
       <Text size="sm" c="dimmed" mt={4}>Mehrzeiliges Angebot anlegen → Versendet → Angenommen → „→ Auftrag" wandelt es in einen Auftrag um (B8, AN-Nummer aus F1).</Text>
       <Group mt="sm" gap="xs" align="end">
-        <TextInput label="Firmen-ID" value={companyId} onChange={(e) => setCompanyId(e.currentTarget.value)} w={130} />
+        <CompanyPicker value={companyId} onChange={setCompanyId} w={240} />
       </Group>
       <LinesEditor lines={lines} onChange={setLines} />
       <Button mt="sm" loading={busy} disabled={!companyId.trim() || toApiLines(lines).length === 0} onClick={async () => {
@@ -933,7 +971,7 @@ export function OrdersPage({ role }: { role: string }): JSX.Element {
           <Button size="compact-sm" variant="light" onClick={() => setShowCreate((v) => !v)}>{showCreate ? "Erfassung schließen" : "+ Auftrag manuell anlegen"}</Button>
           {showCreate && (
             <Box mt="xs" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
-              <TextInput label="Firmen-ID" value={newCompany} onChange={(e) => setNewCompany(e.currentTarget.value)} w={160} />
+              <CompanyPicker value={newCompany} onChange={setNewCompany} w={240} />
               <LinesEditor lines={newLines} onChange={setNewLines} />
               <Button mt="sm" disabled={!newCompany.trim() || toApiLines(newLines).length === 0} onClick={async () => {
                 setErr(null);
@@ -1038,6 +1076,50 @@ export function OrdersPage({ role }: { role: string }): JSX.Element {
   );
 }
 
+// Kunden-Detail + Historie (klickbar im Kundenstamm): Stammdaten, offene Summe und
+// die verknüpften Belege (Aufträge, Angebote, Rechnungen, Muster-Leihgut).
+function CompanyDetailPanel({ companyId, onNavigate }: { companyId: string; onNavigate?: (k: string) => void }): JSX.Element {
+  const [ov, setOv] = useState<Awaited<ReturnType<typeof trpc.companies.overview.query>> | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    void trpc.companies.overview.query({ companyId }).then(setOv).catch((e) => setErr(errMsg(e)));
+  }, [companyId]);
+  if (err) return <Alert color="red" mt="md">{err}</Alert>;
+  if (!ov) return <Text size="sm" c="dimmed" mt="md">lädt…</Text>;
+  const d = (x: string | Date): string => new Date(x).toLocaleDateString("de-DE");
+  const histGroup = (title: string, navKey: string, items: { id: string; label: string; sub?: string }[]): JSX.Element => (
+    <Box miw={230}>
+      <Text size="xs" fw={700} tt="uppercase" c="dimmed" mb={4}>{title} ({items.length})</Text>
+      {items.length === 0 ? <Text size="sm" c="dimmed">—</Text> : items.slice(0, 8).map((i) => (
+        <Group key={i.id} gap={6} mb={2} wrap="nowrap" style={{ cursor: onNavigate ? "pointer" : undefined }} onClick={() => onNavigate?.(navKey)}>
+          <Text size="sm">{i.label}</Text>{i.sub ? <Text size="xs" c="dimmed">· {i.sub}</Text> : null}
+        </Group>
+      ))}
+    </Box>
+  );
+  return (
+    <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+      <Group justify="space-between">
+        <Text fw={600}>{ov.company.name}</Text>
+        <Group gap="xs">
+          {ov.company.fromLead ? <Badge size="xs" color="grape" variant="light">aus Lead</Badge> : null}
+          <Badge size="xs" variant="light">{ov.company.priceGroupKind}</Badge>
+          <Badge size="xs" variant="light" color="gray">Zahlungsziel {ov.company.zahlungszielTage} T</Badge>
+          {ov.openCents > 0 ? <Badge size="xs" color="orange">offen {euro(ov.openCents)}</Badge> : <Badge size="xs" color="teal">keine offenen Posten</Badge>}
+          {ov.company.mahnsperre ? <Badge size="xs" color="red">Mahnsperre</Badge> : null}
+        </Group>
+      </Group>
+      <Text size="xs" c="dimmed" mt={2}>{ov.company.branche ?? "—"} · {ov.contactsCount} Kontakt(e)</Text>
+      <Group align="flex-start" gap="lg" mt="sm" wrap="wrap">
+        {histGroup("Aufträge", "orders", ov.orders.map((o) => ({ id: o.id, label: o.number, sub: o.status })))}
+        {histGroup("Angebote", "quotes", ov.quotes.map((q) => ({ id: q.id, label: q.number, sub: q.status })))}
+        {histGroup("Rechnungen", "dunning", ov.invoices.map((i) => ({ id: i.id, label: i.number, sub: euro(i.grossCents) })))}
+        {histGroup("Muster-Leihgut", "samples", ov.sampleLoans.map((s) => ({ id: s.id, label: d(s.ausgegebenAm), sub: s.status })))}
+      </Group>
+    </Box>
+  );
+}
+
 // Personen & Verknüpfungen einer Firma (CRM-Dynamic-Link): zeigt Stammkontakte +
 // zusätzlich verknüpfte Personen; erlaubt das Verknüpfen einer Person mit einer
 // weiteren Firma (Person ↔ mehrere Parteien).
@@ -1112,15 +1194,16 @@ export function CompaniesPage(): JSX.Element {
         }}>Firma anlegen</Button>
       </Group>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
-      <AutoTable rows={rows} action={(r) => (
+      <AutoTable rows={rows} onRowClick={(r) => setOpenCompany((c) => c === String(r.id) ? null : String(r.id))} action={(r) => (
         <Group gap={4} justify="flex-end" wrap="nowrap">
-          <Button size="compact-xs" variant="subtle" onClick={() => setOpenCompany((c) => c === String(r.id) ? null : String(r.id))}>Personen</Button>
+          <Button size="compact-xs" variant={openCompany === String(r.id) ? "filled" : "subtle"} onClick={() => setOpenCompany((c) => c === String(r.id) ? null : String(r.id))}>Details</Button>
           <Button size="compact-xs" variant="light" color={r.mahnsperre ? "teal" : "orange"} onClick={async () => {
             try { await trpc.companies.update.mutate({ id: String(r.id), mahnsperre: !r.mahnsperre }); await load(); }
             catch (e) { setErr(errMsg(e)); }
           }}>{r.mahnsperre ? "Mahnsperre aufheben" : "Mahnsperre setzen"}</Button>
         </Group>
       )} />
+      {openCompany && <CompanyDetailPanel companyId={openCompany} />}
       {openCompany && <CompanyContactsPanel companyId={openCompany} companies={rows.map((r) => ({ id: String(r.id), name: String(r.name ?? r.id) }))} />}
     </>
   );
