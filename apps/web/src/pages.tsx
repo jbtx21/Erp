@@ -560,19 +560,67 @@ export interface EditorLine { description: string; qty: number; euro: number; ki
 
 // Artikel-Picker: durchsuchbare Auswahl aus dem Artikelstamm (ERPNext „Link field").
 // Bei Auswahl wird eine Position vorbefüllt (Bezeichnung, Standardpreis, Variante).
+// Artikel-Picker: durchsuchbarer Katalog (Artikel×Variante) für die Positionserfassung.
+// Kein Treffer → „+ anlegen" öffnet ein kompaktes Inline-Formular (SKU + optional
+// Farbe/Größe); legt Artikel + Basis-Variante an und wählt sie direkt (ERPNext „Create a new…").
 export function ArticlePicker({ onPick }: { onPick: (e: { label: string; unitNetCents: number; variantId: string }) => void }): JSX.Element {
   const [catalog, setCatalog] = useState<Awaited<ReturnType<typeof trpc.products.catalog.query>>>([]);
   const [value, setValue] = useState<string | null>(null);
-  useEffect(() => { void trpc.products.catalog.query().then(setCatalog).catch(() => undefined); }, []);
+  const [search, setSearch] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [sku, setSku] = useState("");
+  const [farbe, setFarbe] = useState("");
+  const [groesse, setGroesse] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const reload = useCallback(async () => { try { setCatalog(await trpc.products.catalog.query()); } catch { /* ignore */ } }, []);
+  useEffect(() => { void reload(); }, [reload]);
+  const q = search.trim().toLowerCase();
+  const hasMatch = catalog.some((c) => c.label.toLowerCase().includes(q));
+  const reset = (): void => { setCreating(false); setSku(""); setFarbe(""); setGroesse(""); setErr(null); };
   return (
-    <Select size="xs" searchable clearable placeholder="+ Artikel aus Stamm…" w={300} value={value}
-      nothingFoundMessage="Kein Artikel — im Artikelstamm anlegen"
-      data={catalog.map((c) => ({ value: c.variantId, label: c.label }))}
-      onChange={(v) => {
-        const e = catalog.find((c) => c.variantId === v);
-        if (e) onPick({ label: e.label, unitNetCents: e.unitNetCents, variantId: e.variantId });
-        setValue(null);
-      }} />
+    <Box>
+      <Select size="xs" searchable clearable placeholder="+ Artikel aus Stamm…" w={300} value={value}
+        searchValue={search} onSearchChange={setSearch}
+        nothingFoundMessage="Kein Treffer — unten anlegen"
+        data={catalog.map((c) => ({ value: c.variantId, label: c.label }))}
+        onChange={(v) => {
+          const e = catalog.find((c) => c.variantId === v);
+          if (e) onPick({ label: e.label, unitNetCents: e.unitNetCents, variantId: e.variantId });
+          setValue(null);
+        }} />
+      {!creating && search.trim().length >= 2 && !hasMatch && (
+        <Button size="compact-xs" variant="light" mt={4} onClick={() => { setCreating(true); setErr(null); }}>
+          + „{search.trim()}" als Artikel anlegen
+        </Button>
+      )}
+      {creating && (
+        <Box mt={6} p="xs" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 4, maxWidth: 320 }}>
+          <Text size="xs" fw={600} mb={4}>Neuer Artikel: „{search.trim()}"</Text>
+          <Group gap="xs" align="end" wrap="wrap">
+            <TextInput size="xs" label="Artikel-Nr. (SKU)" placeholder="z. B. POLO-001" w={130} value={sku} onChange={(e) => setSku(e.currentTarget.value)} />
+            <TextInput size="xs" label="Farbe" placeholder="optional" w={80} value={farbe} onChange={(e) => setFarbe(e.currentTarget.value)} />
+            <TextInput size="xs" label="Größe" placeholder="optional" w={70} value={groesse} onChange={(e) => setGroesse(e.currentTarget.value)} />
+          </Group>
+          {err && <Text size="xs" c="red" mt={4}>{err}</Text>}
+          <Group gap="xs" mt={6}>
+            <Button size="compact-xs" onClick={async () => {
+              if (!sku.trim()) { setErr("Artikel-Nr. ist Pflicht."); return; }
+              const attributes = [
+                ...(farbe.trim() ? [{ name: "Farbe", value: farbe.trim() }] : []),
+                ...(groesse.trim() ? [{ name: "Größe", value: groesse.trim() }] : []),
+              ];
+              try {
+                const entry = await trpc.products.quickCreate.mutate({ sku: sku.trim(), name: search.trim(), attributes });
+                await reload();
+                onPick({ label: entry.label, unitNetCents: entry.unitNetCents, variantId: entry.variantId });
+                setValue(null); setSearch(""); reset();
+              } catch (e) { setErr(e instanceof Error ? e.message : "Anlegen fehlgeschlagen."); }
+            }}>Anlegen & übernehmen</Button>
+            <Button size="compact-xs" variant="subtle" color="gray" onClick={reset}>Abbrechen</Button>
+          </Group>
+        </Box>
+      )}
+    </Box>
   );
 }
 

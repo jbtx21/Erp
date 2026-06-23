@@ -122,4 +122,24 @@ export class ProductService {
     await this.audit.append(buildEntry({ entity: "Variant", entityId: res.id, action: "CREATE", after: { sku: input.sku, articleId: input.articleId } }));
     return res;
   }
+
+  /**
+   * Schnellanlage aus dem Picker (Angebot/Auftrag/Leihgut): legt Artikel + eine
+   * Basis-Variante an, damit der neue Artikel sofort wählbar ist, und liefert den
+   * Katalog-Eintrag zurück. Ohne Merkmale = Varianten-SKU gleich Artikel-SKU.
+   */
+  async quickCreateCatalogEntry(input: {
+    sku: string;
+    name: string;
+    attributes?: Array<{ name: string; value: string }>;
+  }): Promise<CatalogEntry> {
+    const attributes = (input.attributes ?? []).filter((a) => a.name.trim() && a.value.trim());
+    const art = await this.createArticle(input.sku, input.name);
+    const baseSku = input.sku.trim();
+    const variantSku = attributes.length ? `${baseSku}-${attributes.map((a) => a.value.trim()).join("-")}` : baseSku;
+    const v = await this.createVariant({ articleId: art.id, sku: variantSku, attributes });
+    const attrText = attributes.map((a) => a.value.trim()).join(" / ");
+    const label = `${input.name.trim()}${attrText ? ` — ${attrText}` : ""} (${variantSku})`;
+    return { variantId: v.id, articleId: art.id, sku: variantSku, label, unitNetCents: 0 };
+  }
 }

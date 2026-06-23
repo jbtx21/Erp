@@ -782,6 +782,16 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         try { return await ctx.products.createArticle(input.sku, input.name); } catch (e) { throw toTrpcError(e); }
       }),
+    // Schnellanlage aus dem Picker: Artikel + Basis-Variante in einem Schritt, sofort wählbar.
+    quickCreate: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({
+        sku: z.string().min(1),
+        name: z.string().min(1),
+        attributes: z.array(z.object({ name: z.string().min(1), value: z.string().min(1) })).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.products.quickCreateCatalogEntry(input); } catch (e) { throw toTrpcError(e); }
+      }),
     createVariant: roleProcedure("ADMIN", "BUERO")
       .input(z.object({
         articleId: z.string().min(1),
