@@ -1626,6 +1626,23 @@ model PasswordResetToken {
   @@index([userId])
 }
 
+// Automations-/Regel-Engine (Event → Bedingung → Aktion): im Admin-Portal konfigurierbar,
+// läuft auf dem vorhandenen Event-Backbone. conditionsJson/actionsJson tragen die
+// deklarative Regel (siehe @texma/shared automation.ts).
+model AutomationRule {
+  id            String   @id @default(cuid())
+  name          String
+  triggerEvent  String // z. B. "order.status.changed"
+  conditionsJson String  @default("[]")
+  actionsJson   String   @default("[]")
+  active        Boolean  @default(true)
+  lastFiredAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([triggerEvent, active])
+}
+
 // Contact-Dynamic-Link (CRM-Muster ERPNext): entkoppelt Personen von genau EINER
 // Firma. Eine Person kann zusätzlich mit beliebig vielen Parteien (Company, Lead,
 // Supplier, …) verknüpft werden — polymorph über (entity, entityId).

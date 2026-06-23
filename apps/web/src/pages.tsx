@@ -2621,3 +2621,98 @@ export function ArchivePage({ role }: { role?: string } = {}): JSX.Element {
     </>
   );
 }
+
+// Regel-Engine (Event → Bedingung → Aktion): Admin konfiguriert Automationen ohne Code.
+export function AutomationPage(): JSX.Element {
+  const [meta, setMeta] = useState<{ triggers: readonly string[]; actions: string[] }>({ triggers: [], actions: [] });
+  const [rules, setRules] = useState<Awaited<ReturnType<typeof trpc.automation.list.query>>>([]);
+  const [err, setErr] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  // Formular
+  const [name, setName] = useState("");
+  const [trigger, setTrigger] = useState("order.status.changed");
+  const [condField, setCondField] = useState("status");
+  const [condOp, setCondOp] = useState("eq");
+  const [condVal, setCondVal] = useState("VERSENDET");
+  const [actionType, setActionType] = useState("notify");
+  const [pTo, setPTo] = useState("");
+  const [pTitle, setPTitle] = useState("Auftrag {{orderId}} → {{status}}");
+  const [pBody, setPBody] = useState("");
+
+  const load = useCallback(async () => {
+    try {
+      setMeta(await trpc.automation.meta.query());
+      setRules(await trpc.automation.list.query());
+      setErr(null);
+    } catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  const create = async () => {
+    setErr(null); setMsg(null);
+    try {
+      const params: Record<string, string> = {};
+      if (actionType === "notify") { params.to = pTo; params.title = pTitle; params.body = pBody; }
+      else if (actionType === "email") { params.to = pTo; params.subject = pTitle; params.body = pBody; }
+      await trpc.automation.create.mutate({
+        name, triggerEvent: trigger,
+        conditions: condField.trim() ? [{ field: condField, op: condOp as "eq", value: condVal }] : [],
+        actions: [{ type: actionType, params }],
+      });
+      setMsg(`Regel „${name}" angelegt.`); setName(""); await load();
+    } catch (e) { setErr(errMsg(e)); }
+  };
+
+  return (
+    <>
+      <Title order={3}>Automationen (Regel-Engine)</Title>
+      <Text size="sm" c="dimmed" mt={4}>„Wenn Event X und Bedingung Y, dann Aktion Z" — native Automation im ERP, ohne zweite Datenschicht. Platzhalter <Text span ff="monospace">{"{{feld}}"}</Text> aus dem Event-Payload.</Text>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      {msg && <Alert color="green" mt="sm">{msg}</Alert>}
+
+      <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, maxWidth: 720 }}>
+        <Text fw={600}>Neue Regel</Text>
+        <Group mt="xs" gap="xs" align="end">
+          <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} w={220} />
+          <Select label="Trigger (Event)" data={meta.triggers as string[]} value={trigger} onChange={(v) => setTrigger(v ?? trigger)} w={220} />
+        </Group>
+        <Text size="xs" fw={700} c="dimmed" mt="sm">BEDINGUNG (optional)</Text>
+        <Group gap="xs" align="end">
+          <TextInput label="Feld" value={condField} onChange={(e) => setCondField(e.currentTarget.value)} w={140} />
+          <Select label="Operator" data={["eq", "ne", "gt", "gte", "lt", "lte", "contains", "in"]} value={condOp} onChange={(v) => setCondOp(v ?? "eq")} w={110} />
+          <TextInput label="Wert" value={condVal} onChange={(e) => setCondVal(e.currentTarget.value)} w={160} />
+        </Group>
+        <Text size="xs" fw={700} c="dimmed" mt="sm">AKTION</Text>
+        <Group gap="xs" align="end">
+          <Select label="Typ" data={meta.actions} value={actionType} onChange={(v) => setActionType(v ?? "notify")} w={120} />
+          <TextInput label="An (E-Mail)" value={pTo} onChange={(e) => setPTo(e.currentTarget.value)} w={200} placeholder="{{userEmail}}" />
+          <TextInput label="Titel/Betreff" value={pTitle} onChange={(e) => setPTitle(e.currentTarget.value)} w={260} />
+        </Group>
+        <Textarea label="Text" value={pBody} onChange={(e) => setPBody(e.currentTarget.value)} mt="xs" autosize minRows={2} />
+        <Button mt="sm" disabled={!name.trim()} onClick={() => void create()}>Regel anlegen</Button>
+      </Box>
+
+      <Title order={5} mt="lg">Regeln ({rules.length})</Title>
+      <Table mt="xs" striped withTableBorder>
+        <Table.Thead><Table.Tr>
+          <Table.Th>Aktiv</Table.Th><Table.Th>Name</Table.Th><Table.Th>Trigger</Table.Th>
+          <Table.Th>Bedingungen</Table.Th><Table.Th>Aktionen</Table.Th><Table.Th>Zuletzt</Table.Th><Table.Th></Table.Th>
+        </Table.Tr></Table.Thead>
+        <Table.Tbody>
+          {rules.map((r) => (
+            <Table.Tr key={r.id}>
+              <Table.Td><Switch checked={r.active} onChange={async (e) => { await trpc.automation.setActive.mutate({ id: r.id, active: e.currentTarget.checked }); await load(); }} /></Table.Td>
+              <Table.Td>{r.name}</Table.Td>
+              <Table.Td><Badge variant="light">{r.triggerEvent}</Badge></Table.Td>
+              <Table.Td><Text size="xs">{r.conditions.map((c) => `${c.field} ${c.op} ${String(c.value)}`).join(" & ") || "—"}</Text></Table.Td>
+              <Table.Td><Text size="xs">{r.actions.map((a) => a.type).join(", ")}</Text></Table.Td>
+              <Table.Td><Text size="xs" c="dimmed">{r.lastFiredAt ? new Date(r.lastFiredAt).toLocaleString("de-DE") : "nie"}</Text></Table.Td>
+              <Table.Td><Button size="compact-xs" variant="subtle" color="red" onClick={async () => { await trpc.automation.remove.mutate({ id: r.id }); await load(); }}>Löschen</Button></Table.Td>
+            </Table.Tr>
+          ))}
+          {rules.length === 0 && <Table.Tr><Table.Td colSpan={7}><Text size="sm" c="dimmed">Noch keine Regeln.</Text></Table.Td></Table.Tr>}
+        </Table.Tbody>
+      </Table>
+    </>
+  );
+}

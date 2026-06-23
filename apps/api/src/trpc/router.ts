@@ -198,6 +198,8 @@ export const appRouter = router({
           const res = await ctx.orderWorkflow.transition(input.orderId, input.to);
           // G-5: In-App-Benachrichtigung über den Statuswechsel (Versand-Integrationspunkt separat).
           await ctx.notifications.notify(ctx.user.email, `Auftrag → ${input.to}`, `Auftrag ${input.orderId} ist jetzt ${input.to}.`, "orders");
+          // Regel-Engine: konfigurierte Automationen zum Statuswechsel auslösen (Event → Aktion).
+          await ctx.automation.handleEvent("order.status.changed", { orderId: input.orderId, status: input.to, userEmail: ctx.user.email });
           return res;
         } catch (e) { throw new TRPCError({ code: "CONFLICT", message: (e as Error).message }); }
       }),
@@ -1418,6 +1420,29 @@ export const appRouter = router({
     delete: roleProcedure(...supplierRoles)
       .input(z.object({ id: z.string().min(1) }))
       .mutation(({ input, ctx }) => ctx.costCenters.remove(input.id)),
+  }),
+
+  // Regel-Engine (Event → Bedingung → Aktion). Konfiguration nur Admin.
+  automation: router({
+    meta: roleProcedure("ADMIN").query(({ ctx }) => ({ triggers: ctx.automation.knownTriggers(), actions: ctx.automation.knownActions() })),
+    list: roleProcedure("ADMIN").query(({ ctx }) => ctx.automation.list()),
+    create: roleProcedure("ADMIN")
+      .input(z.object({
+        name: z.string().min(1),
+        triggerEvent: z.string().min(1),
+        conditions: z.array(z.object({ field: z.string().min(1), op: z.enum(["eq", "ne", "gt", "gte", "lt", "lte", "contains", "in"]), value: z.union([z.string(), z.number(), z.boolean(), z.array(z.string())]) })),
+        actions: z.array(z.object({ type: z.string().min(1), params: z.record(z.string()) })),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.automation.create(input); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    setActive: roleProcedure("ADMIN")
+      .input(z.object({ id: z.string().min(1), active: z.boolean() }))
+      .mutation(async ({ input, ctx }) => { await ctx.automation.setActive(input.id, input.active); return { ok: true as const }; }),
+    remove: roleProcedure("ADMIN")
+      .input(z.object({ id: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => { await ctx.automation.remove(input.id); return { ok: true as const }; }),
   }),
 
   // Contact-Dynamic-Link (CRM): Person ↔ mehrere Parteien.

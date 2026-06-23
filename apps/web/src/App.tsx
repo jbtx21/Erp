@@ -9,7 +9,7 @@ import { Differentiators } from "./Differentiators.js";
 import { Banking } from "./Banking.js";
 import {
   CompaniesPage, CostCentersPage, DunningPage, InquiriesPage, IncomingInvoicesPage, LeadsPage, OrdersPage, ProcurementPage, ProductionReportingPage,
-  ProductsPage, PricingPage, EmailTemplatesPage, DashboardsPage, DataIoPage, NewsletterPage, OpportunitiesPage, CalendarPage, MessagesPage, AdminPage, ArchivePage, LagerPage, HrPage, IntegrationsPage, SecurityPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
+  ProductsPage, PricingPage, EmailTemplatesPage, DashboardsPage, DataIoPage, NewsletterPage, OpportunitiesPage, CalendarPage, MessagesPage, AdminPage, ArchivePage, AutomationPage, LagerPage, HrPage, IntegrationsPage, SecurityPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
 } from "./pages.js";
 import { trpc } from "./trpc.js";
 
@@ -30,7 +30,7 @@ const NAV: ReadonlyArray<{ group: string; items: ReadonlyArray<{ key: string; la
     { key: "banking", label: "Banking" }, { key: "costcenters", label: "Kostenstellen" },
     { key: "reporting", label: "Auswertungen" },
   ] },
-  { group: "System", items: [{ key: "emailtemplates", label: "E-Mail-Vorlagen" }, { key: "dataio", label: "Import/Export" }, { key: "newsletter", label: "Newsletter" }, { key: "archive", label: "GoBD-Archiv" }, { key: "admin", label: "Einstellungen" }, { key: "hr", label: "Personalwesen" }, { key: "integrations", label: "Schnittstellen" }] },
+  { group: "System", items: [{ key: "emailtemplates", label: "E-Mail-Vorlagen" }, { key: "dataio", label: "Import/Export" }, { key: "newsletter", label: "Newsletter" }, { key: "archive", label: "GoBD-Archiv" }, { key: "automation", label: "Automationen" }, { key: "admin", label: "Einstellungen" }, { key: "hr", label: "Personalwesen" }, { key: "integrations", label: "Schnittstellen" }] },
 ];
 const ALL_KEYS = NAV.flatMap((g) => g.items.map((i) => i.key));
 const hashKey = (): string => {
@@ -199,6 +199,7 @@ function Page({ k, role, userName }: { k: string; role: string; userName: string
     case "messages": return <MessagesPage />;
     case "admin": return <AdminPage />;
     case "archive": return <ArchivePage role={role} />;
+    case "automation": return <AutomationPage />;
     case "security": return <SecurityPage userName={userName} onProfileUpdated={() => { if (typeof location !== "undefined") location.reload(); }} />;
     case "lager": return <LagerPage />;
     case "hr": return <HrPage />;
