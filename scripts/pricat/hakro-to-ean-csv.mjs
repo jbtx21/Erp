@@ -40,6 +40,12 @@ function rowCells(rowXml) {
 const grams = (kg) => { const n = parseFloat(kg); return Number.isFinite(n) ? String(Math.round(n * 1000)) : ""; };
 const csvField = (s) => { const v = String(s ?? "").trim(); return /[;"\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
 const HEADER = ["EAN", "Artikelnummer", "Bezeichnung", "Marke", "Material", "Pflegehinweis", "Zolltarifnummer", "Ursprungsland", "Gewicht (g)", "EK (EUR)"];
+// TEXMA hat bei HAKRO immer den besten Preis → niedrigsten Staffel-EK nehmen
+// (NetPrice / _H1 / _H2 / _H3 = Menge 1 / 10 / 100 / 500); leere/ungültige ignorieren.
+const bestEk = (c) => {
+  const vals = [c.N, c.P, c.R, c.T].map((x) => parseFloat(x)).filter((n) => Number.isFinite(n) && n > 0);
+  return vals.length ? String(Math.min(...vals)) : (c.N ?? "");
+};
 
 const rows = [...sheet.matchAll(/<row[^>]*>.*?<\/row>/gs)].map((m) => m[0]);
 let total = 0, skipped = 0;
@@ -58,7 +64,7 @@ for (let i = 1; i < rows.length; i++) { // Zeile 0 = Kopf
     c.AN ?? "",                            // HarmonizedCode → Zolltarifnummer
     c.AM ?? "",                            // CountryOfOrigin → Ursprungsland
     grams(c.AS),                           // ItemWeight (kg) → Gewicht (g)
-    c.N ?? "",                             // NetPrice → EK (EUR)
+    bestEk(c),                             // bester Staffel-EK → EK (EUR)
   ].map(csvField).join(";"));
 }
 writeFileSync(out, "﻿" + lines.join("\n"), "utf8");

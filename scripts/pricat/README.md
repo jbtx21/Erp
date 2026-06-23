@@ -26,7 +26,22 @@ werden direkt geparst. `unzip` muss verfügbar sein.
 | HarmonizedCode | → | Zolltarifnummer |
 | CountryOfOrigin | → | Ursprungsland |
 | ItemWeight (kg) ×1000 | → | Gewicht (g) |
-| NetPrice | → | EK (EUR) |
+| **min(NetPrice, _H1, _H2, _H3)** | → | EK (EUR) — **Bestpreis** |
+
+**EK = Bestpreis:** TEXMA hat bei HAKRO immer den besten Konditionspreis, daher wird
+der **niedrigste** Staffelpreis der Pricat (NetPrice_H3, Menge 500) als EK genommen,
+nicht der Basispreis (Menge 1).
+
+## VK-Generierung beim Import (Preisgruppen)
+Der EAN-Import erzeugt den VK je Preisgruppe aus dem EK über einen Aufschlagsfaktor.
+HAKRO-Aufschläge (Default in der Import-Maske, editierbar):
+
+| Preisgruppe | Aufschlag | Beispiel (EK 25,21 €) |
+|---|---|---|
+| STANDARD (Normalkunde) | 1,80 | 45,38 € |
+| TOP | 1,75 | 44,12 € |
+| PREMIUM | 1,70 | 42,86 € |
+| WIEDERVERKAEUFER | 1,35 | 34,03 € |
 
 ## Import ins ERP
 1. Pricat konvertieren (s. o.) → CSV.

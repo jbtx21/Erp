@@ -2594,9 +2594,10 @@ export function EanImportPage(): JSX.Element {
   const [updatePim, setUpdatePim] = useState(true);
   const [updateGtinWeight, setUpdateGtinWeight] = useState(true);
   const [ekSupplier, setEkSupplier] = useState("");
+  // VK-Aufschläge je Preisgruppe — Default = HAKRO-Aufschläge (editierbar je Import/Lieferant).
   const [vk, setVk] = useState<Record<string, { on: boolean; factor: number }>>({
-    STANDARD: { on: false, factor: 1.88 }, TOP: { on: false, factor: 1.7 }, PREMIUM: { on: false, factor: 2.1 },
-    WIEDERVERKAEUFER: { on: false, factor: 1.5 }, AGENTUR: { on: false, factor: 1.4 },
+    STANDARD: { on: false, factor: 1.80 }, TOP: { on: false, factor: 1.75 }, PREMIUM: { on: false, factor: 1.70 },
+    WIEDERVERKAEUFER: { on: false, factor: 1.35 }, AGENTUR: { on: false, factor: 1.40 },
   });
 
   const buildOptions = () => {
