@@ -26,8 +26,26 @@ export interface CreatedInvoice {
   grossCents: number;
 }
 
+export interface InvoiceForCredit {
+  id: string;
+  number: string;
+  grossCents: number;
+  finalized: boolean;
+  orderId: string | null;
+  alreadyCreditedCents: number;
+}
+
 export interface InvoiceRepository {
   loadOrderForInvoice(orderId: string): Promise<OrderForInvoice | null>;
+  loadInvoiceForCredit(invoiceId: string): Promise<InvoiceForCredit | null>;
+  /** Legt die Gutschrift an, neutralisiert den offenen Posten und setzt fakturastatus zurück. */
+  createCreditNoteAndNeutralize(input: {
+    invoiceId: string;
+    orderId: string | null;
+    number: string;
+    amountCents: number;
+    reason: string;
+  }): Promise<{ id: string }>;
   /** Legt Rechnung + offenen Posten an und meldet den Auftrag als fakturiert zurück. */
   createInvoiceFromOrder(input: {
     orderId: string;
@@ -79,6 +97,35 @@ export class InvoiceService {
       })
     );
     return { id, number, netCents: totals.netCents, taxCents: totals.taxCents, grossCents: totals.grossCents };
+  }
+
+  /**
+   * Storno per Gutschrift (Kap. 9.1/20, GoBD-Prinzip): die finalisierte Rechnung bleibt
+   * UNVERÄNDERT (WORM) — die Korrektur erfolgt ausschließlich über eine Gutschrift, die
+   * den offenen Posten neutralisiert und fakturastatus zurücksetzt. Eine Rechnung kann
+   * NICHT zusätzlich „hart" storniert werden, sobald eine Vollgutschrift existiert
+   * (verhindert die doppelte Entlastung — genau wie ERPNexts „linked documents"-Sperre).
+   */
+  async cancelByCreditNote(invoiceId: string, reason: string): Promise<{ id: string; number: string; amountCents: number }> {
+    if (!reason.trim()) throw new InvoiceError("Gutschriftsgrund ist Pflicht.");
+    const inv = await this.repo.loadInvoiceForCredit(invoiceId);
+    if (!inv) throw new InvoiceError("Rechnung nicht gefunden.");
+    if (!inv.finalized) throw new InvoiceError("Nur finalisierte Rechnungen werden per Gutschrift storniert.");
+    const remaining = inv.grossCents - inv.alreadyCreditedCents;
+    if (remaining <= 0) throw new InvoiceError("Rechnung ist bereits vollständig gutgeschrieben.");
+
+    const number = await this.numbering.next("CREDIT_NOTE", this.now());
+    const { id } = await this.repo.createCreditNoteAndNeutralize({
+      invoiceId: inv.id,
+      orderId: inv.orderId,
+      number,
+      amountCents: remaining,
+      reason: reason.trim(),
+    });
+    await this.audit.append(
+      buildEntry({ entity: "CreditNote", entityId: id, action: "STORNO", after: { number, invoice: inv.number, amountCents: remaining, reason: reason.trim() } })
+    );
+    return { id, number, amountCents: remaining };
   }
 
   listRecent(limit = 50): Promise<Array<{ id: string; number: string; orderId: string | null; companyId: string; grossCents: number; issuedAt: Date }>> {

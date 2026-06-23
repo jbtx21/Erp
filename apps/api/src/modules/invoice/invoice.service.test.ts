@@ -50,3 +50,28 @@ describe("InvoiceService — Order → Invoice (Make-Target)", () => {
     await expect(service.createFromOrder("nope")).rejects.toBeInstanceOf(InvoiceError);
   });
 });
+
+describe("InvoiceService — Storno per Gutschrift (GoBD-WORM)", () => {
+  it("neutralisiert die Rechnung per Vollgutschrift und setzt fakturastatus zurück", async () => {
+    const { service, repo, orders } = setup();
+    const inv = await service.createFromOrder("o1");
+    const cn = await service.cancelByCreditNote(inv.id, "Kunde hat storniert");
+    expect(cn.number).toMatch(/^GS-2026-/);
+    expect(cn.amountCents).toBe(inv.grossCents);
+    expect(repo.invoices[0]!.openCents).toBe(0); // offener Posten neutralisiert
+    expect(orders[0]!.fakturastatus).toBe("NICHT"); // Auftrag wieder offen für Faktura
+  });
+
+  it("verhindert die doppelte Gutschrift (zweiter Storno wirft)", async () => {
+    const { service } = setup();
+    const inv = await service.createFromOrder("o1");
+    await service.cancelByCreditNote(inv.id, "Storno 1");
+    await expect(service.cancelByCreditNote(inv.id, "Storno 2")).rejects.toBeInstanceOf(InvoiceError);
+  });
+
+  it("verlangt einen Gutschriftsgrund", async () => {
+    const { service } = setup();
+    const inv = await service.createFromOrder("o1");
+    await expect(service.cancelByCreditNote(inv.id, "  ")).rejects.toBeInstanceOf(InvoiceError);
+  });
+});

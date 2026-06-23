@@ -43,6 +43,29 @@ export class PrismaInvoiceRepository implements InvoiceRepository {
     });
   }
 
+  async loadInvoiceForCredit(invoiceId: string): Promise<import("../modules/invoice/invoice.service.js").InvoiceForCredit | null> {
+    const inv = await prisma.invoice.findUnique({ where: { id: invoiceId }, include: { creditNotes: { select: { amountCents: true } } } });
+    if (!inv) return null;
+    return {
+      id: inv.id,
+      number: inv.number,
+      grossCents: inv.grossCents,
+      finalized: inv.finalized,
+      orderId: inv.orderId,
+      alreadyCreditedCents: inv.creditNotes.reduce((s, c) => s + c.amountCents, 0),
+    };
+  }
+
+  async createCreditNoteAndNeutralize(input: { invoiceId: string; orderId: string | null; number: string; amountCents: number; reason: string }): Promise<{ id: string }> {
+    return prisma.$transaction(async (tx) => {
+      const cn = await tx.creditNote.create({ data: { number: input.number, invoiceId: input.invoiceId, amountCents: input.amountCents, reason: input.reason }, select: { id: true } });
+      // Offenen Posten neutralisieren (Forderung entfällt) — Rechnung selbst bleibt WORM.
+      await tx.openItem.updateMany({ where: { invoiceId: input.invoiceId }, data: { openCents: 0 } });
+      if (input.orderId) await tx.order.update({ where: { id: input.orderId }, data: { fakturastatus: "NICHT" } });
+      return { id: cn.id };
+    });
+  }
+
   async listRecent(limit: number): Promise<Array<{ id: string; number: string; orderId: string | null; companyId: string; grossCents: number; issuedAt: Date }>> {
     const rows = await prisma.invoice.findMany({ orderBy: { issuedAt: "desc" }, take: limit, select: { id: true, number: true, orderId: true, companyId: true, grossCents: true, issuedAt: true } });
     return rows;

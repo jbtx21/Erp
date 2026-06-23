@@ -1428,6 +1428,14 @@ export const appRouter = router({
         try { return await ctx.invoices.createFromOrder(input.orderId); }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
+
+    /** Storno per Gutschrift (WORM): neutralisiert die Rechnung, ohne sie zu verändern. */
+    cancelByCreditNote: roleProcedure("ADMIN", "BUCHHALTUNG")
+      .input(z.object({ invoiceId: z.string().min(1), reason: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.invoices.cancelByCreditNote(input.invoiceId, input.reason); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
   }),
 
   // GoBD-Belegarchiv (Kap. 10): WORM-Ablage + Z3-Export. Finanzrelevant → kein PRODUKTION.
