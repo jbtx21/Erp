@@ -52,6 +52,7 @@ import type { IntegrationsService } from "../modules/integrations/integrations.s
 import type { ArchiveService } from "../modules/archive/archive.service.js";
 import type { InvoiceService } from "../modules/invoice/invoice.service.js";
 import type { ConnectionsService } from "../modules/connections/connections.service.js";
+import type { ContactLinkService } from "../modules/contact/contact-link.service.js";
 import type {
   BankingQueryRepository,
   DunningQueryRepository,
@@ -119,6 +120,7 @@ export interface Context {
   archive: ArchiveService;
   invoices: InvoiceService;
   connections: ConnectionsService;
+  contactLinks: ContactLinkService;
   auth: AuthService;
   user: AuthUser | null;
   /** Roh-Token aus dem Cookie (für den 2FA-Zwischenschritt/Logout, wenn user noch null ist). */

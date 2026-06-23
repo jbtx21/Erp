@@ -1037,6 +1037,47 @@ export function OrdersPage({ role }: { role: string }): JSX.Element {
   );
 }
 
+// Personen & Verknüpfungen einer Firma (CRM-Dynamic-Link): zeigt Stammkontakte +
+// zusätzlich verknüpfte Personen; erlaubt das Verknüpfen einer Person mit einer
+// weiteren Firma (Person ↔ mehrere Parteien).
+function CompanyContactsPanel({ companyId, companies }: { companyId: string; companies: Array<{ id: string; name: string }> }): JSX.Element {
+  const [people, setPeople] = useState<Awaited<ReturnType<typeof trpc.contacts.forEntity.query>>>([]);
+  const [err, setErr] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    try { setPeople(await trpc.contacts.forEntity.query({ entity: "Company", entityId: companyId })); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
+  }, [companyId]);
+  useEffect(() => { void load(); }, [load]);
+
+  return (
+    <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+      <Text fw={600}>Personen &amp; Verknüpfungen</Text>
+      {err && <Alert color="red" mt="xs">{err}</Alert>}
+      {people.length === 0 ? <Text size="sm" c="dimmed" mt="xs">Keine Personen.</Text> : (
+        <Table mt="xs"><Table.Tbody>
+          {people.map((p) => (
+            <Table.Tr key={p.contactId}>
+              <Table.Td><Badge size="xs" variant="light" color={p.primary ? "blue" : "grape"}>{p.primary ? "Stamm" : "Verknüpft"}</Badge></Table.Td>
+              <Table.Td>{p.name}{p.role ? <Text span size="xs" c="dimmed"> · {p.role}</Text> : null}</Table.Td>
+              <Table.Td><Text size="xs" c="dimmed">{p.email ?? p.phone ?? ""}</Text></Table.Td>
+              <Table.Td>
+                <Select size="xs" placeholder="mit Firma verknüpfen…" w={200} searchable
+                  data={companies.filter((c) => c.id !== companyId).map((c) => ({ value: c.id, label: c.name }))}
+                  onChange={async (target) => {
+                    if (!target) return;
+                    setErr(null);
+                    try { await trpc.contacts.link.mutate({ contactId: p.contactId, entity: "Company", entityId: target }); await load(); }
+                    catch (e) { setErr(errMsg(e)); }
+                  }} />
+              </Table.Td>
+            </Table.Tr>
+          ))}
+        </Table.Tbody></Table>
+      )}
+    </Box>
+  );
+}
+
 export function CompaniesPage(): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [name, setName] = useState("");
@@ -1045,6 +1086,7 @@ export function CompaniesPage(): JSX.Element {
   const [ziel, setZiel] = useState(14);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [openCompany, setOpenCompany] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try { setRows((await trpc.companies.list.query()) as Row[]); setErr(null); }
@@ -1070,11 +1112,15 @@ export function CompaniesPage(): JSX.Element {
       </Group>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
       <AutoTable rows={rows} action={(r) => (
-        <Button size="compact-xs" variant="light" color={r.mahnsperre ? "teal" : "orange"} onClick={async () => {
-          try { await trpc.companies.update.mutate({ id: String(r.id), mahnsperre: !r.mahnsperre }); await load(); }
-          catch (e) { setErr(errMsg(e)); }
-        }}>{r.mahnsperre ? "Mahnsperre aufheben" : "Mahnsperre setzen"}</Button>
+        <Group gap={4} justify="flex-end" wrap="nowrap">
+          <Button size="compact-xs" variant="subtle" onClick={() => setOpenCompany((c) => c === String(r.id) ? null : String(r.id))}>Personen</Button>
+          <Button size="compact-xs" variant="light" color={r.mahnsperre ? "teal" : "orange"} onClick={async () => {
+            try { await trpc.companies.update.mutate({ id: String(r.id), mahnsperre: !r.mahnsperre }); await load(); }
+            catch (e) { setErr(errMsg(e)); }
+          }}>{r.mahnsperre ? "Mahnsperre aufheben" : "Mahnsperre setzen"}</Button>
+        </Group>
       )} />
+      {openCompany && <CompanyContactsPanel companyId={openCompany} companies={rows.map((r) => ({ id: String(r.id), name: String(r.name ?? r.id) }))} />}
     </>
   );
 }

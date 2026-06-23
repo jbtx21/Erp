@@ -80,6 +80,8 @@ import { InvoiceService } from "../modules/invoice/invoice.service.js";
 import { InMemoryInvoiceRepository } from "../repositories/in-memory-invoice.repository.js";
 import { ConnectionsService } from "../modules/connections/connections.service.js";
 import { InMemoryConnectionsRepository } from "../repositories/in-memory-connections.repository.js";
+import { ContactLinkService } from "../modules/contact/contact-link.service.js";
+import { InMemoryContactLinkRepository } from "../repositories/in-memory-contact-link.repository.js";
 import { DeliveryService } from "../modules/delivery/delivery.service.js";
 import { InMemoryDeliveryRepository } from "../repositories/in-memory-delivery.repository.js";
 import { NumberingService } from "../modules/numbering/numbering.service.js";
@@ -319,6 +321,7 @@ function setup(user: AuthUser | null = BUERO) {
     archive: new ArchiveService(new InMemoryObjectStore(), new InMemoryArchiveRepository(), new MemoryAuditSink()),
     invoices: new InvoiceService(new InMemoryInvoiceRepository([]), new NumberingService(new InMemoryNumberingRepository()), new MemoryAuditSink()),
     connections: new ConnectionsService(new InMemoryConnectionsRepository({})),
+    contactLinks: new ContactLinkService(new InMemoryContactLinkRepository([]), new MemoryAuditSink()),
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -435,6 +438,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       archive: {} as Context["archive"],
       invoices: {} as Context["invoices"],
       connections: {} as Context["connections"],
+      contactLinks: {} as Context["contactLinks"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",

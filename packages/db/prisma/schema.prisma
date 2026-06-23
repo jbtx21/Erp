@@ -139,6 +139,7 @@ model Contact {
   gesperrtAm     DateTime? // DSGVO-Sperre (B12, Kap. 28)
   anonymisiertAm DateTime? // DSGVO-Anonymisierung (B12)
   createdAt DateTime @default(now())
+  links     ContactLink[] // zusätzliche Verknüpfungen (Dynamic-Link, CRM)
 
   @@index([companyId])
 }
@@ -1623,6 +1624,22 @@ model PasswordResetToken {
   createdAt DateTime  @default(now())
 
   @@index([userId])
+}
+
+// Contact-Dynamic-Link (CRM-Muster ERPNext): entkoppelt Personen von genau EINER
+// Firma. Eine Person kann zusätzlich mit beliebig vielen Parteien (Company, Lead,
+// Supplier, …) verknüpft werden — polymorph über (entity, entityId).
+model ContactLink {
+  id        String   @id @default(cuid())
+  contactId String
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  entity    String // "Company" | "Lead" | "Supplier" | …
+  entityId  String
+  role      String? // Funktion bei dieser Partei (z. B. "Einkauf", "Buchhaltung")
+  createdAt DateTime @default(now())
+
+  @@unique([contactId, entity, entityId])
+  @@index([entity, entityId])
 }
 
 // GoBD-Belegarchiv (Kap. 10): unveränderbares Register zum WORM-Objektspeicher. Die

@@ -122,6 +122,8 @@ import { InvoiceService } from "./modules/invoice/invoice.service.js";
 import { PrismaInvoiceRepository } from "./repositories/prisma-invoice.repository.js";
 import { ConnectionsService } from "./modules/connections/connections.service.js";
 import { PrismaConnectionsRepository } from "./repositories/prisma-connections.repository.js";
+import { ContactLinkService } from "./modules/contact/contact-link.service.js";
+import { PrismaContactLinkRepository } from "./repositories/prisma-contact-link.repository.js";
 import { PrismaIntegrationsRepository } from "./repositories/prisma-integrations.repository.js";
 import { HttpSlackSender } from "./modules/integrations/slack-provider.js";
 import { appRouter } from "./trpc/router.js";
@@ -250,6 +252,8 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const invoices = new InvoiceService(new PrismaInvoiceRepository(), new NumberingService(new PrismaNumberingRepository()), new PrismaAuditSink());
   // Belegkette/Connections (ERPNext-Muster): bidirektionaler Belegbaum eines Auftrags.
   const connections = new ConnectionsService(new PrismaConnectionsRepository());
+  // Contact-Dynamic-Link (CRM): Person ↔ mehrere Parteien (Company/Lead/Supplier).
+  const contactLinks = new ContactLinkService(new PrismaContactLinkRepository(), new PrismaAuditSink());
   const auth = new AuthService(
     new PrismaUserRepository(),
     new PrismaSessionRepository(),
@@ -395,6 +399,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           archive,
           invoices,
           connections,
+          contactLinks,
           auth,
           user,
           sessionToken,

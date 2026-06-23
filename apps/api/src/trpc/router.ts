@@ -1420,6 +1420,30 @@ export const appRouter = router({
       .mutation(({ input, ctx }) => ctx.costCenters.remove(input.id)),
   }),
 
+  // Contact-Dynamic-Link (CRM): Person ↔ mehrere Parteien.
+  contacts: router({
+    /** Personen einer Partei (Stammkontakte + zusätzliche Dynamic-Links). */
+    forEntity: roleProcedure(...supplierRoles)
+      .input(z.object({ entity: z.enum(["Company", "Lead", "Supplier"]), entityId: z.string().min(1) }))
+      .query(({ input, ctx }) => ctx.contactLinks.contactsForEntity(input.entity, input.entityId)),
+
+    /** Alle Parteien, mit denen eine Person verknüpft ist. */
+    links: roleProcedure(...supplierRoles)
+      .input(z.object({ contactId: z.string().min(1) }))
+      .query(({ input, ctx }) => ctx.contactLinks.linksForContact(input.contactId)),
+
+    link: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ contactId: z.string().min(1), entity: z.enum(["Company", "Lead", "Supplier"]), entityId: z.string().min(1), role: z.string().optional() }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.contactLinks.link(input.contactId, input.entity, input.entityId, input.role); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+
+    unlink: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ id: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => { await ctx.contactLinks.unlink(input.id); return { ok: true as const }; }),
+  }),
+
   // Order → Invoice „Make-Target" (Kap. 9.1): Auftrag fakturieren (ERPNext-Muster).
   invoices: router({
     list: roleProcedure(...supplierRoles)
