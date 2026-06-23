@@ -1006,7 +1006,7 @@ export const appRouter = router({
     advance: roleProcedure("ADMIN", "BUERO", "PRODUKTION")
       .input(z.object({ orderId: z.string().min(1) }))
       .mutation(async ({ input, ctx }) => {
-        try { return await ctx.workflow.advance(input.orderId); }
+        try { return await ctx.workflow.advance(input.orderId, ctx.user.email); }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
   }),

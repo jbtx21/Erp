@@ -3,7 +3,8 @@ import { WorkflowError, WorkflowService } from "./workflow.service.js";
 import { InMemoryWorkflowRepository } from "../../repositories/in-memory-workflow.repository.js";
 
 class MemAudit { entries: unknown[] = []; async append(e: unknown): Promise<void> { this.entries.push(e); } }
-function setup() { const repo = new InMemoryWorkflowRepository(); return { svc: new WorkflowService(repo, new MemAudit()), repo }; }
+class MemNotifier { sent: Array<{ recipient: string; title: string }> = []; async notify(recipient: string, title: string): Promise<unknown> { this.sent.push({ recipient, title }); return undefined; } }
+function setup() { const repo = new InMemoryWorkflowRepository(); const notifier = new MemNotifier(); return { svc: new WorkflowService(repo, new MemAudit(), notifier), repo, notifier }; }
 
 describe("WorkflowService (Statusverwaltung / Routen)", () => {
   it("weist die Route automatisch aus den Merkmalen zu", async () => {
@@ -26,6 +27,17 @@ describe("WorkflowService (Statusverwaltung / Routen)", () => {
     for (let i = 0; i < 4; i++) p = await svc.advance("o1");
     expect(p.done).toBe(true);
     await expect(svc.advance("o1")).rejects.toBeInstanceOf(WorkflowError);
+  });
+
+  it("benachrichtigt proaktiv, wenn ein automatisierbarer Schritt erreicht wird", async () => {
+    const { svc, repo, notifier } = setup();
+    repo.seed({ id: "o1", hasVeredelung: false, hasIntern: false, hasExtern: false }); // Route 1
+    await svc.assignRoute("o1"); // Schritt 0 = angelegt (keine Aktion)
+    const p = await svc.advance("o1", "buero@texma.de"); // Schritt 1 = Warenbestellvorschlag (Aktion!)
+    expect(p.currentStep?.action).toBe("BESTELLVORSCHLAG");
+    expect(notifier.sent).toHaveLength(1);
+    expect(notifier.sent[0]).toMatchObject({ recipient: "buero@texma.de" });
+    expect(notifier.sent[0]?.title).toContain("Warenbestellvorschlag");
   });
 
   it("erlaubt explizite Routenwahl (Override)", async () => {

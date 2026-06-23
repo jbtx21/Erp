@@ -665,6 +665,15 @@ const WF_ROUTES = [
   { value: "ROUTE4_EXTERN_INTERN", label: "Route 4 – extern + intern" },
 ] as const;
 
+// Aktion je Schritt → konkreter Hinweis (dockt an das jeweilige Modul an). Beim
+// Erreichen des Schritts wird zusätzlich eine In-App-Benachrichtigung ausgelöst.
+const STEP_ACTION_HINT: Record<string, string> = {
+  BESTELLVORSCHLAG: 'Warenbestellvorschlag erzeugen — siehe „Lager & Inventur" bzw. „Nachbestellung" (auftragsübergreifender Bedarf).',
+  LAUFZETTEL: 'Laufzettel/Produktionszettel erstellen (Produktions-Reporting / PDF).',
+  AB_DRUCKFREIGABE: 'Auftragsbestätigung mit Druckfreigabe an den Kunden senden (E-Mail-Vorlage).',
+  QK_BILD: 'Qualitätskontrolle mit Bild dokumentieren — Foto im Anhänge-Panel unten hochladen.',
+};
+
 function WorkflowPanel({ orderId }: { orderId: string }): JSX.Element {
   const [status, setStatus] = useState<Awaited<ReturnType<typeof trpc.workflow.status.query>> | null>(null);
   const [route, setRoute] = useState<string | null>(null);
@@ -686,6 +695,11 @@ function WorkflowPanel({ orderId }: { orderId: string }): JSX.Element {
       ) : (
         <>
           <Text size="sm" mt={4}>{status.label} · Schritt {Math.min(status.stepIndex + 1, status.totalSteps)}/{status.totalSteps}{status.done ? " · abgeschlossen ✓" : ""}</Text>
+          {status.currentStep?.action && (
+            <Alert color="blue" mt="xs" title="🔔 Aktion fällig">
+              {STEP_ACTION_HINT[status.currentStep.action] ?? status.currentStep.action}
+            </Alert>
+          )}
           <Box mt="xs">
             {status.steps.map((s) => (
               <Group key={s.key} gap={8} py={3}>

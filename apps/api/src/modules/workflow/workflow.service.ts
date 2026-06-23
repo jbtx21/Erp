@@ -3,8 +3,13 @@
 // reine Routendefinition liegt in @texma/shared; hier die Zustandsfortschreibung +
 // GoBD-Audit jedes Statuswechsels.
 
-import { determineRoute, ORDER_ROUTES, routeProgress, type OrderRoute, type RouteProgress } from "@texma/shared";
+import { determineRoute, ORDER_ROUTES, routeProgress, STEP_ACTION_LABEL, type OrderRoute, type RouteProgress } from "@texma/shared";
 import { buildEntry, type AuditSink } from "@texma/audit";
+
+/** Proaktive Benachrichtigung, wenn ein automatisierbarer Schritt erreicht wird. */
+export interface WorkflowNotifier {
+  notify(recipient: string, title: string, body: string | null, navKey: string | null): Promise<unknown>;
+}
 
 export interface WorkflowRepository {
   /** Merkmale zur Routenbestimmung: hat der Auftrag Veredelung, intern/extern? */
@@ -17,7 +22,11 @@ export interface WorkflowRepository {
 export class WorkflowError extends Error {}
 
 export class WorkflowService {
-  constructor(private readonly repo: WorkflowRepository, private readonly audit: AuditSink) {}
+  constructor(
+    private readonly repo: WorkflowRepository,
+    private readonly audit: AuditSink,
+    private readonly notifier?: WorkflowNotifier
+  ) {}
 
   /** Weist die Route zu (aus Merkmalen oder explizit) und setzt den Auftrag auf Schritt 0. */
   async assignRoute(orderId: string, explicit?: OrderRoute): Promise<RouteProgress> {
@@ -36,8 +45,12 @@ export class WorkflowService {
     return routeProgress(r.route, r.stepIndex);
   }
 
-  /** Schaltet einen Schritt weiter; blockiert über das Ende hinaus. */
-  async advance(orderId: string): Promise<RouteProgress> {
+  /**
+   * Schaltet einen Schritt weiter; blockiert über das Ende hinaus. Erreicht der neue
+   * aktuelle Schritt eine automatisierbare Aktion (Warenbestellvorschlag, Laufzettel,
+   * AB+Druckfreigabe, QK-Bild), wird `recipient` proaktiv benachrichtigt.
+   */
+  async advance(orderId: string, recipient?: string): Promise<RouteProgress> {
     const r = await this.repo.getRoute(orderId);
     if (!r || !r.route) throw new WorkflowError("Auftrag hat keine Route — erst zuweisen.");
     const total = ORDER_ROUTES[r.route].steps.length;
@@ -46,6 +59,17 @@ export class WorkflowService {
     const next = r.stepIndex + 1;
     await this.repo.setStepIndex(orderId, next);
     await this.audit.append(buildEntry({ entity: "Order", entityId: orderId, action: "UPDATE", after: { stepCompleted: completed?.key, routeStepIndex: next } }));
-    return routeProgress(r.route, next);
+
+    const progress = routeProgress(r.route, next);
+    const action = progress.currentStep?.action;
+    if (action && this.notifier && recipient) {
+      await this.notifier.notify(
+        recipient,
+        `Nächster Schritt: ${STEP_ACTION_LABEL[action]}`,
+        `Auftrag ${orderId} hat „${progress.currentStep?.label}“ erreicht.`,
+        "orders"
+      );
+    }
+    return progress;
   }
 }

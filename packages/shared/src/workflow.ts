@@ -28,20 +28,36 @@ export const QUOTE_STAGES: ReadonlyArray<{ value: QuoteStage; label: string }> =
 // ── Produktionsrouten ─────────────────────────────────────────────────────────
 export type OrderRoute = "ROUTE1_KEINE" | "ROUTE2_INTERN" | "ROUTE3_EXTERN" | "ROUTE4_EXTERN_INTERN";
 
+/** Automatisierbare Aktion eines Schritts (dockt an die bestehenden Module an). */
+export type StepAction =
+  | "BESTELLVORSCHLAG" // Warenbestellvorschlag (reorder)
+  | "LAUFZETTEL"       // Produktions-/Laufzettel (production-sheet/print)
+  | "AB_DRUCKFREIGABE" // Auftragsbestätigung + Druckfreigabe (mail/notification)
+  | "QK_BILD";         // Qualitätskontrolle mit Bilddokumentation (Anhang)
+
+export const STEP_ACTION_LABEL: Record<StepAction, string> = {
+  BESTELLVORSCHLAG: "Warenbestellvorschlag erzeugen",
+  LAUFZETTEL: "Laufzettel erstellen",
+  AB_DRUCKFREIGABE: "Auftragsbestätigung mit Druckfreigabe senden",
+  QK_BILD: "Qualitätskontrolle mit Bild dokumentieren",
+};
+
 export interface RouteStep {
   key: string;
   label: string;
+  /** Automatisierbare Aktion (UI-Aktion + proaktive Benachrichtigung). */
+  action?: StepAction;
 }
 
 const S = {
   angelegt: { key: "angelegt", label: "Auftrag angelegt – automatische Laufzeit" },
-  bestellvorschlag: { key: "bestellvorschlag", label: "Automatischer Warenbestellvorschlag" },
+  bestellvorschlag: { key: "bestellvorschlag", label: "Automatischer Warenbestellvorschlag", action: "BESTELLVORSCHLAG" as const },
   zutaten: { key: "zutaten", label: "Zutatenbestellung (Transferdrucke)" },
-  laufzettelIntern: { key: "laufzettel_intern", label: "Laufzettel interne Veredelung" },
-  laufzettelExtern: { key: "laufzettel_extern", label: "Laufzettel externe Veredelung" },
-  laufzettelBeide: { key: "laufzettel_beide", label: "Laufzettel externe + interne Veredelung" },
+  laufzettelIntern: { key: "laufzettel_intern", label: "Laufzettel interne Veredelung", action: "LAUFZETTEL" as const },
+  laufzettelExtern: { key: "laufzettel_extern", label: "Laufzettel externe Veredelung", action: "LAUFZETTEL" as const },
+  laufzettelBeide: { key: "laufzettel_beide", label: "Laufzettel externe + interne Veredelung", action: "LAUFZETTEL" as const },
   freigabeGL: { key: "freigabe_gl", label: "Auftrag geprüft & freigegeben durch GL" },
-  abVersendet: { key: "ab_versendet", label: "Auftragsbestätigung versendet (mit Druckfreigabe)" },
+  abVersendet: { key: "ab_versendet", label: "Auftragsbestätigung versendet (mit Druckfreigabe)", action: "AB_DRUCKFREIGABE" as const },
   wareneingang: { key: "wareneingang", label: "Wareneingang – Prüfung" },
   wareneingangKomm: { key: "wareneingang_komm", label: "Wareneingang – Prüfung / Kommissionierung" },
   uebergabeProduktion: { key: "uebergabe_produktion", label: "Übergabe an Produktion" },
@@ -49,10 +65,10 @@ const S = {
   versandVeredler: { key: "versand_veredler", label: "Versand an externen Veredler" },
   produktionExtern: { key: "produktion_extern", label: "Produktion extern (1. Auftrag Muster zur Freigabe, Folge ohne)" },
   ruecklauf: { key: "ruecklauf", label: "Rücklauf vom Veredler" },
-  qkBild: { key: "qk_bild", label: "Qualitätskontrolle mit Bilddokumentation" },
+  qkBild: { key: "qk_bild", label: "Qualitätskontrolle mit Bilddokumentation", action: "QK_BILD" as const },
   uebergabeIntern: { key: "uebergabe_intern", label: "Übergabe an interne Produktion" },
   veredelungIntern: { key: "veredelung_intern", label: "Interne Veredelung" },
-  qkBild2: { key: "qk_bild_2", label: "Qualitätskontrolle mit Bilddokumentation (final)" },
+  qkBild2: { key: "qk_bild_2", label: "Qualitätskontrolle mit Bilddokumentation (final)", action: "QK_BILD" as const },
   kommissionierung: { key: "kommissionierung", label: "Kommissionierung" },
   abrechnungVersand: { key: "abrechnung_versand", label: "Abrechnung & Versand / Abholung vor Ort" },
 } as const;

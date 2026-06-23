@@ -28,3 +28,16 @@ describe("Auftrags-Workflow / Routen", () => {
     expect(end.steps.every((s) => s.done)).toBe(true);
   });
 });
+
+import { ORDER_ROUTES as ROUTES, STEP_ACTION_LABEL } from "./workflow.js";
+
+describe("Workflow-Schritt-Aktionen", () => {
+  it("taggt automatisierbare Schritte mit einer Aktion", () => {
+    const r2 = ROUTES.ROUTE2_INTERN.steps;
+    expect(r2.find((s) => s.key === "bestellvorschlag")?.action).toBe("BESTELLVORSCHLAG");
+    expect(r2.find((s) => s.key === "laufzettel_intern")?.action).toBe("LAUFZETTEL");
+    expect(r2.find((s) => s.key === "ab_versendet")?.action).toBe("AB_DRUCKFREIGABE");
+    expect(r2.find((s) => s.key === "qk_bild")?.action).toBe("QK_BILD");
+    expect(STEP_ACTION_LABEL.LAUFZETTEL).toContain("Laufzettel");
+  });
+});
