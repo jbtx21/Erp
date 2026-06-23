@@ -1415,6 +1415,21 @@ export const appRouter = router({
       .mutation(({ input, ctx }) => ctx.costCenters.remove(input.id)),
   }),
 
+  // Order → Invoice „Make-Target" (Kap. 9.1): Auftrag fakturieren (ERPNext-Muster).
+  invoices: router({
+    list: roleProcedure(...supplierRoles)
+      .input(z.object({ limit: z.number().int().positive().max(200) }).optional())
+      .query(({ input, ctx }) => ctx.invoices.listRecent(input?.limit ?? 50)),
+
+    /** Auftrag → Rechnung: Positionsübernahme + USt, OP anlegen, fakturastatus zurückmelden. */
+    createFromOrder: roleProcedure("ADMIN", "BUERO", "BUCHHALTUNG")
+      .input(z.object({ orderId: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.invoices.createFromOrder(input.orderId); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+  }),
+
   // GoBD-Belegarchiv (Kap. 10): WORM-Ablage + Z3-Export. Finanzrelevant → kein PRODUKTION.
   archive: router({
     list: roleProcedure(...supplierRoles)

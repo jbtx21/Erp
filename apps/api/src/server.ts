@@ -118,6 +118,8 @@ import { IntegrationsService } from "./modules/integrations/integrations.service
 import { ArchiveService } from "./modules/archive/archive.service.js";
 import { FsWormObjectStore } from "./modules/archive/object-store.js";
 import { PrismaArchiveRepository } from "./repositories/prisma-archive.repository.js";
+import { InvoiceService } from "./modules/invoice/invoice.service.js";
+import { PrismaInvoiceRepository } from "./repositories/prisma-invoice.repository.js";
 import { PrismaIntegrationsRepository } from "./repositories/prisma-integrations.repository.js";
 import { HttpSlackSender } from "./modules/integrations/slack-provider.js";
 import { appRouter } from "./trpc/router.js";
@@ -241,6 +243,9 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   // in Produktion S3 mit Object-Lock (ARCHIVE_S3_*). Pfad via ARCHIVE_DIR (Default ./var/archive).
   const archiveStore = new FsWormObjectStore(process.env.ARCHIVE_DIR ?? "./var/archive");
   const archive = new ArchiveService(archiveStore, new PrismaArchiveRepository(), new PrismaAuditSink());
+  // Order → Invoice „Make-Target" (Kap. 9.1): erzeugt die Rechnung + offenen Posten und
+  // meldet fakturastatus/status an den Auftrag zurück.
+  const invoices = new InvoiceService(new PrismaInvoiceRepository(), new NumberingService(new PrismaNumberingRepository()), new PrismaAuditSink());
   const auth = new AuthService(
     new PrismaUserRepository(),
     new PrismaSessionRepository(),
@@ -384,6 +389,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           hr,
           integrations,
           archive,
+          invoices,
           auth,
           user,
           sessionToken,

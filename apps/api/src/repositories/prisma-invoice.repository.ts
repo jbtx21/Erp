@@ -1,0 +1,50 @@
+// Prisma-Invoice-Repo (Produktionspfad): Order → Invoice Make-Target. Erzeugt Rechnung
+// + offenen Posten und schreibt den Auftragsstatus (fakturastatus/status) in EINER
+// Transaktion zurück (Konsistenz der berechneten Erfüllungsstatus, ERPNext-Muster).
+import { prisma } from "@texma/db";
+import type { InvoiceRepository, OrderForInvoice } from "../modules/invoice/invoice.service.js";
+
+export class PrismaInvoiceRepository implements InvoiceRepository {
+  async loadOrderForInvoice(orderId: string): Promise<OrderForInvoice | null> {
+    const o = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { lines: { orderBy: { position: "asc" } }, company: { select: { zahlungszielTage: true } }, invoice: { select: { id: true } } },
+    });
+    if (!o) return null;
+    return {
+      id: o.id,
+      number: o.number,
+      companyId: o.companyId,
+      zahlungszielTage: o.company.zahlungszielTage,
+      alreadyInvoicedId: o.invoice?.id ?? null,
+      lines: o.lines.map((l) => ({ description: l.description, qty: l.qty, unitNetCents: l.unitNetCents })),
+    };
+  }
+
+  async createInvoiceFromOrder(input: { orderId: string; companyId: string; number: string; netCents: number; taxCents: number; grossCents: number; dueDate: Date }): Promise<{ id: string }> {
+    return prisma.$transaction(async (tx) => {
+      const invoice = await tx.invoice.create({
+        data: {
+          number: input.number,
+          orderId: input.orderId,
+          companyId: input.companyId,
+          netCents: input.netCents,
+          taxCents: input.taxCents,
+          grossCents: input.grossCents,
+          finalized: true,
+        },
+        select: { id: true },
+      });
+      // Offener Posten (Forderung) — Grundlage für Banking-Abgleich/Mahnwesen.
+      await tx.openItem.create({ data: { invoiceId: invoice.id, openCents: input.grossCents, dueDate: input.dueDate } });
+      // Fortschritts-Rückmeldung an den Auftrag (per_billed = 100 %).
+      await tx.order.update({ where: { id: input.orderId }, data: { fakturastatus: "VOLL", status: "FAKTURIERT" } });
+      return { id: invoice.id };
+    });
+  }
+
+  async listRecent(limit: number): Promise<Array<{ id: string; number: string; orderId: string | null; companyId: string; grossCents: number; issuedAt: Date }>> {
+    const rows = await prisma.invoice.findMany({ orderBy: { issuedAt: "desc" }, take: limit, select: { id: true, number: true, orderId: true, companyId: true, grossCents: true, issuedAt: true } });
+    return rows;
+  }
+}
