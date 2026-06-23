@@ -859,6 +859,29 @@ export const appRouter = router({
       }),
   }),
 
+  // Auftrag → Produktionsauftrag (PA) + Freigabe (Kap. 5.2). Schreibt Status/Stammdaten →
+  // kein PRODUKTION-Zugriff auf die Erzeugung; der Laufzettel-PDF läuft über productionSheet.
+  production: router({
+    status: roleProcedure(...supplierRoles)
+      .input(z.object({ orderId: z.string().min(1) }))
+      .query(async ({ input, ctx }) => {
+        try { return await ctx.production.status(input.orderId); }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
+      }),
+    release: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ orderId: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.production.release(input.orderId); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    createFromOrder: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ orderId: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.production.createFromOrder(input.orderId); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+  }),
+
   // Artikel/Varianten-Stammdaten (B16): anlegen/auflisten (Farbe×Größe).
   products: router({
     listArticles: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.products.listArticles()),

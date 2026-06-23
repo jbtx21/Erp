@@ -103,6 +103,7 @@ import { InMemoryDeliveryRepository } from "../repositories/in-memory-delivery.r
 import { NumberingService } from "../modules/numbering/numbering.service.js";
 import { InMemoryNumberingRepository } from "../repositories/in-memory-numbering.repository.js";
 import { ProductionSheetService } from "../modules/production-sheet/production-sheet.service.js";
+import { ProductionService } from "../modules/production/production.service.js";
 import { ReportingService } from "../modules/reporting/reporting.service.js";
 import { ProductionReportingService } from "../modules/production-reporting/production-reporting.service.js";
 import { InMemoryOrderRepository } from "../repositories/in-memory-order.repository.js";
@@ -123,6 +124,7 @@ import { InMemoryAmpelRepository } from "../repositories/in-memory-ampel.reposit
 import { InMemoryStickereiRepository } from "../repositories/in-memory-stickerei.repository.js";
 import { InMemoryReorderRepository } from "../repositories/in-memory-reorder.repository.js";
 import { InMemoryProductionSheetRepository } from "../repositories/in-memory-production-sheet.repository.js";
+import { InMemoryProductionRepository } from "../repositories/in-memory-production.repository.js";
 import { InMemoryReportingRepository } from "../repositories/in-memory-reporting.repository.js";
 import { InMemoryProductionReportingRepository } from "../repositories/in-memory-production-reporting.repository.js";
 import { appRouter } from "./router.js";
@@ -237,6 +239,7 @@ function setup(user: AuthUser | null = BUERO) {
       pa_1: { orderNumber: "AB-1", articleName: "Polo", farbe: "Blau", groesse: "XL", qty: 50, logoLabel: "Logo v3" },
     })
   );
+  const production = new ProductionService(new InMemoryProductionRepository(), new NumberingService(new InMemoryNumberingRepository()), new MemoryAuditSink());
   // Kap. 29: zwei Rechnungen (Mai/Juni) + zwei Aufträge für die Reporting-Endpunkte.
   const reporting = new ReportingService(
     new InMemoryReportingRepository(
@@ -301,6 +304,7 @@ function setup(user: AuthUser | null = BUERO) {
     stickerei,
     reorder,
     productionSheet,
+    production,
     reporting,
     productionReporting,
     costCenters: new CostCenterService(new InMemoryCostCenterRepository(), new MemoryAuditSink()),
@@ -426,6 +430,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       stickerei: {} as Context["stickerei"],
       reorder: {} as Context["reorder"],
       productionSheet: {} as Context["productionSheet"],
+      production: {} as Context["production"],
       reporting: {} as Context["reporting"],
       productionReporting: {} as Context["productionReporting"],
       costCenters: {} as Context["costCenters"],
