@@ -138,6 +138,8 @@ import { FinanceReportService } from "./modules/finance-report/finance-report.se
 import { PrismaFinanceReportRepository } from "./repositories/prisma-finance-report.repository.js";
 import { GoodsReceiptService } from "./modules/goods-receipt/goods-receipt.service.js";
 import { PrismaGoodsReceiptRepository } from "./repositories/prisma-goods-receipt.repository.js";
+import { PaymentService } from "./modules/payment/payment.service.js";
+import { PrismaPaymentRepository } from "./repositories/prisma-payment.repository.js";
 import { PrismaIntegrationsRepository } from "./repositories/prisma-integrations.repository.js";
 import { HttpSlackSender } from "./modules/integrations/slack-provider.js";
 import { appRouter } from "./trpc/router.js";
@@ -280,6 +282,8 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const financeReport = new FinanceReportService(new PrismaFinanceReportRepository());
   // Wareneingang gegen Bestellung (Kap. 6.3 / T-05): Beleg + Statusfortschreibung.
   const goodsReceipts = new GoodsReceiptService(new PrismaGoodsReceiptRepository(), new PrismaAuditSink());
+  // Manuelle Zahlungserfassung (Kap. 9.4): Zahlungseingang auf offenen Posten buchen.
+  const payments = new PaymentService(new PrismaPaymentRepository(), new PrismaAuditSink());
   // Regel-Engine: Aktions-Handler bündeln vorhandene Seiteneffekte (In-App, Mail, Aufgabe).
   // Weitere Handler (Slack o. Ä.) lassen sich hier ohne Engine-Änderung ergänzen.
   const automationHandlers: Record<string, ActionHandler> = {
@@ -441,6 +445,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           eanImport,
           financeReport,
           goodsReceipts,
+          payments,
           auth,
           user,
           sessionToken,

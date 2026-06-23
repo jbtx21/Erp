@@ -2472,6 +2472,77 @@ export function WareneingangPage(): JSX.Element {
   );
 }
 
+// Manuelle Zahlungserfassung (Kap. 9.4): offene Posten + Zahlungseingang von Hand buchen
+// (Teil-/Voll-/Überzahlung), ergänzend zum automatischen CAMT-Bankabgleich (T-13).
+function ZahlungZeile({ oi, onBooked, onErr }: {
+  oi: Awaited<ReturnType<typeof trpc.payments.listOpen.query>>[number];
+  onBooked: (msg: string) => void; onErr: (msg: string) => void;
+}): JSX.Element {
+  const [euroVal, setEuroVal] = useState<number>(oi.openCents / 100);
+  const [reference, setReference] = useState("");
+  const [busy, setBusy] = useState(false);
+  const overdue = new Date(oi.dueDate).getTime() < Date.now();
+
+  const book = async (): Promise<void> => {
+    const amountCents = Math.round(euroVal * 100);
+    if (amountCents <= 0) { onErr("Betrag muss größer 0 sein."); return; }
+    setBusy(true);
+    try {
+      const r = await trpc.payments.record.mutate({ openItemId: oi.id, amountCents, reference: reference || undefined });
+      onBooked(r.fullyPaid ? `${oi.invoiceNumber} vollständig bezahlt.` : `${oi.invoiceNumber}: Teilzahlung gebucht, offen ${euro(r.newOpenCents)}.`);
+    } catch (e) { onErr(errMsg(e)); } finally { setBusy(false); }
+  };
+
+  return (
+    <Table.Tr>
+      <Table.Td>{oi.invoiceNumber}</Table.Td>
+      <Table.Td>{oi.companyName}</Table.Td>
+      <Table.Td ta="right">{euro(oi.grossCents)}</Table.Td>
+      <Table.Td ta="right" fw={600}>{euro(oi.openCents)}</Table.Td>
+      <Table.Td c={overdue ? "red" : undefined}>{new Date(oi.dueDate).toLocaleDateString("de-DE")}{oi.dunningLevel > 0 ? ` · M${oi.dunningLevel}` : ""}</Table.Td>
+      <Table.Td>
+        <Group gap={6} wrap="nowrap" justify="flex-end">
+          <NumberInput size="xs" w={110} min={0} step={0.01} decimalScale={2} value={euroVal} onChange={(v) => setEuroVal(Number(v) || 0)} />
+          <TextInput size="xs" w={130} placeholder="Verwendungszweck" value={reference} onChange={(e) => setReference(e.currentTarget.value)} />
+          <Button size="compact-xs" loading={busy} onClick={() => void book()}>Buchen</Button>
+        </Group>
+      </Table.Td>
+    </Table.Tr>
+  );
+}
+
+export function ZahlungenPage(): JSX.Element {
+  const [items, setItems] = useState<Awaited<ReturnType<typeof trpc.payments.listOpen.query>>>([]);
+  const [err, setErr] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    try { setItems(await trpc.payments.listOpen.query()); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  const totalOpen = items.reduce((s, i) => s + i.openCents, 0);
+  return (
+    <>
+      <Title order={3}>Zahlungseingänge erfassen</Title>
+      <Text size="sm" c="dimmed" mt={4}>Offene Posten und manuelle Zahlungsbuchung (Kap. 9.4) — für Barzahlung oder Zahlungen, die der automatische Bankabgleich (T-13) nicht zuordnet. Teil-, Voll- und Überzahlung möglich; bei 0 € gilt die Rechnung als bezahlt.</Text>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      {msg && <Alert color="green" mt="sm">{msg}</Alert>}
+      <Text size="sm" mt="md">Offene Posten: <b>{items.length}</b> · Summe offen: <b>{euro(totalOpen)}</b></Text>
+      <Table mt="xs" striped withTableBorder verticalSpacing="xs" fz="sm">
+        <Table.Thead><Table.Tr>
+          <Table.Th>Rechnung</Table.Th><Table.Th>Kunde</Table.Th><Table.Th ta="right">Brutto</Table.Th>
+          <Table.Th ta="right">Offen</Table.Th><Table.Th>Fällig</Table.Th><Table.Th ta="right">Zahlung erfassen</Table.Th>
+        </Table.Tr></Table.Thead>
+        <Table.Tbody>
+          {items.map((oi) => <ZahlungZeile key={oi.id} oi={oi} onBooked={(m) => { setMsg(m); setErr(null); void load(); }} onErr={(m) => { setErr(m); setMsg(null); }} />)}
+          {items.length === 0 && <Table.Tr><Table.Td colSpan={6}><Text size="sm" c="dimmed">Keine offenen Posten.</Text></Table.Td></Table.Tr>}
+        </Table.Tbody>
+      </Table>
+    </>
+  );
+}
+
 // Newsletter (Brevo): Kampagnen anlegen + an Opt-in-Kontakte versenden (DSGVO).
 export function NewsletterPage(): JSX.Element {
   const [list, setList] = useState<Row[]>([]);

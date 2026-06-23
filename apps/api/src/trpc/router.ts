@@ -409,6 +409,23 @@ export const appRouter = router({
       }),
   }),
 
+  // Manuelle Zahlungserfassung (Kap. 9.4): offene Posten + Zahlungseingang buchen.
+  // Finanzdaten → kein PRODUKTION-Zugriff.
+  payments: router({
+    listOpen: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.payments.listOpenItems()),
+    record: roleProcedure(...supplierRoles)
+      .input(z.object({
+        openItemId: z.string().min(1),
+        amountCents: z.number().int().positive(),
+        bookedAt: z.string().datetime().optional(),
+        reference: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.payments.record({ ...input, bookedAt: input.bookedAt ? new Date(input.bookedAt) : undefined }); }
+        catch (e) { throw toTrpcError(e); }
+      }),
+  }),
+
   subproduction: router({
     /** Schaltet eine Fremdvergabe-Stufe weiter (Beistellung/Rücklauf/Abschluss, T-04). */
     advance: roleProcedure("ADMIN", "BUERO")

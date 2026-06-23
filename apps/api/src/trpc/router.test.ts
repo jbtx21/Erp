@@ -96,6 +96,8 @@ import { FinanceReportService } from "../modules/finance-report/finance-report.s
 import { InMemoryFinanceReportRepository } from "../repositories/in-memory-finance-report.repository.js";
 import { GoodsReceiptService } from "../modules/goods-receipt/goods-receipt.service.js";
 import { InMemoryGoodsReceiptRepository } from "../repositories/in-memory-goods-receipt.repository.js";
+import { PaymentService } from "../modules/payment/payment.service.js";
+import { InMemoryPaymentRepository } from "../repositories/in-memory-payment.repository.js";
 import { DeliveryService } from "../modules/delivery/delivery.service.js";
 import { InMemoryDeliveryRepository } from "../repositories/in-memory-delivery.repository.js";
 import { NumberingService } from "../modules/numbering/numbering.service.js";
@@ -343,6 +345,7 @@ function setup(user: AuthUser | null = BUERO) {
     eanImport: new EanImportService(new InMemoryEanImportRepository(), new MemoryAuditSink()),
     financeReport: new FinanceReportService(new InMemoryFinanceReportRepository()),
     goodsReceipts: new GoodsReceiptService(new InMemoryGoodsReceiptRepository(), new MemoryAuditSink()),
+    payments: new PaymentService(new InMemoryPaymentRepository(), new MemoryAuditSink()),
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -467,6 +470,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       eanImport: {} as Context["eanImport"],
       financeReport: {} as Context["financeReport"],
       goodsReceipts: {} as Context["goodsReceipts"],
+      payments: {} as Context["payments"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",
@@ -1161,5 +1165,17 @@ describe("tRPC goodsReceipts — Wareneingang gegen Bestellung (T-05)", () => {
     const { caller } = setup(PRODUKTION);
     await expect(caller.goodsReceipts.record({ purchaseOrderId: "po1", lines: [{ variantId: "v1", receivedQty: 5 }] }))
       .rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+describe("tRPC payments — manuelle Zahlungserfassung (Kap. 9.4)", () => {
+  it("BUCHHALTUNG darf offene Posten lesen", async () => {
+    const { caller } = setup(BUCHHALTUNG);
+    expect(await caller.payments.listOpen()).toEqual([]);
+  });
+
+  it("PRODUKTION darf keine Zahlung erfassen (FORBIDDEN)", async () => {
+    const { caller } = setup(PRODUKTION);
+    await expect(caller.payments.record({ openItemId: "oi1", amountCents: 5000 })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });

@@ -60,6 +60,7 @@ import type { AuditQueryService } from "../modules/audit-log/audit-query.service
 import type { EanImportService } from "../modules/ean-import/ean-import.service.js";
 import type { FinanceReportService } from "../modules/finance-report/finance-report.service.js";
 import type { GoodsReceiptService } from "../modules/goods-receipt/goods-receipt.service.js";
+import type { PaymentService } from "../modules/payment/payment.service.js";
 import type {
   BankingQueryRepository,
   DunningQueryRepository,
@@ -135,6 +136,7 @@ export interface Context {
   eanImport: EanImportService;
   financeReport: FinanceReportService;
   goodsReceipts: GoodsReceiptService;
+  payments: PaymentService;
   auth: AuthService;
   user: AuthUser | null;
   /** Roh-Token aus dem Cookie (für den 2FA-Zwischenschritt/Logout, wenn user noch null ist). */
