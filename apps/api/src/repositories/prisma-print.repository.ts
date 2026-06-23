@@ -1,8 +1,15 @@
 // Prisma-Druckdaten: liest Lieferschein/Rechnung samt Positionen + Empfängeradresse.
 
 import { prisma } from "@texma/db";
-import type { PositionKind } from "@texma/shared";
-import type { DeliveryNotePrintData, InvoicePrintData, LaufzettelPrintData, PrintRepository } from "../modules/print/print.service.js";
+import { lineNet, taxOnNet, VAT_STANDARD, type PositionKind } from "@texma/shared";
+import type { DeliveryNotePrintData, InvoicePrintData, LaufzettelPrintData, OrderConfirmationPrintData, PrintRepository, PricePrintLine, QuotePrintData } from "../modules/print/print.service.js";
+
+/** Netto/USt/Brutto aus Preis-Positionen (Standard-USt) — für Angebot/AB ohne gespeicherte Steuer. */
+function totals(lines: PricePrintLine[]): { netCents: number; taxCents: number; grossCents: number } {
+  const netCents = lines.reduce((sum, l) => sum + lineNet(l.menge, l.einzelpreisCents), 0);
+  const taxCents = taxOnNet(netCents, VAT_STANDARD);
+  return { netCents, taxCents, grossCents: netCents + taxCents };
+}
 
 const ROUTE_LABEL: Record<string, string> = {
   ROUTE1_KEINE: "Route 1 – keine Veredelung", ROUTE2_INTERN: "Route 2 – interne Veredelung",
@@ -67,6 +74,38 @@ export class PrismaPrintRepository implements PrintRepository {
       empfaenger: addressLines(i.company.name, i.order?.deliveryAddress ?? null),
       positionen: (i.order?.lines ?? []).map((l) => ({ menge: l.qty, bezeichnung: l.description, einzelpreisCents: l.unitNetCents })),
       netCents: i.netCents, taxCents: i.taxCents, grossCents: i.grossCents,
+    };
+  }
+
+  async quoteForPrint(id: string): Promise<QuotePrintData | null> {
+    const q = await prisma.quote.findUnique({
+      where: { id },
+      select: {
+        number: true, createdAt: true, gueltigBisAm: true,
+        company: { select: { name: true } },
+        lines: { orderBy: { position: "asc" }, select: { qty: true, description: true, unitNetCents: true } },
+      },
+    });
+    if (!q) return null;
+    const positionen: PricePrintLine[] = q.lines.map((l) => ({ menge: l.qty, bezeichnung: l.description, einzelpreisCents: l.unitNetCents }));
+    return { number: q.number, datum: q.createdAt, empfaenger: [q.company.name], positionen, ...totals(positionen), gueltigBis: q.gueltigBisAm };
+  }
+
+  async orderConfirmationForPrint(orderId: string): Promise<OrderConfirmationPrintData | null> {
+    const o = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        number: true, createdAt: true, zugesagterLiefertermin: true, externalNumber: true,
+        company: { select: { name: true } },
+        deliveryAddress: { select: { street: true, zip: true, city: true } },
+        lines: { orderBy: { position: "asc" }, select: { qty: true, description: true, unitNetCents: true } },
+      },
+    });
+    if (!o) return null;
+    const positionen: PricePrintLine[] = o.lines.map((l) => ({ menge: l.qty, bezeichnung: l.description, einzelpreisCents: l.unitNetCents }));
+    return {
+      number: o.number, datum: o.createdAt, empfaenger: addressLines(o.company.name, o.deliveryAddress),
+      positionen, ...totals(positionen), liefertermin: o.zugesagterLiefertermin, bestellreferenz: o.externalNumber,
     };
   }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { laufzettelDokument, lieferscheinDokument, rechnungDokument } from "./beleg.js";
+import { angebotDokument, auftragsbestaetigungDokument, laufzettelDokument, lieferscheinDokument, rechnungDokument } from "./beleg.js";
 
 describe("Belegdokumente", () => {
   it("Lieferschein hat keine Preise", () => {
@@ -35,6 +35,33 @@ describe("Briefkopf (Admin-Portal) im Beleg", () => {
   it("fällt ohne Konfiguration auf den TEXMA-Default zurück", () => {
     const d = lieferscheinDokument({ nummer: "LS-1", datum: new Date("2026-06-22"), empfaenger: ["X"], positionen: [{ menge: 1, bezeichnung: "Y" }] });
     expect(d.absender[0]).toContain("TEXMA");
+  });
+});
+
+describe("Angebot / Auftragsbestätigung", () => {
+  const pos = [{ menge: 10, bezeichnung: "Poloshirt + Stick", einzelpreisCents: 1990 }];
+  it("Angebot mit Preisen, Bindefrist und AGB-Hinweis", () => {
+    const d = angebotDokument({
+      nummer: "AN-2026-0001", datum: new Date("2026-06-22"), empfaenger: ["Muster GmbH"],
+      positionen: pos, netCents: 19900, taxCents: 3781, grossCents: 23681, gueltigBis: new Date("2026-07-22"),
+    });
+    expect(d.typ).toBe("ANGEBOT");
+    expect(d.zeigePreise).toBe(true);
+    expect(d.positionen[0]?.gesamt).toBeTruthy();
+    expect(d.summen.find((s) => s.label === "Brutto")?.value).toBeTruthy();
+    expect(d.hinweise.some((h) => h.includes("gültig bis"))).toBe(true);
+    expect(d.hinweise.some((h) => h.includes("Geschäftsbedingungen"))).toBe(true);
+  });
+
+  it("Auftragsbestätigung mit Liefertermin und Bestellbezug", () => {
+    const d = auftragsbestaetigungDokument({
+      nummer: "AB-2026-0007", datum: new Date("2026-06-22"), empfaenger: ["Muster GmbH"],
+      positionen: pos, netCents: 19900, taxCents: 3781, grossCents: 23681,
+      liefertermin: new Date("2026-07-01"), bestellreferenz: "WC-1234",
+    });
+    expect(d.typ).toBe("AUFTRAGSBESTAETIGUNG");
+    expect(d.hinweise.some((h) => h.includes("WC-1234"))).toBe(true);
+    expect(d.hinweise.some((h) => h.includes("Liefertermin"))).toBe(true);
   });
 });
 

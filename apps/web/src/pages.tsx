@@ -728,10 +728,17 @@ export function QuotesPage(): JSX.Element {
     try { await fn(); await load(); } catch (e) { setErr(errMsg(e)); }
   };
 
+  const printPdf = async (quoteId: string): Promise<void> => {
+    setErr(null);
+    try { const r = await trpc.print.quote.query({ quoteId }); downloadBase64(r.filename, r.base64, "application/pdf"); }
+    catch (e) { setErr(errMsg(e)); }
+  };
+
   const actionsFor = (r: Row): ReactNode => {
     const id = String(r.id); const status = String(r.status);
     return (
       <Group gap={4} justify="flex-end" wrap="nowrap">
+        <Button size="compact-xs" variant="subtle" onClick={() => void printPdf(id)}>PDF</Button>
         {status === "ENTWURF" && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.quotes.transition.mutate({ id, to: "VERSENDET" }))}>→ Versendet</Button>}
         {(status === "VERSENDET" || status === "NACHFASSEN") && <Button size="compact-xs" color="green" onClick={() => void act(() => trpc.quotes.transition.mutate({ id, to: "ANGENOMMEN" }))}>Angenommen</Button>}
         {status === "ANGENOMMEN" && <Button size="compact-xs" color="blue" onClick={() => void act(async () => { const r = await trpc.sales.convertQuote.mutate({ quoteId: id }); window.alert(`Auftrag ${r.number} angelegt.`); })}>→ Auftrag</Button>}
@@ -1163,6 +1170,15 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
                 Stufendauern sind Standardwerte (Platzhalter, K-Punkt) — auftragsspezifische Durchlaufzeiten folgen.
               </Text>
             </>
+          )}
+          {termOrder && canAct && (
+            <Group mt="md" gap="xs">
+              <Button size="xs" variant="default" onClick={async () => {
+                setErr(null);
+                try { const r = await trpc.print.auftragsbestaetigung.query({ orderId: termOrder }); downloadBase64(r.filename, r.base64, "application/pdf"); }
+                catch (e) { setErr(errMsg(e)); }
+              }}>Auftragsbestätigung (PDF)</Button>
+            </Group>
           )}
           {termOrder && (
             <Tabs defaultValue="belegkette" mt="md" keepMounted={false}>

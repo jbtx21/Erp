@@ -37,6 +37,32 @@ describe("PrintService (Druckerzeugnisse)", () => {
   });
 });
 
+describe("PrintService — Angebot / Auftragsbestätigung", () => {
+  it("erzeugt ein Angebots-PDF mit Preisen", async () => {
+    const repo = new InMemoryPrintRepository();
+    repo.quotes["q-1"] = {
+      number: "AN-2026-0001", datum: new Date("2026-06-22"), empfaenger: ["Muster GmbH"],
+      positionen: [{ menge: 10, bezeichnung: "Polo + Stick", einzelpreisCents: 1990 }],
+      netCents: 19900, taxCents: 3781, grossCents: 23681, gueltigBis: new Date("2026-07-22"),
+    };
+    const res = await new PrintService(repo).quotePdf("q-1");
+    expect(res.filename).toBe("Angebot-AN-2026-0001.pdf");
+    expect(isPdf(res.base64)).toBe(true);
+  });
+
+  it("erzeugt ein Auftragsbestätigungs-PDF", async () => {
+    const repo = new InMemoryPrintRepository();
+    repo.orderConfirmations["ord-1"] = {
+      number: "AB-2026-0007", datum: new Date("2026-06-22"), empfaenger: ["Muster GmbH"],
+      positionen: [{ menge: 10, bezeichnung: "Polo + Stick", einzelpreisCents: 1990 }],
+      netCents: 19900, taxCents: 3781, grossCents: 23681, liefertermin: new Date("2026-07-01"), bestellreferenz: "WC-1234",
+    };
+    const res = await new PrintService(repo).auftragsbestaetigungPdf("ord-1");
+    expect(res.filename).toBe("Auftragsbestaetigung-AB-2026-0007.pdf");
+    expect(isPdf(res.base64)).toBe(true);
+  });
+});
+
 describe("PrintService.laufzettelPdf", () => {
   it("erzeugt ein Laufzettel-PDF aus den Auftragspositionen", async () => {
     const { InMemoryPrintRepository } = await import("../../repositories/in-memory-print.repository.js");

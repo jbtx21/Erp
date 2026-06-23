@@ -1259,6 +1259,20 @@ export const appRouter = router({
         try { return await ctx.print.laufzettelPdf(input.orderId); }
         catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
       }),
+    // Angebots-PDF (mit Preisen → kein PRODUKTION).
+    quote: roleProcedure(...supplierRoles)
+      .input(z.object({ quoteId: z.string().min(1) }))
+      .query(async ({ input, ctx }) => {
+        try { return await ctx.print.quotePdf(input.quoteId); }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
+      }),
+    // Auftragsbestätigungs-PDF (mit Preisen → kein PRODUKTION).
+    auftragsbestaetigung: roleProcedure(...supplierRoles)
+      .input(z.object({ orderId: z.string().min(1) }))
+      .query(async ({ input, ctx }) => {
+        try { return await ctx.print.auftragsbestaetigungPdf(input.orderId); }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
+      }),
   }),
 
   // Verknüpfte Belege („Connections"): alle mit einem Auftrag verbundenen Dokumente.

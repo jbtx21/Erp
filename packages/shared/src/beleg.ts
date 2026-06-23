@@ -18,7 +18,7 @@ export interface BelegSumme {
   value: string;
 }
 
-export type BelegTyp = "LIEFERSCHEIN" | "RECHNUNG" | "LAUFZETTEL";
+export type BelegTyp = "LIEFERSCHEIN" | "RECHNUNG" | "LAUFZETTEL" | "ANGEBOT" | "AUFTRAGSBESTAETIGUNG";
 
 export interface BelegDokument {
   typ: BelegTyp;
@@ -111,6 +111,29 @@ export interface RechnungInput {
   absender?: string[];
 }
 
+/** Gemeinsame Preis-Positionen (Einzel-/Zeilenpreis) für Rechnung/Angebot/AB. */
+function preisPositionen(ps: { menge: number; bezeichnung: string; einzelpreisCents: Cents }[]): BelegPosition[] {
+  return ps.map((p) => ({
+    menge: p.menge,
+    bezeichnung: p.bezeichnung,
+    einzelpreis: formatEur(p.einzelpreisCents),
+    gesamt: formatEur(lineNet(p.menge, p.einzelpreisCents)),
+  }));
+}
+
+/** Netto/USt/Brutto-Summenblock. */
+function preisSummen(netCents: Cents, taxCents: Cents, grossCents: Cents): BelegSumme[] {
+  return [
+    { label: "Netto", value: formatEur(netCents) },
+    { label: "USt", value: formatEur(taxCents) },
+    { label: "Brutto", value: formatEur(grossCents) },
+  ];
+}
+
+function briefkopf(absender?: string[]): string[] {
+  return absender && absender.length > 0 ? absender : [...ABSENDER_TEXMA];
+}
+
 /** Rechnung — mit Einzel-/Zeilenpreisen und Netto/USt/Brutto-Summen. */
 export function rechnungDokument(input: RechnungInput): BelegDokument {
   return {
@@ -118,20 +141,80 @@ export function rechnungDokument(input: RechnungInput): BelegDokument {
     titel: "Rechnung",
     nummer: input.nummer,
     datum: formatDatum(input.datum),
-    absender: input.absender && input.absender.length > 0 ? input.absender : [...ABSENDER_TEXMA],
+    absender: briefkopf(input.absender),
     empfaenger: input.empfaenger,
-    positionen: input.positionen.map((p) => ({
-      menge: p.menge,
-      bezeichnung: p.bezeichnung,
-      einzelpreis: formatEur(p.einzelpreisCents),
-      gesamt: formatEur(lineNet(p.menge, p.einzelpreisCents)),
-    })),
-    summen: [
-      { label: "Netto", value: formatEur(input.netCents) },
-      { label: "USt", value: formatEur(input.taxCents) },
-      { label: "Brutto", value: formatEur(input.grossCents) },
-    ],
+    positionen: preisPositionen(input.positionen),
+    summen: preisSummen(input.netCents, input.taxCents, input.grossCents),
     hinweise: input.hinweise ?? ["Zahlbar ohne Abzug gemäß vereinbartem Zahlungsziel."],
+    zeigePreise: true,
+  };
+}
+
+export interface AngebotInput {
+  nummer: string;
+  datum: Date;
+  empfaenger: string[];
+  positionen: { menge: number; bezeichnung: string; einzelpreisCents: Cents }[];
+  netCents: Cents;
+  taxCents: Cents;
+  grossCents: Cents;
+  /** Bindefrist „gültig bis" (Kap. 35.1). */
+  gueltigBis?: Date;
+  hinweise?: string[];
+  absender?: string[];
+}
+
+/** Angebot — mit Preisen, Bindefrist und AGB-Hinweis. */
+export function angebotDokument(input: AngebotInput): BelegDokument {
+  return {
+    typ: "ANGEBOT",
+    titel: "Angebot",
+    nummer: input.nummer,
+    datum: formatDatum(input.datum),
+    absender: briefkopf(input.absender),
+    empfaenger: input.empfaenger,
+    positionen: preisPositionen(input.positionen),
+    summen: preisSummen(input.netCents, input.taxCents, input.grossCents),
+    hinweise: input.hinweise ?? [
+      ...(input.gueltigBis ? [`Dieses Angebot ist gültig bis ${formatDatum(input.gueltigBis)}.`] : []),
+      "Freibleibendes Angebot. Es gelten unsere Allgemeinen Geschäftsbedingungen.",
+    ],
+    zeigePreise: true,
+  };
+}
+
+export interface AuftragsbestaetigungInput {
+  nummer: string;
+  datum: Date;
+  empfaenger: string[];
+  positionen: { menge: number; bezeichnung: string; einzelpreisCents: Cents }[];
+  netCents: Cents;
+  taxCents: Cents;
+  grossCents: Cents;
+  /** Zugesagter Liefertermin (B9). */
+  liefertermin?: Date;
+  /** Referenz auf die Kundenbestellung (z. B. Shop-Bestellnummer). */
+  bestellreferenz?: string;
+  hinweise?: string[];
+  absender?: string[];
+}
+
+/** Auftragsbestätigung — bestätigte Positionen/Preise, Liefertermin, Bestellbezug. */
+export function auftragsbestaetigungDokument(input: AuftragsbestaetigungInput): BelegDokument {
+  return {
+    typ: "AUFTRAGSBESTAETIGUNG",
+    titel: "Auftragsbestätigung",
+    nummer: input.nummer,
+    datum: formatDatum(input.datum),
+    absender: briefkopf(input.absender),
+    empfaenger: input.empfaenger,
+    positionen: preisPositionen(input.positionen),
+    summen: preisSummen(input.netCents, input.taxCents, input.grossCents),
+    hinweise: input.hinweise ?? [
+      ...(input.bestellreferenz ? [`Bezug: Ihre Bestellung ${input.bestellreferenz}.`] : []),
+      ...(input.liefertermin ? [`Zugesagter Liefertermin: ${formatDatum(input.liefertermin)}.`] : []),
+      "Wir bestätigen Ihren Auftrag zu den genannten Konditionen.",
+    ],
     zeigePreise: true,
   };
 }
