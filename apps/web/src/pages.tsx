@@ -1596,12 +1596,77 @@ function LaufzettelModal({ productionId, onClose }: { productionId: string; onCl
   );
 }
 
+// Produktionsauftrag erzeugen: Veredelungsweg wählen → Werktage-Terminvorschlag
+// (Rückwärtsterminierung) → manuelle Prüfung/Bestätigung des Produktionstermins
+// (stückzahlabhängig). Erzeugt PA + Fertigungsstückliste.
+type LeadProfile = "INHOUSE_OHNE_TRANSFER" | "INHOUSE_MIT_TRANSFER" | "EXTERN_STICK_SIEBDRUCK" | "EXTERN_UND_INTERN";
+const LEAD_PROFILE_OPTIONS: { value: LeadProfile; label: string }[] = [
+  { value: "INHOUSE_OHNE_TRANSFER", label: "Inhouse-Veredelung (ohne Transferdruck-Zukauf) · 5 WT" },
+  { value: "INHOUSE_MIT_TRANSFER", label: "Inhouse-Veredelung (mit Transferdruck-Zukauf) · 7 WT" },
+  { value: "EXTERN_STICK_SIEBDRUCK", label: "Externe Veredelung — Stick & Siebdruck (ab Versand) · 10 WT" },
+  { value: "EXTERN_UND_INTERN", label: "Externe + interne Veredelung (kombiniert) · 12 WT" },
+];
+
+function ProductionCreateDialog({ orderId, onClose, onDone }: { orderId: string; onClose: () => void; onDone: (msg: string) => void }): JSX.Element {
+  const [profile, setProfile] = useState<LeadProfile>("INHOUSE_OHNE_TRANSFER");
+  const [preview, setPreview] = useState<Awaited<ReturnType<typeof trpc.production.schedulePreview.query>> | null>(null);
+  const [dueDate, setDueDate] = useState<string>("");
+  const [edited, setEdited] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => { void (async () => {
+    try {
+      const p = await trpc.production.schedulePreview.query({ orderId, profile });
+      setPreview(p);
+      if (!edited) setDueDate(p.proposedDueDate ? new Date(p.proposedDueDate).toISOString().slice(0, 10) : "");
+    } catch (e) { setErr(errMsg(e)); }
+  })(); }, [orderId, profile, edited]);
+
+  const create = async (): Promise<void> => {
+    setBusy(true); setErr(null);
+    try {
+      const r = await trpc.production.createFromOrder.mutate({ orderId, dueDate: dueDate ? `${dueDate}T00:00:00.000Z` : null });
+      const term = r.dueDate ? ` · Produktionstermin ${new Date(r.dueDate).toLocaleDateString("de-DE")}` : "";
+      onDone(`Produktionsauftrag ${r.number} erzeugt (${r.bomItemCount} Stücklisten-Positionen)${term}.`);
+    } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+
+  const lieferung = preview?.deliveryDate ? new Date(preview.deliveryDate).toLocaleDateString("de-DE") : "—";
+  return (
+    <Modal opened onClose={onClose} title="Produktionsauftrag erzeugen" size="lg">
+      {err && <Alert color="red" mb="sm">{err}</Alert>}
+      <Select label="Veredelungsweg" data={LEAD_PROFILE_OPTIONS} value={profile} onChange={(v) => { if (v) { setProfile(v as LeadProfile); setEdited(false); } }} />
+      <Group gap="xl" mt="md" align="end">
+        <Box>
+          <Text size="xs" c="dimmed">Zugesagter Liefertermin</Text>
+          <Text size="sm" fw={600}>{lieferung}</Text>
+        </Box>
+        <Box>
+          <Text size="xs" c="dimmed">Durchlaufzeit</Text>
+          <Text size="sm" fw={600}>{preview ? `${preview.leadWorkingDays} Werktage${preview.external ? " (ab Versand z. Veredler)" : ""}` : "—"}</Text>
+        </Box>
+        <TextInput label="Produktionstermin (Vorschlag, anpassbar)" type="date" value={dueDate} onChange={(e) => { setDueDate(e.currentTarget.value); setEdited(true); }} w={200} />
+      </Group>
+      <Alert color="yellow" variant="light" mt="md">
+        Der Termin ist ein Werktage-Vorschlag aus der Rückwärtsterminierung. Die tatsächliche Dauer ist <b>stückzahlabhängig</b> — bitte vor der Bestätigung manuell prüfen.
+      </Alert>
+      {!preview?.deliveryDate && <Text size="xs" c="dimmed" mt={4}>Hinweis: Kein zugesagter Liefertermin am Auftrag — Termin frei wählbar.</Text>}
+      <Group justify="flex-end" mt="md">
+        <Button variant="default" onClick={onClose}>Abbrechen</Button>
+        <Button color="orange" loading={busy} onClick={() => void create()}>Bestätigen &amp; PA erzeugen</Button>
+      </Group>
+    </Modal>
+  );
+}
+
 // Belegkette/Connections (ERPNext-Muster): phasen-gruppierter Belegbaum eines Auftrags
 // + „Create"-Folgebeleg-Aktionen (Rechnung erzeugen / Storno per Gutschrift / Produktion).
 function ConnectionsPanel({ orderId, role, onChanged }: { orderId: string; role: string; onChanged: () => void }): JSX.Element {
   const [graph, setGraph] = useState<Awaited<ReturnType<typeof trpc.shopOrders.connections.query>> | null>(null);
   const [prod, setProd] = useState<Awaited<ReturnType<typeof trpc.production.status.query>> | null>(null);
   const [laufzettelFor, setLaufzettelFor] = useState<string | null>(null);
+  const [createProdOpen, setCreateProdOpen] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const canFinance = role === "ADMIN" || role === "BUERO" || role === "BUCHHALTUNG";
@@ -1623,6 +1688,7 @@ function ConnectionsPanel({ orderId, role, onChanged }: { orderId: string; role:
   return (
     <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
       {laufzettelFor && <LaufzettelModal productionId={laufzettelFor} onClose={() => setLaufzettelFor(null)} />}
+      {createProdOpen && <ProductionCreateDialog orderId={orderId} onClose={() => setCreateProdOpen(false)} onDone={(m) => { setCreateProdOpen(false); setMsg(m); setErr(null); void load(); onChanged(); }} />}
       <Group justify="space-between">
         <Text fw={600}>Belegkette {graph ? `· ${graph.anchor.label}` : ""}</Text>
         <Group gap="xs">
@@ -1634,11 +1700,7 @@ function ConnectionsPanel({ orderId, role, onChanged }: { orderId: string; role:
             }}>Freigeben</Button>
           )}
           {canProd && prod && !prod.productionId && (
-            <Button size="compact-xs" color="orange" disabled={!prod.freigegeben} title={prod.freigegeben ? "" : "Auftrag erst freigeben"} onClick={async () => {
-              setErr(null); setMsg(null);
-              try { const r = await trpc.production.createFromOrder.mutate({ orderId }); const term = r.dueDate ? ` · Produktionstermin (rückwärts) ${new Date(r.dueDate).toLocaleDateString("de-DE")}` : ""; setMsg(`Produktionsauftrag ${r.number} erzeugt (${r.bomItemCount} Stücklisten-Positionen)${term}.`); await load(); onChanged(); }
-              catch (e) { setErr(errMsg(e)); }
-            }}>Produktionsauftrag erzeugen</Button>
+            <Button size="compact-xs" color="orange" disabled={!prod.freigegeben} title={prod.freigegeben ? "" : "Auftrag erst freigeben"} onClick={() => { setErr(null); setMsg(null); setCreateProdOpen(true); }}>Produktionsauftrag erzeugen</Button>
           )}
           {prod?.productionId && (
             <Button size="compact-xs" variant="light" color="orange" onClick={() => setLaufzettelFor(prod.productionId)}>Laufzettel (PDF)</Button>

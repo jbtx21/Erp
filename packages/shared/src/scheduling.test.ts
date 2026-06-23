@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { addDays, backwardStart, scheduleBackward, type LeadStage } from "./scheduling.js";
+import {
+  addDays,
+  addWorkingDays,
+  backwardStart,
+  FINISHING_LEAD_PROFILES,
+  proposeProductionDueDate,
+  scheduleBackward,
+  subtractWorkingDays,
+  type LeadStage,
+} from "./scheduling.js";
 
 const delivery = new Date(Date.UTC(2026, 5, 30)); // 30.06.2026
 const stages: LeadStage[] = [
@@ -34,5 +43,37 @@ describe("scheduleBackward (B9)", () => {
   it("der erste Start entspricht backwardStart", () => {
     const plan = scheduleBackward(delivery, stages);
     expect(plan[0]?.start).toEqual(backwardStart(delivery, stages));
+  });
+});
+
+describe("Werktage-Terminierung (Veredelungs-Durchlaufzeiten)", () => {
+  // Di 30.06.2026 ist ein Dienstag; 5 Werktage zurück überspringt das Wochenende.
+  const di = new Date(Date.UTC(2026, 5, 30));
+
+  it("subtractWorkingDays überspringt Wochenenden", () => {
+    // 30.06 (Di) − 5 WT: Mo 29, Fr 26, Do 25, Mi 24, Di 23 → 23.06.2026
+    expect(subtractWorkingDays(di, 5)).toEqual(new Date(Date.UTC(2026, 5, 23)));
+  });
+
+  it("subtractWorkingDays über ein Wochenende hinweg (Montag − 1 WT = Freitag)", () => {
+    const mo = new Date(Date.UTC(2026, 5, 29)); // Montag
+    expect(subtractWorkingDays(mo, 1)).toEqual(new Date(Date.UTC(2026, 5, 26))); // Freitag
+  });
+
+  it("addWorkingDays ist die Umkehrung über Werktage", () => {
+    expect(addWorkingDays(subtractWorkingDays(di, 7), 7)).toEqual(di);
+  });
+
+  it("Profile bilden die TEXMA-Durchlaufzeiten ab (5/7/10 Werktage)", () => {
+    expect(FINISHING_LEAD_PROFILES.INHOUSE_OHNE_TRANSFER.leadWorkingDays).toBe(5);
+    expect(FINISHING_LEAD_PROFILES.INHOUSE_MIT_TRANSFER.leadWorkingDays).toBe(7);
+    expect(FINISHING_LEAD_PROFILES.EXTERN_STICK_SIEBDRUCK.leadWorkingDays).toBe(10);
+    expect(FINISHING_LEAD_PROFILES.EXTERN_STICK_SIEBDRUCK.external).toBe(true);
+    expect(FINISHING_LEAD_PROFILES.EXTERN_UND_INTERN.leadWorkingDays).toBe(12);
+    expect(FINISHING_LEAD_PROFILES.EXTERN_UND_INTERN.external).toBe(true);
+  });
+
+  it("proposeProductionDueDate = Liefertermin − Werktage", () => {
+    expect(proposeProductionDueDate(di, 5)).toEqual(subtractWorkingDays(di, 5));
   });
 });

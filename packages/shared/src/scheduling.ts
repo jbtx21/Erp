@@ -9,6 +9,72 @@ export function addDays(d: Date, days: number): Date {
   return new Date(d.getTime() + days * DAY_MS);
 }
 
+/** Sa/So = Wochenende (UTC). Feiertage sind bewusst nicht modelliert (manuelle Prüfung). */
+function isWeekend(d: Date): boolean {
+  const day = d.getUTCDay();
+  return day === 0 || day === 6;
+}
+
+/** Zieht `workingDays` Werktage (Mo–Fr) von `from` ab — für die Rückwärtsterminierung. */
+export function subtractWorkingDays(from: Date, workingDays: number): Date {
+  if (workingDays < 0) throw new Error("workingDays must be >= 0");
+  let d = new Date(from.getTime());
+  let remaining = Math.floor(workingDays);
+  while (remaining > 0) {
+    d = addDays(d, -1);
+    if (!isWeekend(d)) remaining--;
+  }
+  return d;
+}
+
+/** Addiert `workingDays` Werktage (Mo–Fr) auf `from`. */
+export function addWorkingDays(from: Date, workingDays: number): Date {
+  if (workingDays < 0) throw new Error("workingDays must be >= 0");
+  let d = new Date(from.getTime());
+  let remaining = Math.floor(workingDays);
+  while (remaining > 0) {
+    d = addDays(d, 1);
+    if (!isWeekend(d)) remaining--;
+  }
+  return d;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Veredelungs-Durchlaufzeiten (TEXMA-Geschäftsregeln, in Werktagen). Reine Richtwerte
+// für den Terminvorschlag — die tatsächliche Dauer ist stückzahlabhängig und erfordert
+// IMMER eine manuelle Prüfung/Bestätigung des Produktionstermins.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type FinishingLeadProfile =
+  | "INHOUSE_OHNE_TRANSFER"
+  | "INHOUSE_MIT_TRANSFER"
+  | "EXTERN_STICK_SIEBDRUCK"
+  | "EXTERN_UND_INTERN";
+
+export interface FinishingLeadDef {
+  label: string;
+  /** Durchlaufzeit in Werktagen (Vorschlagsbasis). */
+  leadWorkingDays: number;
+  /** true = ab Versand zum externen Veredler (Frist gilt für den Versandtag). */
+  external: boolean;
+}
+
+export const FINISHING_LEAD_PROFILES: Record<FinishingLeadProfile, FinishingLeadDef> = {
+  INHOUSE_OHNE_TRANSFER: { label: "Inhouse-Veredelung (ohne Transferdruck-Zukauf)", leadWorkingDays: 5, external: false },
+  INHOUSE_MIT_TRANSFER: { label: "Inhouse-Veredelung (mit Transferdruck-Zukauf)", leadWorkingDays: 7, external: false },
+  EXTERN_STICK_SIEBDRUCK: { label: "Externe Veredelung — Stick & Siebdruck (ab Versand zum Veredler)", leadWorkingDays: 10, external: true },
+  EXTERN_UND_INTERN: { label: "Externe + interne Veredelung (kombiniert)", leadWorkingDays: 12, external: true },
+};
+
+/**
+ * Terminvorschlag für die Produktion: zugesagter Liefertermin minus der Werktage-
+ * Durchlaufzeit. Bei externer Veredelung ist das der späteste Versandtag zum Veredler.
+ * Reiner Vorschlag — stückzahlabhängig, immer manuell zu bestätigen.
+ */
+export function proposeProductionDueDate(deliveryDate: Date, leadWorkingDays: number): Date {
+  return subtractWorkingDays(deliveryDate, leadWorkingDays);
+}
+
 export interface LeadStage {
   label: string;
   /** Durchlaufzeit der Stufe in Tagen (≥ 0). */

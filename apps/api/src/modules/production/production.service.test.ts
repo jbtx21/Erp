@@ -30,7 +30,7 @@ function svcFor(order: OrderForProduction | null): { svc: ProductionService; rep
 }
 
 const baseOrder = (over: Partial<OrderForProduction> = {}): OrderForProduction => ({
-  id: "ord_1", number: "AB-2026-0001", freigegeben: true, deliveryDate: null, stages: [], existingProductionId: null, existingProductionNumber: null,
+  id: "ord_1", number: "AB-2026-0001", freigegeben: true, deliveryDate: null, existingProductionId: null, existingProductionNumber: null,
   lines: [{ description: "240 Polos", qty: 240, variantId: "v_polo", isBundle: false, components: [] }],
   ...over,
 });
@@ -64,18 +64,29 @@ describe("ProductionService — Auftrag → Produktionsauftrag (Kap. 5.2)", () =
     ]);
   });
 
-  it("setzt die PA-Fälligkeit per Rückwärtsterminierung (Liefertermin − Veredelungsstufen)", async () => {
-    const delivery = new Date("2026-07-20T00:00:00.000Z");
-    const { svc, repo } = svcFor(baseOrder({ deliveryDate: delivery, stages: [{ label: "Stick", durationDays: 3 }, { label: "Versand", durationDays: 2 }] }));
-    const res = await svc.createFromOrder("ord_1");
-    // 5 Tage vor dem Liefertermin
-    expect(res.dueDate?.toISOString()).toBe("2026-07-15T00:00:00.000Z");
-    expect(repo.created[0]?.dueDate?.toISOString()).toBe("2026-07-15T00:00:00.000Z");
+  it("schlägt den Produktionstermin per Werktage-Rückwärtsterminierung je Veredelungsweg vor", async () => {
+    const delivery = new Date(Date.UTC(2026, 5, 30)); // Di 30.06.2026
+    const { svc } = svcFor(baseOrder({ deliveryDate: delivery }));
+    const inhouse = await svc.previewSchedule("ord_1", "INHOUSE_OHNE_TRANSFER");
+    expect(inhouse.leadWorkingDays).toBe(5);
+    expect(inhouse.proposedDueDate).toEqual(new Date(Date.UTC(2026, 5, 23))); // 5 Werktage zurück
+    const extern = await svc.previewSchedule("ord_1", "EXTERN_STICK_SIEBDRUCK");
+    expect(extern.leadWorkingDays).toBe(10);
+    expect(extern.external).toBe(true);
   });
 
-  it("ohne Stufen ist die PA-Fälligkeit der Liefertermin selbst", async () => {
-    const delivery = new Date("2026-07-20T00:00:00.000Z");
-    const { svc } = svcFor(baseOrder({ deliveryDate: delivery, stages: [] }));
+  it("übernimmt den manuell bestätigten Produktionstermin", async () => {
+    const delivery = new Date(Date.UTC(2026, 6, 20));
+    const confirmed = new Date(Date.UTC(2026, 6, 10));
+    const { svc, repo } = svcFor(baseOrder({ deliveryDate: delivery }));
+    const res = await svc.createFromOrder("ord_1", { dueDate: confirmed });
+    expect(res.dueDate?.toISOString()).toBe(confirmed.toISOString());
+    expect(repo.created[0]?.dueDate?.toISOString()).toBe(confirmed.toISOString());
+  });
+
+  it("ohne bestätigten Termin gilt der zugesagte Liefertermin", async () => {
+    const delivery = new Date(Date.UTC(2026, 6, 20));
+    const { svc } = svcFor(baseOrder({ deliveryDate: delivery }));
     const res = await svc.createFromOrder("ord_1");
     expect(res.dueDate?.toISOString()).toBe(delivery.toISOString());
   });

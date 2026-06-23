@@ -5,7 +5,13 @@
 // (Kap. 5.2/7.2). Der Laufzettel-PDF wird anschließend über den ProductionSheetService
 // (T-11) aus dem PA gerendert.
 
-import { backwardStart, explodeComponents, type LeadStage, type VariantComponentDef } from "@texma/shared";
+import {
+  explodeComponents,
+  FINISHING_LEAD_PROFILES,
+  proposeProductionDueDate,
+  type FinishingLeadProfile,
+  type VariantComponentDef,
+} from "@texma/shared";
 import { buildEntry, type AuditSink } from "@texma/audit";
 import type { NumberingService } from "../numbering/numbering.service.js";
 
@@ -24,11 +30,20 @@ export interface OrderForProduction {
   freigegeben: boolean;
   /** Zugesagter Liefertermin (Basis der Rückwärtsterminierung); null = kein Termin. */
   deliveryDate: Date | null;
-  /** Sequenzielle (Veredelungs-)Stufen mit Durchlaufzeit für die Rückwärtsterminierung. */
-  stages: LeadStage[];
   existingProductionId: string | null;
   existingProductionNumber: string | null;
   lines: ProductionOrderLine[];
+}
+
+/** Terminvorschlag für die Produktion (Werktage-Rückwärtsterminierung, manuell zu bestätigen). */
+export interface SchedulePreview {
+  deliveryDate: Date | null;
+  profile: FinishingLeadProfile;
+  profileLabel: string;
+  leadWorkingDays: number;
+  external: boolean;
+  /** Vorgeschlagene Produktions-Fälligkeit (null ohne Liefertermin). */
+  proposedDueDate: Date | null;
 }
 
 /** Eine Fertigungsstücklisten-Position des Produktionsauftrags. */
@@ -94,21 +109,30 @@ export class ProductionService {
   }
 
   /**
-   * Auftrag → Produktionsauftrag. Erzeugt PA-Nummer + Fertigungsstückliste, setzt den
-   * Auftrag auf IN_PRODUKTION. Wirft, wenn der Auftrag nicht freigegeben ist oder bereits
-   * ein PA existiert (1 Auftrag = 1 PA).
+   * Terminvorschlag (Werktage-Rückwärtsterminierung) für die gewählte Veredelungsart.
+   * Reiner Vorschlag — stückzahlabhängig, IMMER manuell zu prüfen/bestätigen.
    */
-  /**
-   * Produktions-Fälligkeit aus der Rückwärtsterminierung (Kap. 35.2): der interne
-   * Produktionstermin liegt um die Summe der nachgelagerten (Veredelungs-)Durchlaufzeiten
-   * VOR dem zugesagten Liefertermin. Ohne Termin/Stufen = der Liefertermin selbst (bzw. null).
-   */
-  static plannedDueDate(deliveryDate: Date | null, stages: LeadStage[]): Date | null {
-    if (!deliveryDate) return null;
-    return stages.length > 0 ? backwardStart(deliveryDate, stages) : deliveryDate;
+  async previewSchedule(orderId: string, profile: FinishingLeadProfile): Promise<SchedulePreview> {
+    const order = await this.repo.loadOrderForProduction(orderId);
+    if (!order) throw new ProductionError("Auftrag nicht gefunden.");
+    const def = FINISHING_LEAD_PROFILES[profile];
+    return {
+      deliveryDate: order.deliveryDate,
+      profile,
+      profileLabel: def.label,
+      leadWorkingDays: def.leadWorkingDays,
+      external: def.external,
+      proposedDueDate: order.deliveryDate ? proposeProductionDueDate(order.deliveryDate, def.leadWorkingDays) : null,
+    };
   }
 
-  async createFromOrder(orderId: string): Promise<{ id: string; number: string; bomItemCount: number; dueDate: Date | null }> {
+  /**
+   * Auftrag → Produktionsauftrag. Erzeugt PA-Nummer + Fertigungsstückliste, setzt den
+   * Auftrag auf IN_PRODUKTION. Wirft, wenn der Auftrag nicht freigegeben ist oder bereits
+   * ein PA existiert (1 Auftrag = 1 PA). Der Produktionstermin (`dueDate`) wird vom
+   * Innendienst manuell bestätigt übergeben; ohne Angabe gilt der zugesagte Liefertermin.
+   */
+  async createFromOrder(orderId: string, opts: { dueDate?: Date | null } = {}): Promise<{ id: string; number: string; bomItemCount: number; dueDate: Date | null }> {
     const order = await this.repo.loadOrderForProduction(orderId);
     if (!order) throw new ProductionError("Auftrag nicht gefunden.");
     if (order.existingProductionId) throw new ProductionError(`Produktionsauftrag ${order.existingProductionNumber ?? ""} existiert bereits.`);
@@ -116,13 +140,13 @@ export class ProductionService {
     if (order.lines.length === 0) throw new ProductionError("Auftrag ohne Positionen kann nicht in Produktion gehen.");
 
     const bomItems = ProductionService.buildBomItems(order.lines);
-    const dueDate = ProductionService.plannedDueDate(order.deliveryDate, order.stages);
+    const dueDate = "dueDate" in opts ? opts.dueDate ?? null : order.deliveryDate;
     const number = await this.numbering.next("PRODUCTION_ORDER");
     const { id } = await this.repo.createProductionOrder({ number, orderId, dueDate, bomItems });
     await this.repo.setOrderInProduction(orderId);
     await this.audit.append(buildEntry({
       entity: "ProductionOrder", entityId: id, action: "CREATE",
-      after: { number, orderNumber: order.number, bomItems: bomItems.length, liefertermin: order.deliveryDate, produktionsFaelligkeit: dueDate },
+      after: { number, orderNumber: order.number, bomItems: bomItems.length, liefertermin: order.deliveryDate, produktionstermin: dueDate },
     }));
     return { id, number, bomItemCount: bomItems.length, dueDate };
   }

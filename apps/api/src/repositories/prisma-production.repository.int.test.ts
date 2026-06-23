@@ -58,25 +58,29 @@ if (!dbConfigured) {
     });
     afterAll(cleanup);
 
-    it("blockt ohne Freigabe, erzeugt nach Freigabe PA + expandierte Stückliste, setzt IN_PRODUKTION", async () => {
+    it("Terminvorschlag (Werktage) + blockt ohne Freigabe; erzeugt PA mit bestätigtem Termin + Stückliste", async () => {
       await expect(svc.createFromOrder(ORD)).rejects.toBeInstanceOf(ProductionError);
 
+      // Werktage-Terminvorschlag je Veredelungsweg (manuell zu bestätigen).
+      const preview = await svc.previewSchedule(ORD, "EXTERN_STICK_SIEBDRUCK");
+      expect(preview.leadWorkingDays).toBe(10);
+      expect(preview.proposedDueDate).not.toBeNull();
+      expect(preview.proposedDueDate!.getTime()).toBeLessThan(new Date("2026-09-30T00:00:00.000Z").getTime());
+
       await svc.release(ORD);
-      const res = await svc.createFromOrder(ORD);
+      const confirmed = preview.proposedDueDate!;
+      const res = await svc.createFromOrder(ORD, { dueDate: confirmed });
       expect(res.number).toMatch(/^PA-/);
       expect(res.bomItemCount).toBe(2);
+      expect(res.dueDate?.getTime()).toBe(confirmed.getTime());
 
       const items = await prisma.bomItem.findMany({ where: { production: { orderId: ORD } }, orderBy: { qty: "asc" }, select: { description: true, qty: true, variantId: true } });
       expect(items).toHaveLength(2);
       expect(items.every((i) => i.qty === 50)).toBe(true);
       expect(items.find((i) => i.variantId === COMP)?.description).toBe("Polo rot M");
 
-      // PA-Fälligkeit aus der Rückwärtsterminierung: nicht nach dem Liefertermin.
-      const delivery = new Date("2026-09-30T00:00:00.000Z");
-      expect(res.dueDate).not.toBeNull();
-      expect(res.dueDate!.getTime()).toBeLessThanOrEqual(delivery.getTime());
       const pa = await prisma.productionOrder.findUnique({ where: { orderId: ORD }, select: { dueDate: true } });
-      expect(pa?.dueDate?.getTime()).toBe(res.dueDate!.getTime());
+      expect(pa?.dueDate?.getTime()).toBe(confirmed.getTime());
 
       const order = await prisma.order.findUnique({ where: { id: ORD }, select: { status: true } });
       expect(order?.status).toBe("IN_PRODUKTION");

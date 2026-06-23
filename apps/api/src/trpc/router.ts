@@ -874,10 +874,20 @@ export const appRouter = router({
         try { await ctx.production.release(input.orderId); return { ok: true as const }; }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
+    // Terminvorschlag (Werktage-Rückwärtsterminierung) je Veredelungsweg — manuell zu bestätigen.
+    schedulePreview: roleProcedure(...supplierRoles)
+      .input(z.object({ orderId: z.string().min(1), profile: z.enum(["INHOUSE_OHNE_TRANSFER", "INHOUSE_MIT_TRANSFER", "EXTERN_STICK_SIEBDRUCK", "EXTERN_UND_INTERN"]) }))
+      .query(async ({ input, ctx }) => {
+        try { return await ctx.production.previewSchedule(input.orderId, input.profile); }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
+      }),
     createFromOrder: roleProcedure("ADMIN", "BUERO")
-      .input(z.object({ orderId: z.string().min(1) }))
+      .input(z.object({ orderId: z.string().min(1), dueDate: z.string().datetime().nullish() }))
       .mutation(async ({ input, ctx }) => {
-        try { return await ctx.production.createFromOrder(input.orderId); }
+        try {
+          const opts = input.dueDate !== undefined ? { dueDate: input.dueDate ? new Date(input.dueDate) : null } : {};
+          return await ctx.production.createFromOrder(input.orderId, opts);
+        }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
   }),
