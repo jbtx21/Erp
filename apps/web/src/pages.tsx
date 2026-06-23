@@ -717,14 +717,14 @@ export type PositionKind = "TEXTIL" | "VEREDELUNG" | "SONSTIGE";
 // Eine Position kann auf eine konkrete Variante (variantId) ODER nur auf einen
 // Hauptartikel (articleId, Farbe×Größe noch offen) verweisen; isAlternative kennzeichnet
 // ein unverbindliches Alternativangebot (wird beim Wandeln in den Auftrag weggelassen).
-export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind; variantId?: string; articleId?: string; isAlternative?: boolean; ekEuro?: number }
+export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind; variantId?: string; articleId?: string; isAlternative?: boolean; ekEuro?: number; isBundle?: boolean }
 
 // Artikel-Picker: durchsuchbare Auswahl aus dem Artikelstamm (ERPNext „Link field").
 // Bei Auswahl wird eine Position vorbefüllt (Bezeichnung, Standardpreis, Variante).
 // Artikel-Picker: durchsuchbarer Katalog (Artikel×Variante) für die Positionserfassung.
 // Kein Treffer → „+ anlegen" öffnet ein kompaktes Inline-Formular (SKU + optional
 // Farbe/Größe); legt Artikel + Basis-Variante an und wählt sie direkt (ERPNext „Create a new…").
-export function ArticlePicker({ onPick }: { onPick: (e: { label: string; unitNetCents: number; variantId: string }) => void }): JSX.Element {
+export function ArticlePicker({ onPick }: { onPick: (e: { label: string; unitNetCents: number; variantId: string; isBundle?: boolean }) => void }): JSX.Element {
   const [catalog, setCatalog] = useState<Awaited<ReturnType<typeof trpc.products.catalog.query>>>([]);
   const [value, setValue] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -746,7 +746,7 @@ export function ArticlePicker({ onPick }: { onPick: (e: { label: string; unitNet
         data={catalog.map((c) => ({ value: c.variantId, label: c.label }))}
         onChange={(v) => {
           const e = catalog.find((c) => c.variantId === v);
-          if (e) onPick({ label: e.label, unitNetCents: e.unitNetCents, variantId: e.variantId });
+          if (e) onPick({ label: e.label, unitNetCents: e.unitNetCents, variantId: e.variantId, isBundle: e.isBundle });
           setValue(null);
         }} />
       {!creating && search.trim().length >= 2 && !hasMatch && (
@@ -857,8 +857,84 @@ export function SupplierPicker({ value, onChange, label, w = 200 }: { value: str
 const lineDbCents = (l: EditorLine): number | null =>
   l.ekEuro === undefined ? null : Math.round((l.euro - l.ekEuro) * 100) * l.qty;
 
+interface BundleRow { description: string; qty: number; componentVariantId: string | null }
+
+// Set/Bundle-Stückliste einer Variante (Kap. 5.1): zeigt die Komponenten (× Positionsmenge)
+// und erlaubt das Bearbeiten der Stückliste (Stammdaten). Komponenten sind Freitext oder
+// optional auf eine reale Katalog-Variante verknüpft (Bedarf/EK).
+function BundleEditor({ variantId, label, positionQty, onClose, onSaved }: { variantId: string; label: string; positionQty: number; onClose: () => void; onSaved: (isBundle: boolean) => void }): JSX.Element {
+  const [rows, setRows] = useState<BundleRow[]>([]);
+  const [catalog, setCatalog] = useState<Awaited<ReturnType<typeof trpc.products.catalog.query>>>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => { void (async () => {
+    try {
+      const [comps, cat] = await Promise.all([trpc.products.components.query({ variantId }), trpc.products.catalog.query()]);
+      setRows(comps.map((c) => ({ description: c.description, qty: c.qty, componentVariantId: c.componentVariantId })));
+      setCatalog(cat);
+    } catch (e) { setErr(errMsg(e)); } finally { setLoading(false); }
+  })(); }, [variantId]);
+
+  const setRow = (i: number, patch: Partial<BundleRow>): void => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const addRow = (): void => setRows((rs) => [...rs, { description: "", qty: 1, componentVariantId: null }]);
+  const save = async (): Promise<void> => {
+    setBusy(true); setErr(null);
+    try {
+      const clean = rows.filter((r) => r.description.trim()).map((r) => ({ description: r.description.trim(), qty: r.qty, componentVariantId: r.componentVariantId }));
+      await trpc.products.setComponents.mutate({ variantId, components: clean });
+      onSaved(clean.length > 0);
+    } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+
+  return (
+    <Modal opened onClose={onClose} title={`Stückliste · ${label}`} size="xl">
+      {err && <Alert color="red" mb="sm">{err}</Alert>}
+      {loading ? <Loader size="sm" /> : (
+        <>
+          <Text size="sm" c="dimmed" mb="sm">Komponenten je Set-Stück. Mengen werden mit der Positionsmenge ({positionQty}) multipliziert. Optional auf eine Katalog-Variante verknüpfen (Bedarf/EK).</Text>
+          {rows.length === 0 && <Text size="sm" c="dimmed">Noch keine Komponenten — unten hinzufügen.</Text>}
+          {rows.map((r, i) => (
+            <Group key={i} gap="xs" mt={4} align="end" wrap="nowrap">
+              <TextInput label={i === 0 ? "Komponente" : undefined} value={r.description} onChange={(e) => setRow(i, { description: e.currentTarget.value })} placeholder="z. B. Polo rot M / Stick Brust links" w={260} />
+              <NumberInput label={i === 0 ? "Menge/Set" : undefined} value={r.qty} onChange={(v) => setRow(i, { qty: Number(v) || 1 })} min={1} w={100} />
+              <Select label={i === 0 ? "Variante (optional)" : undefined} searchable clearable placeholder="— Freitext —" w={260}
+                value={r.componentVariantId} data={catalog.filter((c) => c.variantId !== variantId).map((c) => ({ value: c.variantId, label: c.label }))}
+                onChange={(v) => { const e = v ? catalog.find((c) => c.variantId === v) : null; setRow(i, { componentVariantId: v, ...(e && !r.description.trim() ? { description: e.label } : {}) }); }} />
+              <Text size="sm" c="dimmed" w={70} ta="right" title="Gesamtmenge">= {r.qty * positionQty}</Text>
+              <Button size="compact-sm" variant="subtle" color="red" onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}>✕</Button>
+            </Group>
+          ))}
+          <Button size="compact-xs" variant="light" mt="sm" onClick={addRow}>+ Komponente</Button>
+          <Group justify="flex-end" mt="md">
+            <Button variant="default" onClick={onClose}>Abbrechen</Button>
+            <Button color="dark" loading={busy} onClick={() => void save()}>Stückliste speichern</Button>
+          </Group>
+        </>
+      )}
+    </Modal>
+  );
+}
+
+// Read-only-Aufklappung der Stückliste einer Set-Variante auf Beleg-Ebene (× Positionsmenge).
+function BundlePreview({ variantId, positionQty }: { variantId: string; positionQty: number }): JSX.Element {
+  const [rows, setRows] = useState<Awaited<ReturnType<typeof trpc.products.components.query>>>([]);
+  useEffect(() => { void (async () => { try { setRows(await trpc.products.components.query({ variantId })); } catch { /* ignore */ } })(); }, [variantId]);
+  if (rows.length === 0) return <Text size="xs" c="dimmed" ml={124} mt={2}>Keine Komponenten hinterlegt.</Text>;
+  return (
+    <Box ml={124} mt={2} mb={4} pl="xs" style={{ borderLeft: "2px solid var(--mantine-color-gray-3)" }}>
+      {rows.map((r, i) => (
+        <Text key={i} size="xs" c="dimmed">• {r.qty * positionQty}× {r.description}{r.componentLabel ? ` (${r.componentLabel})` : ""}</Text>
+      ))}
+    </Box>
+  );
+}
+
 export function LinesEditor({ lines, onChange, quoteMode = false, companyId }: { lines: EditorLine[]; onChange: (l: EditorLine[]) => void; quoteMode?: boolean; companyId?: string }): JSX.Element {
   const set = (i: number, patch: Partial<EditorLine>): void => onChange(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+  const [bundleFor, setBundleFor] = useState<number | null>(null); // Index der Zeile mit offenem Stücklisten-Editor
+  const [shown, setShown] = useState<Record<number, boolean>>({}); // aufgeklappte Stücklisten-Vorschauen
   // Erste leere Zeile ersetzen, sonst anhängen; gibt den Zielindex zurück.
   const addLine = (line: EditorLine): number => {
     const idx = lines.findIndex((l) => !l.description.trim());
@@ -873,8 +949,8 @@ export function LinesEditor({ lines, onChange, quoteMode = false, companyId }: {
       return { euro: r.netCents / 100, ...(r.ekCents != null ? { ekEuro: r.ekCents / 100 } : {}) };
     } catch { return {}; }
   };
-  const addFromCatalog = (e: { label: string; unitNetCents: number; variantId: string }): void => {
-    const idx = addLine({ description: e.label, qty: 1, euro: e.unitNetCents / 100, kind: "TEXTIL", variantId: e.variantId });
+  const addFromCatalog = (e: { label: string; unitNetCents: number; variantId: string; isBundle?: boolean }): void => {
+    const idx = addLine({ description: e.label, qty: 1, euro: e.unitNetCents / 100, kind: "TEXTIL", variantId: e.variantId, isBundle: e.isBundle });
     void resolve(e.variantId, 1).then((p) => { if (p.euro !== undefined || p.ekEuro !== undefined) set(idx, p); });
   };
   const addHauptartikel = (e: { articleId: string; articleName: string; unitNetCents: number }): void =>
@@ -900,14 +976,27 @@ export function LinesEditor({ lines, onChange, quoteMode = false, companyId }: {
           <NumberInput label={i === 0 ? "Einzel (€)" : undefined} value={l.euro} onChange={(v) => set(i, { euro: Number(v) || 0 })} min={0} decimalScale={2} w={100} />
           <NumberInput label={i === 0 ? "EK (€)" : undefined} value={l.ekEuro ?? ""} onChange={(v) => set(i, { ekEuro: v === "" ? undefined : Number(v) })} min={0} decimalScale={2} w={90} placeholder="—" />
           {db !== null && <Badge color={db >= 0 ? "teal" : "red"} variant="light" size="sm" title="Deckungsbeitrag (VK − EK) × Menge">DB {euro(db)}{margePct !== null ? ` · ${(margePct * 100).toFixed(0)}%` : ""}</Badge>}
+          {l.isBundle && <Badge color="grape" variant="light" size="sm" title="Set/Bundle — löst sich in eine Stückliste auf">Set</Badge>}
           {quoteMode && l.articleId && !l.variantId && <Badge color="orange" variant="light" size="sm" title="Farbe & Größe werden beim Wandeln in den Auftrag abgefragt">Variante offen</Badge>}
+          {l.variantId && <Button size="compact-xs" variant={l.isBundle ? "light" : "subtle"} color="grape" onClick={() => { if (l.isBundle) setShown((s) => ({ ...s, [i]: !s[i] })); else setBundleFor(i); }} title="Stückliste anzeigen/bearbeiten">⊟ Stückliste</Button>}
           {quoteMode && <Switch size="xs" label="Alt." checked={!!l.isAlternative} onChange={(e) => set(i, { isAlternative: e.currentTarget.checked })} title="Alternativposition — wird beim Wandeln in den Auftrag nicht übernommen" />}
           <Button size="compact-sm" variant="subtle" color="red" disabled={lines.length === 1} onClick={() => onChange(lines.filter((_, j) => j !== i))}>✕</Button>
         </Group>
         );
       })}
+      {lines.map((l, i) => (l.isBundle && shown[i] && l.variantId ? (
+        <Group key={`bp-${i}`} gap="xs">
+          <BundlePreview variantId={l.variantId} positionQty={l.qty} />
+          <Button size="compact-xs" variant="subtle" color="grape" onClick={() => setBundleFor(i)}>bearbeiten</Button>
+        </Group>
+      ) : null))}
       <Button size="compact-xs" variant="light" mt="xs" onClick={() => onChange([...lines, { description: "", qty: 1, euro: 0, kind: "VEREDELUNG" }])}>+ Position</Button>
       <LineTotals lines={lines} />
+      {bundleFor !== null && lines[bundleFor]?.variantId && (
+        <BundleEditor variantId={lines[bundleFor]!.variantId!} label={lines[bundleFor]!.description || "Variante"} positionQty={lines[bundleFor]!.qty}
+          onClose={() => setBundleFor(null)}
+          onSaved={(isBundle) => { set(bundleFor, { isBundle }); setShown((s) => ({ ...s, [bundleFor]: isBundle })); setBundleFor(null); }} />
+      )}
     </Box>
   );
 }

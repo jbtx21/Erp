@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { expandBom } from "./bom.js";
+import { expandBom, explodeComponents } from "./bom.js";
 
 describe("BOM-Expansion (T-03)", () => {
   const template = [
@@ -32,5 +32,29 @@ describe("BOM-Expansion (T-03)", () => {
 
   it("lehnt nicht-positive Auftragsmengen ab", () => {
     expect(() => expandBom(template, [], 0)).toThrow();
+  });
+});
+
+describe("Set/Bundle-Stückliste (explodeComponents, Kap. 5.1)", () => {
+  const set = [
+    { description: "Polo HAKRO weiß M", qty: 1, componentVariantId: "v-polo-m" },
+    { description: "Stick Brust links", qty: 1 },
+    { description: "Geschenkbox", qty: 1, componentVariantId: null },
+  ];
+
+  it("multipliziert Komponentenmengen mit der Positionsmenge", () => {
+    const exp = explodeComponents(set, 20);
+    expect(exp).toHaveLength(3);
+    expect(exp[0]).toEqual({ description: "Polo HAKRO weiß M", qty: 20, componentVariantId: "v-polo-m" });
+    expect(exp[1]).toEqual({ description: "Stick Brust links", qty: 20, componentVariantId: null });
+  });
+
+  it("überspringt leere/0-Mengen-Komponenten", () => {
+    const exp = explodeComponents([{ description: "  ", qty: 5 }, { description: "X", qty: 0 }, { description: "Y", qty: 2 }], 3);
+    expect(exp).toEqual([{ description: "Y", qty: 6, componentVariantId: null }]);
+  });
+
+  it("lehnt nicht-positive Positionsmengen ab", () => {
+    expect(() => explodeComponents(set, 0)).toThrow();
   });
 });

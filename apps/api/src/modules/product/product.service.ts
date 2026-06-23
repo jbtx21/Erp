@@ -46,6 +46,24 @@ export interface CatalogEntry {
   label: string;
   /** Standardpreis (Preisgruppe STANDARD) in Cent, 0 wenn nicht hinterlegt. */
   unitNetCents: number;
+  /** true, wenn die Variante eine Set-/Bundle-Stückliste hat (Kap. 5.1). */
+  isBundle: boolean;
+}
+
+/** Eine Stücklisten-Komponente einer Set-/Bundle-Variante (Kap. 5.1). */
+export interface ComponentRow {
+  description: string;
+  qty: number;
+  componentVariantId: string | null;
+  /** Anzeigetext der verknüpften Komponentenvariante (null = reine Freitext-Komponente). */
+  componentLabel: string | null;
+}
+
+/** Eingabe für das Setzen einer Stückliste (ersetzt die bestehende komplett). */
+export interface ComponentInput {
+  description: string;
+  qty: number;
+  componentVariantId?: string | null;
 }
 
 export interface ProductRepository {
@@ -59,6 +77,10 @@ export interface ProductRepository {
   updateArticle(id: string, patch: ArticlePatch): Promise<boolean>;
   /** Massenupdate über SKUs; @returns Anzahl aktualisierter Artikel. */
   updateArticlesBySku(skus: string[], patch: ArticlePatch): Promise<number>;
+  /** Stückliste (Komponenten) einer Set-Variante. */
+  listComponents(variantId: string): Promise<ComponentRow[]>;
+  /** Setzt die Stückliste neu (ersetzt) und markiert die Variante als Set (isBundle). */
+  setComponents(variantId: string, components: ComponentInput[]): Promise<void>;
 }
 
 export class ProductError extends Error {}
@@ -142,6 +164,25 @@ export class ProductService {
     const v = await this.createVariant({ articleId: art.id, sku: variantSku, attributes });
     const attrText = attributes.map((a) => a.value.trim()).join(" / ");
     const label = `${input.name.trim()}${attrText ? ` — ${attrText}` : ""} (${variantSku})`;
-    return { variantId: v.id, articleId: art.id, articleName: input.name.trim(), sku: variantSku, label, unitNetCents: 0 };
+    return { variantId: v.id, articleId: art.id, articleName: input.name.trim(), sku: variantSku, label, unitNetCents: 0, isBundle: false };
+  }
+
+  /** Stückliste (Komponenten) einer Set-Variante (Kap. 5.1). */
+  async listComponents(variantId: string): Promise<ComponentRow[]> {
+    return this.repo.listComponents(variantId);
+  }
+
+  /** Setzt die Stückliste einer Variante neu (ersetzt) und markiert sie als Set. */
+  async setComponents(variantId: string, components: ComponentInput[]): Promise<void> {
+    if (!variantId.trim()) throw new ProductError("Variante ist Pflicht.");
+    const clean = components
+      .map((c) => ({ description: c.description.trim(), qty: c.qty, componentVariantId: c.componentVariantId ?? null }))
+      .filter((c) => c.description);
+    for (const c of clean) {
+      if (c.qty <= 0) throw new ProductError("Komponentenmenge muss größer als 0 sein.");
+      if (c.componentVariantId === variantId) throw new ProductError("Eine Variante kann sich nicht selbst enthalten.");
+    }
+    await this.repo.setComponents(variantId, clean);
+    await this.audit.append(buildEntry({ entity: "Variant", entityId: variantId, action: "UPDATE", after: { stueckliste: clean.length, isBundle: clean.length > 0 } }));
   }
 }

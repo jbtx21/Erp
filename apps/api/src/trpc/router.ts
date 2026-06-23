@@ -891,6 +891,18 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         try { return await ctx.products.createVariant(input); } catch (e) { throw toTrpcError(e); }
       }),
+    // Set/Bundle-Stückliste (Kap. 5.1): Komponenten einer Variante lesen/setzen.
+    components: roleProcedure(...supplierRoles)
+      .input(z.object({ variantId: z.string().min(1) }))
+      .query(({ input, ctx }) => ctx.products.listComponents(input.variantId)),
+    setComponents: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({
+        variantId: z.string().min(1),
+        components: z.array(z.object({ description: z.string().min(1), qty: z.number().int().positive(), componentVariantId: z.string().nullish() })),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.products.setComponents(input.variantId, input.components); return { ok: true as const }; } catch (e) { throw toTrpcError(e); }
+      }),
     // Schnellbearbeitung: ein Artikel, beliebige PIM-/Stammfelder.
     updateArticle: roleProcedure("ADMIN", "BUERO")
       .input(z.object({

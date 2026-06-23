@@ -74,3 +74,36 @@ describe("ProductService — PIM-Vollständigkeit + Bearbeitung", () => {
     await expect(svc.quickCreateCatalogEntry({ sku: "X-1", name: "  " })).rejects.toBeInstanceOf(ProductError);
   });
 });
+
+describe("ProductService — Set/Bundle-Stückliste (Kap. 5.1)", () => {
+  it("setzt Komponenten, markiert die Variante als Set und löst Labels auf", async () => {
+    const { svc } = await setup();
+    const set = await svc.quickCreateCatalogEntry({ sku: "SET-1", name: "Vereins-Set" });
+    const polo = await svc.quickCreateCatalogEntry({ sku: "POLO-1", name: "Polo", attributes: [{ name: "Farbe", value: "rot" }] });
+    await svc.setComponents(set.variantId, [
+      { description: "Polo rot", qty: 1, componentVariantId: polo.variantId },
+      { description: "Stick Brust links", qty: 1 },
+    ]);
+    const comps = await svc.listComponents(set.variantId);
+    expect(comps).toHaveLength(2);
+    expect(comps[0]?.componentLabel).toContain("Polo");
+    expect(comps[1]?.componentLabel).toBeNull();
+    expect((await svc.catalog()).find((c) => c.variantId === set.variantId)?.isBundle).toBe(true);
+  });
+
+  it("verwirft leere Beschreibungen, Selbstreferenz und ungültige Mengen", async () => {
+    const { svc } = await setup();
+    const set = await svc.quickCreateCatalogEntry({ sku: "SET-2", name: "Set" });
+    await svc.setComponents(set.variantId, [{ description: "  ", qty: 1 }, { description: "OK", qty: 2 }]);
+    expect(await svc.listComponents(set.variantId)).toHaveLength(1);
+    await expect(svc.setComponents(set.variantId, [{ description: "Self", qty: 1, componentVariantId: set.variantId }])).rejects.toBeInstanceOf(ProductError);
+  });
+
+  it("leere Komponentenliste hebt das Set-Kennzeichen wieder auf", async () => {
+    const { svc } = await setup();
+    const set = await svc.quickCreateCatalogEntry({ sku: "SET-3", name: "Set" });
+    await svc.setComponents(set.variantId, [{ description: "X", qty: 1 }]);
+    await svc.setComponents(set.variantId, []);
+    expect((await svc.catalog()).find((c) => c.variantId === set.variantId)?.isBundle).toBe(false);
+  });
+});

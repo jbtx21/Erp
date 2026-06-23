@@ -46,3 +46,42 @@ export function expandBom(
   }
   return items;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Set/Bundle-Stückliste (Kap. 5.1). Eine Set-Variante löst sich in Komponenten auf;
+// jede Komponente hat eine Menge je Set-Stück. Auf Beleg-Ebene (Angebot/Auftrag)
+// wird mit der Positionsmenge multipliziert.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface VariantComponentDef {
+  description: string;
+  /** Menge je Set-Stück. */
+  qty: number;
+  /** optionale Verknüpfung auf eine reale Lagervariante (Bedarf/EK). */
+  componentVariantId?: string | null;
+}
+
+export interface ExplodedComponent {
+  description: string;
+  /** Gesamtmenge = qty je Set × Positionsmenge. */
+  qty: number;
+  componentVariantId: string | null;
+}
+
+/**
+ * Multipliziert die Komponenten-Stückliste einer Set-Variante mit der Positionsmenge
+ * (Angebot/Auftrag). Leere Beschreibung oder Menge ≤ 0 wird übersprungen.
+ */
+export function explodeComponents(
+  components: ReadonlyArray<VariantComponentDef>,
+  positionQty: number
+): ExplodedComponent[] {
+  if (positionQty <= 0) throw new Error("positionQty must be > 0");
+  return components
+    .filter((c) => c.description.trim() && c.qty > 0)
+    .map((c) => ({
+      description: c.description.trim(),
+      qty: c.qty * positionQty,
+      componentVariantId: c.componentVariantId ?? null,
+    }));
+}

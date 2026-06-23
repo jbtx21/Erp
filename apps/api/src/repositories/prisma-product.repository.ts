@@ -4,10 +4,18 @@ import { prisma } from "@texma/db";
 import type {
   ArticlePatch,
   ArticleRow,
+  ComponentInput,
+  ComponentRow,
   CreateVariantInput,
   ProductRepository,
   VariantRow,
 } from "../modules/product/product.service.js";
+
+/** Anzeigetext einer Variante (Artikelname — Merkmale (SKU)) für Komponentenlisten. */
+function variantLabel(v: { sku: string; article: { name: string }; attributes: { value: string }[] }): string {
+  const attrs = v.attributes.map((a) => a.value).join(" / ");
+  return `${v.article.name}${attrs ? ` — ${attrs}` : ""} (${v.sku})`;
+}
 
 const PIM_SELECT = { description: true, brand: true, materialComposition: true, careInstructions: true, hsCode: true, originCountry: true } as const;
 const s = (v: string | null | undefined): string => v ?? "";
@@ -52,7 +60,7 @@ export class PrismaProductRepository implements ProductRepository {
     const rows = await prisma.variant.findMany({
       orderBy: [{ article: { sku: "asc" } }, { sku: "asc" }],
       select: {
-        id: true, sku: true, articleId: true,
+        id: true, sku: true, articleId: true, isBundle: true,
         article: { select: { name: true } },
         attributes: { select: { name: true, value: true } },
         prices: { where: { priceGroup: { kind: "STANDARD" } }, select: { netCents: true }, take: 1 },
@@ -61,7 +69,7 @@ export class PrismaProductRepository implements ProductRepository {
     return rows.map((v) => {
       const attrs = v.attributes.map((a) => a.value).join(" / ");
       const label = `${v.article.name}${attrs ? ` — ${attrs}` : ""} (${v.sku})`;
-      return { variantId: v.id, articleId: v.articleId, articleName: v.article.name, sku: v.sku, label, unitNetCents: v.prices[0]?.netCents ?? 0 };
+      return { variantId: v.id, articleId: v.articleId, articleName: v.article.name, sku: v.sku, label, unitNetCents: v.prices[0]?.netCents ?? 0, isBundle: v.isBundle };
     });
   }
 
@@ -74,5 +82,30 @@ export class PrismaProductRepository implements ProductRepository {
       },
       select: { id: true },
     });
+  }
+
+  async listComponents(variantId: string): Promise<ComponentRow[]> {
+    const rows = await prisma.variantComponent.findMany({
+      where: { parentVariantId: variantId },
+      orderBy: { position: "asc" },
+      select: {
+        description: true, qty: true, componentVariantId: true,
+        component: { select: { sku: true, article: { select: { name: true } }, attributes: { select: { value: true } } } },
+      },
+    });
+    return rows.map((c) => ({
+      description: c.description, qty: c.qty, componentVariantId: c.componentVariantId,
+      componentLabel: c.component ? variantLabel(c.component) : null,
+    }));
+  }
+
+  async setComponents(variantId: string, components: ComponentInput[]): Promise<void> {
+    await prisma.$transaction([
+      prisma.variantComponent.deleteMany({ where: { parentVariantId: variantId } }),
+      prisma.variantComponent.createMany({
+        data: components.map((c, i) => ({ parentVariantId: variantId, description: c.description, qty: c.qty, componentVariantId: c.componentVariantId ?? null, position: i + 1 })),
+      }),
+      prisma.variant.update({ where: { id: variantId }, data: { isBundle: components.length > 0 } }),
+    ]);
   }
 }

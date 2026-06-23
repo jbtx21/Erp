@@ -332,6 +332,10 @@ model Variant {
   stockMoves StockMove[] // Bewegungs-Ledger (F4)
   priceTiers PriceGroupPriceTier[] // Preisgruppen-Mengenstaffel (B4)
   customerPriceTiers CustomerPriceTier[] // kundenindividuelle Staffel (B4)
+  // Set/Bundle-Stückliste (Kap. 5.1): isBundle-Variante löst sich in Komponenten auf.
+  isBundle    Boolean @default(false)
+  bundleComponents VariantComponent[] @relation("BundleParent") // Komponenten dieses Sets
+  bundleUsages     VariantComponent[] @relation("BundleComponent") // Verwendung als Komponente
   gtin        String? // EAN/GTIN-13 (B18)
   weightGrams Int? // B18
   mediaAssets MediaAsset[] // B18
@@ -339,6 +343,22 @@ model Variant {
   createdAt  DateTime @default(now())
 
   @@index([articleId])
+}
+
+// Stücklisten-Position einer Set-/Bundle-Variante (Kap. 5.1). qty = Menge je Set-Stück.
+// componentVariant verlinkt optional auf eine reale Lagervariante (Bedarf/EK), sonst
+// reine Freitext-Komponente (z. B. „Druck Brust links").
+model VariantComponent {
+  id                 String   @id @default(cuid())
+  parentVariantId    String
+  parent             Variant  @relation("BundleParent", fields: [parentVariantId], references: [id], onDelete: Cascade)
+  componentVariantId String?
+  component          Variant? @relation("BundleComponent", fields: [componentVariantId], references: [id])
+  description        String
+  qty                Int      @default(1)
+  position           Int      @default(1)
+
+  @@index([parentVariantId])
 }
 
 model VariantAttribute {

@@ -3,6 +3,8 @@
 import type {
   ArticlePatch,
   ArticleRow,
+  ComponentInput,
+  ComponentRow,
   CreateVariantInput,
   ProductRepository,
   VariantRow,
@@ -13,7 +15,8 @@ const emptyPim = { description: "", brand: "", materialComposition: "", careInst
 
 export class InMemoryProductRepository implements ProductRepository {
   private readonly articles = new Map<string, StoredArticle>();
-  private readonly variants = new Map<string, { id: string; articleId: string; sku: string; attributes: Array<{ name: string; value: string }> }>();
+  private readonly variants = new Map<string, { id: string; articleId: string; sku: string; attributes: Array<{ name: string; value: string }>; isBundle: boolean }>();
+  private readonly components = new Map<string, ComponentInput[]>();
   private seq = 0;
 
   async listArticles(): Promise<Omit<ArticleRow, "completeness">[]> {
@@ -51,7 +54,7 @@ export class InMemoryProductRepository implements ProductRepository {
 
   async createVariant(input: CreateVariantInput): Promise<{ id: string }> {
     const id = `var_${++this.seq}`;
-    this.variants.set(id, { id, articleId: input.articleId, sku: input.sku, attributes: input.attributes.map((a) => ({ ...a })) });
+    this.variants.set(id, { id, articleId: input.articleId, sku: input.sku, attributes: input.attributes.map((a) => ({ ...a })), isBundle: false });
     return { id };
   }
 
@@ -60,7 +63,26 @@ export class InMemoryProductRepository implements ProductRepository {
       const a = this.articles.get(v.articleId);
       const attrs = v.attributes.map((x) => x.value).join(" / ");
       const label = `${a?.name ?? v.articleId}${attrs ? ` — ${attrs}` : ""} (${v.sku})`;
-      return { variantId: v.id, articleId: v.articleId, articleName: a?.name ?? v.articleId, sku: v.sku, label, unitNetCents: 0 };
+      return { variantId: v.id, articleId: v.articleId, articleName: a?.name ?? v.articleId, sku: v.sku, label, unitNetCents: 0, isBundle: v.isBundle };
     });
+  }
+
+  async listComponents(variantId: string): Promise<ComponentRow[]> {
+    const comps = this.components.get(variantId) ?? [];
+    return comps.map((c) => {
+      const cv = c.componentVariantId ? this.variants.get(c.componentVariantId) : undefined;
+      const a = cv ? this.articles.get(cv.articleId) : undefined;
+      const attrs = cv ? cv.attributes.map((x) => x.value).join(" / ") : "";
+      return {
+        description: c.description, qty: c.qty, componentVariantId: c.componentVariantId ?? null,
+        componentLabel: cv ? `${a?.name ?? cv.articleId}${attrs ? ` — ${attrs}` : ""} (${cv.sku})` : null,
+      };
+    });
+  }
+
+  async setComponents(variantId: string, components: ComponentInput[]): Promise<void> {
+    this.components.set(variantId, components.map((c) => ({ ...c })));
+    const v = this.variants.get(variantId);
+    if (v) v.isBundle = components.length > 0;
   }
 }
