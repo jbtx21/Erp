@@ -7,6 +7,8 @@ import {
   fastifyTRPCPlugin,
 } from "@trpc/server/adapters/fastify";
 import Fastify, { type FastifyInstance } from "fastify";
+import { prisma } from "@texma/db";
+import { FixedWindowRateLimiter } from "@texma/shared";
 import { PrismaAuditSink } from "./audit/prisma-audit-sink.js";
 import { AuthService, type AuthUser } from "./modules/auth/auth.service.js";
 import { JoseOidcVerifier, type IdentityVerifier } from "./modules/auth/oidc.js";
@@ -142,7 +144,14 @@ export interface ServerOptions {
 
 export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   // bodyLimit großzügig: Logo-/Stickdatei-Uploads (≤ 10 MB) reisen base64-kodiert (~+33 %).
-  const server = Fastify({ logger: true, bodyLimit: 15 * 1024 * 1024 });
+  // Strukturiertes Logging mit Redaction sensibler Header (Cookie/Authorization),
+  // damit Session-Token/Secrets nicht im Klartext im Log landen (Kap. 28).
+  const server = Fastify({
+    logger: {
+      redact: ["req.headers.cookie", "req.headers.authorization", "res.headers['set-cookie']"],
+    },
+    bodyLimit: 15 * 1024 * 1024,
+  });
   void server.register(cookie);
 
   const repo = new PrismaOrderRepository();
@@ -258,7 +267,27 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   // Der selbstgebaute Session-Pfad bleibt nur als Fallback (Dev/Übergang) bestehen.
   const oidc = opts.identityVerifier !== undefined ? opts.identityVerifier : JoseOidcVerifier.fromEnv();
 
+  // Brute-Force-Schutz am Login: max. 10 Versuche je E-Mail in 5 Minuten (Kap. 27/28).
+  const loginRateLimiter = new FixedWindowRateLimiter(10, 5 * 60_000);
+
+  // Liveness (Prozess läuft) vs. Readiness (DB erreichbar) — für Monitoring/Orchestrierung.
   server.get("/health", async () => ({ ok: true }));
+  server.get("/ready", async (_req, reply) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      return { ok: true, db: "up" };
+    } catch {
+      return reply.code(503).send({ ok: false, db: "down" });
+    }
+  });
+
+  // Basis-Sicherheits-Header (Kap. 27/28): konservativ, da reine JSON-API hinter der SPA.
+  server.addHook("onSend", async (_req, reply, payload) => {
+    void reply.header("X-Content-Type-Options", "nosniff");
+    void reply.header("X-Frame-Options", "DENY");
+    void reply.header("Referrer-Policy", "no-referrer");
+    return payload;
+  });
 
   // Binär-Download/Preview der hochgeladenen Stickdatei (außerhalb von tRPC, da Bytes).
   // Nutzt denselben Stickerei-Service wie der Context (inkl. Demo-Override) und ist über
@@ -367,6 +396,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
               maxAge: maxAgeSeconds,
             }),
           clearSessionCookie: () => void res.clearCookie(COOKIE_NAME, { path: "/" }),
+          loginRateLimiter,
           // Demo/Durchstich: ausgewählte Services überschreiben (In-Memory statt Prisma).
           ...(opts.contextOverrides ?? {}),
         };

@@ -1,6 +1,6 @@
 // tRPC-Basis (v11): Kontext, Auth-Middleware, Procedure-Builder.
 import { initTRPC, TRPCError } from "@trpc/server";
-import type { Role } from "@texma/shared";
+import type { FixedWindowRateLimiter, Role } from "@texma/shared";
 import type { AuthService, AuthUser } from "../modules/auth/auth.service.js";
 import type { OrderImportService } from "../modules/shop-import/order-import.service.js";
 import type { SupplierImportService } from "../modules/supplier-import/supplier-import.service.js";
@@ -121,6 +121,8 @@ export interface Context {
   sessionToken: string | null;
   setSessionCookie: (token: string, maxAgeSeconds: number) => void;
   clearSessionCookie: () => void;
+  /** Brute-Force-Schutz am Login/Passwort-Reset (optional; in Tests weggelassen). */
+  loginRateLimiter?: FixedWindowRateLimiter;
 }
 
 const t = initTRPC.context<Context>().create();

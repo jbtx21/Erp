@@ -46,8 +46,14 @@ export const appRouter = router({
     login: publicProcedure
       .input(z.object({ email: z.string().email(), password: z.string().min(1) }))
       .mutation(async ({ input, ctx }) => {
+        // Brute-Force-Schutz: zu viele Versuche je E-Mail werden vor der Passwortprüfung abgewiesen.
+        const rl = ctx.loginRateLimiter?.check(input.email.toLowerCase());
+        if (rl && !rl.allowed) {
+          throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Zu viele Anmeldeversuche. Bitte in ${rl.retryAfterSec}s erneut versuchen.` });
+        }
         try {
           const res = await ctx.auth.loginWithPassword(input.email, input.password);
+          ctx.loginRateLimiter?.reset(input.email.toLowerCase());
           ctx.setSessionCookie(res.token, SESSION_TTL_SECONDS);
           return { needsTotp: res.needsTotp };
         } catch (err) {
