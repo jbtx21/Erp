@@ -9,3 +9,6 @@ coverage/
 .DS_Store
 # Prisma generated client
 packages/db/generated/
+# HAKRO-Pricat (volle Preisliste — nicht versionieren)
+data/pricats/**/PRICAT_ITEM_EU_*.xlsx
+*-PRICAT_ITEM_EU_*.xlsx
