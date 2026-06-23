@@ -405,6 +405,7 @@ model Supplier {
   stickereiKunden Company[] @relation("StickereiPartner")
   purchaseOrders  PurchaseOrder[]
   incomingInvoices IncomingInvoice[]
+  sampleLoanLines  SampleLoanLine[]
   createdAt       DateTime @default(now())
 }
 
@@ -801,17 +802,36 @@ model SampleLoan {
   id           String           @id @default(cuid())
   companyId    String
   company      Company          @relation(fields: [companyId], references: [id])
-  variantId    String
-  variant      Variant          @relation(fields: [variantId], references: [id])
-  menge        Int
+  // Einzel-Leihe (Legacy, Auto-Berechnung): genau eine Variante. Mehrartikel-Leihe
+  // (Muster/Anprobe, mehrere Lieferanten) nutzt stattdessen SampleLoanLine.
+  variantId    String?
+  variant      Variant?         @relation(fields: [variantId], references: [id])
+  menge        Int?
+  zweck        String? // z. B. "Anprobe", "Muster" (Mehrartikel-Leihe)
   ausgegebenAm DateTime         @default(now())
   status       SampleLoanStatus @default(VERLIEHEN)
   invoiceId    String?          @unique
   invoice      Invoice?         @relation(fields: [invoiceId], references: [id])
+  lines        SampleLoanLine[]
   createdAt    DateTime         @default(now())
 
   @@index([companyId])
   @@index([status])
+}
+
+// Position einer Mehrartikel-Leihe: mehrere Artikel von verschiedenen Lieferanten
+// (Muster/Anprobe). variantId optional (Katalogartikel), supplierId = Herkunft.
+model SampleLoanLine {
+  id           String     @id @default(cuid())
+  sampleLoanId String
+  sampleLoan   SampleLoan @relation(fields: [sampleLoanId], references: [id], onDelete: Cascade)
+  description  String
+  variantId    String?
+  supplierId   String?
+  supplier     Supplier?  @relation(fields: [supplierId], references: [id])
+  menge        Int
+
+  @@index([sampleLoanId])
 }
 
 // Kostenstelle (B7, Kap. 37.1) — generische Tabelle; Nummern von TEXMA/StB

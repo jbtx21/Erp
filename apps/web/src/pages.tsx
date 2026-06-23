@@ -283,6 +283,10 @@ export function SampleLoansPage(): JSX.Element {
   const [err, setErr] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Mehrartikel-Leihe (mehrere Lieferanten)
+  const [multiCompany, setMultiCompany] = useState("co-muster");
+  const [multiZweck, setMultiZweck] = useState("Anprobe");
+  const [multiLines, setMultiLines] = useState<{ description: string; supplierId: string; menge: number }[]>([{ description: "", supplierId: "", menge: 1 }]);
 
   const load = useCallback(async () => {
     try { setRows((await trpc.sampleLoans.list.query()) as Row[]); setErr(null); }
@@ -315,7 +319,31 @@ export function SampleLoansPage(): JSX.Element {
       </Group>
       {status && <Text size="sm" mt="xs" c="dimmed">{status}</Text>}
       {err && <Alert color="red" mt="sm">{err}</Alert>}
-      <AutoTable rows={rows} action={(r) => (
+
+      <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+        <Text size="sm" fw={600}>Mehrartikel-Leihe (Muster/Anprobe, mehrere Lieferanten)</Text>
+        <Group gap="xs" align="end" mt="xs">
+          <TextInput label="Firmen-ID" value={multiCompany} onChange={(e) => setMultiCompany(e.currentTarget.value)} w={130} />
+          <TextInput label="Zweck" value={multiZweck} onChange={(e) => setMultiZweck(e.currentTarget.value)} w={140} />
+        </Group>
+        {multiLines.map((l, i) => (
+          <Group key={i} gap="xs" mt={4} align="end">
+            <TextInput label={i === 0 ? "Artikel" : undefined} value={l.description} onChange={(e) => setMultiLines((ls) => ls.map((x, j) => j === i ? { ...x, description: e.currentTarget.value } : x))} w={240} placeholder="Polo blau M" />
+            <TextInput label={i === 0 ? "Lieferant-ID" : undefined} value={l.supplierId} onChange={(e) => setMultiLines((ls) => ls.map((x, j) => j === i ? { ...x, supplierId: e.currentTarget.value } : x))} w={150} />
+            <NumberInput label={i === 0 ? "Menge" : undefined} value={l.menge} onChange={(v) => setMultiLines((ls) => ls.map((x, j) => j === i ? { ...x, menge: Number(v) || 1 } : x))} min={1} w={90} />
+            <Button size="compact-sm" variant="subtle" color="red" disabled={multiLines.length === 1} onClick={() => setMultiLines((ls) => ls.filter((_, j) => j !== i))}>✕</Button>
+          </Group>
+        ))}
+        <Group gap="xs" mt="xs">
+          <Button size="compact-xs" variant="light" onClick={() => setMultiLines((ls) => [...ls, { description: "", supplierId: "", menge: 1 }])}>+ Artikel</Button>
+          <Button size="compact-sm" disabled={!multiLines.some((l) => l.description.trim())} onClick={() => void act(async () => {
+            await trpc.sampleLoans.issueMulti.mutate({ companyId: multiCompany, zweck: multiZweck, lines: multiLines.filter((l) => l.description.trim()).map((l) => ({ description: l.description.trim(), supplierId: l.supplierId.trim() || undefined, menge: l.menge })) });
+            setMultiLines([{ description: "", supplierId: "", menge: 1 }]);
+          })}>Mehrartikel-Leihe anlegen</Button>
+        </Group>
+      </Box>
+
+      <AutoTable rows={rows} hide={["lines"]} action={(r) => (
         String(r.status) === "VERLIEHEN"
           ? <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.sampleLoans.returnSample.mutate({ loanId: String(r.id) }))}>Zurückgenommen</Button>
           : <Text size="xs" c="dimmed">—</Text>
@@ -509,6 +537,7 @@ export function QuotesPage(): JSX.Element {
         {status === "ENTWURF" && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.quotes.transition.mutate({ id, to: "VERSENDET" }))}>→ Versendet</Button>}
         {(status === "VERSENDET" || status === "NACHFASSEN") && <Button size="compact-xs" color="green" onClick={() => void act(() => trpc.quotes.transition.mutate({ id, to: "ANGENOMMEN" }))}>Angenommen</Button>}
         {status === "ANGENOMMEN" && <Button size="compact-xs" color="blue" onClick={() => void act(async () => { const r = await trpc.sales.convertQuote.mutate({ quoteId: id }); window.alert(`Auftrag ${r.number} angelegt.`); })}>→ Auftrag</Button>}
+        {status === "ANGENOMMEN" && <Button size="compact-xs" variant="light" color="grape" onClick={() => void act(async () => { await trpc.sampleLoans.convertQuote.mutate({ quoteId: id }); window.alert("Muster/Anprobe-Leihe aus Angebot angelegt."); })}>→ Leihgut</Button>}
         {status !== "ANGENOMMEN" && status !== "ABGELEHNT" && (
           <Button size="compact-xs" color="red" variant="light" onClick={() => {
             const grund = typeof window !== "undefined" ? window.prompt("Ablehnen — Verlustgrund?") : null;

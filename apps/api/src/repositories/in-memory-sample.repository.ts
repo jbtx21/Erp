@@ -3,6 +3,7 @@
 
 import { isSampleOverdue, type SampleLoanStatus } from "@texma/shared";
 import type {
+  LoanLine,
   OverdueSampleLoan,
   SampleInvoiceData,
   SampleLoanRepository,
@@ -12,11 +13,13 @@ import type {
 interface Loan {
   id: string;
   companyId: string;
-  variantId: string;
-  menge: number;
+  variantId: string | null;
+  menge: number | null;
+  zweck: string | null;
   ausgegebenAm: Date;
   status: SampleLoanStatus;
   invoiceId: string | null;
+  lines: LoanLine[];
 }
 
 export class InMemorySampleLoanRepository implements SampleLoanRepository {
@@ -39,6 +42,12 @@ export class InMemorySampleLoanRepository implements SampleLoanRepository {
     return [...this.loans.values()].map((l) => ({ ...l })).sort((a, b) => b.ausgegebenAm.getTime() - a.ausgegebenAm.getTime());
   }
 
+  /** Test-Helfer: Angebot für „Angebot → Leihgut" hinterlegen. */
+  setQuoteForLoan(quoteId: string, data: { companyId: string; lines: LoanLine[] }): void {
+    this.quotes.set(quoteId, data);
+  }
+  private readonly quotes = new Map<string, { companyId: string; lines: LoanLine[] }>();
+
   async issue(input: {
     companyId: string;
     variantId: string;
@@ -47,22 +56,34 @@ export class InMemorySampleLoanRepository implements SampleLoanRepository {
     dueDate: Date;
   }): Promise<{ id: string }> {
     const id = `loan-${++this.seq}`;
-    this.loans.set(id, { id, ...input, status: "VERLIEHEN", invoiceId: null });
+    this.loans.set(id, { id, companyId: input.companyId, variantId: input.variantId, menge: input.menge, zweck: null, ausgegebenAm: input.ausgegebenAm, status: "VERLIEHEN", invoiceId: null, lines: [] });
     this.moveMuster(input.variantId, -input.menge); // Muster-Abgang
     return { id };
+  }
+
+  async issueMulti(input: { companyId: string; zweck: string | null; ausgegebenAm: Date; lines: LoanLine[] }): Promise<{ id: string }> {
+    const id = `loan-${++this.seq}`;
+    this.loans.set(id, { id, companyId: input.companyId, variantId: null, menge: null, zweck: input.zweck, ausgegebenAm: input.ausgegebenAm, status: "VERLIEHEN", invoiceId: null, lines: input.lines });
+    for (const l of input.lines) if (l.variantId) this.moveMuster(l.variantId, -l.menge);
+    return { id };
+  }
+
+  async quoteForLoan(quoteId: string): Promise<{ companyId: string; lines: LoanLine[] } | null> {
+    return this.quotes.get(quoteId) ?? null;
   }
 
   async markReturned(loanId: string): Promise<void> {
     const loan = this.loans.get(loanId);
     if (!loan || loan.status !== "VERLIEHEN") return;
     loan.status = "ZURUECK";
-    this.moveMuster(loan.variantId, loan.menge); // Muster-Zugang
+    if (loan.variantId && loan.menge) this.moveMuster(loan.variantId, loan.menge); // Muster-Zugang
+    for (const l of loan.lines) if (l.variantId) this.moveMuster(l.variantId, l.menge);
   }
 
   async listDueForBilling(now: Date): Promise<OverdueSampleLoan[]> {
     return [...this.loans.values()]
-      .filter((l) => isSampleOverdue({ ausgegebenAm: l.ausgegebenAm, status: l.status }, now))
-      .map((l) => ({ id: l.id, companyId: l.companyId, variantId: l.variantId, menge: l.menge, ausgegebenAm: l.ausgegebenAm }));
+      .filter((l) => l.variantId !== null && l.menge !== null && isSampleOverdue({ ausgegebenAm: l.ausgegebenAm, status: l.status }, now))
+      .map((l) => ({ id: l.id, companyId: l.companyId, variantId: l.variantId as string, menge: l.menge as number, ausgegebenAm: l.ausgegebenAm }));
   }
 
   async listPriceCents(_companyId: string, variantId: string, menge: number): Promise<number> {

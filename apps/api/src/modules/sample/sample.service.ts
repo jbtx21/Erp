@@ -25,14 +25,23 @@ export interface OverdueSampleLoan {
   ausgegebenAm: Date;
 }
 
+export interface LoanLine {
+  description: string;
+  variantId?: string | null;
+  supplierId?: string | null;
+  menge: number;
+}
+
 export interface SampleLoanRow {
   id: string;
   companyId: string;
-  variantId: string;
-  menge: number;
+  variantId: string | null;
+  menge: number | null;
+  zweck: string | null;
   ausgegebenAm: Date;
   status: string;
   invoiceId: string | null;
+  lines: LoanLine[];
 }
 
 export interface SampleLoanRepository {
@@ -46,6 +55,10 @@ export interface SampleLoanRepository {
     ausgegebenAm: Date;
     dueDate: Date;
   }): Promise<{ id: string }>;
+  /** Mehrartikel-Leihe (Muster/Anprobe, mehrere Lieferanten) — keine Auto-Berechnung. */
+  issueMulti(input: { companyId: string; zweck: string | null; ausgegebenAm: Date; lines: LoanLine[] }): Promise<{ id: string }>;
+  /** Angebotsdaten für „Angebot → Leihgut": Firma + Positionen (Beschreibung/Menge). */
+  quoteForLoan(quoteId: string): Promise<{ companyId: string; lines: LoanLine[] } | null>;
   /** Rückgabe: Status ZURUECK, Muster-Zugang (+menge), DueItem erledigt. */
   markReturned(loanId: string): Promise<void>;
   /** Noch verliehene Leihen, deren Frist `now` erreicht/überschritten hat. */
@@ -112,6 +125,22 @@ export class SampleLoanService {
       })
     );
     return loan;
+  }
+
+  /** Mehrartikel-Leihe (Muster/Anprobe): mehrere Artikel, ggf. von verschiedenen Lieferanten. */
+  async issueMulti(input: { companyId: string; zweck?: string | null; lines: LoanLine[]; at?: Date }): Promise<{ id: string }> {
+    const lines = input.lines.filter((l) => l.description.trim() && l.menge > 0);
+    if (lines.length === 0) throw new Error("Mindestens eine Position (Beschreibung + Menge > 0).");
+    const loan = await this.repo.issueMulti({ companyId: input.companyId, zweck: input.zweck ?? null, ausgegebenAm: input.at ?? new Date(), lines });
+    await this.audit.append(buildEntry({ entity: "SampleLoan", entityId: loan.id, action: "CREATE", after: { companyId: input.companyId, zweck: input.zweck, lineCount: lines.length, multi: true } }));
+    return loan;
+  }
+
+  /** Angebot → Leihgut: übernimmt die Angebotspositionen als Muster/Anprobe-Leihe. */
+  async convertQuoteToLoan(quoteId: string, zweck = "Muster/Anprobe"): Promise<{ id: string }> {
+    const q = await this.repo.quoteForLoan(quoteId);
+    if (!q) throw new Error("Angebot nicht gefunden.");
+    return this.issueMulti({ companyId: q.companyId, zweck, lines: q.lines });
   }
 
   /** Muster zurückgenommen — keine Berechnung mehr. */

@@ -1152,6 +1152,21 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         try { return await ctx.sampleLoans.issue(input); } catch (e) { throw toTrpcError(e); }
       }),
+    // Mehrartikel-Leihe (Muster/Anprobe, mehrere Lieferanten).
+    issueMulti: roleProcedure(...supplierRoles)
+      .input(z.object({
+        companyId: z.string().min(1), zweck: z.string().optional(),
+        lines: z.array(z.object({ description: z.string().min(1), variantId: z.string().optional(), supplierId: z.string().optional(), menge: z.number().int().positive() })).min(1),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.sampleLoans.issueMulti(input); } catch (e) { throw toTrpcError(e); }
+      }),
+    // Angebot → Leihgut wandeln (Won-Verzweigung: Muster/Anprobe).
+    convertQuote: roleProcedure(...supplierRoles)
+      .input(z.object({ quoteId: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.sampleLoans.convertQuoteToLoan(input.quoteId); } catch (e) { throw toTrpcError(e); }
+      }),
     returnSample: roleProcedure(...supplierRoles)
       .input(z.object({ loanId: z.string().min(1) }))
       .mutation(async ({ input, ctx }) => {
