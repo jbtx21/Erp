@@ -1548,16 +1548,71 @@ function DeliveryPanel({ orderId, onChanged }: { orderId: string; onChanged: () 
   );
 }
 
+// Laufzettel / Produktionszettel (T-11): erzeugt das PDF aus einem Produktionsauftrag.
+// INTERN = Maschinenparameter, EXTERN = Dienstleister + Termine (Pflichtfelder je Art).
+function LaufzettelModal({ productionId, onClose }: { productionId: string; onClose: () => void }): JSX.Element {
+  const [kind, setKind] = useState<"INTERN" | "EXTERN">("INTERN");
+  const [maschine, setMaschine] = useState(""); const [tempC, setTempC] = useState<number | "">(160); const [presszeit, setPresszeit] = useState<number | "">(15);
+  const [dienstleister, setDienstleister] = useState(""); const [positionierung, setPositionierung] = useState("");
+  const [anliefer, setAnliefer] = useState(""); const [fertig, setFertig] = useState("");
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
+
+  const gen = async (): Promise<void> => {
+    setBusy(true); setErr(null);
+    try {
+      const extra = kind === "INTERN"
+        ? { maschine: maschine.trim(), temperaturC: typeof tempC === "number" ? tempC : 0, presszeitSek: typeof presszeit === "number" ? presszeit : 0 }
+        : { dienstleister: dienstleister.trim(), positionierung: positionierung.trim(), ...(anliefer ? { anlieferDatum: `${anliefer}T00:00:00.000Z` } : {}), ...(fertig ? { fertigstellDatum: `${fertig}T00:00:00.000Z` } : {}) };
+      const res = await trpc.productionSheet.render.mutate({ productionId, kind, extra });
+      downloadBase64Pdf(res.fileName, res.pdfBase64);
+      onClose();
+    } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+
+  return (
+    <Modal opened onClose={onClose} title="Laufzettel erzeugen" size="lg">
+      {err && <Alert color="red" mb="sm">{err}</Alert>}
+      <Select label="Art" w={220} value={kind} onChange={(v) => v && setKind(v as "INTERN" | "EXTERN")}
+        data={[{ value: "INTERN", label: "Intern (Maschinenparameter)" }, { value: "EXTERN", label: "Extern (Dienstleister)" }]} />
+      {kind === "INTERN" ? (
+        <Group gap="md" mt="md" align="end" wrap="wrap">
+          <TextInput label="Maschine" value={maschine} onChange={(e) => setMaschine(e.currentTarget.value)} placeholder="z. B. Transferpresse 1" w={200} />
+          <NumberInput label="Temperatur (°C)" value={tempC} onChange={(v) => setTempC(typeof v === "number" ? v : "")} w={140} />
+          <NumberInput label="Presszeit (s)" value={presszeit} onChange={(v) => setPresszeit(typeof v === "number" ? v : "")} w={140} />
+        </Group>
+      ) : (
+        <Group gap="md" mt="md" align="end" wrap="wrap">
+          <TextInput label="Dienstleister" value={dienstleister} onChange={(e) => setDienstleister(e.currentTarget.value)} placeholder="Veredler" w={200} />
+          <TextInput label="Positionierung" value={positionierung} onChange={(e) => setPositionierung(e.currentTarget.value)} placeholder="z. B. Brust links" w={180} />
+          <TextInput label="Anliefertermin" type="date" value={anliefer} onChange={(e) => setAnliefer(e.currentTarget.value)} w={160} />
+          <TextInput label="Fertigstellung" type="date" value={fertig} onChange={(e) => setFertig(e.currentTarget.value)} w={160} />
+        </Group>
+      )}
+      <Group justify="flex-end" mt="lg">
+        <Button variant="default" onClick={onClose}>Abbrechen</Button>
+        <Button color="dark" loading={busy} onClick={() => void gen()}>PDF erzeugen</Button>
+      </Group>
+    </Modal>
+  );
+}
+
 // Belegkette/Connections (ERPNext-Muster): phasen-gruppierter Belegbaum eines Auftrags
-// + „Create"-Folgebeleg-Aktionen (Rechnung erzeugen / Storno per Gutschrift).
+// + „Create"-Folgebeleg-Aktionen (Rechnung erzeugen / Storno per Gutschrift / Produktion).
 function ConnectionsPanel({ orderId, role, onChanged }: { orderId: string; role: string; onChanged: () => void }): JSX.Element {
   const [graph, setGraph] = useState<Awaited<ReturnType<typeof trpc.shopOrders.connections.query>> | null>(null);
+  const [prod, setProd] = useState<Awaited<ReturnType<typeof trpc.production.status.query>> | null>(null);
+  const [laufzettelFor, setLaufzettelFor] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const canFinance = role === "ADMIN" || role === "BUERO" || role === "BUCHHALTUNG";
+  const canProd = role === "ADMIN" || role === "BUERO";
 
   const load = useCallback(async () => {
-    try { setGraph(await trpc.shopOrders.connections.query({ orderId })); setErr(null); }
+    try {
+      setGraph(await trpc.shopOrders.connections.query({ orderId }));
+      try { setProd(await trpc.production.status.query({ orderId })); } catch { setProd(null); }
+      setErr(null);
+    }
     catch (e) { setErr(errMsg(e)); }
   }, [orderId]);
   useEffect(() => { void load(); }, [load]);
@@ -1567,28 +1622,48 @@ function ConnectionsPanel({ orderId, role, onChanged }: { orderId: string; role:
 
   return (
     <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+      {laufzettelFor && <LaufzettelModal productionId={laufzettelFor} onClose={() => setLaufzettelFor(null)} />}
       <Group justify="space-between">
         <Text fw={600}>Belegkette {graph ? `· ${graph.anchor.label}` : ""}</Text>
-        {canFinance && (
-          <Group gap="xs">
-            {!invoiceNode && (
-              <Button size="compact-xs" onClick={async () => {
-                setErr(null); setMsg(null);
-                try { const r = await trpc.invoices.createFromOrder.mutate({ orderId }); setMsg(`Rechnung ${r.number} erzeugt.`); await load(); onChanged(); }
-                catch (e) { setErr(errMsg(e)); }
-              }}>Rechnung erzeugen</Button>
-            )}
-            {invoiceNode && (role === "ADMIN" || role === "BUCHHALTUNG") && (
-              <Button size="compact-xs" variant="light" color="red" onClick={async () => {
-                const reason = window.prompt("Gutschriftsgrund (Storno der Rechnung):");
-                if (!reason) return;
-                setErr(null); setMsg(null);
-                try { const r = await trpc.invoices.cancelByCreditNote.mutate({ invoiceId: invoiceNode.id, reason }); setMsg(`Gutschrift ${r.number} gebucht (Rechnung bleibt WORM).`); await load(); onChanged(); }
-                catch (e) { setErr(errMsg(e)); }
-              }}>Storno per Gutschrift</Button>
-            )}
-          </Group>
-        )}
+        <Group gap="xs">
+          {canProd && prod && !prod.productionId && !prod.freigegeben && (
+            <Button size="compact-xs" variant="light" color="orange" onClick={async () => {
+              setErr(null); setMsg(null);
+              try { await trpc.production.release.mutate({ orderId }); setMsg("Auftrag für die Produktion freigegeben."); await load(); }
+              catch (e) { setErr(errMsg(e)); }
+            }}>Freigeben</Button>
+          )}
+          {canProd && prod && !prod.productionId && (
+            <Button size="compact-xs" color="orange" disabled={!prod.freigegeben} title={prod.freigegeben ? "" : "Auftrag erst freigeben"} onClick={async () => {
+              setErr(null); setMsg(null);
+              try { const r = await trpc.production.createFromOrder.mutate({ orderId }); setMsg(`Produktionsauftrag ${r.number} erzeugt (${r.bomItemCount} Stücklisten-Positionen).`); await load(); onChanged(); }
+              catch (e) { setErr(errMsg(e)); }
+            }}>Produktionsauftrag erzeugen</Button>
+          )}
+          {prod?.productionId && (
+            <Button size="compact-xs" variant="light" color="orange" onClick={() => setLaufzettelFor(prod.productionId)}>Laufzettel (PDF)</Button>
+          )}
+          {canFinance && (
+            <>
+              {!invoiceNode && (
+                <Button size="compact-xs" onClick={async () => {
+                  setErr(null); setMsg(null);
+                  try { const r = await trpc.invoices.createFromOrder.mutate({ orderId }); setMsg(`Rechnung ${r.number} erzeugt.`); await load(); onChanged(); }
+                  catch (e) { setErr(errMsg(e)); }
+                }}>Rechnung erzeugen</Button>
+              )}
+              {invoiceNode && (role === "ADMIN" || role === "BUCHHALTUNG") && (
+                <Button size="compact-xs" variant="light" color="red" onClick={async () => {
+                  const reason = window.prompt("Gutschriftsgrund (Storno der Rechnung):");
+                  if (!reason) return;
+                  setErr(null); setMsg(null);
+                  try { const r = await trpc.invoices.cancelByCreditNote.mutate({ invoiceId: invoiceNode.id, reason }); setMsg(`Gutschrift ${r.number} gebucht (Rechnung bleibt WORM).`); await load(); onChanged(); }
+                  catch (e) { setErr(errMsg(e)); }
+                }}>Storno per Gutschrift</Button>
+              )}
+            </>
+          )}
+        </Group>
       </Group>
       {err && <Alert color="red" mt="xs">{err}</Alert>}
       {msg && <Alert color="green" mt="xs">{msg}</Alert>}
