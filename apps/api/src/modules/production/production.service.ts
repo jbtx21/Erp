@@ -57,11 +57,14 @@ export interface ProductionStatus {
   freigegeben: boolean;
   productionId: string | null;
   productionNumber: string | null;
+  /** Gewählter Veredelungsweg + bestätigter Produktionstermin (null, wenn kein PA). */
+  finishingProfile: FinishingLeadProfile | null;
+  dueDate: Date | null;
 }
 
 export interface ProductionRepository {
   loadOrderForProduction(orderId: string): Promise<OrderForProduction | null>;
-  createProductionOrder(input: { number: string; orderId: string; dueDate: Date | null; bomItems: BomItemInput[] }): Promise<{ id: string }>;
+  createProductionOrder(input: { number: string; orderId: string; dueDate: Date | null; finishingProfile: string | null; bomItems: BomItemInput[] }): Promise<{ id: string }>;
   /** Setzt den Auftrag auf IN_PRODUKTION (nur aus frühen Status). */
   setOrderInProduction(orderId: string): Promise<void>;
   /** Gibt den Auftrag für die Produktion frei (Kap. 5.2/7.2). */
@@ -132,7 +135,7 @@ export class ProductionService {
    * ein PA existiert (1 Auftrag = 1 PA). Der Produktionstermin (`dueDate`) wird vom
    * Innendienst manuell bestätigt übergeben; ohne Angabe gilt der zugesagte Liefertermin.
    */
-  async createFromOrder(orderId: string, opts: { dueDate?: Date | null } = {}): Promise<{ id: string; number: string; bomItemCount: number; dueDate: Date | null }> {
+  async createFromOrder(orderId: string, opts: { dueDate?: Date | null; profile?: FinishingLeadProfile } = {}): Promise<{ id: string; number: string; bomItemCount: number; dueDate: Date | null }> {
     const order = await this.repo.loadOrderForProduction(orderId);
     if (!order) throw new ProductionError("Auftrag nicht gefunden.");
     if (order.existingProductionId) throw new ProductionError(`Produktionsauftrag ${order.existingProductionNumber ?? ""} existiert bereits.`);
@@ -141,12 +144,13 @@ export class ProductionService {
 
     const bomItems = ProductionService.buildBomItems(order.lines);
     const dueDate = "dueDate" in opts ? opts.dueDate ?? null : order.deliveryDate;
+    const finishingProfile = opts.profile ?? null;
     const number = await this.numbering.next("PRODUCTION_ORDER");
-    const { id } = await this.repo.createProductionOrder({ number, orderId, dueDate, bomItems });
+    const { id } = await this.repo.createProductionOrder({ number, orderId, dueDate, finishingProfile, bomItems });
     await this.repo.setOrderInProduction(orderId);
     await this.audit.append(buildEntry({
       entity: "ProductionOrder", entityId: id, action: "CREATE",
-      after: { number, orderNumber: order.number, bomItems: bomItems.length, liefertermin: order.deliveryDate, produktionstermin: dueDate },
+      after: { number, orderNumber: order.number, bomItems: bomItems.length, liefertermin: order.deliveryDate, produktionstermin: dueDate, veredelungsweg: finishingProfile },
     }));
     return { id, number, bomItemCount: bomItems.length, dueDate };
   }

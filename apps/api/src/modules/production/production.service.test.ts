@@ -1,25 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { ProductionError, ProductionService, type OrderForProduction, type ProductionRepository } from "./production.service.js";
+import { ProductionError, ProductionService, type OrderForProduction, type ProductionRepository, type ProductionStatus } from "./production.service.js";
 import { NumberingService } from "../numbering/numbering.service.js";
 import { InMemoryNumberingRepository } from "../../repositories/in-memory-numbering.repository.js";
 
 class MemAudit { entries: unknown[] = []; async append(e: unknown): Promise<void> { this.entries.push(e); } }
 
 class FakeRepo implements ProductionRepository {
-  created: { number: string; orderId: string; dueDate: Date | null; bomItems: { description: string; qty: number; variantId: string | null }[] }[] = [];
+  created: { number: string; orderId: string; dueDate: Date | null; finishingProfile: string | null; bomItems: { description: string; qty: number; variantId: string | null }[] }[] = [];
   inProduction: string[] = [];
   released: string[] = [];
   constructor(private order: OrderForProduction | null) {}
   async loadOrderForProduction(): Promise<OrderForProduction | null> { return this.order; }
-  async createProductionOrder(input: { number: string; orderId: string; dueDate: Date | null; bomItems: { description: string; qty: number; variantId: string | null }[] }): Promise<{ id: string }> {
-    this.created.push({ number: input.number, orderId: input.orderId, dueDate: input.dueDate, bomItems: input.bomItems });
+  async createProductionOrder(input: { number: string; orderId: string; dueDate: Date | null; finishingProfile: string | null; bomItems: { description: string; qty: number; variantId: string | null }[] }): Promise<{ id: string }> {
+    this.created.push({ number: input.number, orderId: input.orderId, dueDate: input.dueDate, finishingProfile: input.finishingProfile, bomItems: input.bomItems });
     if (this.order) this.order = { ...this.order, existingProductionId: "pa_1", existingProductionNumber: input.number };
     return { id: "pa_1" };
   }
   async setOrderInProduction(orderId: string): Promise<void> { this.inProduction.push(orderId); }
   async releaseOrder(orderId: string): Promise<void> { this.released.push(orderId); if (this.order) this.order = { ...this.order, freigegeben: true }; }
-  async status(): Promise<{ freigegeben: boolean; productionId: string | null; productionNumber: string | null } | null> {
-    return this.order ? { freigegeben: this.order.freigegeben, productionId: this.order.existingProductionId, productionNumber: this.order.existingProductionNumber } : null;
+  async status(): Promise<ProductionStatus | null> {
+    return this.order ? { freigegeben: this.order.freigegeben, productionId: this.order.existingProductionId, productionNumber: this.order.existingProductionNumber, finishingProfile: null, dueDate: null } : null;
   }
 }
 
@@ -75,13 +75,14 @@ describe("ProductionService — Auftrag → Produktionsauftrag (Kap. 5.2)", () =
     expect(extern.external).toBe(true);
   });
 
-  it("übernimmt den manuell bestätigten Produktionstermin", async () => {
+  it("übernimmt den manuell bestätigten Produktionstermin + Veredelungsweg", async () => {
     const delivery = new Date(Date.UTC(2026, 6, 20));
     const confirmed = new Date(Date.UTC(2026, 6, 10));
     const { svc, repo } = svcFor(baseOrder({ deliveryDate: delivery }));
-    const res = await svc.createFromOrder("ord_1", { dueDate: confirmed });
+    const res = await svc.createFromOrder("ord_1", { dueDate: confirmed, profile: "EXTERN_UND_INTERN" });
     expect(res.dueDate?.toISOString()).toBe(confirmed.toISOString());
     expect(repo.created[0]?.dueDate?.toISOString()).toBe(confirmed.toISOString());
+    expect(repo.created[0]?.finishingProfile).toBe("EXTERN_UND_INTERN");
   });
 
   it("ohne bestätigten Termin gilt der zugesagte Liefertermin", async () => {

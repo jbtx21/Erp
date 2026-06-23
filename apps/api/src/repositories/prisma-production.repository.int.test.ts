@@ -69,10 +69,14 @@ if (!dbConfigured) {
 
       await svc.release(ORD);
       const confirmed = preview.proposedDueDate!;
-      const res = await svc.createFromOrder(ORD, { dueDate: confirmed });
+      const res = await svc.createFromOrder(ORD, { dueDate: confirmed, profile: "EXTERN_STICK_SIEBDRUCK" });
       expect(res.number).toMatch(/^PA-/);
       expect(res.bomItemCount).toBe(2);
       expect(res.dueDate?.getTime()).toBe(confirmed.getTime());
+
+      const st = await svc.status(ORD);
+      expect(st.finishingProfile).toBe("EXTERN_STICK_SIEBDRUCK");
+      expect(st.dueDate?.getTime()).toBe(confirmed.getTime());
 
       const items = await prisma.bomItem.findMany({ where: { production: { orderId: ORD } }, orderBy: { qty: "asc" }, select: { description: true, qty: true, variantId: true } });
       expect(items).toHaveLength(2);

@@ -783,6 +783,7 @@ model ProductionOrder {
   order       Order    @relation(fields: [orderId], references: [id])
   ampel       AmpelStatus @default(GRUEN) // ersetzt Excel-Terminliste (Kap. 5.2/35.4)
   dueDate     DateTime?
+  finishingProfile String? // gewählter Veredelungsweg (Werktage-Durchlaufzeit, Kap. 35.2)
   bomItems    BomItem[]
   subOrders   SubProductionOrder[]
   timeEntries TimeEntry[]

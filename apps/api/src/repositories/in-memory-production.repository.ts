@@ -9,6 +9,7 @@ import type {
 
 export class InMemoryProductionRepository implements ProductionRepository {
   private readonly orders = new Map<string, OrderForProduction>();
+  private readonly meta = new Map<string, { finishingProfile: ProductionStatus["finishingProfile"]; dueDate: Date | null }>();
   private seq = 0;
 
   addOrder(order: OrderForProduction): void { this.orders.set(order.id, order); }
@@ -17,10 +18,11 @@ export class InMemoryProductionRepository implements ProductionRepository {
     return this.orders.get(orderId) ?? null;
   }
 
-  async createProductionOrder(input: { number: string; orderId: string; dueDate: Date | null; bomItems: BomItemInput[] }): Promise<{ id: string }> {
+  async createProductionOrder(input: { number: string; orderId: string; dueDate: Date | null; finishingProfile: string | null; bomItems: BomItemInput[] }): Promise<{ id: string }> {
     const id = `pa_${++this.seq}`;
     const o = this.orders.get(input.orderId);
     if (o) { o.existingProductionId = id; o.existingProductionNumber = input.number; }
+    this.meta.set(input.orderId, { finishingProfile: input.finishingProfile as ProductionStatus["finishingProfile"], dueDate: input.dueDate });
     return { id };
   }
 
@@ -34,6 +36,7 @@ export class InMemoryProductionRepository implements ProductionRepository {
   async status(orderId: string): Promise<ProductionStatus | null> {
     const o = this.orders.get(orderId);
     if (!o) return null;
-    return { freigegeben: o.freigegeben, productionId: o.existingProductionId, productionNumber: o.existingProductionNumber };
+    const m = this.meta.get(orderId);
+    return { freigegeben: o.freigegeben, productionId: o.existingProductionId, productionNumber: o.existingProductionNumber, finishingProfile: m?.finishingProfile ?? null, dueDate: m?.dueDate ?? null };
   }
 }

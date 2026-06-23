@@ -1550,8 +1550,8 @@ function DeliveryPanel({ orderId, onChanged }: { orderId: string; onChanged: () 
 
 // Laufzettel / Produktionszettel (T-11): erzeugt das PDF aus einem Produktionsauftrag.
 // INTERN = Maschinenparameter, EXTERN = Dienstleister + Termine (Pflichtfelder je Art).
-function LaufzettelModal({ productionId, onClose }: { productionId: string; onClose: () => void }): JSX.Element {
-  const [kind, setKind] = useState<"INTERN" | "EXTERN">("INTERN");
+function LaufzettelModal({ productionId, defaultKind = "INTERN", onClose }: { productionId: string; defaultKind?: "INTERN" | "EXTERN"; onClose: () => void }): JSX.Element {
+  const [kind, setKind] = useState<"INTERN" | "EXTERN">(defaultKind);
   const [maschine, setMaschine] = useState(""); const [tempC, setTempC] = useState<number | "">(160); const [presszeit, setPresszeit] = useState<number | "">(15);
   const [dienstleister, setDienstleister] = useState(""); const [positionierung, setPositionierung] = useState("");
   const [anliefer, setAnliefer] = useState(""); const [fertig, setFertig] = useState("");
@@ -1606,6 +1606,11 @@ const LEAD_PROFILE_OPTIONS: { value: LeadProfile; label: string }[] = [
   { value: "EXTERN_STICK_SIEBDRUCK", label: "Externe Veredelung — Stick & Siebdruck (ab Versand) · 10 WT" },
   { value: "EXTERN_UND_INTERN", label: "Externe + interne Veredelung (kombiniert) · 12 WT" },
 ];
+const LEAD_PROFILE_SHORT: Record<string, string> = {
+  INHOUSE_OHNE_TRANSFER: "Inhouse (ohne Transferdruck)", INHOUSE_MIT_TRANSFER: "Inhouse (mit Transferdruck)",
+  EXTERN_STICK_SIEBDRUCK: "Extern (Stick & Siebdruck)", EXTERN_UND_INTERN: "Extern + intern",
+};
+const isExternalProfile = (p: string | null | undefined): boolean => p === "EXTERN_STICK_SIEBDRUCK" || p === "EXTERN_UND_INTERN";
 
 function ProductionCreateDialog({ orderId, onClose, onDone }: { orderId: string; onClose: () => void; onDone: (msg: string) => void }): JSX.Element {
   const [profile, setProfile] = useState<LeadProfile>("INHOUSE_OHNE_TRANSFER");
@@ -1626,7 +1631,7 @@ function ProductionCreateDialog({ orderId, onClose, onDone }: { orderId: string;
   const create = async (): Promise<void> => {
     setBusy(true); setErr(null);
     try {
-      const r = await trpc.production.createFromOrder.mutate({ orderId, dueDate: dueDate ? `${dueDate}T00:00:00.000Z` : null });
+      const r = await trpc.production.createFromOrder.mutate({ orderId, dueDate: dueDate ? `${dueDate}T00:00:00.000Z` : null, profile });
       const term = r.dueDate ? ` · Produktionstermin ${new Date(r.dueDate).toLocaleDateString("de-DE")}` : "";
       onDone(`Produktionsauftrag ${r.number} erzeugt (${r.bomItemCount} Stücklisten-Positionen)${term}.`);
     } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
@@ -1687,7 +1692,7 @@ function ConnectionsPanel({ orderId, role, onChanged }: { orderId: string; role:
 
   return (
     <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
-      {laufzettelFor && <LaufzettelModal productionId={laufzettelFor} onClose={() => setLaufzettelFor(null)} />}
+      {laufzettelFor && <LaufzettelModal productionId={laufzettelFor} defaultKind={isExternalProfile(prod?.finishingProfile) ? "EXTERN" : "INTERN"} onClose={() => setLaufzettelFor(null)} />}
       {createProdOpen && <ProductionCreateDialog orderId={orderId} onClose={() => setCreateProdOpen(false)} onDone={(m) => { setCreateProdOpen(false); setMsg(m); setErr(null); void load(); onChanged(); }} />}
       <Group justify="space-between">
         <Text fw={600}>Belegkette {graph ? `· ${graph.anchor.label}` : ""}</Text>
@@ -1729,6 +1734,13 @@ function ConnectionsPanel({ orderId, role, onChanged }: { orderId: string; role:
       </Group>
       {err && <Alert color="red" mt="xs">{err}</Alert>}
       {msg && <Alert color="green" mt="xs">{msg}</Alert>}
+      {prod?.productionId && (prod.finishingProfile || prod.dueDate) && (
+        <Group gap="xs" mt="xs">
+          <Badge color="orange" variant="light" size="sm">Produktion</Badge>
+          {prod.finishingProfile && <Text size="sm">Veredelung: <b>{LEAD_PROFILE_SHORT[prod.finishingProfile] ?? prod.finishingProfile}</b></Text>}
+          {prod.dueDate && <Text size="sm" c="dimmed">· Produktionstermin {new Date(prod.dueDate).toLocaleDateString("de-DE")}</Text>}
+        </Group>
+      )}
       {!graph || graph.groups.length === 0 ? (
         <Text size="sm" c="dimmed" mt="xs">Noch keine Folgebelege.</Text>
       ) : (

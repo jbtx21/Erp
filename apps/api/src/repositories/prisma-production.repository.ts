@@ -48,12 +48,13 @@ export class PrismaProductionRepository implements ProductionRepository {
     };
   }
 
-  async createProductionOrder(input: { number: string; orderId: string; dueDate: Date | null; bomItems: BomItemInput[] }): Promise<{ id: string }> {
+  async createProductionOrder(input: { number: string; orderId: string; dueDate: Date | null; finishingProfile: string | null; bomItems: BomItemInput[] }): Promise<{ id: string }> {
     return prisma.productionOrder.create({
       data: {
         number: input.number,
         orderId: input.orderId,
         dueDate: input.dueDate,
+        finishingProfile: input.finishingProfile,
         bomItems: { create: input.bomItems.map((b) => ({ description: b.description, qty: b.qty, variantId: b.variantId ?? null })) },
       },
       select: { id: true },
@@ -75,9 +76,15 @@ export class PrismaProductionRepository implements ProductionRepository {
   async status(orderId: string): Promise<ProductionStatus | null> {
     const o = await prisma.order.findUnique({
       where: { id: orderId },
-      select: { freigegeben: true, production: { select: { id: true, number: true } } },
+      select: { freigegeben: true, production: { select: { id: true, number: true, finishingProfile: true, dueDate: true } } },
     });
     if (!o) return null;
-    return { freigegeben: o.freigegeben, productionId: o.production?.id ?? null, productionNumber: o.production?.number ?? null };
+    return {
+      freigegeben: o.freigegeben,
+      productionId: o.production?.id ?? null,
+      productionNumber: o.production?.number ?? null,
+      finishingProfile: (o.production?.finishingProfile ?? null) as ProductionStatus["finishingProfile"],
+      dueDate: o.production?.dueDate ?? null,
+    };
   }
 }
