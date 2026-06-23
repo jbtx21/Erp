@@ -89,6 +89,26 @@ export const appRouter = router({
           toTrpcError(err);
         }
       }),
+
+    // Benutzerverwaltung (nur Geschäftsleitung/ADMIN): Konten @texma-gmbh.de + 2FA.
+    listUsers: roleProcedure("ADMIN").query(({ ctx }) => ctx.auth.listUsers()),
+    createUser: roleProcedure("ADMIN")
+      .input(z.object({
+        email: z.string().min(3),
+        name: z.string().min(1),
+        role: z.enum(["ADMIN", "BUERO", "BUCHHALTUNG", "PRODUKTION"]),
+        password: z.string().min(8),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.auth.createUser(input); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    setUserActive: roleProcedure("ADMIN")
+      .input(z.object({ userId: z.string().min(1), active: z.boolean() }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.auth.setUserActive(input.userId, input.active); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
   }),
 
   shopOrders: router({

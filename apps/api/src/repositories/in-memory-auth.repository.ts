@@ -1,12 +1,15 @@
 // In-Memory-User/Session-Repos für Auth-Tests (ohne DB).
+import type { Role } from "@texma/shared";
 import type {
   SessionRecord,
   SessionRepository,
+  UserListRow,
   UserRecord,
   UserRepository,
 } from "../modules/auth/auth.service.js";
 
 export class InMemoryUserRepository implements UserRepository {
+  private seq = 0;
   constructor(private readonly users: UserRecord[]) {}
 
   async findByEmail(email: string): Promise<UserRecord | null> {
@@ -36,6 +39,18 @@ export class InMemoryUserRepository implements UserRepository {
   async enableTotp(userId: string): Promise<void> {
     const u = this.users.find((x) => x.id === userId);
     if (u) u.totpEnabled = true;
+  }
+  async create(input: { email: string; name: string; role: Role; passwordHash: string }): Promise<{ id: string }> {
+    const id = `user_${String(++this.seq)}`;
+    this.users.push({ id, email: input.email, name: input.name, role: input.role, passwordHash: input.passwordHash, totpSecret: null, totpEnabled: false, active: true, failedLoginCount: 0, lockedUntil: null });
+    return { id };
+  }
+  async list(): Promise<UserListRow[]> {
+    return this.users.map((u) => ({ id: u.id, email: u.email, name: u.name, role: u.role, totpEnabled: u.totpEnabled, active: u.active }));
+  }
+  async setActive(userId: string, active: boolean): Promise<void> {
+    const u = this.users.find((x) => x.id === userId);
+    if (u) u.active = active;
   }
 }
 

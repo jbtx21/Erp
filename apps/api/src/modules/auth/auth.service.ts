@@ -11,6 +11,20 @@ export const SESSION_TTL_SECONDS = 8 * 60 * 60; // 8 h
 const MAX_FAILED = 5;
 const LOCK_MINUTES = 15;
 
+/** Erlaubte E-Mail-Domain der Mitarbeiter-Logins (überschreibbar per ENV). */
+export const AUTH_EMAIL_DOMAIN = process.env.AUTH_EMAIL_DOMAIN ?? "texma-gmbh.de";
+
+export interface UserListRow {
+  id: string;
+  email: string;
+  name: string;
+  role: Role;
+  totpEnabled: boolean;
+  active: boolean;
+}
+
+export class UserValidationError extends Error {}
+
 export interface UserRecord {
   id: string;
   email: string;
@@ -45,6 +59,9 @@ export interface UserRepository {
   resetLoginState(userId: string): Promise<void>;
   setTotpSecret(userId: string, secret: string): Promise<void>;
   enableTotp(userId: string): Promise<void>;
+  create(input: { email: string; name: string; role: Role; passwordHash: string }): Promise<{ id: string }>;
+  list(): Promise<UserListRow[]>;
+  setActive(userId: string, active: boolean): Promise<void>;
 }
 
 export interface SessionRepository {
@@ -163,6 +180,30 @@ export class AuthService {
     await this.audit.append(
       buildEntry({ userId: user.id, entity: "User", entityId: user.id, action: "UPDATE", after: { totpEnabled: true } })
     );
+  }
+
+  // ── Benutzerverwaltung (nur Admin/Geschäftsleitung) ──────────────────────────
+
+  /** Mitarbeiter-Konto anlegen (E-Mail muss auf die TEXMA-Domain enden). */
+  async createUser(input: { email: string; name: string; role: Role; password: string }): Promise<{ id: string }> {
+    const email = input.email.trim().toLowerCase();
+    if (!email.endsWith(`@${AUTH_EMAIL_DOMAIN}`)) {
+      throw new UserValidationError(`E-Mail muss auf @${AUTH_EMAIL_DOMAIN} enden.`);
+    }
+    if (!input.name.trim()) throw new UserValidationError("Name ist Pflicht.");
+    if (input.password.length < 8) throw new UserValidationError("Passwort muss mindestens 8 Zeichen haben.");
+    if (await this.users.findByEmail(email)) throw new UserValidationError("E-Mail-Adresse bereits vergeben.");
+    const passwordHash = await this.hasher.hash(input.password);
+    const res = await this.users.create({ email, name: input.name.trim(), role: input.role, passwordHash });
+    await this.audit.append(buildEntry({ entity: "User", entityId: res.id, action: "CREATE", after: { email, role: input.role } }));
+    return res;
+  }
+
+  listUsers(): Promise<UserListRow[]> { return this.users.list(); }
+
+  async setUserActive(userId: string, active: boolean): Promise<void> {
+    await this.users.setActive(userId, active);
+    await this.audit.append(buildEntry({ entity: "User", entityId: userId, action: "UPDATE", after: { active } }));
   }
 
   private async auditAttempt(email: string, reason: string, userId?: string): Promise<void> {

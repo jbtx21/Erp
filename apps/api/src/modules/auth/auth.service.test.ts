@@ -115,3 +115,43 @@ describe("AuthService", () => {
     });
   });
 });
+
+describe("AuthService — Benutzerverwaltung (@texma-gmbh.de)", () => {
+  it("legt ein Konto an und es kann sich einloggen", async () => {
+    const { service } = setup([]);
+    const res = await service.createUser({ email: "Anna@texma-gmbh.de", name: "Anna", role: "BUERO", password: "geheim12" });
+    expect(res.id).toBeTruthy();
+    const list = await service.listUsers();
+    expect(list[0]).toMatchObject({ email: "anna@texma-gmbh.de", role: "BUERO", active: true, totpEnabled: false });
+    const login = await service.loginWithPassword("anna@texma-gmbh.de", "geheim12");
+    expect(login.needsTotp).toBe(false);
+  });
+
+  it("erzwingt die TEXMA-Domain und Mindestpasswortlänge, verhindert Duplikate", async () => {
+    const { service } = setup([]);
+    await expect(service.createUser({ email: "x@gmail.com", name: "X", role: "BUERO", password: "geheim12" })).rejects.toThrow(/texma-gmbh\.de/);
+    await expect(service.createUser({ email: "y@texma-gmbh.de", name: "Y", role: "BUERO", password: "kurz" })).rejects.toThrow(/8 Zeichen/);
+    await service.createUser({ email: "z@texma-gmbh.de", name: "Z", role: "BUERO", password: "geheim12" });
+    await expect(service.createUser({ email: "z@texma-gmbh.de", name: "Z2", role: "BUERO", password: "geheim12" })).rejects.toThrow(/vergeben/);
+  });
+
+  it("2FA-Einrichtung: setupTotp → enableTotp macht needsTotp beim Login true", async () => {
+    const { service, userRepo } = setup([]);
+    const { id } = await service.createUser({ email: "tf@texma-gmbh.de", name: "TF", role: "ADMIN", password: "geheim12" });
+    const { secret } = await service.setupTotp(id);
+    const { Secret, TOTP } = await import("otpauth");
+    const code = new TOTP({ issuer: "TEXMA ERP", secret: Secret.fromBase32(secret) }).generate();
+    await service.enableTotp(id, code);
+    const u = await userRepo.findById(id);
+    expect(u?.totpEnabled).toBe(true);
+    const login = await service.loginWithPassword("tf@texma-gmbh.de", "geheim12");
+    expect(login.needsTotp).toBe(true);
+  });
+
+  it("Konto deaktivieren verhindert den Login", async () => {
+    const { service, userRepo } = setup([]);
+    const { id } = await service.createUser({ email: "d@texma-gmbh.de", name: "D", role: "BUERO", password: "geheim12" });
+    await service.setUserActive(id, false);
+    expect((await userRepo.findById(id))?.active).toBe(false);
+  });
+});

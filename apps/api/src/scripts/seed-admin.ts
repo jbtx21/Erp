@@ -4,7 +4,7 @@ import { prisma } from "@texma/db";
 import { Argon2Hasher } from "../modules/auth/password.js";
 
 async function main(): Promise<void> {
-  const email = (process.env.ADMIN_EMAIL ?? "admin@texma.de").toLowerCase();
+  const email = (process.env.ADMIN_EMAIL ?? "admin@texma-gmbh.de").toLowerCase();
   const password = process.env.ADMIN_PASSWORD ?? "ChangeMe!2026";
   const passwordHash = await new Argon2Hasher().hash(password);
 

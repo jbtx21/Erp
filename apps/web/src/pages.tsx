@@ -2039,6 +2039,59 @@ export function AdminPage(): JSX.Element {
           catch (e) { setErr(errMsg(e)); }
         }}>Testmail senden</Button>
       </Group>
+
+      <UserAdmin onError={setErr} onMsg={setMsg} />
+    </>
+  );
+}
+
+// Benutzerverwaltung (nur ADMIN): Mitarbeiter-Konten @texma-gmbh.de anlegen, mit 2FA.
+function UserAdmin({ onError, onMsg }: { onError: (s: string | null) => void; onMsg: (s: string | null) => void }): JSX.Element {
+  const [users, setUsers] = useState<Awaited<ReturnType<typeof trpc.auth.listUsers.query>>>([]);
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [role, setRole] = useState<string>("BUERO");
+  const [pw, setPw] = useState("");
+
+  const load = useCallback(async () => {
+    try { setUsers(await trpc.auth.listUsers.query()); } catch (e) { onError(errMsg(e)); }
+  }, [onError]);
+  useEffect(() => { void load(); }, [load]);
+
+  return (
+    <>
+      <Title order={4} mt="xl">Benutzerverwaltung (Login + 2FA)</Title>
+      <Text size="sm" c="dimmed" mt={4}>Mitarbeiter-Konten für den ERP-Login. E-Mail muss auf <code>@texma-gmbh.de</code> enden. Jede:r richtet 2FA selbst unter „Mein Konto" ein.</Text>
+      <Group gap="xs" align="end" mt="xs" wrap="wrap">
+        <TextInput label="E-Mail" value={email} onChange={(e) => setEmail(e.currentTarget.value)} w={230} placeholder="vorname@texma-gmbh.de" />
+        <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} w={170} />
+        <Select label="Rolle" value={role} onChange={(v) => v && setRole(v)} w={160} data={[
+          { value: "ADMIN", label: "Geschäftsleitung" }, { value: "BUERO", label: "Büro/Vertrieb" },
+          { value: "BUCHHALTUNG", label: "Buchhaltung" }, { value: "PRODUKTION", label: "Produktion" }]} />
+        <TextInput label="Start-Passwort (min. 8)" value={pw} onChange={(e) => setPw(e.currentTarget.value)} w={180} type="password" />
+        <Button disabled={!email.includes("@") || !name.trim() || pw.length < 8} onClick={async () => {
+          onError(null); onMsg(null);
+          try { await trpc.auth.createUser.mutate({ email, name, role: role as "BUERO", password: pw }); onMsg(`Konto ${email} angelegt.`); setEmail(""); setName(""); setPw(""); await load(); }
+          catch (e) { onError(errMsg(e)); }
+        }}>Konto anlegen</Button>
+      </Group>
+      <Table mt="sm" withTableBorder withColumnBorders>
+        <Table.Thead><Table.Tr><Table.Th>E-Mail</Table.Th><Table.Th>Name</Table.Th><Table.Th>Rolle</Table.Th><Table.Th>2FA</Table.Th><Table.Th>Status</Table.Th><Table.Th>Aktion</Table.Th></Table.Tr></Table.Thead>
+        <Table.Tbody>
+          {users.map((u) => (
+            <Table.Tr key={u.id}>
+              <Table.Td>{u.email}</Table.Td><Table.Td>{u.name}</Table.Td><Table.Td>{u.role}</Table.Td>
+              <Table.Td>{u.totpEnabled ? <Badge color="green" variant="light">aktiv</Badge> : <Badge color="gray" variant="light">aus</Badge>}</Table.Td>
+              <Table.Td>{u.active ? "aktiv" : "gesperrt"}</Table.Td>
+              <Table.Td>
+                <Button size="compact-xs" variant="light" color={u.active ? "red" : "green"} onClick={async () => {
+                  onError(null); try { await trpc.auth.setUserActive.mutate({ userId: u.id, active: !u.active }); await load(); } catch (e) { onError(errMsg(e)); }
+                }}>{u.active ? "Sperren" : "Entsperren"}</Button>
+              </Table.Td>
+            </Table.Tr>
+          ))}
+        </Table.Tbody>
+      </Table>
     </>
   );
 }
@@ -2254,6 +2307,46 @@ export function IntegrationsPage(): JSX.Element {
           </Box>
         ))}
       </Group>
+    </>
+  );
+}
+
+// Mein Konto / Sicherheit: TOTP-2FA selbst einrichten (für jede:n angemeldete:n Nutzer:in).
+export function SecurityPage(): JSX.Element {
+  const [setup, setSetup] = useState<{ secret: string; keyUri: string } | null>(null);
+  const [code, setCode] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  return (
+    <>
+      <Title order={3}>Mein Konto — 2FA-Sicherheit</Title>
+      <Text size="sm" c="dimmed" mt={4}>Zwei-Faktor-Authentifizierung (TOTP) mit einer Authenticator-App (z. B. Google Authenticator, Authy) einrichten.</Text>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      {msg && <Alert color="green" mt="sm">{msg}</Alert>}
+
+      {!setup ? (
+        <Button mt="md" onClick={async () => {
+          setErr(null); setMsg(null);
+          try { setSetup(await trpc.auth.setupTotp.mutate()); } catch (e) { setErr(errMsg(e)); }
+        }}>2FA einrichten</Button>
+      ) : (
+        <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, maxWidth: 560 }}>
+          <Text size="sm" fw={600}>1. In der Authenticator-App hinzufügen</Text>
+          <Text size="sm" mt={4}>Geheimschlüssel (manuell eingeben):</Text>
+          <Text ff="monospace" size="sm" style={{ wordBreak: "break-all" }} c="blue">{setup.secret}</Text>
+          <Text size="xs" c="dimmed" mt={4} style={{ wordBreak: "break-all" }}>otpauth-URL: {setup.keyUri}</Text>
+          <Text size="sm" fw={600} mt="md">2. 6-stelligen Code bestätigen</Text>
+          <Group gap="xs" align="end" mt="xs">
+            <TextInput label="Code" value={code} onChange={(e) => setCode(e.currentTarget.value)} w={140} />
+            <Button disabled={code.length < 6} onClick={async () => {
+              setErr(null); setMsg(null);
+              try { await trpc.auth.enableTotp.mutate({ code }); setMsg("2FA aktiviert. Beim nächsten Login wird der Code abgefragt."); setSetup(null); setCode(""); }
+              catch (e) { setErr(errMsg(e)); }
+            }}>Aktivieren</Button>
+          </Group>
+        </Box>
+      )}
     </>
   );
 }
