@@ -6,7 +6,7 @@ export interface SearchSeed {
   companies?: { id: string; name: string; branche?: string | null }[];
   suppliers?: { id: string; name: string; kind?: string | null }[];
   orders?: { id: string; number: string; externalNumber?: string | null; status?: string | null }[];
-  variants?: { id: string; sku: string; articleName?: string | null }[];
+  variants?: { id: string; sku: string; articleId?: string; articleName?: string | null }[];
   leads?: { id: string; name: string; email?: string | null }[];
 }
 
@@ -25,7 +25,7 @@ export class InMemorySearchRepository implements SearchRepository {
       ...(this.seed.orders ?? []).filter((o) => has(o.number, query) || has(o.externalNumber, query))
         .map((o) => ({ entity: "Auftrag", id: o.id, label: o.number, sub: o.status ?? null, navKey: "orders" })),
       ...(this.seed.variants ?? []).filter((v) => has(v.sku, query))
-        .map((v) => ({ entity: "Artikel", id: v.id, label: v.sku, sub: v.articleName ?? null, navKey: "products" })),
+        .map((v) => ({ entity: "Artikel", id: v.articleId ?? v.id, label: v.sku, sub: v.articleName ?? null, navKey: "products" })),
       ...(this.seed.leads ?? []).filter((l) => has(l.name, query) || has(l.email, query))
         .map((l) => ({ entity: "Lead", id: l.id, label: l.name, sub: l.email ?? null, navKey: "leads" })),
     ];

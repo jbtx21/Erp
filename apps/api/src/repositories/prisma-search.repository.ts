@@ -16,7 +16,7 @@ export class PrismaSearchRepository implements SearchRepository {
         where: { OR: [{ number: ci }, { externalNumber: ci }] },
         take: per, select: { id: true, number: true, status: true },
       }),
-      prisma.variant.findMany({ where: { sku: ci }, take: per, select: { id: true, sku: true, article: { select: { name: true } } } }),
+      prisma.variant.findMany({ where: { sku: ci }, take: per, select: { id: true, sku: true, articleId: true, article: { select: { name: true } } } }),
       prisma.lead.findMany({ where: { OR: [{ name: ci }, { email: ci }] }, take: per, select: { id: true, name: true, email: true } }),
     ]);
 
@@ -24,7 +24,7 @@ export class PrismaSearchRepository implements SearchRepository {
       ...companies.map((c) => ({ entity: "Firma", id: c.id, label: c.name, sub: c.branche, navKey: "companies" })),
       ...suppliers.map((s) => ({ entity: "Lieferant", id: s.id, label: s.name, sub: s.kind, navKey: "suppliers" })),
       ...orders.map((o) => ({ entity: "Auftrag", id: o.id, label: o.number, sub: o.status, navKey: "orders" })),
-      ...variants.map((v) => ({ entity: "Artikel", id: v.id, label: v.sku, sub: v.article.name, navKey: "products" })),
+      ...variants.map((v) => ({ entity: "Artikel", id: v.articleId, label: v.sku, sub: v.article.name, navKey: "products" })),
       ...leads.map((l) => ({ entity: "Lead", id: l.id, label: l.name, sub: l.email, navKey: "leads" })),
     ];
     return hits.slice(0, limit);

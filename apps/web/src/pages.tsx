@@ -2,7 +2,7 @@
 // AutoTable rendert jede Liste robust (Cent→€, Datum, Status-Badge), sodass neue
 // Bereiche mit wenig Code anbindbar sind. Interaktive Aktionen (Versand bestätigen,
 // Mahnlauf, Reorder→Bestellungen) sind je Seite ergänzt.
-import { Fragment, useCallback, useEffect, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Alert, Badge, Box, Button, Checkbox, Group, Loader, NumberInput, Select, Switch, Table, Tabs, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { trpc } from "./trpc.js";
@@ -66,7 +66,10 @@ function fmtCell(key: string, v: unknown): ReactNode {
   return String(v);
 }
 
-export function AutoTable({ rows, hide = [], action, onRowClick }: { rows: Row[]; hide?: string[]; action?: (r: Row) => ReactNode; onRowClick?: (r: Row) => void }): JSX.Element {
+export function AutoTable({ rows, hide = [], action, onRowClick, highlightId }: { rows: Row[]; hide?: string[]; action?: (r: Row) => ReactNode; onRowClick?: (r: Row) => void; highlightId?: string }): JSX.Element {
+  const hlRef = useRef<HTMLTableRowElement | null>(null);
+  // Treffer aus der globalen Suche in den Sichtbereich rollen (Deep-Link).
+  useEffect(() => { if (highlightId && hlRef.current) hlRef.current.scrollIntoView({ block: "center", behavior: "smooth" }); }, [highlightId, rows]);
   if (!rows || rows.length === 0) return <Text c="dimmed" mt="sm">Keine Daten.</Text>;
   const cols = Object.keys(rows[0] as object).filter((k) => !hide.includes(k));
   return (
@@ -78,12 +81,16 @@ export function AutoTable({ rows, hide = [], action, onRowClick }: { rows: Row[]
         </Table.Tr>
       </Table.Thead>
       <Table.Tbody>
-        {rows.map((r, i) => (
-          <Table.Tr key={i} style={onRowClick ? { cursor: "pointer" } : undefined}>
-            {cols.map((c) => <Table.Td key={c} onClick={onRowClick ? () => onRowClick(r) : undefined}>{fmtCell(c, r[c])}</Table.Td>)}
-            {action && <Table.Td>{action(r)}</Table.Td>}
-          </Table.Tr>
-        ))}
+        {rows.map((r, i) => {
+          const hit = highlightId !== undefined && String(r.id) === highlightId;
+          return (
+            <Table.Tr key={i} ref={hit ? hlRef : undefined}
+              style={{ ...(onRowClick ? { cursor: "pointer" } : {}), ...(hit ? { background: "var(--mantine-color-yellow-1)" } : {}) }}>
+              {cols.map((c) => <Table.Td key={c} onClick={onRowClick ? () => onRowClick(r) : undefined}>{fmtCell(c, r[c])}</Table.Td>)}
+              {action && <Table.Td>{action(r)}</Table.Td>}
+            </Table.Tr>
+          );
+        })}
       </Table.Tbody>
     </Table>
   );
@@ -125,7 +132,7 @@ export function ListPage({
 }
 
 // ── Beschaffung ─────────────────────────────────────────────────────────────
-export function SuppliersPage(): JSX.Element {
+export function SuppliersPage({ focusId }: { focusId?: string } = {}): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [name, setName] = useState("");
   const [vatId, setVatId] = useState("");
@@ -140,6 +147,8 @@ export function SuppliersPage(): JSX.Element {
     catch (e) { setErr(errMsg(e)); }
   }, []);
   useEffect(() => { void load(); }, [load]);
+  // Deep-Link aus der globalen Suche: Lieferanten-Zeile hervorheben + Katalog laden.
+  useEffect(() => { if (focusId) { setApplied(focusId); setSid(focusId); } }, [focusId]);
 
   return (
     <>
@@ -156,7 +165,7 @@ export function SuppliersPage(): JSX.Element {
         }}>Lieferant anlegen</Button>
       </Group>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
-      <AutoTable rows={rows} action={(r) => (
+      <AutoTable rows={rows} highlightId={focusId} action={(r) => (
         <Button size="compact-xs" variant="default" onClick={() => { setSid(String(r.id)); setApplied(String(r.id)); }}>Katalog</Button>
       )} />
 
@@ -455,7 +464,7 @@ function ArticleRowEdit({ a, onSaved, onVariants }: { a: ArticleData; onSaved: (
   );
 }
 
-export function ProductsPage(): JSX.Element {
+export function ProductsPage({ focusId }: { focusId?: string } = {}): JSX.Element {
   const [articles, setArticles] = useState<ArticleData[]>([]);
   const [sku, setSku] = useState("");
   const [name, setName] = useState("");
@@ -481,6 +490,8 @@ export function ProductsPage(): JSX.Element {
     try { setVariants((await trpc.products.listVariants.query({ articleId })) as Row[]); }
     catch (e) { setErr(errMsg(e)); }
   }, []);
+  // Deep-Link aus der globalen Suche: Varianten des gesuchten Artikels direkt öffnen.
+  useEffect(() => { if (focusId) void loadVariants(focusId); }, [focusId, loadVariants]);
 
   return (
     <>
@@ -1369,7 +1380,7 @@ export function InquiriesPage(): JSX.Element {
   );
 }
 
-export function LeadsPage(): JSX.Element {
+export function LeadsPage({ focusId }: { focusId?: string } = {}): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [name, setName] = useState("");
   const [quelle, setQuelle] = useState("WEB");
@@ -1420,7 +1431,7 @@ export function LeadsPage(): JSX.Element {
         }}>Lead anlegen</Button>
       </Group>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
-      <AutoTable rows={rows} hide={["note", "convertedCompanyId"]} action={actionsFor} />
+      <AutoTable rows={rows} hide={["note", "convertedCompanyId"]} highlightId={focusId} action={actionsFor} />
     </>
   );
 }
