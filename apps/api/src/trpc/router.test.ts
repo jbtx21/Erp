@@ -62,6 +62,8 @@ import { CalendarService } from "../modules/calendar/calendar.service.js";
 import { InMemoryCalendarRepository } from "../repositories/in-memory-calendar.repository.js";
 import { MessageService } from "../modules/messages/messages.service.js";
 import { InMemoryMessageRepository } from "../repositories/in-memory-messages.repository.js";
+import { WorkflowService } from "../modules/workflow/workflow.service.js";
+import { InMemoryWorkflowRepository } from "../repositories/in-memory-workflow.repository.js";
 import { DeliveryService } from "../modules/delivery/delivery.service.js";
 import { InMemoryDeliveryRepository } from "../repositories/in-memory-delivery.repository.js";
 import { NumberingService } from "../modules/numbering/numbering.service.js";
@@ -291,6 +293,7 @@ function setup(user: AuthUser | null = BUERO) {
     opportunities: new OpportunityService(new InMemoryOpportunityRepository(), new MemoryAuditSink(), new StubCrmProvider()),
     calendar: new CalendarService(new InMemoryCalendarRepository(), new MemoryAuditSink()),
     messages: new MessageService(new InMemoryMessageRepository(), new MemoryAuditSink()),
+    workflow: new WorkflowService(new InMemoryWorkflowRepository(), new MemoryAuditSink()),
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -397,6 +400,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       opportunities: {} as Context["opportunities"],
       calendar: {} as Context["calendar"],
       messages: {} as Context["messages"],
+      workflow: {} as Context["workflow"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",

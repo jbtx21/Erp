@@ -906,6 +906,27 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => { try { await ctx.opportunities.markLost(input.id, input.reason); return { ok: true as const }; } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); } }),
   }),
 
+  // Auftrags-Workflow / Statusverwaltung: Produktionsroute zuweisen + Schritt für
+  // Schritt weiterschalten (4 Routen je Veredelungsart). Operativ → kein PRODUKTION-
+  // Preiszugriff betroffen; ADMIN/BUERO steuern, PRODUKTION sieht (status read offen).
+  workflow: router({
+    status: protectedProcedure
+      .input(z.object({ orderId: z.string().min(1) }))
+      .query(({ input, ctx }) => ctx.workflow.status(input.orderId)),
+    assignRoute: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ orderId: z.string().min(1), route: z.enum(["ROUTE1_KEINE", "ROUTE2_INTERN", "ROUTE3_EXTERN", "ROUTE4_EXTERN_INTERN"]).optional() }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.workflow.assignRoute(input.orderId, input.route); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    advance: roleProcedure("ADMIN", "BUERO", "PRODUKTION")
+      .input(z.object({ orderId: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.workflow.advance(input.orderId); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+  }),
+
   // Büro-Kalender (Terminmanagement): Termine/Urlaub/Abwesenheiten — eigene + geteilte.
   calendar: router({
     list: protectedProcedure

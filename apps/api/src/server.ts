@@ -101,6 +101,8 @@ import { CalendarService } from "./modules/calendar/calendar.service.js";
 import { PrismaCalendarRepository } from "./repositories/prisma-calendar.repository.js";
 import { MessageService } from "./modules/messages/messages.service.js";
 import { PrismaMessageRepository } from "./repositories/prisma-messages.repository.js";
+import { WorkflowService } from "./modules/workflow/workflow.service.js";
+import { PrismaWorkflowRepository } from "./repositories/prisma-workflow.repository.js";
 import { appRouter } from "./trpc/router.js";
 import type { Context } from "./trpc/trpc.js";
 import { portalAppRouter } from "./trpc/portal-router.js";
@@ -203,6 +205,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const opportunities = new OpportunityService(new PrismaOpportunityRepository(), new PrismaAuditSink(), crmProvider);
   const calendar = new CalendarService(new PrismaCalendarRepository(), new PrismaAuditSink());
   const messages = new MessageService(new PrismaMessageRepository(), new PrismaAuditSink());
+  const workflow = new WorkflowService(new PrismaWorkflowRepository(), new PrismaAuditSink());
   const auth = new AuthService(
     new PrismaUserRepository(),
     new PrismaSessionRepository(),
@@ -312,6 +315,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           opportunities,
           calendar,
           messages,
+          workflow,
           auth,
           user,
           sessionToken,

@@ -43,6 +43,7 @@ import type { NewsletterService } from "../modules/newsletter/newsletter.service
 import type { OpportunityService } from "../modules/opportunity/opportunity.service.js";
 import type { CalendarService } from "../modules/calendar/calendar.service.js";
 import type { MessageService } from "../modules/messages/messages.service.js";
+import type { WorkflowService } from "../modules/workflow/workflow.service.js";
 import type {
   BankingQueryRepository,
   DunningQueryRepository,
@@ -100,6 +101,7 @@ export interface Context {
   opportunities: OpportunityService;
   calendar: CalendarService;
   messages: MessageService;
+  workflow: WorkflowService;
   auth: AuthService;
   user: AuthUser | null;
   /** Roh-Token aus dem Cookie (für den 2FA-Zwischenschritt/Logout, wenn user noch null ist). */

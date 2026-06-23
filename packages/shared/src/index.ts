@@ -7,6 +7,7 @@ export * from "./positions.js";
 export * from "./newsletter.js";
 export * from "./opportunity.js";
 export * from "./calendar.js";
+export * from "./workflow.js";
 export * from "./pricing.js";
 export * from "./markup.js";
 export * from "./pain001.js";

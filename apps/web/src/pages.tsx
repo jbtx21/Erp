@@ -581,6 +581,54 @@ function LinksPanel({ orderId }: { orderId: string }): JSX.Element {
   );
 }
 
+// Auftrags-Workflow / Statusverwaltung: Produktionsroute + Schritt-Checkliste.
+const WF_ROUTES = [
+  { value: "ROUTE1_KEINE", label: "Route 1 – keine Veredelung" },
+  { value: "ROUTE2_INTERN", label: "Route 2 – interne Veredelung" },
+  { value: "ROUTE3_EXTERN", label: "Route 3 – externe Veredler" },
+  { value: "ROUTE4_EXTERN_INTERN", label: "Route 4 – extern + intern" },
+] as const;
+
+function WorkflowPanel({ orderId }: { orderId: string }): JSX.Element {
+  const [status, setStatus] = useState<Awaited<ReturnType<typeof trpc.workflow.status.query>> | null>(null);
+  const [route, setRoute] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    try { setStatus(await trpc.workflow.status.query({ orderId })); setErr(null); } catch (e) { setErr(errMsg(e)); }
+  }, [orderId]);
+  useEffect(() => { void load(); }, [load]);
+
+  return (
+    <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+      <Text size="sm" fw={600}>Workflow / Statusverwaltung</Text>
+      {err && <Alert color="red" mt="xs">{err}</Alert>}
+      {!status ? (
+        <Group gap="xs" align="end" mt="xs">
+          <Select label="Route zuweisen" placeholder="automatisch aus Veredelung" w={260} value={route} onChange={setRoute} data={WF_ROUTES.map((r) => ({ value: r.value, label: r.label }))} />
+          <Button size="compact-sm" onClick={async () => { try { await trpc.workflow.assignRoute.mutate({ orderId, route: (route ?? undefined) as "ROUTE1_KEINE" | undefined }); await load(); } catch (e) { setErr(errMsg(e)); } }}>Route starten</Button>
+        </Group>
+      ) : (
+        <>
+          <Text size="sm" mt={4}>{status.label} · Schritt {Math.min(status.stepIndex + 1, status.totalSteps)}/{status.totalSteps}{status.done ? " · abgeschlossen ✓" : ""}</Text>
+          <Box mt="xs">
+            {status.steps.map((s) => (
+              <Group key={s.key} gap={8} py={3}>
+                <Text size="sm" w={20}>{s.done ? "✅" : s.current ? "▶️" : "⬜"}</Text>
+                <Text size="sm" fw={s.current ? 700 : 400} c={s.done ? "dimmed" : undefined}>{s.label}</Text>
+              </Group>
+            ))}
+          </Box>
+          {!status.done && (
+            <Button size="compact-sm" mt="xs" onClick={async () => { try { await trpc.workflow.advance.mutate({ orderId }); await load(); } catch (e) { setErr(errMsg(e)); } }}>
+              Schritt abschließen → „{status.currentStep?.label ?? ""}"
+            </Button>
+          )}
+        </>
+      )}
+    </Box>
+  );
+}
+
 function DeliveryPanel({ orderId, onChanged }: { orderId: string; onChanged: () => void }): JSX.Element {
   const [lines, setLines] = useState<Awaited<ReturnType<typeof trpc.deliveries.remaining.query>>>([]);
   const [notes, setNotes] = useState<Awaited<ReturnType<typeof trpc.deliveries.list.query>>>([]);
@@ -769,6 +817,7 @@ export function OrdersPage({ role }: { role: string }): JSX.Element {
               </Text>
             </>
           )}
+          {termOrder && <WorkflowPanel orderId={termOrder} />}
           {termOrder && <LinksPanel orderId={termOrder} />}
           {termOrder && <DeliveryPanel orderId={termOrder} onChanged={() => void load()} />}
           {termOrder && <RecordPanel entity="Order" entityId={termOrder} />}
