@@ -909,6 +909,23 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => { try { await ctx.opportunities.markLost(input.id, input.reason); return { ok: true as const }; } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); } }),
   }),
 
+  // Admin-Portal: zentrale Einstellungen (Briefkopf, Freigabeschwellen, Aufschlag).
+  // Nur ADMIN (Geschäftsleitung).
+  settings: router({
+    get: roleProcedure("ADMIN").query(({ ctx }) => ctx.settings.get()),
+    update: roleProcedure("ADMIN")
+      .input(z.object({
+        briefkopf: z.array(z.string()).optional(),
+        maxDiscountPct: z.number().min(0).max(100).nullable().optional(),
+        maxOrderValueEuro: z.number().min(0).nullable().optional(),
+        markupFactor: z.number().positive().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.settings.update(input); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+  }),
+
   // Auftrags-Workflow / Statusverwaltung: Produktionsroute zuweisen + Schritt für
   // Schritt weiterschalten (4 Routen je Veredelungsart). Operativ → kein PRODUKTION-
   // Preiszugriff betroffen; ADMIN/BUERO steuern, PRODUKTION sieht (status read offen).

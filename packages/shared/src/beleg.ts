@@ -51,6 +51,8 @@ export interface LieferscheinInput {
   empfaenger: string[];
   positionen: { menge: number; bezeichnung: string }[];
   hinweise?: string[];
+  /** Briefkopf (Admin-Portal); Default: ABSENDER_TEXMA. */
+  absender?: string[];
 }
 
 /** Lieferschein — bewusst OHNE Preise (Kap. 12: Produktion sieht keine Beträge). */
@@ -60,7 +62,7 @@ export function lieferscheinDokument(input: LieferscheinInput): BelegDokument {
     titel: "Lieferschein",
     nummer: input.nummer,
     datum: formatDatum(input.datum),
-    absender: [...ABSENDER_TEXMA],
+    absender: input.absender && input.absender.length > 0 ? input.absender : [...ABSENDER_TEXMA],
     empfaenger: input.empfaenger,
     positionen: input.positionen.map((p) => ({ menge: p.menge, bezeichnung: p.bezeichnung })),
     summen: [],
@@ -78,6 +80,8 @@ export interface RechnungInput {
   taxCents: Cents;
   grossCents: Cents;
   hinweise?: string[];
+  /** Briefkopf (Admin-Portal); Default: ABSENDER_TEXMA. */
+  absender?: string[];
 }
 
 /** Rechnung — mit Einzel-/Zeilenpreisen und Netto/USt/Brutto-Summen. */
@@ -87,7 +91,7 @@ export function rechnungDokument(input: RechnungInput): BelegDokument {
     titel: "Rechnung",
     nummer: input.nummer,
     datum: formatDatum(input.datum),
-    absender: [...ABSENDER_TEXMA],
+    absender: input.absender && input.absender.length > 0 ? input.absender : [...ABSENDER_TEXMA],
     empfaenger: input.empfaenger,
     positionen: input.positionen.map((p) => ({
       menge: p.menge,

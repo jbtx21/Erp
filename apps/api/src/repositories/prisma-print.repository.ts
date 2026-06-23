@@ -8,6 +8,10 @@ function addressLines(companyName: string, addr: { street: string; zip: string; 
 }
 
 export class PrismaPrintRepository implements PrintRepository {
+  async briefkopf(): Promise<string[]> {
+    const row = await prisma.appSetting.findUnique({ where: { key: "briefkopf" } });
+    return row ? row.value.split("\n").map((l) => l.trim()).filter(Boolean) : [];
+  }
   async deliveryNoteForPrint(id: string): Promise<DeliveryNotePrintData | null> {
     const d = await prisma.deliveryNote.findUnique({
       where: { id },

@@ -26,3 +26,14 @@ describe("Belegdokumente", () => {
     expect(d.summen.find((s) => s.label === "Brutto")?.value).toContain("35,70");
   });
 });
+
+describe("Briefkopf (Admin-Portal) im Beleg", () => {
+  it("nutzt den konfigurierten Absender statt des Defaults", () => {
+    const d = lieferscheinDokument({ nummer: "LS-1", datum: new Date("2026-06-22"), empfaenger: ["X"], positionen: [{ menge: 1, bezeichnung: "Y" }], absender: ["Meine Firma", "Meine Str. 1"] });
+    expect(d.absender).toEqual(["Meine Firma", "Meine Str. 1"]);
+  });
+  it("fällt ohne Konfiguration auf den TEXMA-Default zurück", () => {
+    const d = lieferscheinDokument({ nummer: "LS-1", datum: new Date("2026-06-22"), empfaenger: ["X"], positionen: [{ menge: 1, bezeichnung: "Y" }] });
+    expect(d.absender[0]).toContain("TEXMA");
+  });
+});

@@ -25,6 +25,8 @@ export interface InvoicePrintData {
 export interface PrintRepository {
   deliveryNoteForPrint(id: string): Promise<DeliveryNotePrintData | null>;
   invoiceForPrint(id: string): Promise<InvoicePrintData | null>;
+  /** Konfigurierter Briefkopf (Admin-Portal); leer = Renderer-Default. */
+  briefkopf(): Promise<string[]>;
 }
 
 export interface PdfResult {
@@ -40,8 +42,9 @@ export class PrintService {
   async deliveryNotePdf(id: string): Promise<PdfResult> {
     const d = await this.repo.deliveryNoteForPrint(id);
     if (!d) throw new PrintError(`Lieferschein ${id} nicht gefunden.`);
+    const absender = await this.repo.briefkopf();
     const bytes = await renderBelegPdf(lieferscheinDokument({
-      nummer: d.number, datum: d.createdAt, empfaenger: d.empfaenger, positionen: d.positionen,
+      nummer: d.number, datum: d.createdAt, empfaenger: d.empfaenger, positionen: d.positionen, absender,
     }));
     return { filename: `Lieferschein-${d.number}.pdf`, base64: Buffer.from(bytes).toString("base64") };
   }
@@ -49,9 +52,10 @@ export class PrintService {
   async invoicePdf(id: string): Promise<PdfResult> {
     const i = await this.repo.invoiceForPrint(id);
     if (!i) throw new PrintError(`Rechnung ${id} nicht gefunden.`);
+    const absender = await this.repo.briefkopf();
     const bytes = await renderBelegPdf(rechnungDokument({
       nummer: i.number, datum: i.issuedAt, empfaenger: i.empfaenger, positionen: i.positionen,
-      netCents: i.netCents, taxCents: i.taxCents, grossCents: i.grossCents,
+      netCents: i.netCents, taxCents: i.taxCents, grossCents: i.grossCents, absender,
     }));
     return { filename: `Rechnung-${i.number}.pdf`, base64: Buffer.from(bytes).toString("base64") };
   }

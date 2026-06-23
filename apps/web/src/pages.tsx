@@ -1921,3 +1921,56 @@ export function MessagesPage(): JSX.Element {
     </>
   );
 }
+
+// Admin-Portal: zentrale Einstellungen (Briefkopf, Freigabeschwellen, Aufschlag).
+export function AdminPage(): JSX.Element {
+  const [briefkopf, setBriefkopf] = useState("");
+  const [maxDiscount, setMaxDiscount] = useState<number | "">("");
+  const [maxOrderValue, setMaxOrderValue] = useState<number | "">("");
+  const [markup, setMarkup] = useState<number>(1.88);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const s = await trpc.settings.get.query();
+      setBriefkopf(s.briefkopf.join("\n"));
+      setMaxDiscount(s.maxDiscountPct ?? "");
+      setMaxOrderValue(s.maxOrderValueEuro ?? "");
+      setMarkup(s.markupFactor);
+      setErr(null);
+    } catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  return (
+    <>
+      <Title order={3}>Einstellungen (Admin)</Title>
+      <Text size="sm" c="dimmed" mt={4}>Nur Geschäftsleitung. Briefkopf erscheint auf Lieferschein/Rechnung-PDFs; Freigabeschwellen steuern das Freigabe-Gate; Aufschlagsfaktor (Kap. 4.4).</Text>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      {msg && <Alert color="green" mt="sm">{msg}</Alert>}
+
+      <Textarea label="Briefkopf (eine Zeile je Adresszeile)" value={briefkopf} onChange={(e) => setBriefkopf(e.currentTarget.value)} autosize minRows={3} mt="md" w={460}
+        placeholder={"TEXMA Textilveredelung GmbH\nMusterstraße 1 · 00000 Musterstadt\ninfo@texma-gmbh.de"} />
+
+      <Group gap="md" align="end" mt="md" wrap="wrap">
+        <NumberInput label="Max. Rabatt ohne Freigabe (%)" value={maxDiscount} onChange={(v) => setMaxDiscount(v === "" ? "" : Number(v))} min={0} max={100} w={220} />
+        <NumberInput label="Max. Auftragswert ohne Freigabe (€)" value={maxOrderValue} onChange={(v) => setMaxOrderValue(v === "" ? "" : Number(v))} min={0} w={260} />
+        <NumberInput label="Aufschlagsfaktor" value={markup} onChange={(v) => setMarkup(Number(v) || 1.88)} min={0.01} step={0.01} decimalScale={2} w={160} />
+      </Group>
+
+      <Button mt="lg" onClick={async () => {
+        setErr(null); setMsg(null);
+        try {
+          await trpc.settings.update.mutate({
+            briefkopf: briefkopf.split("\n").map((l) => l.trim()).filter(Boolean),
+            maxDiscountPct: maxDiscount === "" ? null : maxDiscount,
+            maxOrderValueEuro: maxOrderValue === "" ? null : maxOrderValue,
+            markupFactor: markup,
+          });
+          setMsg("Einstellungen gespeichert."); await load();
+        } catch (e) { setErr(errMsg(e)); }
+      }}>Speichern</Button>
+    </>
+  );
+}

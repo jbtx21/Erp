@@ -1557,3 +1557,10 @@ enum QuoteWorkflowStage {
   GEWONNEN
   VERLOREN
 }
+
+// Generischer Einstellungs-Speicher (Admin-Portal): Schlüssel/Wert, z. B. Briefkopf.
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
