@@ -28,7 +28,7 @@ const NAV: ReadonlyArray<{ group: string; icon: NavIconName; items: ReadonlyArra
     { key: "reorder", label: "Nachbestellung" }, { key: "ausschreibungen", label: "Stickerei-Ausschreibungen" }, { key: "incoming", label: "Eingangsrechnungen" },
   ] },
   { group: "Stammdaten", icon: "stammdaten", items: [{ key: "products", label: "Artikel/Varianten" }, { key: "logos", label: "Logos & Stickerei" }, { key: "pricing", label: "Preise/Staffel" }, { key: "eanimport", label: "EAN-Listen-Import" }] },
-  { group: "Produktion", icon: "produktion", items: [{ key: "differentiators", label: "Fremdvergabe (alt)" }, { key: "subproduction", label: "Fremdvergabe" }, { key: "prodreport", label: "Produktions-Reporting" }, { key: "nachkalk", label: "Nachkalkulation" }] },
+  { group: "Produktion", icon: "produktion", items: [{ key: "differentiators", label: "Fremdvergabe (alt)" }, { key: "subproduction", label: "Fremdvergabe" }, { key: "prodreport", label: "Produktions-Reporting" }] },
   { group: "Logistik", icon: "logistik", items: [
     { key: "wareneingang", label: "Wareneingang" }, { key: "lager", label: "Lager & Inventur" },
     { key: "samples", label: "Muster-Leihgut" }, { key: "shipments", label: "Versand" },
@@ -377,7 +377,7 @@ function Page({ k, role, userName, onNavigate, focusId }: { k: string; role: str
     case "logos": return <LogosPage />;
     case "aufschlag": return <AufschlagPage />;
     case "ausschreibungen": return <AusschreibungenPage />;
-    case "nachkalk": case "nachkalkfin": return <NachkalkulationPage />;
+    case "nachkalkfin": return <NachkalkulationPage />;
     case "subproduction": return <SubproductionPage />;
     case "prodreport": return <ProductionReportingPage />;
     case "shipments": return <ShipmentsPage />;
