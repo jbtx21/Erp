@@ -4414,6 +4414,38 @@ const LAGER = [
   { value: "TRANSFERDRUCK", label: "Transferdrucke" },
 ] as const;
 
+// Lager-Stammdaten (Multi-Lager Stufe 1): beliebige Läger anlegen/aktiv schalten.
+const WAREHOUSE_KINDS = ["HAUPT", "MUSTER", "SHOWROOM", "TRANSFERDRUCK", "SONSTIGE"] as const;
+function WarehousesSection(): JSX.Element {
+  const [rows, setRows] = useState<Awaited<ReturnType<typeof trpc.warehouses.list.query>>>([]);
+  const [code, setCode] = useState(""); const [name, setName] = useState(""); const [kind, setKind] = useState<string>("SONSTIGE");
+  const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
+  const load = useCallback(async () => { try { setRows(await trpc.warehouses.list.query()); setErr(null); } catch (e) { setErr(errMsg(e)); } }, []);
+  useEffect(() => { void load(); }, [load]);
+  return (
+    <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+      <Text size="sm" fw={600}>Läger (Stammdaten)</Text>
+      <Text size="xs" c="dimmed" mb="xs">Beliebige Läger statt festem Schema. Die vier bisherigen (HAUPT/MUSTER/SHOWROOM/TRANSFERDRUCK) sind als Stammsätze migriert.</Text>
+      <Group gap="xs" align="end">
+        <TextInput label="Code" value={code} onChange={(e) => setCode(e.currentTarget.value.toUpperCase())} placeholder="LAGER-2" w={130} />
+        <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Außenlager" w={200} />
+        <Select label="Typ" value={kind} onChange={(v) => v && setKind(v)} data={[...WAREHOUSE_KINDS]} w={160} />
+        <Button loading={busy} disabled={!code.trim()} onClick={async () => {
+          setBusy(true); setErr(null);
+          try { await trpc.warehouses.create.mutate({ code: code.trim(), name: name.trim() || undefined, kind: kind as typeof WAREHOUSE_KINDS[number] }); setCode(""); setName(""); await load(); }
+          catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+        }}>Lager anlegen</Button>
+      </Group>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      <AutoTable rows={rows as unknown as Row[]} action={(r) => (
+        <Button size="compact-xs" variant="light" color={(r as Row).active ? "orange" : "teal"} onClick={async () => {
+          try { await trpc.warehouses.setActive.mutate({ id: String((r as Row).id), active: !(r as Row).active }); await load(); } catch (e) { setErr(errMsg(e)); }
+        }}>{(r as Row).active ? "Deaktivieren" : "Aktivieren"}</Button>
+      )} />
+    </Box>
+  );
+}
+
 export function LagerPage(): JSX.Element {
   const [rows, setRows] = useState<Awaited<ReturnType<typeof trpc.stock.list.query>>>([]);
   const [variantId, setVariantId] = useState("");
@@ -4432,9 +4464,10 @@ export function LagerPage(): JSX.Element {
 
   return (
     <>
-      <Title order={3}>Lager & Inventur</Title>
-      <Text size="sm" c="dimmed" mt={4}>Schlanke Lagerführung über Bewegungen (F4): Bestand = Summe der Buchungen. Showroom + Transferdrucke als eigene Lager. Inventur bucht die Differenz (Ist − Soll) als Korrektur.</Text>
+      <DocListHeader module="Lager" title="Lager & Bestand"
+        hint="Mehrere Läger (Stammdaten) + schlanke Bestandsführung über Bewegungen (F4): Bestand = Summe der Buchungen. Inventur bucht die Differenz (Ist − Soll)." />
       {err && <Alert color="red" mt="sm">{err}</Alert>}
+      <WarehousesSection />
       {msg && <Alert color="green" mt="sm">{msg}</Alert>}
 
       <Group gap="md" mt="md" align="end" wrap="wrap">

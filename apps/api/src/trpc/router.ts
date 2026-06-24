@@ -1287,6 +1287,22 @@ export const appRouter = router({
   }),
 
   // Schlanke Lagerhaltung + Inventur (F4-Ledger): Bestandsübersicht je Lager,
+  // Lager-Stammdaten (Multi-Lager Stufe 1): beliebige Läger statt festes Enum.
+  warehouses: router({
+    list: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.warehouses.list()),
+    create: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({
+        code: z.string().min(1),
+        name: z.string().optional(),
+        kind: z.enum(["HAUPT", "MUSTER", "SHOWROOM", "TRANSFERDRUCK", "SONSTIGE"]).optional(),
+        parentId: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => { try { return await ctx.warehouses.create(input); } catch (e) { throw toTrpcError(e); } }),
+    setActive: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ id: z.string().min(1), active: z.boolean() }))
+      .mutation(async ({ input, ctx }) => { await ctx.warehouses.setActive(input.id, input.active); return { ok: true as const }; }),
+  }),
+
   // manuelle Bewegung (Zugang/Abgang), Inventur-Zählung (bucht Differenz).
   stock: router({
     list: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.stock.listBalances()),

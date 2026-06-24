@@ -1298,10 +1298,43 @@ model GoodsReceiptLine {
 }
 
 // Lagerbestand je Variante; Mindestbestand-Reorder Transferdrucke (Kap. 6.3 / T-12)
+// Echtes Multi-Lager (statt festes StockLager-Enum): beliebige Läger + optionale
+// Lagerplätze (parentId-Baum). Das Enum bleibt vorerst additiv bestehen (Strangler);
+// warehouseId verweist parallel auf den Warehouse-Datensatz. Die 4 bisherigen Läger
+// werden als Warehouse-Seeds migriert (Migration 0075).
+enum WarehouseKind {
+  HAUPT
+  MUSTER
+  SHOWROOM
+  TRANSFERDRUCK
+  SONSTIGE
+}
+
+model Warehouse {
+  id        String        @id @default(cuid())
+  code      String        @unique // kurzer eindeutiger Code (z. B. HAUPT, LAGER-2)
+  name      String
+  kind      WarehouseKind @default(SONSTIGE)
+  parentId  String? // optionaler Lagerplatz/Bin innerhalb eines Lagers
+  parent    Warehouse?    @relation("WarehouseTree", fields: [parentId], references: [id])
+  children  Warehouse[]   @relation("WarehouseTree")
+  active    Boolean       @default(true)
+  createdAt DateTime      @default(now())
+
+  stockMoves        StockMove[]
+  stockLevels       StockLevel[]
+  stockReservations StockReservation[]
+  stockThresholds   StockThreshold[]
+
+  @@index([kind])
+}
+
 model StockLevel {
   id        String  @id @default(cuid())
   variantId String  @unique
   variant   Variant @relation(fields: [variantId], references: [id])
+  warehouseId String?
+  warehouse   Warehouse? @relation(fields: [warehouseId], references: [id])
   qty       Int     @default(0)
   minStock  Int     @default(0)
   updatedAt DateTime @updatedAt
@@ -1334,10 +1367,13 @@ model StockMove {
   deltaQty  Int // +Zugang / −Abgang
   grund     StockMoveReason
   lager     StockLager      @default(HAUPT)
+  warehouseId String?
+  warehouse   Warehouse?    @relation(fields: [warehouseId], references: [id])
   belegRef  String? // Verweis auf auslösenden Beleg (PO/Order/Inventur)
   createdAt DateTime        @default(now())
 
   @@index([variantId, lager])
+  @@index([variantId, warehouseId])
   @@index([createdAt])
 }
 
@@ -1354,6 +1390,8 @@ model StockReservation {
   variantId  String
   variant    Variant                @relation(fields: [variantId], references: [id])
   lager      StockLager             @default(HAUPT)
+  warehouseId String?
+  warehouse   Warehouse?            @relation(fields: [warehouseId], references: [id])
   qty        Int // reservierte Menge (>0)
   orderId    String? // auslösender Auftrag (optional)
   belegRef   String? // Anzeige-Referenz (z. B. Auftragsnummer)
@@ -1374,6 +1412,8 @@ model StockThreshold {
   variantId String
   variant   Variant    @relation(fields: [variantId], references: [id])
   lager     StockLager @default(TRANSFERDRUCK)
+  warehouseId String?
+  warehouse   Warehouse? @relation(fields: [warehouseId], references: [id])
   minQty    Int
   alerting  Boolean    @default(false)
   updatedAt DateTime   @updatedAt
