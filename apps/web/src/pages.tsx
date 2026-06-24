@@ -5,11 +5,24 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Alert, Badge, Box, Button, Checkbox, Group, Loader, Modal, NumberInput, Select, Switch, Table, Tabs, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
+import { validateVatId } from "@texma/shared";
 import { trpc } from "./trpc.js";
 import { euro, numTd, statusMantineColor } from "./theme.js";
 
 type Row = Record<string, unknown>;
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+
+// Live-Validität einer USt-IdNr (offline: Format je EU-Land + DE-Prüfziffer, Kap. shared/vat).
+// Leeres Feld → kein Badge (USt-IdNr ist optional).
+function VatBadge({ value }: { value: string }): JSX.Element | null {
+  if (!value.trim()) return null;
+  const r = validateVatId(value);
+  return (
+    <Badge mt={4} size="sm" variant="light" color={r.valid ? "green" : "red"}>
+      {r.valid ? `✓ gültig${r.country ? ` (${r.country})` : ""}` : (r.reason ?? "ungültig")}
+    </Badge>
+  );
+}
 
 // Lädt ein Base64-PDF (vom Server) als Datei herunter.
 function downloadBase64Pdf(filename: string, base64: string): void {
@@ -299,7 +312,10 @@ export function SuppliersPage({ focusId }: { focusId?: string } = {}): JSX.Eleme
       <Text size="sm" c="dimmed" mt={4}>Stammsätze + Katalog je Lieferant (EK nur ADMIN/Büro/Buchhaltung, Kap. 12).</Text>
       <Group mt="sm" gap="xs" align="end">
         <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Neuer Lieferant GmbH" />
-        <TextInput label="USt-IdNr." value={vatId} onChange={(e) => setVatId(e.currentTarget.value)} w={150} />
+        <Box>
+          <TextInput label="USt-IdNr." value={vatId} onChange={(e) => setVatId(e.currentTarget.value)} w={150} />
+          <VatBadge value={vatId} />
+        </Box>
         <TextInput label="IBAN" value={iban} onChange={(e) => setIban(e.currentTarget.value)} w={200} />
         <Button loading={busy} disabled={!name.trim()} onClick={async () => {
           setBusy(true); setErr(null);
@@ -2240,7 +2256,10 @@ function CompanyStammdaten({ company, onSaved }: { company: CompanyDetail; onSav
         <TextInput size="xs" label="Land" w={70} value={f.country} onChange={(e) => set("country")(e.currentTarget.value)} />
       </Group>
       <Group gap="xs" align="end" wrap="wrap" mt={6}>
-        <TextInput size="xs" label="USt-IdNr." w={160} value={f.vatId} onChange={(e) => set("vatId")(e.currentTarget.value)} />
+        <Box>
+          <TextInput size="xs" label="USt-IdNr." w={160} value={f.vatId} onChange={(e) => set("vatId")(e.currentTarget.value)} />
+          <VatBadge value={f.vatId} />
+        </Box>
         <TextInput size="xs" label="Steuernummer" w={150} value={f.taxNumber} onChange={(e) => set("taxNumber")(e.currentTarget.value)} />
         <NumberInput size="xs" label="Skonto %" w={90} min={0} max={100} value={f.skontoPercent === "" ? "" : Number(f.skontoPercent)} onChange={(v) => set("skontoPercent")(v === "" ? "" : String(v))} />
         <NumberInput size="xs" label="Skonto-Tage" w={100} min={0} max={180} value={f.skontoDays === "" ? "" : Number(f.skontoDays)} onChange={(v) => set("skontoDays")(v === "" ? "" : String(v))} />
