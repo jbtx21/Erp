@@ -6,6 +6,9 @@ import { buildEntry, type AuditSink } from "@texma/audit";
 
 export const BRIEFKOPF_KEY = "briefkopf";
 export const SIEBDRUCK_VEREDLER_KEY = "siebdruck_veredler";
+export const DEFAULT_TAX_RATE_KEY = "default_tax_rate_pct";
+/** Globaler USt-Satz, wenn nichts konfiguriert ist (Regelsteuersatz). */
+export const DEFAULT_TAX_RATE_PCT = 19;
 
 export interface AppSettings {
   /** Briefkopf-Zeilen (Absender auf Lieferschein/Rechnung). */
@@ -17,6 +20,8 @@ export interface AppSettings {
   markupFactor: number;
   /** Standard-Veredler für Siebdruck (Lieferant-ID) — Vorbelegung bei Logo/Siebdruck. */
   siebdruckVeredlerId: string | null;
+  /** Globaler USt-Satz in Prozent — gilt für alle Positionen (zentral, keine USt je Position). */
+  defaultTaxRatePct: number;
 }
 
 export interface SettingsRepository {
@@ -45,9 +50,16 @@ export class SettingsService {
     return v && v.trim() ? v.trim() : null;
   }
 
+  /** Globaler USt-Satz (auch operativ lesbar — Vorbelegung der Positionssummen). */
+  async defaultTaxRatePct(): Promise<number> {
+    const v = await this.repo.getSetting(DEFAULT_TAX_RATE_KEY);
+    const n = v === null ? NaN : Number(v);
+    return Number.isFinite(n) && n >= 0 && n <= 100 ? n : DEFAULT_TAX_RATE_PCT;
+  }
+
   async get(): Promise<AppSettings> {
-    const [briefkopf, thr, markupFactor, siebdruckVeredlerId] = await Promise.all([
-      this.briefkopf(), this.repo.getApprovalThreshold(), this.repo.getMarkupFactor(), this.siebdruckVeredlerId(),
+    const [briefkopf, thr, markupFactor, siebdruckVeredlerId, defaultTaxRatePct] = await Promise.all([
+      this.briefkopf(), this.repo.getApprovalThreshold(), this.repo.getMarkupFactor(), this.siebdruckVeredlerId(), this.defaultTaxRatePct(),
     ]);
     return {
       briefkopf,
@@ -55,10 +67,11 @@ export class SettingsService {
       maxOrderValueEuro: thr.maxOrderValueCents === null ? null : thr.maxOrderValueCents / 100,
       markupFactor,
       siebdruckVeredlerId,
+      defaultTaxRatePct,
     };
   }
 
-  async update(patch: Partial<{ briefkopf: string[]; maxDiscountPct: number | null; maxOrderValueEuro: number | null; markupFactor: number; siebdruckVeredlerId: string | null }>): Promise<void> {
+  async update(patch: Partial<{ briefkopf: string[]; maxDiscountPct: number | null; maxOrderValueEuro: number | null; markupFactor: number; siebdruckVeredlerId: string | null; defaultTaxRatePct: number }>): Promise<void> {
     if (patch.briefkopf !== undefined) {
       await this.repo.setSetting(BRIEFKOPF_KEY, patch.briefkopf.join("\n"));
     }
@@ -75,6 +88,12 @@ export class SettingsService {
     if (patch.markupFactor !== undefined) {
       if (patch.markupFactor <= 0) throw new SettingsError("Aufschlagsfaktor muss > 0 sein.");
       await this.repo.setMarkupFactor(patch.markupFactor);
+    }
+    if (patch.defaultTaxRatePct !== undefined) {
+      if (!Number.isInteger(patch.defaultTaxRatePct) || patch.defaultTaxRatePct < 0 || patch.defaultTaxRatePct > 100) {
+        throw new SettingsError("USt-Satz muss zwischen 0 und 100 liegen.");
+      }
+      await this.repo.setSetting(DEFAULT_TAX_RATE_KEY, String(patch.defaultTaxRatePct));
     }
     await this.audit.append(buildEntry({ entity: "AppSetting", entityId: "settings", action: "UPDATE", after: patch }));
   }

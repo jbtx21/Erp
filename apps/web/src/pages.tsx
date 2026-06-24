@@ -1068,7 +1068,9 @@ function LogoArticleDialog({ onClose, onCreated }: { onClose: () => void; onCrea
   );
 }
 
-export function LinesEditor({ lines, onChange, quoteMode = false, companyId }: { lines: EditorLine[]; onChange: (l: EditorLine[]) => void; quoteMode?: boolean; companyId?: string }): JSX.Element {
+export function LinesEditor({ lines, onChange, quoteMode = false, companyId, taxRate }: { lines: EditorLine[]; onChange: (l: EditorLine[]) => void; quoteMode?: boolean; companyId?: string; taxRate?: number }): JSX.Element {
+  const fetchedTaxRate = useDefaultTaxRate();
+  const effTaxRate = taxRate ?? fetchedTaxRate;
   const set = (i: number, patch: Partial<EditorLine>): void => onChange(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
   // Aufschlagsfaktor-Konfiguration (Kap. 4.4) für die automatische VK-Ableitung aus dem EK.
   const [markupCfg, setMarkupCfg] = useState<MarkupConfig | null>(null);
@@ -1134,8 +1136,6 @@ export function LinesEditor({ lines, onChange, quoteMode = false, companyId }: {
           <NumberInput label={i === 0 ? "EK (€)" : undefined} value={l.ekEuro ?? ""} onChange={(v) => applyEk(i, l, v)} min={0} decimalScale={2} w={90} placeholder="—" title="Einkaufspreis — VK wird bei freien Positionen automatisch über den Aufschlagsfaktor berechnet" />
           <NumberInput label={i === 0 ? "VK (€)" : undefined} value={l.euro} onChange={(v) => set(i, { euro: Number(v) || 0 })} min={0} decimalScale={2} w={90} />
           <NumberInput label={i === 0 ? "Rabatt %" : undefined} value={l.rabattPct ?? ""} onChange={(v) => set(i, { rabattPct: v === "" ? undefined : Math.min(100, Math.max(0, Number(v))) })} min={0} max={100} decimalScale={1} w={80} placeholder="0" />
-          <Select label={i === 0 ? "USt" : undefined} w={80} value={String(l.taxRatePct ?? 19)} onChange={(v) => set(i, { taxRatePct: Number(v) })}
-            data={[{ value: "19", label: "19 %" }, { value: "7", label: "7 %" }, { value: "0", label: "0 %" }]} title="Umsatzsteuersatz dieser Position" />
           {hasRabatt && <Text size="xs" c="dimmed" title="Netto-Einzelpreis nach Rabatt">= {euro(Math.round(effEuro * 100))}</Text>}
           {db !== null && <Badge color={db >= 0 ? "teal" : "red"} variant="light" size="sm" title="Deckungsbeitrag (VK nach Rabatt − EK) × Menge">DB {euro(db)}{margePct !== null ? ` · ${(margePct * 100).toFixed(0)}%` : ""}</Badge>}
           {l.isBundle && <Badge color="grape" variant="light" size="sm" title="Set/Bundle — löst sich in eine Stückliste auf">Set</Badge>}
@@ -1153,7 +1153,8 @@ export function LinesEditor({ lines, onChange, quoteMode = false, companyId }: {
         </Group>
       ) : null))}
       <Button size="compact-xs" variant="light" mt="xs" onClick={() => onChange([...lines, { description: "", qty: 1, euro: 0, kind: "VEREDELUNG" }])}>+ Position</Button>
-      <LineTotals lines={lines} />
+      <Text size="xs" c="dimmed" mt={4}>USt {effTaxRate} % (zentral über Einstellungen). Steuerbefreite Vorgänge separat.</Text>
+      <LineTotals lines={lines} taxRate={effTaxRate} />
       {bundleFor !== null && lines[bundleFor]?.variantId && (
         <BundleEditor variantId={lines[bundleFor]!.variantId!} label={lines[bundleFor]!.description || "Variante"} positionQty={lines[bundleFor]!.qty}
           onClose={() => setBundleFor(null)}
@@ -1163,23 +1164,24 @@ export function LinesEditor({ lines, onChange, quoteMode = false, companyId }: {
   );
 }
 
+// Globaler USt-Satz aus den Einstellungen (zentral gesteuert, keine USt je Position).
+// Operativ lesbar (protectedProcedure); Fallback 19 % bis geladen.
+function useDefaultTaxRate(): number {
+  const [rate, setRate] = useState(19);
+  useEffect(() => { void trpc.settings.defaultTaxRate.query().then((r) => setRate(r)).catch(() => undefined); }, []);
+  return rate;
+}
+
 // Auto-berechnete Summen (Netto/USt/Brutto + Deckungsbeitrag) aus den Positionen — read-only (ERPNext-Muster).
-function LineTotals({ lines }: { lines: EditorLine[] }): JSX.Element {
+// USt zentral über den globalen Satz (taxRate), nicht je Position.
+function LineTotals({ lines, taxRate }: { lines: EditorLine[]; taxRate: number }): JSX.Element {
   // Alternativpositionen zählen nicht zur Angebotssumme (unverbindlich).
   const main = lines.filter((l) => l.description.trim() && !l.isAlternative);
   const netCents = main.reduce((s, l) => s + Math.round(l.qty * effUnitEuro(l) * 100), 0);
   // Gewährter Rabatt gegenüber den VK-Listenpreisen (für die Summenanzeige).
   const listCents = main.reduce((s, l) => s + Math.round(l.qty * l.euro * 100), 0);
   const rabattCents = listCents - netCents;
-  // USt je Satz: jede Position mit ihrem eigenen Satz, je Satz aggregiert (saubere Ausweisung).
-  const byRate = new Map<number, number>();
-  for (const l of main) {
-    const rate = l.taxRatePct ?? 19;
-    const lineNetCents = Math.round(l.qty * effUnitEuro(l) * 100);
-    byRate.set(rate, (byRate.get(rate) ?? 0) + Math.round(lineNetCents * rate / 100));
-  }
-  const taxCents = [...byRate.values()].reduce((s, v) => s + v, 0);
-  const rates = [...byRate.entries()].filter(([, v]) => v !== 0).sort((a, b) => b[0] - a[0]);
+  const taxCents = Math.round(netCents * taxRate / 100);
   const dbLines = main.filter((l) => l.ekEuro !== undefined);
   const dbCents = dbLines.reduce((s, l) => s + (lineDbCents(l) ?? 0), 0);
   const dbMargePct = dbLines.length && netCents > 0 ? dbCents / netCents : null;
@@ -1188,9 +1190,7 @@ function LineTotals({ lines }: { lines: EditorLine[] }): JSX.Element {
       {dbLines.length > 0 && <Text size="sm" c={dbCents >= 0 ? "teal" : "red"}>DB: <b>{euro(dbCents)}</b>{dbMargePct !== null ? ` (${(dbMargePct * 100).toFixed(0)} %)` : ""}</Text>}
       {rabattCents > 0 && <Text size="sm" c="dimmed">Rabatt: <b>−{euro(rabattCents)}</b></Text>}
       <Text size="sm" c="dimmed">Netto: <b>{euro(netCents)}</b></Text>
-      {rates.length <= 1
-        ? <Text size="sm" c="dimmed">USt {rates[0]?.[0] ?? 19} %: <b>{euro(taxCents)}</b></Text>
-        : rates.map(([rate, v]) => <Text key={rate} size="sm" c="dimmed">USt {rate} %: <b>{euro(v)}</b></Text>)}
+      <Text size="sm" c="dimmed">USt {taxRate} %: <b>{euro(taxCents)}</b></Text>
       <Text size="sm">Brutto: <b>{euro(netCents + taxCents)}</b></Text>
     </Group>
   );
@@ -1211,9 +1211,9 @@ export const toApiLines = (lines: EditorLine[]): { description: string; qty: num
   }));
 
 // Wie toApiLines, aber inkl. Artikel-/Varianten-Referenz und Alternativ-Kennzeichen (Angebot).
-export const toQuoteApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; articleId?: string; variantId?: string; isAlternative?: boolean; dbCents?: number }[] =>
+export const toQuoteApiLines = (lines: EditorLine[], taxRatePct = 19): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; articleId?: string; variantId?: string; isAlternative?: boolean; dbCents?: number }[] =>
   lines.filter((l) => l.description.trim()).map((l) => ({
-    description: l.description.trim(), qty: l.qty, kind: l.kind, ...lineMoney(l), taxRatePct: l.taxRatePct ?? 19,
+    description: l.description.trim(), qty: l.qty, kind: l.kind, ...lineMoney(l), taxRatePct,
     ...(l.articleId ? { articleId: l.articleId } : {}), ...(l.variantId ? { variantId: l.variantId } : {}), ...(l.isAlternative ? { isAlternative: true } : {}),
   }));
 
@@ -1312,6 +1312,7 @@ export function QuotesPage(): JSX.Element {
   const [incoterm, setIncoterm] = useState("");
   const [versandregel, setVersandregel] = useState("");
   const [exempt, setExempt] = useState(false);
+  const globalTaxRate = useDefaultTaxRate();
   const [busy, setBusy] = useState(false);
   // Quick-Filter + Sortierung (clientseitig)
   const [fId, setFId] = useState(""); const [fAngebotFuer, setFAngebotFuer] = useState(""); const [fKunde, setFKunde] = useState(""); const [fArt, setFArt] = useState(""); const [fStatus, setFStatus] = useState("");
@@ -1380,7 +1381,7 @@ export function QuotesPage(): JSX.Element {
     setBusy(true); setErr(null);
     try {
       const payload = {
-        companyId, lines: toQuoteApiLines(lines),
+        companyId, lines: toQuoteApiLines(lines, exempt ? 0 : globalTaxRate),
         gueltigBisAm: gueltigBis ? `${gueltigBis}T00:00:00.000Z` : undefined,
         orderType: orderType as "SALES" | "MAINTENANCE" | "SHOPPING_CART",
         quotationTo: quotationTo as "CUSTOMER" | "LEAD",
@@ -1431,14 +1432,14 @@ export function QuotesPage(): JSX.Element {
               <Text size="sm" c="dimmed">Währung: <b>EUR</b> · Preisfindung über Preisgruppe des Kunden + Mengenstaffeln (B4).</Text>
             </Collapsible>
             <Title order={5} mt="lg">Artikel</Title>
-            <LinesEditor lines={lines} onChange={setLines} quoteMode companyId={companyId || undefined} />
+            <LinesEditor lines={lines} onChange={setLines} quoteMode companyId={companyId || undefined} taxRate={exempt ? 0 : globalTaxRate} />
             <Collapsible title="Stickerei-Mengenstaffeln je Logo (Referenz)">
               <StickereiStaffelnSection />
             </Collapsible>
             <Title order={5} mt="lg">Steuern und Gebühren</Title>
             <Checkbox mt="xs" label="Kunde ist von der Umsatzsteuer befreit (innergemeinschaftlich / Reverse-Charge)" checked={exempt}
-              onChange={(e) => { const ex = e.currentTarget.checked; setExempt(ex); setLines((ls) => ls.map((l) => ({ ...l, taxRatePct: ex ? 0 : 19 }))); }} />
-            <Text size="xs" c="dimmed" mt={4}>{exempt ? "Steuerbefreit: alle Positionen 0 % USt." : "USt je Position wählbar (19 % Standard, 7 % ermäßigt) — Summen werden automatisch berechnet."}</Text>
+              onChange={(e) => setExempt(e.currentTarget.checked)} />
+            <Text size="xs" c="dimmed" mt={4}>{exempt ? "Steuerbefreit: alle Positionen 0 % USt." : `USt zentral ${globalTaxRate} % (Einstellungen) — Summen werden automatisch berechnet.`}</Text>
             <Group gap="md" align="end" wrap="wrap" mt="md">
               <TextInput label="Incoterm" placeholder="z. B. EXW, DAP" value={incoterm} onChange={(e) => setIncoterm(e.currentTarget.value)} w={160} />
               <TextInput label="Versandregel" placeholder="z. B. frei Haus, pauschal" value={versandregel} onChange={(e) => setVersandregel(e.currentTarget.value)} w={220} />
@@ -2060,6 +2061,7 @@ function ConnectionsPanel({ orderId, role, onChanged }: { orderId: string; role:
 export function OrdersPage({ role, focusId }: { role: string; focusId?: string }): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const globalTaxRate = useDefaultTaxRate();
   // Terminierungs-Panel (B9): Auftrag + zugesagter Liefertermin + Rückwärts-Vorschau.
   const [termOrder, setTermOrder] = useState<string | null>(null);
   const [dateStr, setDateStr] = useState<string>("");
@@ -2139,7 +2141,7 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
               </Tabs.List>
               <Tabs.Panel value="details" pt="md">
                 <CompanyPicker value={newCompany} onChange={setNewCompany} w={240} />
-                <LinesEditor lines={newLines} onChange={setNewLines} companyId={newCompany || undefined} />
+                <LinesEditor lines={newLines} onChange={setNewLines} companyId={newCompany || undefined} taxRate={globalTaxRate} />
               </Tabs.Panel>
               <Tabs.Panel value="stickerei" pt="md">
                 <StickereiStaffelnSection />
@@ -4109,6 +4111,7 @@ export function AdminPage(): JSX.Element {
   const [maxDiscount, setMaxDiscount] = useState<number | "">("");
   const [maxOrderValue, setMaxOrderValue] = useState<number | "">("");
   const [markup, setMarkup] = useState<number>(1.88);
+  const [taxRate, setTaxRate] = useState<number>(19);
   const [siebdruckVeredler, setSiebdruckVeredler] = useState("");
   const [testTo, setTestTo] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
@@ -4121,6 +4124,7 @@ export function AdminPage(): JSX.Element {
       setMaxDiscount(s.maxDiscountPct ?? "");
       setMaxOrderValue(s.maxOrderValueEuro ?? "");
       setMarkup(s.markupFactor);
+      setTaxRate(s.defaultTaxRatePct);
       setSiebdruckVeredler(s.siebdruckVeredlerId ?? "");
       setErr(null);
     } catch (e) { setErr(errMsg(e)); }
@@ -4141,6 +4145,7 @@ export function AdminPage(): JSX.Element {
         <NumberInput label="Max. Rabatt ohne Freigabe (%)" value={maxDiscount} onChange={(v) => setMaxDiscount(v === "" ? "" : Number(v))} min={0} max={100} w={220} />
         <NumberInput label="Max. Auftragswert ohne Freigabe (€)" value={maxOrderValue} onChange={(v) => setMaxOrderValue(v === "" ? "" : Number(v))} min={0} w={260} />
         <NumberInput label="Aufschlagsfaktor" value={markup} onChange={(v) => setMarkup(Number(v) || 1.88)} min={0.01} step={0.01} decimalScale={2} w={160} />
+        <NumberInput label="USt-Satz global (%)" value={taxRate} onChange={(v) => setTaxRate(Number(v) || 0)} min={0} max={100} w={160} title="Gilt für alle Positionen in Angebot/Auftrag (zentral statt je Position)" />
       </Group>
 
       <Group gap="md" align="end" mt="md" wrap="wrap">
@@ -4156,6 +4161,7 @@ export function AdminPage(): JSX.Element {
             maxDiscountPct: maxDiscount === "" ? null : maxDiscount,
             maxOrderValueEuro: maxOrderValue === "" ? null : maxOrderValue,
             markupFactor: markup,
+            defaultTaxRatePct: taxRate,
             siebdruckVeredlerId: siebdruckVeredler || null,
           });
           setMsg("Einstellungen gespeichert."); await load();
