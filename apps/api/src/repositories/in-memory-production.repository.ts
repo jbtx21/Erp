@@ -46,6 +46,11 @@ export class InMemoryProductionRepository implements ProductionRepository {
     return this.approvalFactsByOrder.get(orderId) ?? { orderValueCents: 0, discountPct: 0 };
   }
 
+  readonly bomByProduction = new Map<string, BomItemInput[]>();
+  async replaceBomItems(productionId: string, items: BomItemInput[]): Promise<void> {
+    this.bomByProduction.set(productionId, items);
+  }
+
   async status(orderId: string): Promise<ProductionStatus | null> {
     const o = this.orders.get(orderId);
     if (!o) return null;

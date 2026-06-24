@@ -20,6 +20,8 @@ class FakeRepo implements ProductionRepository {
   async releaseOrder(orderId: string): Promise<void> { this.released.push(orderId); if (this.order) this.order = { ...this.order, freigegeben: true }; }
   facts: { orderValueCents: number; discountPct: number } = { orderValueCents: 0, discountPct: 0 };
   async approvalFacts(): Promise<{ orderValueCents: number; discountPct: number } | null> { return this.order ? this.facts : null; }
+  replacedBom: { description: string; qty: number; variantId: string | null }[] | null = null;
+  async replaceBomItems(_productionId: string, items: { description: string; qty: number; variantId: string | null }[]): Promise<void> { this.replacedBom = items; }
   async status(): Promise<ProductionStatus | null> {
     return this.order ? { freigegeben: this.order.freigegeben, productionId: this.order.existingProductionId, productionNumber: this.order.existingProductionNumber, finishingProfile: null, dueDate: null } : null;
   }
@@ -158,6 +160,22 @@ describe("ProductionService — Auftrag → Produktionsauftrag (Kap. 5.2)", () =
     repo.facts = { orderValueCents: 50000, discountPct: 10 };
     await svc.release("ord_1", { role: "BUERO", thresholds: { maxDiscountPct: 15, maxOrderValueCents: 100000 } });
     expect(repo.released).toContain("ord_1");
+  });
+
+  it("rebuildBomForOrder: baut die Stückliste neu, wenn ein PA existiert", async () => {
+    const { svc, repo } = svcFor(baseOrder({ existingProductionId: "pa_1", lines: [
+      { description: "240 Polos", qty: 240, variantId: "v_polo", isBundle: false, components: [], veredlerId: null },
+    ] }));
+    const res = await svc.rebuildBomForOrder("ord_1");
+    expect(res).toEqual({ rebuilt: true, bomItemCount: 1 });
+    expect(repo.replacedBom).toHaveLength(1);
+  });
+
+  it("rebuildBomForOrder: No-op ohne PA", async () => {
+    const { svc, repo } = svcFor(baseOrder({ existingProductionId: null }));
+    const res = await svc.rebuildBomForOrder("ord_1");
+    expect(res.rebuilt).toBe(false);
+    expect(repo.replacedBom).toBeNull();
   });
 
   it("Freigabe-Gate: greift über dem Auftragswert", async () => {

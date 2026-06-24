@@ -1422,7 +1422,12 @@ export const appRouter = router({
         lines: z.array(z.object({ description: z.string().min(1), qty: z.number().int().positive(), unitNetCents: z.number().int().min(0), listNetCents: z.number().int().min(0).optional(), rabattPct: z.number().int().min(0).max(100).optional(), kind: z.enum(["TEXTIL", "VEREDELUNG", "SONSTIGE"]).optional(), variantId: z.string().optional(), dbCents: z.number().int().optional() })).min(1),
       }))
       .mutation(async ({ input, ctx }) => {
-        try { await ctx.salesOrders.updateOrder(input.orderId, input.companyId, input.lines); return { ok: true as const }; }
+        try {
+          await ctx.salesOrders.updateOrder(input.orderId, input.companyId, input.lines);
+          // Bei laufender Produktion die Fertigungsstückliste an die geänderten Positionen anpassen.
+          const bom = await ctx.production.rebuildBomForOrder(input.orderId);
+          return { ok: true as const, bomRebuilt: bom.rebuilt };
+        }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
     // Umwandlungs-Plan: zeigt je Position, ob ein Hauptartikel (Farbe×Größe noch offen)

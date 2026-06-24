@@ -167,16 +167,15 @@ export class SalesOrderService {
   }
 
   /**
-   * Vollständige Bearbeitung eines Auftrags (Kunde + Positionen), solange er weder
-   * fakturiert noch (teil-)geliefert noch in Produktion ist — danach gesperrt, um die
-   * Belegkette (Rechnung/Lieferung/PA) konsistent zu halten.
+   * Vollständige Bearbeitung eines Auftrags (Kunde + Positionen) bis zur Fakturierung —
+   * auch während der Produktion (die Fertigungsstückliste wird anschließend neu aufgebaut)
+   * und nach Teillieferung (bereits gelieferte Positionen/Mengen bleiben erhalten, das Repo
+   * erzwingt diese Integrität). Nach der Fakturierung gesperrt (§ 14 UStG / Belegkette).
    */
   async updateOrder(orderId: string, companyId: string, lines: SalesLine[]): Promise<void> {
     const data = await this.repo.orderForEdit(orderId);
     if (!data) throw new SalesOrderError("Auftrag nicht gefunden.");
     if (data.invoiced) throw new SalesOrderError("Auftrag ist bereits fakturiert — keine Bearbeitung mehr möglich.");
-    if (data.delivered) throw new SalesOrderError("Auftrag ist bereits (teil-)geliefert — keine Bearbeitung mehr möglich.");
-    if (data.inProduction) throw new SalesOrderError("Auftrag ist bereits in Produktion — keine Bearbeitung mehr möglich.");
     if (!companyId.trim()) throw new SalesOrderError("Firma ist Pflicht.");
     validateLines(lines);
     if (!(await this.repo.companyExists(companyId))) throw new SalesOrderError("Unbekannte Firma.");

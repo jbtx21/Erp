@@ -39,19 +39,33 @@ export class InMemorySalesOrderRepository implements SalesOrderRepository {
 
   /** Sperrflags je Auftrag (für Edit-Gate-Tests setzbar). */
   readonly orderLocks = new Map<string, { invoiced?: boolean; inProduction?: boolean; delivered?: boolean }>();
+  /** Bereits gelieferte Menge je Bestandsposition (Index), für Integritäts-Tests. */
+  readonly deliveredByOrder = new Map<string, number[]>();
+  setDelivered(orderId: string, deliveredByPosition: number[]): void { this.deliveredByOrder.set(orderId, deliveredByPosition); }
+
   async orderForEdit(orderId: string): Promise<OrderEditData | null> {
     const o = this.orders.find((x) => x.id === orderId);
     if (!o) return null;
     const lock = this.orderLocks.get(orderId) ?? {};
+    const delivered = (this.deliveredByOrder.get(orderId) ?? []).some((q) => q > 0);
     return {
       id: o.id, number: o.number, companyId: o.companyId,
-      invoiced: !!lock.invoiced, inProduction: !!lock.inProduction, delivered: !!lock.delivered,
+      invoiced: !!lock.invoiced, inProduction: !!lock.inProduction, delivered: !!lock.delivered || delivered,
       lines: o.lines.map((l) => ({ description: l.description, qty: l.qty, kind: l.kind ?? "TEXTIL", unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, dbCents: l.dbCents ?? null, variantId: l.variantId ?? null })),
     };
   }
   async updateOrder(orderId: string, companyId: string, lines: SalesLine[]): Promise<void> {
     const o = this.orders.find((x) => x.id === orderId);
-    if (o) { o.companyId = companyId; o.lines = lines; }
+    if (!o) return;
+    // Integrität: bereits gelieferte Positionen dürfen nicht entfallen/unter die Liefermenge fallen.
+    const delivered = this.deliveredByOrder.get(orderId) ?? [];
+    delivered.forEach((dq, i) => {
+      if (dq <= 0) return;
+      const nw = lines[i];
+      if (!nw) throw new Error(`Position ${i + 1} ist bereits geliefert und kann nicht entfernt werden.`);
+      if (dq > nw.qty) throw new Error(`Position ${i + 1}: Menge ${nw.qty} unter bereits gelieferter Menge ${dq}.`);
+    });
+    o.companyId = companyId; o.lines = lines;
   }
   async conversionPlan(quoteId: string): Promise<ConversionPlan | null> {
     const q = this.quotes.find((x) => x.id === quoteId);

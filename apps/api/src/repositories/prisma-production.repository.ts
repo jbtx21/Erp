@@ -80,6 +80,13 @@ export class PrismaProductionRepository implements ProductionRepository {
     await prisma.order.update({ where: { id: orderId }, data: { freigegeben: true } });
   }
 
+  async replaceBomItems(productionId: string, items: BomItemInput[]): Promise<void> {
+    await prisma.$transaction([
+      prisma.bomItem.deleteMany({ where: { productionId } }),
+      prisma.bomItem.createMany({ data: items.map((b) => ({ productionId, description: b.description, qty: b.qty, variantId: b.variantId ?? null })) }),
+    ]);
+  }
+
   async approvalFacts(orderId: string): Promise<{ orderValueCents: number; discountPct: number } | null> {
     const o = await prisma.order.findUnique({
       where: { id: orderId },

@@ -98,16 +98,31 @@ describe("SalesOrderService.updateOrder (vollständige Bearbeitung)", () => {
     expect(o.lines[0]).toMatchObject({ qty: 8, unitNetCents: 1350, listNetCents: 1500, rabattPct: 10 });
   });
 
-  it.each([
-    ["invoiced", { invoiced: true }],
-    ["delivered", { delivered: true }],
-    ["inProduction", { inProduction: true }],
-  ])("blockt die Bearbeitung, wenn %s", async (_label, lock) => {
+  it("blockt die Bearbeitung NUR nach Fakturierung", async () => {
     const { svc, repo } = setup();
     const { id } = await svc.createManual("co-1", [{ description: "Polo", qty: 5, unitNetCents: 1200 }]);
-    repo.orderLocks.set(id, lock);
+    repo.orderLocks.set(id, { invoiced: true });
     await expect(svc.updateOrder(id, "co-1", [{ description: "X", qty: 1, unitNetCents: 100 }]))
       .rejects.toBeInstanceOf(SalesOrderError);
+  });
+
+  it("erlaubt die Bearbeitung während der Produktion (Stückliste wird später neu aufgebaut)", async () => {
+    const { svc, repo } = setup();
+    const { id } = await svc.createManual("co-1", [{ description: "Polo", qty: 5, unitNetCents: 1200 }]);
+    repo.orderLocks.set(id, { inProduction: true });
+    await svc.updateOrder(id, "co-1", [{ description: "Polo XL", qty: 8, unitNetCents: 1300 }]);
+    expect((await svc.getOrderForEdit(id)).lines[0]?.qty).toBe(8);
+  });
+
+  it("schützt bereits gelieferte Positionen (keine Reduktion unter die Liefermenge)", async () => {
+    const { svc, repo } = setup();
+    const { id } = await svc.createManual("co-1", [{ description: "Polo", qty: 10, unitNetCents: 1200 }]);
+    repo.setDelivered(id, [6]); // 6 von 10 geliefert
+    await expect(svc.updateOrder(id, "co-1", [{ description: "Polo", qty: 4, unitNetCents: 1200 }]))
+      .rejects.toThrow(/gelieferter Menge/);
+    // auf 8 erhöhen ist erlaubt
+    await svc.updateOrder(id, "co-1", [{ description: "Polo", qty: 8, unitNetCents: 1200 }]);
+    expect((await svc.getOrderForEdit(id)).lines[0]?.qty).toBe(8);
   });
 
   it("übernimmt konkrete Varianten direkt und lässt Alternativen weg", async () => {

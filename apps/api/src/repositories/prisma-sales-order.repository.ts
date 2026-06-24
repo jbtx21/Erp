@@ -29,16 +29,38 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
   }
 
   async updateOrder(orderId: string, companyId: string, lines: SalesLine[]): Promise<void> {
-    await prisma.$transaction([
-      prisma.orderLine.deleteMany({ where: { orderId } }),
-      prisma.order.update({
-        where: { id: orderId },
-        data: {
-          companyId,
-          lines: { create: lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, dbCents: l.dbCents ?? null, kind: (l.kind ?? "TEXTIL") as never, variantId: l.variantId ?? null })) },
-        },
-      }),
-    ]);
+    // Bereits gelieferte Menge je Bestandsposition (positionsweise) ermitteln.
+    const existing = await prisma.orderLine.findMany({
+      where: { orderId },
+      orderBy: { position: "asc" },
+      select: { id: true, qty: true, deliveryLines: { select: { qty: true } } },
+    });
+    const deliveredByIdx = existing.map((l) => l.deliveryLines.reduce((s, d) => s + d.qty, 0));
+    const lineData = (l: SalesLine, i: number) => ({
+      position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents,
+      listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, dbCents: l.dbCents ?? null,
+      kind: (l.kind ?? "TEXTIL") as never, variantId: l.variantId ?? null,
+    });
+
+    await prisma.$transaction(async (tx) => {
+      await tx.order.update({ where: { id: orderId }, data: { companyId } });
+      const n = Math.max(existing.length, lines.length);
+      for (let i = 0; i < n; i++) {
+        const ex = existing[i];
+        const nw = lines[i];
+        const delivered = ex ? deliveredByIdx[i]! : 0;
+        if (ex && !nw) {
+          // Entfallende Position — bereits gelieferte Positionen dürfen nicht wegfallen.
+          if (delivered > 0) throw new Error(`Position ${i + 1} ist bereits geliefert und kann nicht entfernt werden.`);
+          await tx.orderLine.delete({ where: { id: ex.id } });
+        } else if (ex && nw) {
+          if (delivered > nw.qty) throw new Error(`Position ${i + 1}: Menge ${nw.qty} unter bereits gelieferter Menge ${delivered}.`);
+          await tx.orderLine.update({ where: { id: ex.id }, data: lineData(nw, i) }); // id erhalten (Lieferschein-Bezug)
+        } else if (!ex && nw) {
+          await tx.orderLine.create({ data: { orderId, ...lineData(nw, i) } });
+        }
+      }
+    });
   }
 
   async createOrder(input: { number: string; companyId: string; quoteId?: string; lines: SalesLine[] }): Promise<{ id: string }> {

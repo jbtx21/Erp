@@ -2005,11 +2005,14 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
     setErr(null);
     try {
       const o = await trpc.sales.orderForEdit.query({ orderId: id });
-      if (o.invoiced || o.delivered || o.inProduction) {
-        const grund = o.invoiced ? "bereits fakturiert" : o.delivered ? "bereits (teil-)geliefert" : "bereits in Produktion";
-        window.alert(`Auftrag ${o.number} kann nicht mehr bearbeitet werden (${grund}).`);
+      if (o.invoiced) {
+        window.alert(`Auftrag ${o.number} ist bereits fakturiert und kann nicht mehr bearbeitet werden.`);
         return;
       }
+      const hinweise: string[] = [];
+      if (o.inProduction) hinweise.push("in Produktion — die Stückliste wird beim Speichern neu aufgebaut");
+      if (o.delivered) hinweise.push("bereits teilgeliefert — gelieferte Mengen können nicht reduziert/entfernt werden");
+      if (hinweise.length) window.alert(`Hinweis zu Auftrag ${o.number}: ${hinweise.join("; ")}.`);
       setEditOrderId(id); setNewCompany(o.companyId); setNewLines(fromStoredLines(o.lines)); setShowCreate(true);
     } catch (e) { setErr(errMsg(e)); }
   };

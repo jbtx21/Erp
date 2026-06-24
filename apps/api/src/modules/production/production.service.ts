@@ -83,6 +83,8 @@ export interface ProductionRepository {
   status(orderId: string): Promise<ProductionStatus | null>;
   /** Kennzahlen für das Freigabe-Gate (K-10): Auftragswert + höchster Positionsrabatt. */
   approvalFacts(orderId: string): Promise<{ orderValueCents: number; discountPct: number } | null>;
+  /** Ersetzt die Fertigungsstückliste eines PA (nach Auftragsbearbeitung). */
+  replaceBomItems(productionId: string, items: BomItemInput[]): Promise<void>;
 }
 
 /** Optionen der Freigabe: GL-Gate gegen die Schwellen (K-10). */
@@ -174,6 +176,20 @@ export class ProductionService {
    * ein PA existiert (1 Auftrag = 1 PA). Der Produktionstermin (`dueDate`) wird vom
    * Innendienst manuell bestätigt übergeben; ohne Angabe gilt der zugesagte Liefertermin.
    */
+  /**
+   * Baut die Fertigungsstückliste eines bestehenden PA neu auf — nach einer
+   * Auftragsbearbeitung, damit die Produktion zu den geänderten Positionen passt.
+   * No-op, wenn (noch) kein PA existiert.
+   */
+  async rebuildBomForOrder(orderId: string): Promise<{ rebuilt: boolean; bomItemCount: number }> {
+    const order = await this.repo.loadOrderForProduction(orderId);
+    if (!order || !order.existingProductionId) return { rebuilt: false, bomItemCount: 0 };
+    const bomItems = ProductionService.buildBomItems(order.lines);
+    await this.repo.replaceBomItems(order.existingProductionId, bomItems);
+    await this.audit.append(buildEntry({ entity: "ProductionOrder", entityId: order.existingProductionId, action: "UPDATE", after: { bomItems: bomItems.length, grund: "Auftragsbearbeitung" } }));
+    return { rebuilt: true, bomItemCount: bomItems.length };
+  }
+
   /** Auto-Fremdvergabe (T-04): bei externem PA je distinktem Veredler der Positionen eine Stufe. */
   static buildSubOrders(paNumber: string, profile: FinishingLeadProfile | null, lines: ProductionOrderLine[]): SubOrderInput[] {
     if (!profile || !FINISHING_LEAD_PROFILES[profile].external) return [];
