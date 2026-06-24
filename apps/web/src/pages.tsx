@@ -10,7 +10,7 @@ import { trpc } from "./trpc.js";
 import { AufschlagsfaktorenSection, LogosStickereiSection, StickereiAusschreibungSection, StickereiStaffelnSection, Postcalc } from "./Differentiators.js";
 import { euro, numTd, statusMantineColor } from "./theme.js";
 import { MultiLineChart } from "./charts.js";
-import { DocFormShell, DocListHeader } from "./doc-layout.js";
+import { DocFormShell, DocListHeader, StatusDot } from "./doc-layout.js";
 
 type Row = Record<string, unknown>;
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
@@ -76,7 +76,9 @@ function fmtCell(key: string, v: unknown): ReactNode {
   if (v === null || v === undefined) return "—";
   if (/cents$/i.test(key) && typeof v === "number") return <span style={numTd}>{euro(v)}</span>;
   if (typeof v === "boolean") return v ? "ja" : "nein";
-  if (/(status|kind|ampel|level)$/i.test(key) && typeof v === "string")
+  if (/(status|ampel|level)$/i.test(key) && typeof v === "string")
+    return <StatusDot color={`var(--mantine-color-${statusMantineColor[v] ?? "gray"}-6)`} label={v} />;
+  if (/kind$/i.test(key) && typeof v === "string")
     return <Badge color={statusMantineColor[v] ?? "gray"} variant="light">{v}</Badge>;
   if (/(at|date|termin|am)$/i.test(key) && typeof v === "string" && !Number.isNaN(Date.parse(v)))
     return new Date(v).toLocaleDateString("de-DE");
@@ -265,14 +267,16 @@ function SupplierDetailPanel({ supplierId }: { supplierId: string }): JSX.Elemen
   const d = (x: string | Date): string => new Date(x).toLocaleDateString("de-DE");
   return (
     <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
-      <Group justify="space-between">
-        <Text fw={600}>{ov.supplier.name}</Text>
-        <Group gap="xs">
-          <Badge size="xs" variant="light">{ov.supplier.kind}</Badge>
+      <DocFormShell
+        breadcrumb="Einkauf / Lieferanten"
+        title={ov.supplier.name}
+        status={ov.supplier.kind}
+        statusColor="blue"
+        actions={<>
           <Badge size="xs" variant="light" color="gray">{ov.itemCount} Katalog-Artikel</Badge>
           <Badge size="xs" color="blue" variant="light">Einkaufsvolumen {euro(ov.purchaseVolumeCents)}</Badge>
-        </Group>
-      </Group>
+        </>}
+      >
       <SupplierStammdatenEditor s={ov.supplier} onSaved={reload} />
       <SupplierContactsBox supplierId={supplierId} contacts={ov.contacts} onChanged={reload} />
       <Group align="flex-start" gap="lg" mt="sm" wrap="wrap">
@@ -285,6 +289,7 @@ function SupplierDetailPanel({ supplierId }: { supplierId: string }): JSX.Elemen
           {ov.incomingInvoices.length === 0 ? <Text size="sm" c="dimmed">—</Text> : ov.incomingInvoices.slice(0, 8).map((i) => <Text key={i.id} size="sm">{i.number} · {euro(i.grossCents)} · {d(i.receivedAt)}</Text>)}
         </Box>
       </Group>
+      </DocFormShell>
     </Box>
   );
 }
@@ -1512,7 +1517,7 @@ export function QuotesPage(): JSX.Element {
                 <Table.Td>{r.companyName}</Table.Td>
                 <Table.Td>{new Date(r.createdAt).toLocaleDateString("de-DE")}</Table.Td>
                 <Table.Td>{ORDER_TYPE_LABEL[r.orderType] ?? r.orderType}</Table.Td>
-                <Table.Td><Badge size="sm" variant="light" color={QUOTE_STATUS_COLOR[r.status] ?? "gray"}>{QUOTE_STATUS_LABEL[r.status] ?? r.status}</Badge></Table.Td>
+                <Table.Td><StatusDot color={`var(--mantine-color-${QUOTE_STATUS_COLOR[r.status] ?? "gray"}-6)`} label={QUOTE_STATUS_LABEL[r.status] ?? r.status} /></Table.Td>
                 <Table.Td ta="right">{euro(r.totalNetCents)}</Table.Td>
                 <Table.Td ta="right">{r.totalDbCents !== null ? <Text size="sm" c={r.totalDbCents >= 0 ? "teal" : "red"}>{euro(r.totalDbCents)}</Text> : <Text size="sm" c="dimmed">—</Text>}</Table.Td>
                 <Table.Td>{rowActions(r)}</Table.Td>
@@ -2358,16 +2363,18 @@ function CompanyDetailPanel({ companyId, onNavigate }: { companyId: string; onNa
   );
   return (
     <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
-      <Group justify="space-between">
-        <Text fw={600}>{ov.company.name}</Text>
-        <Group gap="xs">
+      <DocFormShell
+        breadcrumb="Vertrieb / Kunden"
+        title={ov.company.name}
+        status={ov.company.priceGroupKind}
+        statusColor="blue"
+        actions={<>
           {ov.company.fromLead ? <Badge size="xs" color="grape" variant="light">aus Lead</Badge> : null}
-          <Badge size="xs" variant="light">{ov.company.priceGroupKind}</Badge>
           <Badge size="xs" variant="light" color="gray">Zahlungsziel {ov.company.zahlungszielTage} T</Badge>
           {ov.openCents > 0 ? <Badge size="xs" color="orange">offen {euro(ov.openCents)}</Badge> : <Badge size="xs" color="teal">keine offenen Posten</Badge>}
           {ov.company.mahnsperre ? <Badge size="xs" color="red">Mahnsperre</Badge> : null}
-        </Group>
-      </Group>
+        </>}
+      >
       <Text size="xs" c="dimmed" mt={2}>{ov.company.branche ?? "—"} · {ov.contactsCount} Kontakt(e)</Text>
       <Group gap="md" mt="sm" wrap="wrap">
         <Box style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 6, padding: "6px 12px" }}>
@@ -2390,6 +2397,7 @@ function CompanyDetailPanel({ companyId, onNavigate }: { companyId: string; onNa
         {histGroup("Rechnungen", "dunning", ov.invoices.map((i) => ({ id: i.id, label: i.number, sub: euro(i.grossCents) })))}
         {histGroup("Muster-Leihgut", "samples", ov.sampleLoans.map((s) => ({ id: s.id, label: d(s.ausgegebenAm), sub: s.status })))}
       </Group>
+      </DocFormShell>
     </Box>
   );
 }
@@ -2455,19 +2463,19 @@ export function CompaniesPage({ focusId }: { focusId?: string } = {}): JSX.Eleme
 
   return (
     <>
-      <DocListHeader module="Vertrieb / Kunden" title="Kunden" hint="Stammdaten (B3). Sperren/Anonymisieren erfolgt separat (DSGVO)." />
-      <Group mt="sm" gap="xs" align="end">
-        <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Neue Firma GmbH" />
-        <TextInput label="Branche" value={branche} onChange={(e) => setBranche(e.currentTarget.value)} w={140} />
-        <Select label="Preisgruppe" value={kind} onChange={(v) => v && setKind(v)} w={170}
-          data={["STANDARD", "TOP", "PREMIUM", "WIEDERVERKAEUFER", "AGENTUR"]} />
-        <NumberInput label="Zahlungsziel (Tage)" value={ziel} onChange={(v) => setZiel(Number(v) || 0)} min={0} max={180} w={150} />
-        <Button loading={busy} disabled={!name.trim()} onClick={async () => {
-          setBusy(true); setErr(null);
-          try { await trpc.companies.create.mutate({ name: name.trim(), branche: branche || undefined, priceGroupKind: kind as "STANDARD" | "TOP" | "PREMIUM" | "WIEDERVERKAEUFER" | "AGENTUR", zahlungszielTage: ziel }); setName(""); setBranche(""); await load(); }
-          catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
-        }}>Firma anlegen</Button>
-      </Group>
+      <DocListHeader module="Vertrieb / Kunden" title="Kunden" hint="Stammdaten (B3). Sperren/Anonymisieren erfolgt separat (DSGVO)."
+        filters={<>
+          <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Neue Firma GmbH" />
+          <TextInput label="Branche" value={branche} onChange={(e) => setBranche(e.currentTarget.value)} w={140} />
+          <Select label="Preisgruppe" value={kind} onChange={(v) => v && setKind(v)} w={170}
+            data={["STANDARD", "TOP", "PREMIUM", "WIEDERVERKAEUFER", "AGENTUR"]} />
+          <NumberInput label="Zahlungsziel (Tage)" value={ziel} onChange={(v) => setZiel(Number(v) || 0)} min={0} max={180} w={150} />
+          <Button mt={22} loading={busy} disabled={!name.trim()} onClick={async () => {
+            setBusy(true); setErr(null);
+            try { await trpc.companies.create.mutate({ name: name.trim(), branche: branche || undefined, priceGroupKind: kind as "STANDARD" | "TOP" | "PREMIUM" | "WIEDERVERKAEUFER" | "AGENTUR", zahlungszielTage: ziel }); setName(""); setBranche(""); await load(); }
+            catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+          }}>Firma anlegen</Button>
+        </>} />
       {err && <Alert color="red" mt="sm">{err}</Alert>}
       <AutoTable rows={rows} onRowClick={(r) => setOpenCompany((c) => c === String(r.id) ? null : String(r.id))} action={(r) => (
         <Group gap={4} justify="flex-end" wrap="nowrap">
