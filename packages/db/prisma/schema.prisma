@@ -600,8 +600,19 @@ model SupplierItem {
 
 enum ShopKind {
   WOOCOMMERCE
+  SHOPIFY // generischer Shop-Adapter (Rückmeldung Status/Tracking, Kap. 4.2)
   ANFRAGESHOP // Kap. 18.1
   SAMMELBESTELLUNG // Kap. 18.2
+}
+
+// Versanddienstleister (Carrier) — bestimmt die Tracking-Link-Vorlage (DPD/DHL/GLS …).
+enum Carrier {
+  DPD
+  DHL
+  GLS
+  UPS
+  HERMES
+  SONSTIGE
 }
 
 // Lieferadress-Regelung je Shop (K-08, Kap. 8.2)
@@ -626,6 +637,10 @@ model ShopConnector {
   syncCursor String? // Delta-Sync (Kap. 13)
   consumerKey      String? // WooCommerce REST consumer key (Identifier)
   consumerSecretEnc String? // consumer secret, AES-256-GCM verschlüsselt (DSGVO/Kap. 28)
+  // Update-Strategie (Kap. 4.2): welche Statuswechsel an den Shop zurückgespielt werden;
+  // notifyCustomer steuert, ob der Shop die Kunden-Mail auslösen soll (Mail an/aus).
+  pushStatuses   OrderStatus[] @default([VERSENDET, STORNIERT])
+  notifyCustomer Boolean       @default(true)
   orders    Order[]
   createdAt DateTime @default(now())
 
@@ -828,6 +843,7 @@ model Order {
   employeeNote String?
   externalNumber String? // Shop-Bestellnummer (Idempotenz beim Import, T-01)
   trackingNumber String? // DPD (Kap. 4.2/T-06)
+  carrier        Carrier? // Versanddienstleister → Tracking-Link-Vorlage (Kap. 4.2)
   lines       OrderLine[]
   production  ProductionOrder?
   invoice     Invoice?

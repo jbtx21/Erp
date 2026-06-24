@@ -6,6 +6,7 @@ import type { Cents } from "./money.js";
 import type { PriceGroupKind, VariantPrice } from "./pricing.js";
 import { resolvePrice } from "./pricing.js";
 import type { OrderStatus } from "./order.js";
+import { buildTrackingUrl, type Carrier } from "./tracking.js";
 
 // ── Preis-Push (T-08): ERP ist Preis-Master, Shop zeigt nur an ──────────────
 
@@ -63,19 +64,24 @@ const STATUS_MAP: Record<OrderStatus, WooStatus> = {
 export interface ShopStatusUpdate {
   externalOrderNumber: string;
   status: WooStatus;
-  /** DPD-Trackingnummer, sobald versendet (Kap. 4.2 / T-06/T-09). */
+  /** Trackingnummer, sobald versendet (Kap. 4.2 / T-06/T-09). */
   trackingNumber?: string;
+  /** Versanddienstleister (für korrekte Tracking-Links im Shop). */
+  carrier?: Carrier;
+  /** Fertiger Tracking-Link aus Carrier + Nummer (sofern Vorlage vorhanden). */
+  trackingUrl?: string;
 }
 
 /**
- * Bildet den ERP-Auftragsstatus auf den Shop-Status ab und hängt die
- * Trackingnummer an, sobald der Auftrag versendet ist (T-09). Tracking nur
+ * Bildet den ERP-Auftragsstatus auf den Shop-Status ab und hängt Tracking +
+ * Carrier + Tracking-Link an, sobald der Auftrag versendet ist (T-09). Tracking nur
  * im Status VERSENDET, damit der Kunde keine leere Sendungsverfolgung sieht.
  */
 export function buildShopStatusUpdate(input: {
   externalOrderNumber: string;
   status: OrderStatus;
   trackingNumber?: string | null;
+  carrier?: Carrier | null;
 }): ShopStatusUpdate {
   const status = STATUS_MAP[input.status];
   const out: ShopStatusUpdate = {
@@ -84,6 +90,9 @@ export function buildShopStatusUpdate(input: {
   };
   if (input.status === "VERSENDET" && input.trackingNumber) {
     out.trackingNumber = input.trackingNumber;
+    if (input.carrier) out.carrier = input.carrier;
+    const url = buildTrackingUrl(input.carrier, input.trackingNumber);
+    if (url) out.trackingUrl = url;
   }
   return out;
 }
