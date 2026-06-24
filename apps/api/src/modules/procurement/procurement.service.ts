@@ -12,11 +12,19 @@ import {
   type RequiredComponent,
 } from "@texma/shared";
 
+export interface ProductionRef {
+  id: string;
+  number: string;
+  orderNumber: string | null;
+}
+
 export interface ProcurementRepository {
   /** Benötigte Komponenten (aus den Bestellpositionen der PA-Bestellungen). */
   requiredComponents(productionId: string): Promise<RequiredComponent[]>;
   /** Gebuchte Wareneingänge (aus den Wareneingängen der PA-Bestellungen). */
   receivedComponents(productionId: string): Promise<GoodsReceiptLine[]>;
+  /** Produktionsaufträge für die Auswahl (neueste zuerst) — ID-Picker statt Freitext. */
+  listProductions(): Promise<ProductionRef[]>;
 }
 
 export interface ProductionStartStatus {
@@ -28,6 +36,10 @@ export interface ProductionStartStatus {
 
 export class ProcurementService {
   constructor(private readonly repo: ProcurementRepository) {}
+
+  listProductions(): Promise<ProductionRef[]> {
+    return this.repo.listProductions();
+  }
 
   async productionStartStatus(productionId: string): Promise<ProductionStartStatus> {
     const [required, receipts] = await Promise.all([

@@ -438,6 +438,8 @@ export const appRouter = router({
   }),
 
   procurement: router({
+    /** Produktionsaufträge für die Auswahl (ID-Picker statt Freitext). */
+    listProductions: protectedProcedure.query(({ ctx }) => ctx.procurement.listProductions()),
     /** Produktionsstart-Gate (T-05): Komponentenstatus + canStart (operativ, keine Preise). */
     productionStartStatus: protectedProcedure
       .input(z.object({ productionId: z.string().min(1) }))

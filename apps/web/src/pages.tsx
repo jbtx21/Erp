@@ -436,7 +436,7 @@ function CreatePOButton({ reload }: { reload: () => Promise<void> }): JSX.Elemen
 }
 
 export const ProcurementPage = (): JSX.Element => {
-  const [pid, setPid] = useState("PA-2026-0001");
+  const [pid, setPid] = useState("");
   const [data, setData] = useState<unknown>(null);
   const [err, setErr] = useState<string | null>(null);
   return (
@@ -444,8 +444,8 @@ export const ProcurementPage = (): JSX.Element => {
       <Title order={3}>Beschaffung — Produktionsstart-Status</Title>
       <Text size="sm" c="dimmed" mt={4}>Multi-Lieferant: Start erst, wenn alle Wareneingänge da sind (T-05).</Text>
       <Group mt="sm" gap="xs" align="end">
-        <TextInput label="Produktions-ID" value={pid} onChange={(e) => setPid(e.currentTarget.value)} />
-        <Button size="sm" onClick={async () => {
+        <ProductionPicker value={pid} onChange={setPid} />
+        <Button size="sm" disabled={!pid} onClick={async () => {
           setErr(null);
           try { setData(await trpc.procurement.productionStartStatus.query({ productionId: pid })); }
           catch (e) { setErr(errMsg(e)); }
@@ -1103,6 +1103,20 @@ export function HauptartikelPicker({ onPick }: { onPick: (e: { articleId: string
         setValue(null);
       }} />
   );
+}
+
+// Auftrags-Picker: durchsuchbare Auswahl aus den Aufträgen (statt Auftrags-ID tippen).
+export function OrderPicker({ value, onChange, label = "Auftrag", w = 260 }: { value: string; onChange: (id: string) => void; label?: string; w?: number }): JSX.Element {
+  const [orders, setOrders] = useState<{ value: string; label: string }[]>([]);
+  useEffect(() => { void trpc.shopOrders.list.query({ limit: 200 }).then((rows) => setOrders((rows as Row[]).map((r) => ({ value: String(r.id), label: `${String(r.number ?? r.id)}${r.companyName ? ` · ${String(r.companyName)}` : ""}` })))).catch(() => { /* ignore */ }); }, []);
+  return <Select label={label} searchable placeholder="Auftrag wählen…" w={w} value={value || null} onChange={(v) => onChange(v ?? "")} data={orders} nothingFoundMessage="Kein Auftrag" />;
+}
+
+// Produktionsauftrags-Picker (statt Produktions-ID tippen).
+export function ProductionPicker({ value, onChange, label = "Produktionsauftrag", w = 280 }: { value: string; onChange: (id: string) => void; label?: string; w?: number }): JSX.Element {
+  const [prods, setProds] = useState<{ value: string; label: string }[]>([]);
+  useEffect(() => { void trpc.procurement.listProductions.query().then((rows) => setProds(rows.map((p) => ({ value: p.id, label: `${p.number}${p.orderNumber ? ` · Auftrag ${p.orderNumber}` : ""}` })))).catch(() => { /* ignore */ }); }, []);
+  return <Select label={label} searchable placeholder="Produktionsauftrag wählen…" w={w} value={value || null} onChange={(v) => onChange(v ?? "")} data={prods} nothingFoundMessage="Kein Produktionsauftrag" />;
 }
 
 // Kunden-Picker: durchsuchbare Auswahl aus dem Kundenstamm (statt Firmen-ID tippen).
@@ -3430,7 +3444,7 @@ export function PricingPage(): JSX.Element {
 }
 
 export const ReklamationPage = (): JSX.Element => {
-  const [orderId, setOrderId] = useState("ord-1");
+  const [orderId, setOrderId] = useState("");
   const [lines, setLines] = useState<Row[]>([]);
   const [lineId, setLineId] = useState("");
   const [cause, setCause] = useState("INTERN");
@@ -3454,8 +3468,8 @@ export const ReklamationPage = (): JSX.Element => {
       <Title order={3}>Reklamation</Title>
       <Text size="sm" c="dimmed" mt={4}>Reklamation je Auftragsposition → Folgevorgang (Gutschrift/Nachproduktion, Kap. 20).</Text>
       <Group mt="sm" gap="xs" align="end">
-        <TextInput label="Auftrags-ID" value={orderId} onChange={(e) => setOrderId(e.currentTarget.value)} placeholder="ord-1" />
-        <Button variant="default" onClick={() => void loadLines()}>Positionen laden</Button>
+        <OrderPicker value={orderId} onChange={setOrderId} />
+        <Button variant="default" disabled={!orderId} onClick={() => void loadLines()}>Positionen laden</Button>
       </Group>
 
       {lines.length > 0 && (
@@ -4650,7 +4664,11 @@ export function LagerPage(): JSX.Element {
         <Box p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
           <Text size="sm" fw={600}>Zugang / Abgang (beliebiges Lager)</Text>
           <Group gap="xs" align="end" mt="xs">
-            <TextInput label="Varianten-ID" value={variantId} onChange={(e) => setVariantId(e.currentTarget.value)} w={170} />
+            <Box>
+              <Text size="xs" fw={500} mb={2}>Artikel / Variante</Text>
+              <ArticlePicker onPick={(e) => setVariantId(e.variantId)} />
+              {variantId && <Text size="xs" c="dimmed" mt={2}>gewählt: {variantId}</Text>}
+            </Box>
             <Select label="Lager" value={whId} onChange={(v) => v && setWhId(v)} w={190} searchable
               data={warehouses.filter((w) => w.active).map((w) => ({ value: w.id, label: `${w.code} · ${w.name}` }))} />
             <NumberInput label="Menge (+/−)" value={delta} onChange={(v) => setDelta(Number(v) || 0)} w={120} />
@@ -4665,7 +4683,11 @@ export function LagerPage(): JSX.Element {
         <Box p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
           <Text size="sm" fw={600}>Inventur (Showroom)</Text>
           <Group gap="xs" align="end" mt="xs">
-            <TextInput label="Varianten-ID" value={countVariant} onChange={(e) => setCountVariant(e.currentTarget.value)} w={170} />
+            <Box>
+              <Text size="xs" fw={500} mb={2}>Artikel / Variante</Text>
+              <ArticlePicker onPick={(e) => setCountVariant(e.variantId)} />
+              {countVariant && <Text size="xs" c="dimmed" mt={2}>gewählt: {countVariant}</Text>}
+            </Box>
             <Select label="Lager" value={countLager} onChange={(v) => v && setCountLager(v)} data={LAGER.map((l) => ({ value: l.value, label: l.label }))} w={150} />
             <NumberInput label="Gezählt" value={counted} onChange={(v) => setCounted(Number(v) || 0)} min={0} w={110} />
             <Button disabled={!countVariant.trim()} onClick={async () => {

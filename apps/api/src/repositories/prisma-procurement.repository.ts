@@ -4,9 +4,17 @@
 
 import { prisma } from "@texma/db";
 import type { GoodsReceiptLine, RequiredComponent } from "@texma/shared";
-import type { ProcurementRepository } from "../modules/procurement/procurement.service.js";
+import type { ProcurementRepository, ProductionRef } from "../modules/procurement/procurement.service.js";
 
 export class PrismaProcurementRepository implements ProcurementRepository {
+  async listProductions(): Promise<ProductionRef[]> {
+    const rows = await prisma.productionOrder.findMany({
+      orderBy: { number: "desc" },
+      select: { id: true, number: true, order: { select: { number: true } } },
+    });
+    return rows.map((p) => ({ id: p.id, number: p.number, orderNumber: p.order?.number ?? null }));
+  }
+
   async requiredComponents(productionId: string): Promise<RequiredComponent[]> {
     const lines = await prisma.purchaseOrderLine.findMany({
       where: { purchaseOrder: { productionId } },
