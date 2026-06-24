@@ -10,17 +10,36 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
   }
 
   async createOrder(input: { number: string; companyId: string; quoteId?: string; lines: SalesLine[] }): Promise<{ id: string }> {
-    const order = await prisma.order.create({
-      data: {
-        number: input.number,
-        companyId: input.companyId,
-        quoteId: input.quoteId,
-        status: "ANGELEGT",
-        lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, dbCents: l.dbCents ?? null, kind: (l.kind ?? "TEXTIL") as never, variantId: l.variantId ?? null })) },
-      },
-      select: { id: true },
+    const needsMaterialize = input.lines.some((l) => l.materializeArticle);
+    return prisma.$transaction(async (tx) => {
+      // Temporär erfasste Produktpositionen zu festen Artikeln machen (Article+Variant,
+      // STANDARD-Preis = VK), dann die Auftragsposition mit der neuen Variante verknüpfen.
+      const stdId = needsMaterialize
+        ? (await tx.priceGroup.findFirst({ where: { kind: "STANDARD" }, select: { id: true } }))?.id ?? null
+        : null;
+      const variantByIndex = new Map<number, string>();
+      for (let i = 0; i < input.lines.length; i++) {
+        const m = input.lines[i]!.materializeArticle;
+        if (!m) continue;
+        const art = await tx.article.create({
+          data: { sku: m.sku, name: m.name, isVeredelung: m.isVeredelung, variants: { create: { sku: m.sku } } },
+          select: { variants: { select: { id: true } } },
+        });
+        const variantId = art.variants[0]!.id;
+        variantByIndex.set(i, variantId);
+        if (stdId) await tx.priceGroupPrice.create({ data: { variantId, priceGroupId: stdId, netCents: input.lines[i]!.unitNetCents } });
+      }
+      return tx.order.create({
+        data: {
+          number: input.number,
+          companyId: input.companyId,
+          quoteId: input.quoteId,
+          status: "ANGELEGT",
+          lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, dbCents: l.dbCents ?? null, kind: (l.kind ?? "TEXTIL") as never, variantId: l.variantId ?? variantByIndex.get(i) ?? null })) },
+        },
+        select: { id: true },
+      });
     });
-    return order;
   }
 
   async conversionPlan(quoteId: string): Promise<ConversionPlan | null> {

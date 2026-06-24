@@ -13,6 +13,12 @@ export interface SalesLine {
   kind?: PositionKind;
   variantId?: string;
   dbCents?: number | null; // Deckungsbeitrag je Stück (VK − EK), Kap. 4.4
+  /**
+   * Materialisierung: temporär (frei) erfasste Produktposition beim Wandeln in einen
+   * festen Artikel überführen (Article+Variant anlegen, STANDARD-Preis = VK). Der Repo
+   * legt den Artikel an und verknüpft die Auftragsposition mit der neuen Variante.
+   */
+  materializeArticle?: { sku: string; name: string; isVeredelung: boolean };
 }
 
 export interface CreatedSalesOrder {
@@ -96,6 +102,7 @@ export class SalesOrderService {
     if (!plan) throw new SalesOrderError("Angebot nicht gefunden.");
     if (plan.existingOrderId) throw new SalesOrderError("Angebot wurde bereits in einen Auftrag umgewandelt.");
 
+    const number = await this.numbering.next("ORDER");
     const lines: SalesLine[] = plan.lines
       .filter((l) => !l.isAlternative)
       .map((l) => {
@@ -103,16 +110,20 @@ export class SalesOrderService {
         if (l.articleId && !variantId) {
           throw new SalesOrderError(`Position ${l.position} „${l.articleName ?? l.description}": Farbe & Größe wählen.`);
         }
-        return { description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, kind: l.kind, variantId, dbCents: l.dbCents };
+        // Temporär (frei) erfasste Produktposition (TEXTIL/VEREDELUNG ohne Variante/Artikel)
+        // → beim Wandeln immer als fester Artikel anlegen. SONSTIGE bleibt freie Position.
+        const materialize = !variantId && !l.articleId && (l.kind === "TEXTIL" || l.kind === "VEREDELUNG");
+        return {
+          description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, kind: l.kind, variantId, dbCents: l.dbCents,
+          ...(materialize ? { materializeArticle: { sku: `${number}-P${l.position}`, name: l.description.trim(), isVeredelung: l.kind === "VEREDELUNG" } } : {}),
+        };
       });
     validateLines(lines);
-
-    const number = await this.numbering.next("ORDER");
     const { id } = await this.repo.createOrder({ number, companyId: plan.companyId, quoteId, lines });
     await this.repo.markQuoteAccepted(quoteId);
     await this.audit.append(buildEntry({
       entity: "Order", entityId: id, action: "CREATE",
-      after: { number, fromQuote: quoteId, lineCount: lines.length, droppedAlternatives: plan.lines.filter((l) => l.isAlternative).length },
+      after: { number, fromQuote: quoteId, lineCount: lines.length, droppedAlternatives: plan.lines.filter((l) => l.isAlternative).length, materialisierteArtikel: lines.filter((l) => l.materializeArticle).length },
     }));
     return { id, number };
   }

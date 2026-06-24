@@ -60,6 +60,33 @@ describe("SalesOrderService (Auftragserstellung)", () => {
     expect(repo.orders[0]?.lines[0]?.variantId).toBe("var-rot-l");
   });
 
+  it("wandelt temporär erfasste Produktpositionen (TEXTIL/VEREDELUNG) in feste Artikel", async () => {
+    const { svc, repo } = setup();
+    repo.addQuote({
+      id: "q-1", companyId: "co-1", accepted: false,
+      lines: [
+        { position: 1, description: "Sonder-Polo", qty: 5, unitNetCents: 1500, kind: "TEXTIL" }, // frei → Artikel
+        { position: 2, description: "Sonderstick", qty: 5, unitNetCents: 400, kind: "VEREDELUNG" }, // frei → Veredelungsartikel
+        { position: 3, description: "Versandkosten", qty: 1, unitNetCents: 590, kind: "SONSTIGE" }, // bleibt frei
+      ],
+    });
+    const res = await svc.convertQuote("q-1");
+    const lines = repo.orders[0]!.lines;
+    expect(lines[0]?.materializeArticle).toMatchObject({ name: "Sonder-Polo", isVeredelung: false, sku: `${res.number}-P1` });
+    expect(lines[1]?.materializeArticle).toMatchObject({ name: "Sonderstick", isVeredelung: true });
+    expect(lines[2]?.materializeArticle).toBeUndefined(); // SONSTIGE bleibt freie Position
+  });
+
+  it("materialisiert KEINE Position, die bereits Variante oder Artikel hat", async () => {
+    const { svc, repo } = setup();
+    repo.addQuote({
+      id: "q-1", companyId: "co-1", accepted: false,
+      lines: [{ position: 1, description: "Cap rot", qty: 3, unitNetCents: 900, kind: "TEXTIL", variantId: "var-cap-rot" }],
+    });
+    await svc.convertQuote("q-1");
+    expect(repo.orders[0]?.lines[0]?.materializeArticle).toBeUndefined();
+  });
+
   it("übernimmt konkrete Varianten direkt und lässt Alternativen weg", async () => {
     const { svc, repo } = setup();
     repo.addQuote({
