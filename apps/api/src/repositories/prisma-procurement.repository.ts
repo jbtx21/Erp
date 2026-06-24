@@ -15,6 +15,10 @@ export class PrismaProcurementRepository implements ProcurementRepository {
     return rows.map((p) => ({ id: p.id, number: p.number, orderNumber: p.order?.number ?? null }));
   }
 
+  async productionForOrder(orderId: string): Promise<{ id: string } | null> {
+    return prisma.productionOrder.findUnique({ where: { orderId }, select: { id: true } });
+  }
+
   async requiredComponents(productionId: string): Promise<RequiredComponent[]> {
     const lines = await prisma.purchaseOrderLine.findMany({
       where: { purchaseOrder: { productionId } },

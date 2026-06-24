@@ -13,6 +13,11 @@ export class InMemoryProcurementRepository implements ProcurementRepository {
     return Object.keys(this.required).map((id) => ({ id, number: id, orderNumber: null }));
   }
 
+  async productionForOrder(orderId: string): Promise<{ id: string } | null> {
+    // In Tests entspricht die Production-ID dem Auftrags-Key, falls vorhanden.
+    return this.required[orderId] ? { id: orderId } : null;
+  }
+
   async requiredComponents(productionId: string): Promise<RequiredComponent[]> {
     return this.required[productionId] ?? [];
   }

@@ -25,6 +25,8 @@ export interface ProcurementRepository {
   receivedComponents(productionId: string): Promise<GoodsReceiptLine[]>;
   /** Produktionsaufträge für die Auswahl (neueste zuerst) — ID-Picker statt Freitext. */
   listProductions(): Promise<ProductionRef[]>;
+  /** Produktionsauftrag eines Auftrags (für das Start-Gate); null = keiner angelegt. */
+  productionForOrder(orderId: string): Promise<{ id: string } | null>;
 }
 
 export interface ProductionStartStatus {
@@ -39,6 +41,20 @@ export class ProcurementService {
 
   listProductions(): Promise<ProductionRef[]> {
     return this.repo.listProductions();
+  }
+
+  /**
+   * Start-Gate (T-05) für den Auftrags-Statuswechsel → IN_PRODUKTION: blockiert nur, wenn
+   * ein Produktionsauftrag MIT Beschaffung existiert und der Wareneingang unvollständig ist.
+   * Ohne Produktionsauftrag oder ohne externe Komponenten greift kein Gate (nicht blockierend).
+   */
+  async startGateForOrder(orderId: string): Promise<{ blocked: boolean; reason?: string }> {
+    const prod = await this.repo.productionForOrder(orderId);
+    if (!prod) return { blocked: false };
+    const status = await this.productionStartStatus(prod.id);
+    if (status.components.length === 0 || status.canStart) return { blocked: false };
+    const offen = status.components.filter((c) => !c.complete).map((c) => c.variantId);
+    return { blocked: true, reason: `Produktionsstart gesperrt (T-05): Wareneingang unvollständig für ${offen.length} Komponente(n). Erst alle Wareneingänge buchen.` };
   }
 
   async productionStartStatus(productionId: string): Promise<ProductionStartStatus> {

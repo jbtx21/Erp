@@ -195,6 +195,12 @@ export const appRouter = router({
       }))
       .mutation(async ({ input, ctx }) => {
         try {
+          // Produktionsstart-Gate (T-05): → IN_PRODUKTION nur, wenn der Wareneingang der
+          // zugehörigen Beschaffung vollständig ist (greift nur bei Produktion mit Bestellungen).
+          if (input.to === "IN_PRODUKTION") {
+            const gate = await ctx.procurement.startGateForOrder(input.orderId);
+            if (gate.blocked) throw new TRPCError({ code: "CONFLICT", message: gate.reason ?? "Produktionsstart gesperrt." });
+          }
           const res = await ctx.orderWorkflow.transition(input.orderId, input.to);
           // Versand-Verkettung: → VERSENDET erzeugt automatisch einen Lieferschein über alle
           // offenen Restmengen (bucht Bestandsabgang + setzt lieferstatus). Kein „versendet

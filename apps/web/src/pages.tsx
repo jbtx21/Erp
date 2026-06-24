@@ -97,7 +97,10 @@ export function AutoTable({ rows, hide = [], action, onRowClick, highlightId }: 
   // Treffer aus der globalen Suche in den Sichtbereich rollen (Deep-Link).
   useEffect(() => { if (highlightId && hlRef.current) hlRef.current.scrollIntoView({ block: "center", behavior: "smooth" }); }, [highlightId, rows]);
   if (!rows || rows.length === 0) return <Text c="dimmed" mt="sm">Keine Daten.</Text>;
-  const cols = Object.keys(rows[0] as object).filter((k) => !hide.includes(k));
+  // Rohe cuid-`id`-Spalte ausblenden, sobald eine sprechende `number` vorhanden ist
+  // (QA: kryptische IDs neben Belegnummern). Klick/Highlight nutzen r.id intern weiter.
+  const hasNumber = "number" in (rows[0] as object) && Boolean((rows[0] as Row).number);
+  const cols = Object.keys(rows[0] as object).filter((k) => !hide.includes(k) && !(k === "id" && hasNumber));
   // Breite Tabellen (v. a. Aufträge mit Status-Aktionen) horizontal scrollbar halten,
   // damit die Aktionsspalte rechts nie abgeschnitten wird (QA #13).
   return (
