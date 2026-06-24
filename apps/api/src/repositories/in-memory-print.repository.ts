@@ -10,6 +10,7 @@ export class InMemoryPrintRepository implements PrintRepository {
   orderConfirmations: Record<string, OrderConfirmationPrintData> = {};
   briefkopfLines: string[] = [];
   async deliveryNoteForPrint(id: string): Promise<DeliveryNotePrintData | null> { return this.deliveryNotes[id] ?? null; }
+  async sampleLoanForPrint(loanId: string): Promise<DeliveryNotePrintData | null> { return this.deliveryNotes[loanId] ?? null; }
   async invoiceForPrint(id: string): Promise<InvoicePrintData | null> { return this.invoices[id] ?? null; }
   async laufzettelForPrint(orderId: string): Promise<LaufzettelPrintData | null> { return this.laufzettel[orderId] ?? null; }
   async quoteForPrint(id: string): Promise<QuotePrintData | null> { return this.quotes[id] ?? null; }

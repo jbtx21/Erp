@@ -59,6 +59,29 @@ export class PrismaPrintRepository implements PrintRepository {
     };
   }
 
+  async sampleLoanForPrint(loanId: string): Promise<DeliveryNotePrintData | null> {
+    const l = await prisma.sampleLoan.findUnique({
+      where: { id: loanId },
+      select: {
+        ausgegebenAm: true, menge: true,
+        company: { select: { name: true, street: true, zip: true, city: true } },
+        variant: { select: { sku: true, article: { select: { name: true } } } },
+        lines: { select: { menge: true, description: true } },
+      },
+    });
+    if (!l) return null;
+    // Mehrartikel-Leihe → lines; Einzel-Leihe → Variante als eine Position.
+    const positionen = l.lines.length > 0
+      ? l.lines.map((p) => ({ menge: p.menge, bezeichnung: p.description }))
+      : (l.variant ? [{ menge: l.menge ?? 1, bezeichnung: `${l.variant.article.name} (${l.variant.sku})` }] : []);
+    return {
+      number: `MUSTER-${loanId.slice(-6)}`,
+      createdAt: l.ausgegebenAm,
+      empfaenger: addressLines(l.company.name, l.company.street && l.company.zip && l.company.city ? { street: l.company.street, zip: l.company.zip, city: l.company.city } : null),
+      positionen,
+    };
+  }
+
   async laufzettelForPrint(orderId: string): Promise<LaufzettelPrintData | null> {
     const o = await prisma.order.findUnique({
       where: { id: orderId },

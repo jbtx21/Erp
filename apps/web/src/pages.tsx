@@ -669,6 +669,10 @@ export function SampleLoansPage({ onOpen }: { onOpen?: (navKey: string, id: stri
       <AutoTable rows={rows} hide={["lines"]} action={(r) => (
         <Group gap={4} justify="flex-end" wrap="nowrap">
           {onOpen && r.quoteId ? <Button size="compact-xs" variant="subtle" onClick={() => onOpen("quotes", String(r.quoteId))} title="zugeordnetes Angebot öffnen">↗ Angebot</Button> : null}
+          <Button size="compact-xs" variant="default" onClick={() => void act(async () => {
+            const pdf = await trpc.print.sampleLoanLieferschein.query({ loanId: String(r.id) });
+            downloadBase64(pdf.filename, pdf.base64, "application/pdf");
+          })}>Lieferschein</Button>
           {String(r.status) === "VERLIEHEN"
             ? <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.sampleLoans.returnSample.mutate({ loanId: String(r.id) }))}>Zurückgenommen</Button>
             : <Text size="xs" c="dimmed">—</Text>}

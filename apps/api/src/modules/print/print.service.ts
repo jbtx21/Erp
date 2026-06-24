@@ -57,6 +57,8 @@ export interface OrderConfirmationPrintData {
 
 export interface PrintRepository {
   deliveryNoteForPrint(id: string): Promise<DeliveryNotePrintData | null>;
+  /** Muster-Leihgut als Lieferschein-Daten (Empfänger + Positionen, ohne Preise). */
+  sampleLoanForPrint(loanId: string): Promise<DeliveryNotePrintData | null>;
   invoiceForPrint(id: string): Promise<InvoicePrintData | null>;
   laufzettelForPrint(orderId: string): Promise<LaufzettelPrintData | null>;
   quoteForPrint(id: string): Promise<QuotePrintData | null>;
@@ -83,6 +85,18 @@ export class PrintService {
       nummer: d.number, datum: d.createdAt, empfaenger: d.empfaenger, positionen: d.positionen, absender,
     }));
     return { filename: `Lieferschein-${d.number}.pdf`, base64: Buffer.from(bytes).toString("base64") };
+  }
+
+  /** Lieferschein für eine Muster-Leihe (Leihgut, ohne Preise). */
+  async sampleLoanLieferscheinPdf(loanId: string): Promise<PdfResult> {
+    const d = await this.repo.sampleLoanForPrint(loanId);
+    if (!d) throw new PrintError(`Muster-Leihe ${loanId} nicht gefunden.`);
+    const absender = await this.repo.briefkopf();
+    const bytes = await renderBelegPdf(lieferscheinDokument({
+      nummer: d.number, datum: d.createdAt, empfaenger: d.empfaenger, positionen: d.positionen, absender,
+      hinweise: ["Muster-Leihgut — Rückgabe innerhalb 21 Tagen, sonst Musterrechnung zum Listenpreis (B5)."],
+    }));
+    return { filename: `Leihgut-Lieferschein-${d.number}.pdf`, base64: Buffer.from(bytes).toString("base64") };
   }
 
   /** Laufzettel/Produktionszettel zum Auftrag (Workflow-Schritt LAUFZETTEL). */

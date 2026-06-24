@@ -1567,6 +1567,12 @@ export const appRouter = router({
         try { return await ctx.print.deliveryNotePdf(input.deliveryNoteId); }
         catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
       }),
+    sampleLoanLieferschein: roleProcedure(...allRoles)
+      .input(z.object({ loanId: z.string().min(1) }))
+      .query(async ({ input, ctx }) => {
+        try { return await ctx.print.sampleLoanLieferscheinPdf(input.loanId); }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
+      }),
     invoice: roleProcedure(...supplierRoles)
       .input(z.object({ invoiceId: z.string().min(1) }))
       .query(async ({ input, ctx }) => {
