@@ -63,6 +63,64 @@ export function BarChart({
   );
 }
 
+/** Mehr-Serien-Liniendiagramm mit Legende (z. B. Ertrag/Aufwand/Ergebnis in der GuV). */
+export interface LineSeries {
+  name: string;
+  color: string;
+  data: ChartDatum[];
+}
+export function MultiLineChart({
+  series,
+  format,
+  height = 240,
+  width = 620,
+}: {
+  series: ReadonlyArray<LineSeries>;
+  format: (v: number) => string;
+  height?: number;
+  width?: number;
+}): JSX.Element {
+  const labels = series[0]?.data.map((d) => d.label) ?? [];
+  if (labels.length === 0) return <p style={{ color: T.text3 }}>Keine Daten.</p>;
+  const pad = { top: 20, bottom: 40, left: 8, right: 16 };
+  const plotW = width - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
+  const allValues = series.flatMap((s) => s.data.map((d) => d.value));
+  const max = niceMax(Math.max(1, ...allValues));
+  const min = Math.min(0, ...allValues);
+  const span = max - min || 1;
+  const stepX = labels.length > 1 ? plotW / (labels.length - 1) : 0;
+  const xAt = (i: number): number => pad.left + (labels.length > 1 ? i * stepX : plotW / 2);
+  const yAt = (v: number): number => pad.top + plotH - ((v - min) / span) * plotH;
+  const zeroY = yAt(0);
+  return (
+    <div style={wrap}>
+      <svg width={width} height={height} role="img" aria-label="Liniendiagramm (mehrere Serien)">
+        <line x1={pad.left} y1={zeroY} x2={width - pad.right} y2={zeroY} stroke={AXIS} />
+        {series.map((s) => (
+          <path key={s.name} d={s.data.map((d, i) => `${i === 0 ? "M" : "L"} ${xAt(i).toFixed(1)} ${yAt(d.value).toFixed(1)}`).join(" ")} fill="none" stroke={s.color} strokeWidth={2} />
+        ))}
+        {series.map((s) => s.data.map((d, i) => (
+          <g key={`${s.name}-${d.label}`}>
+            <circle cx={xAt(i)} cy={yAt(d.value)} r={2.5} fill={s.color} />
+            <title>{`${s.name} · ${d.label}: ${format(d.value)}`}</title>
+          </g>
+        )))}
+        {labels.map((label, i) => (
+          <text key={label} x={xAt(i)} y={pad.top + plotH + 15} textAnchor="middle" fontSize={9} fill={T.text2}>{label}</text>
+        ))}
+      </svg>
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", paddingLeft: pad.left }}>
+        {series.map((s) => (
+          <span key={s.name} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: T.text2 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 2, background: s.color, display: "inline-block" }} />{s.name}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** Liniendiagramm über Perioden (z. B. Umsatzverlauf je Monat). */
 export function LineChart({
   data,

@@ -10,7 +10,7 @@ import { Banking } from "./Banking.js";
 import {
   CompaniesPage, CallLogsPage, CostCentersPage, DunningPage, InquiriesPage, IncomingInvoicesPage, LeadsPage, MailAccountsPage, OrdersPage, ProcurementPage, ProductionReportingPage,
   ProductsPage, PricingPage, EmailTemplatesPage, DashboardsPage, DataIoPage, EanImportPage, FinanceReportingPage, WareneingangPage, ZahlungenPage, NewsletterPage, OpportunitiesPage, CalendarPage, MessagesPage, AdminPage, ArchivePage, AuditLogPage, AutomationPage, TasksPage, HomePage, LagerPage, HrPage, IntegrationsPage, SecurityPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
-  LogosPage, AufschlagPage, AusschreibungenPage, NachkalkulationPage,
+  LogosPage, AufschlagPage, AusschreibungenPage, NachkalkulationPage, GuVReportPage,
 } from "./pages.js";
 import { trpc } from "./trpc.js";
 
@@ -33,6 +33,7 @@ const NAV: ReadonlyArray<{ group: string; icon: NavIconName; items: ReadonlyArra
   ] },
   { group: "Fertigung", icon: "produktion", items: [{ key: "subproduction", label: "Fremdvergabe" }, { key: "prodreport", label: "Produktions-Reporting" }] },
   { group: "Buchhaltung", icon: "finanzen", items: [
+    { key: "guv", label: "Gewinn- und Verlustrechnung" },
     { key: "zahlungen", label: "Zahlungseingänge" }, { key: "banking", label: "Banking" },
     { key: "finance", label: "Offene Posten (OP-Aging)" }, { key: "dunning", label: "Mahnwesen" },
     { key: "costcenters", label: "Kostenstellen" }, { key: "nachkalkfin", label: "Nachkalkulation" }, { key: "reporting", label: "Auswertungen" },
@@ -375,6 +376,7 @@ function Page({ k, role, userName, onNavigate, focusId }: { k: string; role: str
     case "logos": return <LogosPage />;
     case "aufschlag": return <AufschlagPage />;
     case "ausschreibungen": return <AusschreibungenPage />;
+    case "guv": return <GuVReportPage />;
     case "nachkalkfin": return <NachkalkulationPage />;
     case "subproduction": return <SubproductionPage />;
     case "prodreport": return <ProductionReportingPage />;

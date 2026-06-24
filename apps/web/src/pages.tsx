@@ -3,12 +3,13 @@
 // Bereiche mit wenig Code anbindbar sind. Interaktive Aktionen (Versand bestätigen,
 // Mahnlauf, Reorder→Bestellungen) sind je Seite ergänzt.
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Alert, Badge, Box, Button, Checkbox, Group, Loader, Modal, NumberInput, PasswordInput, Select, Switch, Table, Tabs, Text, Textarea, TextInput, Title } from "@mantine/core";
+import { Alert, Badge, Box, Button, Card, Checkbox, Group, Loader, Modal, NumberInput, PasswordInput, Select, SimpleGrid, Switch, Table, Tabs, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { validateVatId } from "@texma/shared/vat";
 import { trpc } from "./trpc.js";
 import { AufschlagsfaktorenSection, LogosStickereiSection, StickereiAusschreibungSection, StickereiStaffelnSection, Postcalc } from "./Differentiators.js";
 import { euro, numTd, statusMantineColor } from "./theme.js";
+import { MultiLineChart } from "./charts.js";
 
 type Row = Record<string, unknown>;
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
@@ -5149,6 +5150,138 @@ export function AusschreibungenPage(): JSX.Element {
       <Title order={2}>Stickerei-Ausschreibungen</Title>
       <Text size="sm" c="dimmed">Neues Logo an Stickerei-Partner ausschreiben und den günstigsten Anbieter wählen (Kap. 5.4).</Text>
       <StickereiAusschreibungSection />
+    </>
+  );
+}
+
+// Gewinn- und Verlustrechnung (GuV / P&L) — Report-Layout nach ERPNext-Vorbild:
+// Filterzeile → KPI-Karten (Ertrag − Aufwand = Ergebnis) → Mehr-Serien-Diagramm → Konten-Baum.
+// Ertrag aus Umsatzerlösen (reporting.revenueOverview), Aufwand aus Eingangsrechnungen.
+type GuvGran = "DAY" | "WEEK" | "MONTH" | "YEAR";
+const GUV_GRAN_LABEL: Record<GuvGran, string> = { DAY: "Täglich", WEEK: "Wöchentlich", MONTH: "Monatlich", YEAR: "Jährlich" };
+function guvBucketKey(at: Date, g: GuvGran): string {
+  const p2 = (n: number): string => String(n).padStart(2, "0");
+  const y = at.getUTCFullYear();
+  if (g === "YEAR") return String(y);
+  if (g === "MONTH") return `${y}-${p2(at.getUTCMonth() + 1)}`;
+  if (g === "DAY") return `${y}-${p2(at.getUTCMonth() + 1)}-${p2(at.getUTCDate())}`;
+  // WEEK: ISO-Woche
+  const d = new Date(Date.UTC(y, at.getUTCMonth(), at.getUTCDate()));
+  const day = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${d.getUTCFullYear()}-W${p2(week)}`;
+}
+export function GuVReportPage(): JSX.Element {
+  const [gran, setGran] = useState<GuvGran>("MONTH");
+  const [income, setIncome] = useState<Awaited<ReturnType<typeof trpc.reporting.revenueOverview.query>> | null>(null);
+  const [invoices, setInvoices] = useState<Awaited<ReturnType<typeof trpc.incomingInvoices.list.query>>>([]);
+  const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const reload = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [inc, invs] = await Promise.all([
+        trpc.reporting.revenueOverview.query({ granularity: gran }),
+        trpc.incomingInvoices.list.query({ limit: 200 }),
+      ]);
+      setIncome(inc); setInvoices(invs); setErr(null);
+    } catch (e) { setErr(errMsg(e)); } finally { setLoading(false); }
+  }, [gran]);
+  useEffect(() => { void reload(); }, [reload]);
+
+  const incomeByKey = new Map<string, number>((income?.buckets ?? []).map((b) => [b.key, b.netCents]));
+  const expenseByKey = new Map<string, number>();
+  for (const inv of invoices) {
+    const key = guvBucketKey(new Date(inv.receivedAt), gran);
+    expenseByKey.set(key, (expenseByKey.get(key) ?? 0) + inv.netCents);
+  }
+  const keys = [...new Set([...incomeByKey.keys(), ...expenseByKey.keys()])].sort();
+  const rows = keys.map((k) => {
+    const inc = incomeByKey.get(k) ?? 0;
+    const exp = expenseByKey.get(k) ?? 0;
+    return { key: k, income: inc, expense: exp, net: inc - exp };
+  });
+  const totalIncome = rows.reduce((s, r) => s + r.income, 0);
+  const totalExpense = rows.reduce((s, r) => s + r.expense, 0);
+  const totalNet = totalIncome - totalExpense;
+
+  const opChip = (sym: string): JSX.Element => (
+    <Box style={{ alignSelf: "center", border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, padding: "6px 12px", fontWeight: 700, color: "var(--mantine-color-dimmed)" }}>{sym}</Box>
+  );
+  const kpi = (label: string, cents: number, color?: string): JSX.Element => (
+    <Card withBorder padding="md" radius="md" style={{ flex: 1, minWidth: 180, textAlign: "center" }}>
+      <Text size="sm" c="dimmed">{label}</Text>
+      <Text fw={700} fz={28} mt={4} c={color}>{euro(cents)}</Text>
+    </Card>
+  );
+
+  return (
+    <>
+      <Group justify="space-between" align="center">
+        <Box>
+          <Title order={3}>Gewinn- und Verlustrechnung</Title>
+          <Text size="sm" c="dimmed" mt={2}>P&amp;L · Ertrag aus Umsatzerlösen, Aufwand aus erfassten Eingangsrechnungen.</Text>
+        </Box>
+        <Group gap="xs">
+          <Select w={150} value={gran} onChange={(v) => v && setGran(v as GuvGran)} data={(Object.keys(GUV_GRAN_LABEL) as GuvGran[]).map((g) => ({ value: g, label: GUV_GRAN_LABEL[g] }))} />
+          <Button variant="default" onClick={() => void reload()} loading={loading}>Aktualisieren</Button>
+        </Group>
+      </Group>
+
+      <Group gap="sm" mt="md" wrap="wrap">
+        <TextInput value="Texma GmbH" readOnly w={180} />
+        <TextInput value="Geschäftsjahr 2026" readOnly w={180} />
+        <TextInput value={`Periode: ${GUV_GRAN_LABEL[gran]}`} readOnly w={180} />
+        <TextInput value="Währung: EUR" readOnly w={150} />
+      </Group>
+
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+
+      <Group gap="sm" mt="lg" align="stretch" wrap="nowrap" style={{ overflowX: "auto" }}>
+        {kpi("Gesamtertrag", totalIncome)}
+        {opChip("−")}
+        {kpi("Gesamtaufwand", totalExpense)}
+        {opChip("=")}
+        {kpi(totalNet >= 0 ? "Jahresüberschuss" : "Jahresfehlbetrag", totalNet, totalNet >= 0 ? "teal" : "red")}
+      </Group>
+
+      <Box mt="lg">
+        <MultiLineChart
+          format={euro}
+          series={[
+            { name: "Ertrag", color: "#e64980", data: rows.map((r) => ({ label: r.key, value: r.income })) },
+            { name: "Aufwand", color: "#228be6", data: rows.map((r) => ({ label: r.key, value: r.expense })) },
+            { name: "Ergebnis", color: "#40c057", data: rows.map((r) => ({ label: r.key, value: r.net })) },
+          ]}
+        />
+      </Box>
+
+      <Title order={5} mt="lg">Konten</Title>
+      {rows.length === 0 ? (
+        <Text size="sm" c="dimmed" mt="xs">{loading ? "Lädt…" : "Keine Buchungen im Zeitraum."}</Text>
+      ) : (
+        <Box style={{ overflowX: "auto" }}>
+          <Table mt="xs" striped withTableBorder withColumnBorders style={{ minWidth: 480 }}>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Konto</Table.Th>
+                {rows.map((r) => <Table.Th key={r.key} style={{ textAlign: "right" }}>{r.key}</Table.Th>)}
+                <Table.Th style={{ textAlign: "right" }}>Gesamt</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              <Table.Tr><Table.Td fw={700}>▾ Ertrag</Table.Td>{rows.map((r) => <Table.Td key={r.key} style={numTd}>{euro(r.income)}</Table.Td>)}<Table.Td style={numTd} fw={700}>{euro(totalIncome)}</Table.Td></Table.Tr>
+              <Table.Tr><Table.Td pl="lg" c="dimmed">Umsatzerlöse</Table.Td>{rows.map((r) => <Table.Td key={r.key} style={numTd}>{euro(r.income)}</Table.Td>)}<Table.Td style={numTd}>{euro(totalIncome)}</Table.Td></Table.Tr>
+              <Table.Tr><Table.Td fw={700}>▾ Aufwand</Table.Td>{rows.map((r) => <Table.Td key={r.key} style={numTd}>{euro(r.expense)}</Table.Td>)}<Table.Td style={numTd} fw={700}>{euro(totalExpense)}</Table.Td></Table.Tr>
+              <Table.Tr><Table.Td pl="lg" c="dimmed">Wareneinsatz / Fremdleistungen</Table.Td>{rows.map((r) => <Table.Td key={r.key} style={numTd}>{euro(r.expense)}</Table.Td>)}<Table.Td style={numTd}>{euro(totalExpense)}</Table.Td></Table.Tr>
+              <Table.Tr><Table.Td fw={700}>Ergebnis</Table.Td>{rows.map((r) => <Table.Td key={r.key} style={numTd} c={r.net >= 0 ? "teal" : "red"}>{euro(r.net)}</Table.Td>)}<Table.Td style={numTd} fw={700} c={totalNet >= 0 ? "teal" : "red"}>{euro(totalNet)}</Table.Td></Table.Tr>
+            </Table.Tbody>
+          </Table>
+        </Box>
+      )}
     </>
   );
 }
