@@ -40,6 +40,7 @@ export class InMemoryQuoteRepository implements QuoteRepository {
       id: q.id, number: q.number, companyId: q.companyId, companyName: q.companyId, status: q.status,
       orderType: q.orderType, quotationTo: q.quotationTo, gueltigBisAm: q.gueltigBisAm, createdAt: q.createdAt,
       totalNetCents: q.totalNetCents, totalTaxCents: q.totalTaxCents, totalGrossCents: q.totalGrossCents, totalDbCents: q.totalDbCents,
+      converted: false,
     }));
   }
 

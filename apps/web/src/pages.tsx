@@ -98,27 +98,31 @@ export function AutoTable({ rows, hide = [], action, onRowClick, highlightId }: 
   useEffect(() => { if (highlightId && hlRef.current) hlRef.current.scrollIntoView({ block: "center", behavior: "smooth" }); }, [highlightId, rows]);
   if (!rows || rows.length === 0) return <Text c="dimmed" mt="sm">Keine Daten.</Text>;
   const cols = Object.keys(rows[0] as object).filter((k) => !hide.includes(k));
+  // Breite Tabellen (v. a. Aufträge mit Status-Aktionen) horizontal scrollbar halten,
+  // damit die Aktionsspalte rechts nie abgeschnitten wird (QA #13).
   return (
-    <Table striped highlightOnHover withTableBorder mt="sm" verticalSpacing="xs" fz="sm">
-      <Table.Thead>
-        <Table.Tr>
-          {cols.map((c) => <Table.Th key={c}>{colLabel(c)}</Table.Th>)}
-          {action && <Table.Th />}
-        </Table.Tr>
-      </Table.Thead>
-      <Table.Tbody>
-        {rows.map((r, i) => {
-          const hit = highlightId !== undefined && String(r.id) === highlightId;
-          return (
-            <Table.Tr key={i} ref={hit ? hlRef : undefined}
-              style={{ ...(onRowClick ? { cursor: "pointer" } : {}), ...(hit ? { background: "var(--mantine-color-yellow-1)" } : {}) }}>
-              {cols.map((c) => <Table.Td key={c} onClick={onRowClick ? () => onRowClick(r) : undefined}>{fmtCell(c, r[c])}</Table.Td>)}
-              {action && <Table.Td>{action(r)}</Table.Td>}
-            </Table.Tr>
-          );
-        })}
-      </Table.Tbody>
-    </Table>
+    <Table.ScrollContainer minWidth={action ? 820 : 600} mt="sm">
+      <Table striped highlightOnHover withTableBorder verticalSpacing="xs" fz="sm">
+        <Table.Thead>
+          <Table.Tr>
+            {cols.map((c) => <Table.Th key={c}>{colLabel(c)}</Table.Th>)}
+            {action && <Table.Th />}
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
+          {rows.map((r, i) => {
+            const hit = highlightId !== undefined && String(r.id) === highlightId;
+            return (
+              <Table.Tr key={i} ref={hit ? hlRef : undefined}
+                style={{ ...(onRowClick ? { cursor: "pointer" } : {}), ...(hit ? { background: "var(--mantine-color-yellow-1)" } : {}) }}>
+                {cols.map((c) => <Table.Td key={c} onClick={onRowClick ? () => onRowClick(r) : undefined}>{fmtCell(c, r[c])}</Table.Td>)}
+                {action && <Table.Td style={{ whiteSpace: "nowrap" }}>{action(r)}</Table.Td>}
+              </Table.Tr>
+            );
+          })}
+        </Table.Tbody>
+      </Table>
+    </Table.ScrollContainer>
   );
 }
 
@@ -1592,7 +1596,8 @@ export function QuotesPage(): JSX.Element {
         {status !== "ANGENOMMEN" && status !== "ABGELEHNT" && <Button size="compact-xs" variant="subtle" onClick={() => void startEdit(id)}>Bearbeiten</Button>}
         {status === "ENTWURF" && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.quotes.transition.mutate({ id, to: "VERSENDET" }))}>→ Versendet</Button>}
         {(status === "VERSENDET" || status === "NACHFASSEN") && <Button size="compact-xs" color="green" onClick={() => void act(() => trpc.quotes.transition.mutate({ id, to: "ANGENOMMEN" }))}>Angenommen</Button>}
-        {status === "ANGENOMMEN" && <Button size="compact-xs" color="blue" onClick={() => setConvertId(id)}>→ Auftrag</Button>}
+        {status === "ANGENOMMEN" && !r.converted && <Button size="compact-xs" color="blue" onClick={() => setConvertId(id)}>→ Auftrag</Button>}
+        {status === "ANGENOMMEN" && r.converted && <Badge size="sm" color="teal" variant="light">Auftrag erstellt</Badge>}
         {status !== "ANGENOMMEN" && status !== "ABGELEHNT" && (
           <Button size="compact-xs" color="red" variant="light" onClick={() => {
             const grund = typeof window !== "undefined" ? window.prompt("Ablehnen — Verlustgrund?") : null;
@@ -1766,7 +1771,7 @@ export function QuotesPage(): JSX.Element {
             <Table.Tr>
               <Table.Th>ID</Table.Th><Table.Th>Angebot für</Table.Th><Table.Th>Kundenname</Table.Th>
               <Table.Th>Datum</Table.Th><Table.Th>Bestellart</Table.Th><Table.Th>Status</Table.Th>
-              <Table.Th ta="right">Gesamtbetrag</Table.Th><Table.Th ta="right">DB</Table.Th><Table.Th></Table.Th>
+              <Table.Th ta="right">Netto</Table.Th><Table.Th ta="right">USt</Table.Th><Table.Th ta="right">Brutto</Table.Th><Table.Th ta="right">DB</Table.Th><Table.Th></Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -1779,11 +1784,13 @@ export function QuotesPage(): JSX.Element {
                 <Table.Td>{ORDER_TYPE_LABEL[r.orderType] ?? r.orderType}</Table.Td>
                 <Table.Td><StatusDot color={`var(--mantine-color-${QUOTE_STATUS_COLOR[r.status] ?? "gray"}-6)`} label={QUOTE_STATUS_LABEL[r.status] ?? r.status} /></Table.Td>
                 <Table.Td ta="right">{euro(r.totalNetCents)}</Table.Td>
+                <Table.Td ta="right"><Text size="sm" c="dimmed">{euro(r.totalTaxCents)}</Text></Table.Td>
+                <Table.Td ta="right"><Text size="sm" fw={600}>{euro(r.totalGrossCents)}</Text></Table.Td>
                 <Table.Td ta="right">{r.totalDbCents !== null ? <Text size="sm" c={r.totalDbCents >= 0 ? "teal" : "red"}>{euro(r.totalDbCents)}</Text> : <Text size="sm" c="dimmed">—</Text>}</Table.Td>
                 <Table.Td>{rowActions(r)}</Table.Td>
               </Table.Tr>
             ))}
-            {visible.length === 0 && <Table.Tr><Table.Td colSpan={9}><Text size="sm" c="dimmed">Kein Angebot passt zum Filter.</Text></Table.Td></Table.Tr>}
+            {visible.length === 0 && <Table.Tr><Table.Td colSpan={11}><Text size="sm" c="dimmed">Kein Angebot passt zum Filter.</Text></Table.Td></Table.Tr>}
           </Table.Tbody>
         </Table>
       )}

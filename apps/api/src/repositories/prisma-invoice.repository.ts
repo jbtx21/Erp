@@ -66,8 +66,14 @@ export class PrismaInvoiceRepository implements InvoiceRepository {
     });
   }
 
-  async listRecent(limit: number): Promise<Array<{ id: string; number: string; orderId: string | null; companyId: string; grossCents: number; issuedAt: Date }>> {
-    const rows = await prisma.invoice.findMany({ orderBy: { issuedAt: "desc" }, take: limit, select: { id: true, number: true, orderId: true, companyId: true, grossCents: true, issuedAt: true } });
-    return rows;
+  async listRecent(limit: number): Promise<Array<{ id: string; number: string; orderId: string | null; companyId: string; netCents: number; taxCents: number; grossCents: number; openCents: number | null; dueDate: Date | null; issuedAt: Date }>> {
+    const rows = await prisma.invoice.findMany({
+      orderBy: { issuedAt: "desc" }, take: limit,
+      select: { id: true, number: true, orderId: true, companyId: true, netCents: true, taxCents: true, grossCents: true, issuedAt: true, openItem: { select: { openCents: true, dueDate: true } } },
+    });
+    return rows.map((r) => {
+      const { openItem, ...rest } = r;
+      return { ...rest, openCents: openItem?.openCents ?? null, dueDate: openItem?.dueDate ?? null };
+    });
   }
 }

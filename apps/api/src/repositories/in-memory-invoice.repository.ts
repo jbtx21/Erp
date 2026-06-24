@@ -62,7 +62,7 @@ export class InMemoryInvoiceRepository implements InvoiceRepository {
     return { id };
   }
 
-  async listRecent(limit: number): Promise<Array<{ id: string; number: string; orderId: string | null; companyId: string; grossCents: number; issuedAt: Date }>> {
-    return [...this.invoices].reverse().slice(0, limit).map((i) => ({ id: i.id, number: i.number, orderId: i.orderId, companyId: i.companyId, grossCents: i.grossCents, issuedAt: i.issuedAt }));
+  async listRecent(limit: number): Promise<Array<{ id: string; number: string; orderId: string | null; companyId: string; netCents: number; taxCents: number; grossCents: number; openCents: number | null; dueDate: Date | null; issuedAt: Date }>> {
+    return [...this.invoices].reverse().slice(0, limit).map((i) => ({ id: i.id, number: i.number, orderId: i.orderId, companyId: i.companyId, netCents: i.netCents, taxCents: i.taxCents, grossCents: i.grossCents, openCents: null, dueDate: null, issuedAt: i.issuedAt }));
   }
 }

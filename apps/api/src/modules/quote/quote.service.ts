@@ -25,6 +25,7 @@ export interface QuoteRow {
   totalTaxCents: number; // USt-Summe (je Satz aggregiert)
   totalGrossCents: number; // Bruttosumme (Netto + USt)
   totalDbCents: number | null; // Summe Deckungsbeitrag (null, wenn keine Position EK hat)
+  converted: boolean; // true, sobald ein Auftrag aus dem Angebot erzeugt wurde (QA #16)
 }
 
 export interface CreateQuoteInput {

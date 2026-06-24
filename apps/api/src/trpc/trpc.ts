@@ -159,7 +159,27 @@ export interface Context {
   loginRateLimiter?: FixedWindowRateLimiter;
 }
 
-const t = initTRPC.context<Context>().create();
+/**
+ * Übersetzt rohe Datenbank-/Prisma-Fehlermeldungen in benutzerfreundliche deutsche
+ * Texte, damit niemals technischer Klartext („Unique constraint failed on the fields:
+ * (number)", „Invalid prisma.x.create()") in der UI landet (QA-Befund). Greift app-weit
+ * über den errorFormatter — unabhängig davon, ob eine Procedure den Fehler selbst fängt.
+ */
+function friendlyDbError(msg: string): string | null {
+  if (/Unique constraint failed/i.test(msg)) return "Dieser Eintrag existiert bereits (eindeutiges Feld verletzt). Bitte Eingaben prüfen.";
+  if (/Foreign key constraint/i.test(msg)) return "Ein verknüpfter Datensatz fehlt oder ist ungültig (z. B. unbekannte ID).";
+  if (/Record to (update|delete).*not exist|No record was found|NotFoundError/i.test(msg)) return "Datensatz nicht gefunden.";
+  if (/Invalid `?prisma\.|\bprisma\.[a-z]/i.test(msg)) return "Datenbank-Fehler — bitte Eingaben prüfen.";
+  return null;
+}
+
+const t = initTRPC.context<Context>().create({
+  errorFormatter({ shape, error }) {
+    const causeMsg = error.cause instanceof Error ? error.cause.message : "";
+    const friendly = friendlyDbError(causeMsg) ?? friendlyDbError(shape.message);
+    return friendly ? { ...shape, message: friendly } : shape;
+  },
+});
 
 export const router = t.router;
 export const publicProcedure = t.procedure;

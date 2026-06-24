@@ -56,7 +56,7 @@ export interface InvoiceRepository {
     grossCents: number;
     dueDate: Date;
   }): Promise<{ id: string }>;
-  listRecent(limit: number): Promise<Array<{ id: string; number: string; orderId: string | null; companyId: string; grossCents: number; issuedAt: Date }>>;
+  listRecent(limit: number): Promise<Array<{ id: string; number: string; orderId: string | null; companyId: string; netCents: number; taxCents: number; grossCents: number; openCents: number | null; dueDate: Date | null; issuedAt: Date }>>;
 }
 
 export class InvoiceService {
@@ -128,7 +128,7 @@ export class InvoiceService {
     return { id, number, amountCents: remaining };
   }
 
-  listRecent(limit = 50): Promise<Array<{ id: string; number: string; orderId: string | null; companyId: string; grossCents: number; issuedAt: Date }>> {
+  listRecent(limit = 50): Promise<Array<{ id: string; number: string; orderId: string | null; companyId: string; netCents: number; taxCents: number; grossCents: number; openCents: number | null; dueDate: Date | null; issuedAt: Date }>> {
     return this.repo.listRecent(limit);
   }
 }

@@ -14,7 +14,7 @@ export class PrismaQuoteRepository implements QuoteRepository {
   async list(): Promise<QuoteRow[]> {
     const rows = await prisma.quote.findMany({
       orderBy: { createdAt: "desc" },
-      select: { id: true, number: true, companyId: true, status: true, orderType: true, quotationTo: true, gueltigBisAm: true, createdAt: true, company: { select: { name: true } }, lines: { select: { qty: true, unitNetCents: true, taxRatePct: true, dbCents: true, isAlternative: true } } },
+      select: { id: true, number: true, companyId: true, status: true, orderType: true, quotationTo: true, gueltigBisAm: true, createdAt: true, company: { select: { name: true } }, order: { select: { id: true } }, lines: { select: { qty: true, unitNetCents: true, taxRatePct: true, dbCents: true, isAlternative: true } } },
     });
     return rows.map((q) => {
       const t = buildQuoteTotals(q.lines.map((l) => ({ qty: l.qty, unitNetCents: l.unitNetCents, taxRatePct: l.taxRatePct, dbCents: l.dbCents, isAlternative: l.isAlternative })));
@@ -22,6 +22,7 @@ export class PrismaQuoteRepository implements QuoteRepository {
         id: q.id, number: q.number, companyId: q.companyId, companyName: q.company.name, status: q.status as QuoteStatus,
         orderType: q.orderType, quotationTo: q.quotationTo, gueltigBisAm: q.gueltigBisAm, createdAt: q.createdAt,
         totalNetCents: t.netCents, totalTaxCents: t.taxCents, totalGrossCents: t.grossCents, totalDbCents: t.totalDbCents,
+        converted: q.order !== null,
       };
     });
   }
