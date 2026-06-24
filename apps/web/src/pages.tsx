@@ -736,7 +736,7 @@ export type PositionKind = "TEXTIL" | "VEREDELUNG" | "SONSTIGE";
 // Eine Position kann auf eine konkrete Variante (variantId) ODER nur auf einen
 // Hauptartikel (articleId, Farbe×Größe noch offen) verweisen; isAlternative kennzeichnet
 // ein unverbindliches Alternativangebot (wird beim Wandeln in den Auftrag weggelassen).
-export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind; variantId?: string; articleId?: string; isAlternative?: boolean; ekEuro?: number; isBundle?: boolean; rabattPct?: number }
+export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind; variantId?: string; articleId?: string; isAlternative?: boolean; ekEuro?: number; isBundle?: boolean; rabattPct?: number; taxRatePct?: number }
 
 // Artikel-Picker: durchsuchbare Auswahl aus dem Artikelstamm (ERPNext „Link field").
 // Bei Auswahl wird eine Position vorbefüllt (Bezeichnung, Standardpreis, Variante).
@@ -1111,6 +1111,8 @@ export function LinesEditor({ lines, onChange, quoteMode = false, companyId }: {
           <NumberInput label={i === 0 ? "EK (€)" : undefined} value={l.ekEuro ?? ""} onChange={(v) => set(i, { ekEuro: v === "" ? undefined : Number(v) })} min={0} decimalScale={2} w={90} placeholder="—" />
           <NumberInput label={i === 0 ? "VK (€)" : undefined} value={l.euro} onChange={(v) => set(i, { euro: Number(v) || 0 })} min={0} decimalScale={2} w={90} />
           <NumberInput label={i === 0 ? "Rabatt %" : undefined} value={l.rabattPct ?? ""} onChange={(v) => set(i, { rabattPct: v === "" ? undefined : Math.min(100, Math.max(0, Number(v))) })} min={0} max={100} decimalScale={1} w={80} placeholder="0" />
+          <Select label={i === 0 ? "USt" : undefined} w={80} value={String(l.taxRatePct ?? 19)} onChange={(v) => set(i, { taxRatePct: Number(v) })}
+            data={[{ value: "19", label: "19 %" }, { value: "7", label: "7 %" }, { value: "0", label: "0 %" }]} title="Umsatzsteuersatz dieser Position" />
           {hasRabatt && <Text size="xs" c="dimmed" title="Netto-Einzelpreis nach Rabatt">= {euro(Math.round(effEuro * 100))}</Text>}
           {db !== null && <Badge color={db >= 0 ? "teal" : "red"} variant="light" size="sm" title="Deckungsbeitrag (VK nach Rabatt − EK) × Menge">DB {euro(db)}{margePct !== null ? ` · ${(margePct * 100).toFixed(0)}%` : ""}</Badge>}
           {l.isBundle && <Badge color="grape" variant="light" size="sm" title="Set/Bundle — löst sich in eine Stückliste auf">Set</Badge>}
@@ -1146,7 +1148,15 @@ function LineTotals({ lines }: { lines: EditorLine[] }): JSX.Element {
   // Gewährter Rabatt gegenüber den VK-Listenpreisen (für die Summenanzeige).
   const listCents = main.reduce((s, l) => s + Math.round(l.qty * l.euro * 100), 0);
   const rabattCents = listCents - netCents;
-  const taxCents = Math.round(netCents * 0.19);
+  // USt je Satz: jede Position mit ihrem eigenen Satz, je Satz aggregiert (saubere Ausweisung).
+  const byRate = new Map<number, number>();
+  for (const l of main) {
+    const rate = l.taxRatePct ?? 19;
+    const lineNetCents = Math.round(l.qty * effUnitEuro(l) * 100);
+    byRate.set(rate, (byRate.get(rate) ?? 0) + Math.round(lineNetCents * rate / 100));
+  }
+  const taxCents = [...byRate.values()].reduce((s, v) => s + v, 0);
+  const rates = [...byRate.entries()].filter(([, v]) => v !== 0).sort((a, b) => b[0] - a[0]);
   const dbLines = main.filter((l) => l.ekEuro !== undefined);
   const dbCents = dbLines.reduce((s, l) => s + (lineDbCents(l) ?? 0), 0);
   const dbMargePct = dbLines.length && netCents > 0 ? dbCents / netCents : null;
@@ -1155,7 +1165,9 @@ function LineTotals({ lines }: { lines: EditorLine[] }): JSX.Element {
       {dbLines.length > 0 && <Text size="sm" c={dbCents >= 0 ? "teal" : "red"}>DB: <b>{euro(dbCents)}</b>{dbMargePct !== null ? ` (${(dbMargePct * 100).toFixed(0)} %)` : ""}</Text>}
       {rabattCents > 0 && <Text size="sm" c="dimmed">Rabatt: <b>−{euro(rabattCents)}</b></Text>}
       <Text size="sm" c="dimmed">Netto: <b>{euro(netCents)}</b></Text>
-      <Text size="sm" c="dimmed">USt 19 %: <b>{euro(taxCents)}</b></Text>
+      {rates.length <= 1
+        ? <Text size="sm" c="dimmed">USt {rates[0]?.[0] ?? 19} %: <b>{euro(taxCents)}</b></Text>
+        : rates.map(([rate, v]) => <Text key={rate} size="sm" c="dimmed">USt {rate} %: <b>{euro(v)}</b></Text>)}
       <Text size="sm">Brutto: <b>{euro(netCents + taxCents)}</b></Text>
     </Group>
   );
@@ -1176,20 +1188,21 @@ export const toApiLines = (lines: EditorLine[]): { description: string; qty: num
   }));
 
 // Wie toApiLines, aber inkl. Artikel-/Varianten-Referenz und Alternativ-Kennzeichen (Angebot).
-export const toQuoteApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; kind: PositionKind; articleId?: string; variantId?: string; isAlternative?: boolean; dbCents?: number }[] =>
+export const toQuoteApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; articleId?: string; variantId?: string; isAlternative?: boolean; dbCents?: number }[] =>
   lines.filter((l) => l.description.trim()).map((l) => ({
-    description: l.description.trim(), qty: l.qty, kind: l.kind, ...lineMoney(l),
+    description: l.description.trim(), qty: l.qty, kind: l.kind, ...lineMoney(l), taxRatePct: l.taxRatePct ?? 19,
     ...(l.articleId ? { articleId: l.articleId } : {}), ...(l.variantId ? { variantId: l.variantId } : {}), ...(l.isAlternative ? { isAlternative: true } : {}),
   }));
 
 // Rekonstruiert die Erfassungs-Positionen aus gespeicherten Angebots-/Auftragszeilen
 // (für die Bearbeitung): VK = Listenpreis, Rabatt, EK = effektiver Netto − DB.
-type StoredLine = { description: string; qty: number; kind: PositionKind; unitNetCents: number; listNetCents: number | null; rabattPct: number | null; dbCents: number | null; articleId?: string | null; variantId?: string | null; isAlternative?: boolean };
+type StoredLine = { description: string; qty: number; kind: PositionKind; unitNetCents: number; listNetCents: number | null; rabattPct: number | null; taxRatePct?: number | null; dbCents: number | null; articleId?: string | null; variantId?: string | null; isAlternative?: boolean };
 export const fromStoredLines = (ls: StoredLine[]): EditorLine[] =>
   ls.map((l) => ({
     description: l.description, qty: l.qty, kind: l.kind,
     euro: (l.listNetCents ?? l.unitNetCents) / 100,
     ...(l.rabattPct ? { rabattPct: l.rabattPct } : {}),
+    ...(l.taxRatePct != null ? { taxRatePct: l.taxRatePct } : {}),
     ...(l.dbCents != null ? { ekEuro: (l.unitNetCents - l.dbCents) / 100 } : {}),
     ...(l.variantId ? { variantId: l.variantId } : {}),
     ...(l.articleId ? { articleId: l.articleId } : {}),
@@ -1386,8 +1399,9 @@ export function QuotesPage(): JSX.Element {
             <Title order={5} mt="lg">Artikel</Title>
             <LinesEditor lines={lines} onChange={setLines} quoteMode companyId={companyId || undefined} />
             <Title order={5} mt="lg">Steuern und Gebühren</Title>
-            <Checkbox mt="xs" label="Kunde ist von der Umsatzsteuer befreit (innergemeinschaftlich / Reverse-Charge)" checked={exempt} onChange={(e) => setExempt(e.currentTarget.checked)} />
-            <Text size="xs" c="dimmed" mt={4}>USt-Satz: {exempt ? "0 % (steuerfrei)" : "19 % Standard"} — Steuer- und Summenfelder werden automatisch berechnet (read-only).</Text>
+            <Checkbox mt="xs" label="Kunde ist von der Umsatzsteuer befreit (innergemeinschaftlich / Reverse-Charge)" checked={exempt}
+              onChange={(e) => { const ex = e.currentTarget.checked; setExempt(ex); setLines((ls) => ls.map((l) => ({ ...l, taxRatePct: ex ? 0 : 19 }))); }} />
+            <Text size="xs" c="dimmed" mt={4}>{exempt ? "Steuerbefreit: alle Positionen 0 % USt." : "USt je Position wählbar (19 % Standard, 7 % ermäßigt) — Summen werden automatisch berechnet."}</Text>
           </Tabs.Panel>
 
           <Tabs.Panel value="adresse" pt="md">
