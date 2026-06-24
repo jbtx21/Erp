@@ -622,7 +622,7 @@ const PIM_COLS: ReadonlyArray<{ key: "name" | "brand" | "materialComposition" | 
 
 // Eine editierbare Artikelzeile (Schnellbearbeitung): lokaler Entwurf + Speichern.
 type ArticleData = Row & { completeness?: { percent: number; missing: string[] } };
-function ArticleRowEdit({ a, onSaved, onVariants }: { a: ArticleData; onSaved: () => void; onVariants: () => void }): JSX.Element {
+function ArticleRowEdit({ a, onSaved, onVariants, onOpen }: { a: ArticleData; onSaved: () => void; onVariants: () => void; onOpen: () => void }): JSX.Element {
   const [draft, setDraft] = useState<Record<string, string>>(() => Object.fromEntries(PIM_COLS.map((c) => [c.key, String(a[c.key] ?? "")])));
   const [busy, setBusy] = useState(false);
   const dirty = PIM_COLS.some((c) => draft[c.key] !== String(a[c.key] ?? ""));
@@ -640,6 +640,7 @@ function ArticleRowEdit({ a, onSaved, onVariants }: { a: ArticleData; onSaved: (
             setBusy(true);
             try { await trpc.products.updateArticle.mutate({ id: String(a.id), patch: draft }); onSaved(); } finally { setBusy(false); }
           }}>Speichern</Button>
+          <Button size="compact-xs" variant="subtle" onClick={onOpen}>Öffnen</Button>
           <Button size="compact-xs" variant="default" onClick={onVariants}>Varianten</Button>
         </Group>
       </Table.Td>
@@ -647,10 +648,140 @@ function ArticleRowEdit({ a, onSaved, onVariants }: { a: ArticleData; onSaved: (
   );
 }
 
+// Artikel-Detailformular im ERPNext-Item-Muster (Textil-Subset, auch Handel): tabbed
+// DocFormShell mit Details/Einkauf/Vertrieb/Lagerbestand/Varianten. Veredelung ist nur
+// EIN Artikeltyp — die Tabs decken das reine Handelsgeschäft mit ab.
+function ArticleForm({ a, onClose, onSaved }: { a: ArticleData; onClose: () => void; onSaved: () => void }): JSX.Element {
+  const str = (v: unknown): string => (v == null ? "" : String(v));
+  const num = (v: unknown): number | "" => (v == null || v === "" ? "" : Number(v));
+  const [d, setD] = useState(() => ({
+    name: str(a.name), itemGroup: str(a.itemGroup), stockUom: str(a.stockUom) || "Stk",
+    isSalesItem: a.isSalesItem !== false, isPurchaseItem: a.isPurchaseItem !== false,
+    brand: str(a.brand), description: str(a.description), materialComposition: str(a.materialComposition),
+    careInstructions: str(a.careInstructions), gender: str(a.gender), styleFit: str(a.styleFit),
+    hsCode: str(a.hsCode), originCountry: str(a.originCountry),
+    minOrderQty: num(a.minOrderQty), maxDiscountPct: num(a.maxDiscountPct), leadTimeDays: num(a.leadTimeDays), gm2: num(a.gm2),
+  }));
+  const set = (patch: Partial<typeof d>): void => setD((s) => ({ ...s, ...patch }));
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const save = async (): Promise<void> => {
+    setBusy(true); setErr(null);
+    try {
+      await trpc.products.updateArticle.mutate({ id: String(a.id), patch: {
+        name: d.name.trim(), itemGroup: d.itemGroup.trim(), stockUom: d.stockUom.trim() || "Stk",
+        isSalesItem: d.isSalesItem, isPurchaseItem: d.isPurchaseItem,
+        brand: d.brand.trim(), description: d.description.trim(), materialComposition: d.materialComposition.trim(),
+        careInstructions: d.careInstructions.trim(), gender: d.gender.trim(), styleFit: d.styleFit.trim(),
+        hsCode: d.hsCode.trim(), originCountry: d.originCountry.trim(),
+        minOrderQty: d.minOrderQty === "" ? null : Number(d.minOrderQty),
+        maxDiscountPct: d.maxDiscountPct === "" ? null : Number(d.maxDiscountPct),
+        leadTimeDays: d.leadTimeDays === "" ? null : Number(d.leadTimeDays),
+        gm2: d.gm2 === "" ? null : Number(d.gm2),
+      } });
+      onSaved();
+    } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+  return (
+    <DocFormShell
+      breadcrumb="Lager / Artikel"
+      title={`${String(a.sku)} · ${d.name || "Artikel"}`}
+      status={a.isVeredelung ? "Veredelung" : "Handelsware"}
+      statusColor={a.isVeredelung ? "grape" : "blue"}
+      actions={<>
+        <Button variant="default" onClick={onClose}>Schließen</Button>
+        <Button color="dark" loading={busy} onClick={() => void save()}>Speichern</Button>
+      </>}
+    >
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      <Tabs defaultValue="details" mt="md" keepMounted={false}>
+        <Tabs.List>
+          <Tabs.Tab value="details">Details</Tabs.Tab>
+          <Tabs.Tab value="einkauf">Einkauf</Tabs.Tab>
+          <Tabs.Tab value="vertrieb">Vertrieb</Tabs.Tab>
+          <Tabs.Tab value="lager">Lagerbestand</Tabs.Tab>
+          <Tabs.Tab value="varianten">Varianten</Tabs.Tab>
+        </Tabs.List>
+
+        <Tabs.Panel value="details" pt="md">
+          <SimpleGrid cols={2} spacing="md" maw={760}>
+            <TextInput label="Artikelname" value={d.name} onChange={(e) => set({ name: e.currentTarget.value })} />
+            <TextInput label="Artikelgruppe" value={d.itemGroup} onChange={(e) => set({ itemGroup: e.currentTarget.value })} placeholder="z. B. Poloshirts" />
+            <TextInput label="Standardmaßeinheit" value={d.stockUom} onChange={(e) => set({ stockUom: e.currentTarget.value })} w={140} />
+            <TextInput label="Marke" value={d.brand} onChange={(e) => set({ brand: e.currentTarget.value })} />
+            <Checkbox label="Verkauf erlauben" checked={d.isSalesItem} onChange={(e) => set({ isSalesItem: e.currentTarget.checked })} />
+            <Checkbox label="Einkauf zulassen" checked={d.isPurchaseItem} onChange={(e) => set({ isPurchaseItem: e.currentTarget.checked })} />
+          </SimpleGrid>
+          <Textarea label="Beschreibung" value={d.description} onChange={(e) => set({ description: e.currentTarget.value })} autosize minRows={2} mt="md" maw={760} />
+          <Title order={6} mt="lg">Textil</Title>
+          <SimpleGrid cols={3} spacing="md" maw={760} mt="xs">
+            <TextInput label="Material" value={d.materialComposition} onChange={(e) => set({ materialComposition: e.currentTarget.value })} placeholder="100% Baumwolle" />
+            <TextInput label="Pflegehinweis" value={d.careInstructions} onChange={(e) => set({ careInstructions: e.currentTarget.value })} />
+            <Select label="Gender" value={d.gender || null} onChange={(v) => set({ gender: v ?? "" })} clearable data={["HERREN", "DAMEN", "KINDER", "UNISEX"]} />
+            <NumberInput label="Flächengewicht g/m²" value={d.gm2} onChange={(v) => set({ gm2: v === "" ? "" : Number(v) })} min={0} />
+            <TextInput label="Passform" value={d.styleFit} onChange={(e) => set({ styleFit: e.currentTarget.value })} placeholder="Regular / Slim …" />
+          </SimpleGrid>
+        </Tabs.Panel>
+
+        <Tabs.Panel value="einkauf" pt="md">
+          <SimpleGrid cols={2} spacing="md" maw={620}>
+            <NumberInput label="Mindestbestellmenge" value={d.minOrderQty} onChange={(v) => set({ minOrderQty: v === "" ? "" : Number(v) })} min={0} />
+            <NumberInput label="Lieferzeit (Tage)" value={d.leadTimeDays} onChange={(v) => set({ leadTimeDays: v === "" ? "" : Number(v) })} min={0} />
+            <TextInput label="Ursprungsland" value={d.originCountry} onChange={(e) => set({ originCountry: e.currentTarget.value })} placeholder="DE" />
+            <TextInput label="Zolltarifnummer" value={d.hsCode} onChange={(e) => set({ hsCode: e.currentTarget.value })} />
+          </SimpleGrid>
+          <Text size="xs" c="dimmed" mt="sm">EK-Preise & Lieferanten-Artikelnummern werden je Variante über den Lieferantenkatalog (SupplierItem) geführt.</Text>
+        </Tabs.Panel>
+
+        <Tabs.Panel value="vertrieb" pt="md">
+          <NumberInput label="Maximaler Rabatt (%)" value={d.maxDiscountPct} onChange={(v) => set({ maxDiscountPct: v === "" ? "" : Number(v) })} min={0} max={100} w={200} />
+          <Text size="xs" c="dimmed" mt="sm">VK-Preise je Preisgruppe + Mengenstaffel werden in „Preise/Staffel" gepflegt. Die globale USt liegt in den Einstellungen.</Text>
+        </Tabs.Panel>
+
+        <Tabs.Panel value="lager" pt="md">
+          <Text size="sm">Bestand wird je Variante und Lagerort geführt (Bewegungs-Ledger + Meldebestände). Gewicht je Variante im Variantenstamm.</Text>
+          <Text size="sm" c="dimmed" mt={4}>Varianten dieses Artikels: {String(a.variantCount ?? "—")}</Text>
+        </Tabs.Panel>
+
+        <Tabs.Panel value="varianten" pt="md">
+          <ArticleVariantsTab articleId={String(a.id)} />
+        </Tabs.Panel>
+      </Tabs>
+    </DocFormShell>
+  );
+}
+
+// Varianten-Tab des Artikelformulars: listet Farbe×Größe-Varianten und legt neue an.
+function ArticleVariantsTab({ articleId }: { articleId: string }): JSX.Element {
+  const [variants, setVariants] = useState<Row[]>([]);
+  const [vsku, setVsku] = useState(""); const [farbe, setFarbe] = useState(""); const [groesse, setGroesse] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const load = useCallback(async () => { try { setVariants((await trpc.products.listVariants.query({ articleId })) as Row[]); setErr(null); } catch (e) { setErr(errMsg(e)); } }, [articleId]);
+  useEffect(() => { void load(); }, [load]);
+  return (
+    <Box>
+      <Group gap="xs" align="end">
+        <TextInput label="Varianten-SKU" value={vsku} onChange={(e) => setVsku(e.currentTarget.value)} placeholder="POLO-NAVY-L" w={180} />
+        <TextInput label="Farbe" value={farbe} onChange={(e) => setFarbe(e.currentTarget.value)} w={110} />
+        <TextInput label="Größe" value={groesse} onChange={(e) => setGroesse(e.currentTarget.value)} w={90} />
+        <Button disabled={!vsku.trim()} onClick={async () => {
+          setErr(null);
+          const attributes = [...(farbe.trim() ? [{ name: "Farbe", value: farbe.trim() }] : []), ...(groesse.trim() ? [{ name: "Größe", value: groesse.trim() }] : [])];
+          try { await trpc.products.createVariant.mutate({ articleId, sku: vsku.trim(), attributes }); setVsku(""); setFarbe(""); setGroesse(""); await load(); }
+          catch (e) { setErr(errMsg(e)); }
+        }}>Variante anlegen</Button>
+      </Group>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      <AutoTable rows={variants} />
+    </Box>
+  );
+}
+
 export function ProductsPage({ focusId }: { focusId?: string } = {}): JSX.Element {
   const [articles, setArticles] = useState<ArticleData[]>([]);
   const [sku, setSku] = useState("");
   const [name, setName] = useState("");
+  const [editId, setEditId] = useState<string | null>(null);
   const [sel, setSel] = useState<string | null>(null);
   const [variants, setVariants] = useState<Row[]>([]);
   const [vsku, setVsku] = useState("");
@@ -675,6 +806,12 @@ export function ProductsPage({ focusId }: { focusId?: string } = {}): JSX.Elemen
   }, []);
   // Deep-Link aus der globalen Suche: Varianten des gesuchten Artikels direkt öffnen.
   useEffect(() => { if (focusId) void loadVariants(focusId); }, [focusId, loadVariants]);
+
+  // Formularansicht (ERPNext-Stil): tabbed Artikel-Stammblatt.
+  const editArticle = editId ? articles.find((a) => String(a.id) === editId) : undefined;
+  if (editArticle) {
+    return <ArticleForm a={editArticle} onClose={() => setEditId(null)} onSaved={() => { void loadArticles(); }} />;
+  }
 
   return (
     <>
@@ -717,7 +854,7 @@ export function ProductsPage({ focusId }: { focusId?: string } = {}): JSX.Elemen
         </Table.Tr></Table.Thead>
         <Table.Tbody>
           {articles.map((a) => (
-            <ArticleRowEdit key={String(a.id)} a={a} onSaved={() => void loadArticles()} onVariants={() => void loadVariants(String(a.id))} />
+            <ArticleRowEdit key={String(a.id)} a={a} onSaved={() => void loadArticles()} onVariants={() => void loadVariants(String(a.id))} onOpen={() => setEditId(String(a.id))} />
           ))}
         </Table.Tbody>
       </Table>
