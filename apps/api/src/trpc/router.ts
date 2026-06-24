@@ -617,6 +617,11 @@ export const appRouter = router({
   }),
 
   ampel: router({
+    /** Auftragsampel (Xentral-Vorbild): je aktivem Auftrag Prüf-Lampen (Bestand, USt-IdNr.,
+     *  Liefertermin, Lieferung, Faktura, Zahlung, Produktion, Freigabe, Liefersperre) + Gesamt. */
+    auftragsampel: roleProcedure("ADMIN", "BUERO", "BUCHHALTUNG")
+      .query(({ ctx }) => ctx.statusAmpel.auftragsampel()),
+
     /** Ebenenübergreifende Terminübersicht (Kap. 35.4): kritisch/ROT zuerst (operativ). */
     overview: protectedProcedure
       .input(z.object({ today: z.string().datetime().optional() }).optional())

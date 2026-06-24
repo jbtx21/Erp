@@ -1,0 +1,88 @@
+// Anwendungsfall: Auftragsampel (Xentral-Vorbild). Bindet die reine
+// `computeAuftragsampel`-Logik (@texma/shared) an die Auftrags-Fakten (Status, Bestand,
+// Liefertermin, Zahlung, Produktion, Freigabe, Liefersperre). Reine Leseanalyse über das
+// Repository-Interface (testbar ohne DB). Angebots-/Produktionsampel laufen über die
+// bestehende Termin-Ampel (`ampel.overview`, Ebene ANGEBOT/PRODUKTION).
+
+import {
+  computeAuftragsampel,
+  validateVatId,
+  type AmpelLamp,
+  type AuftragsampelInput,
+  type AmpelCheck,
+} from "@texma/shared";
+
+/** Roh-Fakten eines Auftrags für die Ampelberechnung (aus dem Repository). */
+export interface AuftragFacts {
+  id: string;
+  number: string;
+  companyName: string;
+  country: string;
+  vatId: string | null;
+  liefersperre: boolean;
+  status: AuftragsampelInput["status"];
+  liefertermin: Date | null;
+  lieferstatus: AuftragsampelInput["lieferstatus"];
+  fakturastatus: AuftragsampelInput["fakturastatus"];
+  openCents: number | null;
+  grossCents: number | null;
+  freigegeben: boolean;
+  hasProduction: boolean;
+  /** Bestandsgeführte Positionen: Sollmenge vs. aktueller Hauptlagerbestand. */
+  lines: ReadonlyArray<{ variantId: string | null; qty: number; stockQty: number }>;
+}
+
+export interface AuftragsampelZeile {
+  id: string;
+  number: string;
+  companyName: string;
+  status: string;
+  liefertermin: Date | null;
+  overall: AmpelLamp;
+  checks: AmpelCheck[];
+}
+
+export interface StatusAmpelRepository {
+  /** Aktive Aufträge (nicht abgeschlossen/storniert) mit allen Ampel-Fakten. */
+  auftragFacts(): Promise<AuftragFacts[]>;
+}
+
+function produktionState(f: AuftragFacts): AuftragsampelInput["produktion"] {
+  if (!f.hasProduction) return "KEINE";
+  if (f.status === "VERSENDET" || f.status === "FAKTURIERT" || f.status === "ABGESCHLOSSEN") return "ABGESCHLOSSEN";
+  return f.freigegeben ? "FREIGEGEBEN" : "ANGELEGT";
+}
+
+export class StatusAmpelService {
+  constructor(
+    private readonly repo: StatusAmpelRepository,
+    private readonly now: () => Date = () => new Date()
+  ) {}
+
+  /** Auftragsampel: je aktivem Auftrag die Prüf-Lampen + Gesamtampel (dringendste zuerst). */
+  async auftragsampel(): Promise<AuftragsampelZeile[]> {
+    const today = this.now();
+    const facts = await this.repo.auftragFacts();
+    const rows = facts.map((f) => {
+      const input: AuftragsampelInput = {
+        status: f.status,
+        today,
+        liefertermin: f.liefertermin,
+        lieferstatus: f.lieferstatus,
+        fakturastatus: f.fakturastatus,
+        openCents: f.openCents,
+        grossCents: f.grossCents,
+        lines: f.lines.map((l) => ({ hasVariant: l.variantId !== null, sufficient: l.stockQty >= l.qty })),
+        isEuForeignB2B: f.country !== "DE",
+        vatIdValid: f.vatId ? validateVatId(f.vatId).valid : false,
+        produktion: produktionState(f),
+        freigegeben: f.freigegeben,
+        liefersperre: f.liefersperre,
+      };
+      const { checks, overall } = computeAuftragsampel(input);
+      return { id: f.id, number: f.number, companyName: f.companyName, status: f.status, liefertermin: f.liefertermin, overall, checks };
+    });
+    const rank: Record<AmpelLamp, number> = { ROT: 0, GELB: 1, GRUEN: 2, GRAU: 3 };
+    return rows.sort((a, b) => rank[a.overall] - rank[b.overall] || a.number.localeCompare(b.number));
+  }
+}

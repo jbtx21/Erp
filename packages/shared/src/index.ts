@@ -32,6 +32,7 @@ export * from "./three-way-match.js";
 export * from "./postcalc.js";
 export * from "./stickerei.js";
 export * from "./ampel.js";
+export * from "./auftragsampel.js";
 export * from "./reklamation.js";
 export * from "./shipping.js";
 export * from "./finishing.js";
