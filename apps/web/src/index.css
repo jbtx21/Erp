@@ -45,6 +45,14 @@ table {
   font-variant-numeric: tabular-nums;
 }
 
+/* Aufklappbarer Sektionskopf der Modul-Navigation: ruhiger Hover, kein Signalfarbe. */
+.erp-nav-group {
+  transition: background 120ms ease;
+}
+.erp-nav-group:hover {
+  background: rgba(14, 28, 54, 0.05);
+}
+
 /* Reduzierte Bewegung respektieren. */
 @media (prefers-reduced-motion: reduce) {
   *,

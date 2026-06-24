@@ -1,7 +1,8 @@
 // Navigations-Gerüst: Auth-Gate + AppShell mit gruppierter Sidebar über ALLE Module
 // (alles durchklickbar). Jede Sektion ist eine Seite gegen die echten tRPC-Endpunkte.
 import { useCallback, useEffect, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
-import { AppShell, Badge, Box, Button, Group, Kbd, Loader, Modal, NavLink, Paper, ScrollArea, Stack, Text, TextInput, Title } from "@mantine/core";
+import { ActionIcon, AppShell, Badge, Box, Button, Collapse, Group, HoverCard, Kbd, Loader, Modal, NavLink, Paper, ScrollArea, Stack, Text, TextInput, Title, Tooltip, UnstyledButton } from "@mantine/core";
+import { Chevron, NavIcon, SidebarToggleIcon, type NavIconName } from "./nav-icons.js";
 import { Login } from "./Login.js";
 import { Dashboard } from "./Dashboard.js";
 import { Reporting } from "./Reporting.js";
@@ -15,28 +16,44 @@ import { trpc } from "./trpc.js";
 
 interface AuthUser { id: string; email: string; name: string; role: string; totpEnabled: boolean; }
 
-const NAV: ReadonlyArray<{ group: string; items: ReadonlyArray<{ key: string; label: string }> }> = [
-  { group: "Übersicht", items: [{ key: "home", label: "Start" }, { key: "dashboard", label: "Termin-Ampel" }, { key: "dashboards", label: "Dashboards (G-7)" }, { key: "calendar", label: "Kalender" }, { key: "tasks", label: "Meine Aufgaben" }, { key: "messages", label: "Nachrichten" }, { key: "security", label: "Mein Konto (2FA)" }] },
-  { group: "Vertrieb", items: [{ key: "companies", label: "Firmen/Kunden" }, { key: "leads", label: "Leads" }, { key: "opportunities", label: "Verkaufschancen" }, { key: "calllogs", label: "Anrufliste" }, { key: "inquiries", label: "Anfragen" }, { key: "quotes", label: "Angebote" }, { key: "orders", label: "Aufträge" }, { key: "reklamation", label: "Reklamation" }] },
-  { group: "Beschaffung", items: [
-    { key: "suppliers", label: "Lieferanten" }, { key: "incoming", label: "Eingangsrechnungen" },
-    { key: "procurement", label: "Beschaffung" }, { key: "reorder", label: "Nachbestellung" },
-    { key: "wareneingang", label: "Wareneingang" },
-    { key: "samples", label: "Muster-Leihgut" }, { key: "lager", label: "Lager & Inventur" },
+// Modul-Navigation: neun Sektionen mit Strich-Icon je Gruppe. Logistik und Finanzen
+// sind getrennt; Einstellungen ist eine eigene Sektion am Fuß. Jede Gruppe ist
+// einzeln aufklappbar, die ganze Leiste lässt sich zur Icon-Schiene einklappen.
+const NAV: ReadonlyArray<{ group: string; icon: NavIconName; items: ReadonlyArray<{ key: string; label: string }> }> = [
+  { group: "Übersicht", icon: "uebersicht", items: [{ key: "home", label: "Start" }, { key: "dashboard", label: "Termin-Ampel" }, { key: "dashboards", label: "Dashboards (G-7)" }, { key: "calendar", label: "Kalender" }, { key: "tasks", label: "Meine Aufgaben" }, { key: "messages", label: "Nachrichten" }] },
+  { group: "Vertrieb", icon: "vertrieb", items: [{ key: "companies", label: "Firmen/Kunden" }, { key: "leads", label: "Leads" }, { key: "opportunities", label: "Verkaufschancen" }, { key: "calllogs", label: "Anrufliste" }, { key: "inquiries", label: "Anfragen" }, { key: "quotes", label: "Angebote" }, { key: "orders", label: "Aufträge" }, { key: "reklamation", label: "Reklamation" }] },
+  { group: "Beschaffung", icon: "beschaffung", items: [
+    { key: "suppliers", label: "Lieferanten" }, { key: "procurement", label: "Beschaffung" },
+    { key: "reorder", label: "Nachbestellung" }, { key: "incoming", label: "Eingangsrechnungen" },
   ] },
-  { group: "Stammdaten", items: [{ key: "products", label: "Artikel/Varianten" }, { key: "pricing", label: "Preise/Staffel" }, { key: "eanimport", label: "EAN-Listen-Import" }] },
-  { group: "Produktion", items: [{ key: "differentiators", label: "Differenzierer" }, { key: "subproduction", label: "Fremdvergabe" }, { key: "prodreport", label: "Produktions-Reporting" }] },
-  { group: "Logistik & Finanzen", items: [
-    { key: "shipments", label: "Versand" }, { key: "dunning", label: "Mahnwesen" },
-    { key: "banking", label: "Banking" }, { key: "zahlungen", label: "Zahlungseingänge" }, { key: "costcenters", label: "Kostenstellen" },
-    { key: "reporting", label: "Auswertungen" }, { key: "finance", label: "Offene Posten (OP-Aging)" },
+  { group: "Stammdaten", icon: "stammdaten", items: [{ key: "products", label: "Artikel/Varianten" }, { key: "pricing", label: "Preise/Staffel" }, { key: "eanimport", label: "EAN-Listen-Import" }] },
+  { group: "Produktion", icon: "produktion", items: [{ key: "differentiators", label: "Differenzierer" }, { key: "subproduction", label: "Fremdvergabe" }, { key: "prodreport", label: "Produktions-Reporting" }] },
+  { group: "Logistik", icon: "logistik", items: [
+    { key: "wareneingang", label: "Wareneingang" }, { key: "lager", label: "Lager & Inventur" },
+    { key: "samples", label: "Muster-Leihgut" }, { key: "shipments", label: "Versand" },
   ] },
-  { group: "System", items: [{ key: "mailaccounts", label: "E-Mail-Konten" }, { key: "emailtemplates", label: "E-Mail-Vorlagen" }, { key: "dataio", label: "Import/Export" }, { key: "newsletter", label: "Newsletter" }, { key: "archive", label: "GoBD-Archiv" }, { key: "auditlog", label: "Audit-Protokoll" }, { key: "automation", label: "Automationen" }, { key: "admin", label: "Einstellungen" }, { key: "hr", label: "Personalwesen" }, { key: "integrations", label: "Schnittstellen" }] },
+  { group: "Finanzen", icon: "finanzen", items: [
+    { key: "zahlungen", label: "Zahlungseingänge" }, { key: "banking", label: "Banking" },
+    { key: "finance", label: "Offene Posten (OP-Aging)" }, { key: "dunning", label: "Mahnwesen" },
+    { key: "costcenters", label: "Kostenstellen" }, { key: "reporting", label: "Auswertungen" },
+  ] },
+  { group: "System", icon: "system", items: [{ key: "mailaccounts", label: "E-Mail-Konten" }, { key: "emailtemplates", label: "E-Mail-Vorlagen" }, { key: "dataio", label: "Import/Export" }, { key: "newsletter", label: "Newsletter" }, { key: "archive", label: "GoBD-Archiv" }, { key: "auditlog", label: "Audit-Protokoll" }, { key: "integrations", label: "Schnittstellen" }] },
+  { group: "Einstellungen", icon: "einstellungen", items: [{ key: "admin", label: "Einstellungen" }, { key: "automation", label: "Automationen" }, { key: "hr", label: "Personalwesen" }, { key: "security", label: "Mein Konto (2FA)" }] },
 ];
 const ALL_KEYS = NAV.flatMap((g) => g.items.map((i) => i.key));
 const hashKey = (): string => {
   const h = typeof location !== "undefined" ? location.hash.replace("#", "") : "";
   return ALL_KEYS.includes(h) ? h : "home";
+};
+/** Sektion, die den aktiven Bereich enthält (für Highlight im eingeklappten Modus). */
+const groupOfKey = (k: string): string | undefined => NAV.find((g) => g.items.some((i) => i.key === k))?.group;
+
+// Nav-Zustand (eingeklappt + zugeklappte Gruppen) überlebt Reload via localStorage.
+const readFlag = (key: string, fallback: boolean): boolean => {
+  try { const v = localStorage.getItem(key); return v == null ? fallback : v === "1"; } catch { return fallback; }
+};
+const readSet = (key: string): Set<string> => {
+  try { const v = localStorage.getItem(key); return new Set(v ? (JSON.parse(v) as string[]) : []); } catch { return new Set(); }
 };
 
 export function App(): JSX.Element {
@@ -180,8 +197,88 @@ function TaskBadge({ onOpen }: { onOpen: () => void }): JSX.Element {
   );
 }
 
+// Linke Modul-Navigation: ganz einklappbar (Icon-Schiene) und je Sektion aufklappbar.
+// Voll: Sektionskopf (Icon + Titel + Chevron) klappt seine Einträge auf/zu.
+// Schiene: nur Sektions-Icons; Hover öffnet die Einträge als Flyout.
+function SideNav({ active, collapsed, onNavigate }: { active: string; collapsed: boolean; onNavigate: (k: string) => void }): JSX.Element {
+  const [closed, setClosed] = useState<Set<string>>(() => readSet("erp.nav.closedGroups"));
+  const activeGroup = groupOfKey(active);
+  const toggleGroup = useCallback((g: string) => {
+    setClosed((prev) => {
+      const next = new Set(prev);
+      if (next.has(g)) next.delete(g); else next.add(g);
+      try { localStorage.setItem("erp.nav.closedGroups", JSON.stringify([...next])); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
+  if (collapsed) {
+    // Icon-Schiene: je Sektion ein Icon; Hover blendet die Einträge ein.
+    return (
+      <ScrollArea type="scroll" px={4}>
+        <Stack gap={4} align="center" py={4}>
+          {NAV.map((g) => (
+            <HoverCard key={g.group} position="right-start" offset={6} openDelay={40} closeDelay={120} shadow="md" withinPortal>
+              <HoverCard.Target>
+                <ActionIcon variant={activeGroup === g.group ? "light" : "subtle"} color="navy" size="lg" radius="md" aria-label={g.group}>
+                  <NavIcon name={g.icon} />
+                </ActionIcon>
+              </HoverCard.Target>
+              <HoverCard.Dropdown p={6}>
+                <Text size="xs" fw={700} c="dimmed" tt="uppercase" px="xs" mb={4} style={{ letterSpacing: 0.4 }}>{g.group}</Text>
+                <Box miw={190}>
+                  {g.items.map((i) => (
+                    <NavLink key={i.key} label={i.label} active={active === i.key} variant="light" color="navy"
+                      onClick={() => onNavigate(i.key)} style={{ borderRadius: 6 }} />
+                  ))}
+                </Box>
+              </HoverCard.Dropdown>
+            </HoverCard>
+          ))}
+        </Stack>
+      </ScrollArea>
+    );
+  }
+
+  // Volle Leiste: aufklappbare Sektionen.
+  return (
+    <ScrollArea type="scroll">
+      <Stack gap={2} py={2}>
+        {NAV.map((g) => {
+          const open = !closed.has(g.group);
+          return (
+            <Box key={g.group}>
+              <UnstyledButton onClick={() => toggleGroup(g.group)} aria-expanded={open}
+                style={{ display: "block", width: "100%", borderRadius: 6, padding: "6px 8px", marginTop: 4 }}
+                className="erp-nav-group">
+                <Group gap={8} wrap="nowrap">
+                  <Box c={activeGroup === g.group ? "navy.9" : "dimmed"} style={{ display: "inline-flex" }}><NavIcon name={g.icon} /></Box>
+                  <Text size="xs" fw={700} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.4, flex: 1 }}>{g.group}</Text>
+                  <Box c="dimmed" style={{ display: "inline-flex" }}><Chevron open={open} /></Box>
+                </Group>
+              </UnstyledButton>
+              <Collapse in={open}>
+                <Box pl={6}>
+                  {g.items.map((i) => (
+                    <NavLink key={i.key} label={i.label} active={active === i.key} variant="light" color="navy"
+                      onClick={() => onNavigate(i.key)} style={{ borderRadius: 6 }} />
+                  ))}
+                </Box>
+              </Collapse>
+            </Box>
+          );
+        })}
+      </Stack>
+    </ScrollArea>
+  );
+}
+
 function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<void> }): JSX.Element {
   const [active, setActiveState] = useState<string>(hashKey);
+  const [navCollapsed, setNavCollapsed] = useState<boolean>(() => readFlag("erp.nav.collapsed", false));
+  const toggleNav = useCallback(() => {
+    setNavCollapsed((c) => { const next = !c; try { localStorage.setItem("erp.nav.collapsed", next ? "1" : "0"); } catch { /* ignore */ } return next; });
+  }, []);
   // Fokus-Sprungziel aus der globalen Suche (navKey + Beleg-ID): die Zielseite öffnet
   // direkt den Beleg. Manuelle Navigation (Sidebar/Badges) löscht den Fokus.
   const [focus, setFocus] = useState<{ navKey: string; id: string } | null>(null);
@@ -202,10 +299,16 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<voi
   }, [active]);
 
   return (
-    <AppShell header={{ height: 52 }} navbar={{ width: 240, breakpoint: "xs" }} padding="md">
+    <AppShell header={{ height: 52 }} navbar={{ width: navCollapsed ? 64 : 248, breakpoint: "xs" }} padding="md">
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between">
           <Group gap="sm">
+            <Tooltip label={navCollapsed ? "Menü ausklappen" : "Menü einklappen"} openDelay={300}>
+              <ActionIcon variant="subtle" color="navy" size="md" onClick={toggleNav}
+                aria-label={navCollapsed ? "Menü ausklappen" : "Menü einklappen"} aria-pressed={navCollapsed}>
+                <SidebarToggleIcon />
+              </ActionIcon>
+            </Tooltip>
             <Box w={22} h={22} style={{ borderRadius: 6, background: "var(--erp-focus)" }} aria-hidden />
             <Title order={4}>TEXMA&nbsp;ERP</Title>
             <Badge size="sm" color="amber">Demo</Badge>
@@ -220,18 +323,8 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<voi
         </Group>
       </AppShell.Header>
 
-      <AppShell.Navbar p="xs" style={{ background: "var(--erp-surface)" }}>
-        <ScrollArea type="scroll">
-          {NAV.map((g) => (
-            <Box key={g.group} mb={6}>
-              <Text size="xs" fw={700} c="dimmed" tt="uppercase" px="xs" mt="sm" mb={4} style={{ letterSpacing: 0.4 }}>{g.group}</Text>
-              {g.items.map((i) => (
-                <NavLink key={i.key} label={i.label} active={active === i.key} variant="light" color="navy"
-                  onClick={() => setActive(i.key)} style={{ borderRadius: 6 }} />
-              ))}
-            </Box>
-          ))}
-        </ScrollArea>
+      <AppShell.Navbar p={navCollapsed ? 4 : "xs"} style={{ background: "var(--erp-surface)" }}>
+        <SideNav active={active} collapsed={navCollapsed} onNavigate={setActive} />
       </AppShell.Navbar>
 
       <AppShell.Main>
