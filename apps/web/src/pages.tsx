@@ -7,7 +7,7 @@ import { Alert, Badge, Box, Button, Checkbox, Group, Loader, Modal, NumberInput,
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { validateVatId } from "@texma/shared/vat";
 import { trpc } from "./trpc.js";
-import { AufschlagsfaktorenSection, LogosStickereiSection, StickereiAusschreibungSection, Postcalc } from "./Differentiators.js";
+import { AufschlagsfaktorenSection, LogosStickereiSection, StickereiAusschreibungSection, StickereiStaffelnSection, Postcalc } from "./Differentiators.js";
 import { euro, numTd, statusMantineColor } from "./theme.js";
 
 type Row = Record<string, unknown>;
@@ -1399,6 +1399,9 @@ export function QuotesPage(): JSX.Element {
             </Collapsible>
             <Title order={5} mt="lg">Artikel</Title>
             <LinesEditor lines={lines} onChange={setLines} quoteMode companyId={companyId || undefined} />
+            <Collapsible title="Stickerei-Mengenstaffeln je Logo (Referenz)">
+              <StickereiStaffelnSection />
+            </Collapsible>
             <Title order={5} mt="lg">Steuern und Gebühren</Title>
             <Checkbox mt="xs" label="Kunde ist von der Umsatzsteuer befreit (innergemeinschaftlich / Reverse-Charge)" checked={exempt}
               onChange={(e) => { const ex = e.currentTarget.checked; setExempt(ex); setLines((ls) => ls.map((l) => ({ ...l, taxRatePct: ex ? 0 : 19 }))); }} />
@@ -2079,6 +2082,9 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
               <Text size="sm" fw={600} mb={4}>{editOrderId ? "Auftrag bearbeiten" : "Neuer Auftrag"}</Text>
               <CompanyPicker value={newCompany} onChange={setNewCompany} w={240} />
               <LinesEditor lines={newLines} onChange={setNewLines} companyId={newCompany || undefined} />
+              <Collapsible title="Stickerei-Mengenstaffeln je Logo (Referenz)">
+                <StickereiStaffelnSection />
+              </Collapsible>
               <Button mt="sm" disabled={!newCompany.trim() || toApiLines(newLines).length === 0} onClick={() => void saveOrder()}>
                 {editOrderId ? "Änderungen speichern" : "Auftrag anlegen"}
               </Button>

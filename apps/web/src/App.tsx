@@ -6,7 +6,6 @@ import { Chevron, NavIcon, SidebarToggleIcon, type NavIconName } from "./nav-ico
 import { Login } from "./Login.js";
 import { Dashboard } from "./Dashboard.js";
 import { Reporting } from "./Reporting.js";
-import { Differentiators } from "./Differentiators.js";
 import { Banking } from "./Banking.js";
 import {
   CompaniesPage, CallLogsPage, CostCentersPage, DunningPage, InquiriesPage, IncomingInvoicesPage, LeadsPage, MailAccountsPage, OrdersPage, ProcurementPage, ProductionReportingPage,
@@ -28,7 +27,7 @@ const NAV: ReadonlyArray<{ group: string; icon: NavIconName; items: ReadonlyArra
     { key: "reorder", label: "Nachbestellung" }, { key: "ausschreibungen", label: "Stickerei-Ausschreibungen" }, { key: "incoming", label: "Eingangsrechnungen" },
   ] },
   { group: "Stammdaten", icon: "stammdaten", items: [{ key: "products", label: "Artikel/Varianten" }, { key: "logos", label: "Logos & Stickerei" }, { key: "pricing", label: "Preise/Staffel" }, { key: "eanimport", label: "EAN-Listen-Import" }] },
-  { group: "Produktion", icon: "produktion", items: [{ key: "differentiators", label: "Fremdvergabe (alt)" }, { key: "subproduction", label: "Fremdvergabe" }, { key: "prodreport", label: "Produktions-Reporting" }] },
+  { group: "Produktion", icon: "produktion", items: [{ key: "subproduction", label: "Fremdvergabe" }, { key: "prodreport", label: "Produktions-Reporting" }] },
   { group: "Logistik", icon: "logistik", items: [
     { key: "wareneingang", label: "Wareneingang" }, { key: "lager", label: "Lager & Inventur" },
     { key: "samples", label: "Muster-Leihgut" }, { key: "shipments", label: "Versand" },
@@ -373,7 +372,6 @@ function Page({ k, role, userName, onNavigate, focusId }: { k: string; role: str
     case "lager": return <LagerPage />;
     case "hr": return <HrPage />;
     case "integrations": return <IntegrationsPage />;
-    case "differentiators": return <Differentiators role={role} />;
     case "logos": return <LogosPage />;
     case "aufschlag": return <AufschlagPage />;
     case "ausschreibungen": return <AusschreibungenPage />;
