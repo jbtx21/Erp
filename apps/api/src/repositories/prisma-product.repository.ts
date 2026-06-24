@@ -19,7 +19,11 @@ function variantLabel(v: { sku: string; article: { name: string }; attributes: {
   return `${v.article.name}${attrs ? ` — ${attrs}` : ""} (${v.sku})`;
 }
 
-const PIM_SELECT = { description: true, brand: true, materialComposition: true, careInstructions: true, hsCode: true, originCountry: true } as const;
+const PIM_SELECT = {
+  description: true, brand: true, materialComposition: true, careInstructions: true, hsCode: true, originCountry: true,
+  itemGroup: true, stockUom: true, isSalesItem: true, isPurchaseItem: true, minOrderQty: true, maxDiscountPct: true,
+  leadTimeDays: true, gender: true, gm2: true, styleFit: true,
+} as const;
 const s = (v: string | null | undefined): string => v ?? "";
 
 export class PrismaProductRepository implements ProductRepository {
@@ -32,6 +36,9 @@ export class PrismaProductRepository implements ProductRepository {
       id: a.id, sku: a.sku, name: a.name, variantCount: a._count.variants,
       description: s(a.description), brand: s(a.brand), materialComposition: s(a.materialComposition),
       careInstructions: s(a.careInstructions), hsCode: s(a.hsCode), originCountry: s(a.originCountry),
+      itemGroup: s(a.itemGroup), stockUom: a.stockUom, isSalesItem: a.isSalesItem, isPurchaseItem: a.isPurchaseItem,
+      minOrderQty: a.minOrderQty, maxDiscountPct: a.maxDiscountPct, leadTimeDays: a.leadTimeDays,
+      gender: s(a.gender), gm2: a.gm2, styleFit: s(a.styleFit),
     }));
   }
 

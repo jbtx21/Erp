@@ -15,12 +15,36 @@ export interface ArticleRow {
   careInstructions: string;
   hsCode: string;
   originCountry: string;
+  // ERPNext-Item-Angleichung (Textil-Subset).
+  itemGroup: string;
+  stockUom: string;
+  isSalesItem: boolean;
+  isPurchaseItem: boolean;
+  minOrderQty: number | null;
+  maxDiscountPct: number | null;
+  leadTimeDays: number | null;
+  gender: string;
+  gm2: number | null;
+  styleFit: string;
   /** PIM-Vollständigkeit (abgeleitet, nicht persistiert). */
   completeness: PimCompleteness;
 }
 
 /** Editierbare Stammfelder (Name + PIM); leere Strings = Feld leeren. */
-export type ArticlePatch = Partial<{ name: string } & ArticlePimFields>;
+export type ArticlePatch = Partial<
+  { name: string } & ArticlePimFields & {
+    itemGroup: string;
+    stockUom: string;
+    isSalesItem: boolean;
+    isPurchaseItem: boolean;
+    minOrderQty: number | null;
+    maxDiscountPct: number | null;
+    leadTimeDays: number | null;
+    gender: string;
+    gm2: number | null;
+    styleFit: string;
+  }
+>;
 
 export interface VariantRow {
   id: string;
@@ -116,7 +140,7 @@ function normalizePatch(patch: ArticlePatch): ArticlePatch {
   const out: ArticlePatch = {};
   for (const [k, v] of Object.entries(patch)) {
     if (v === undefined) continue;
-    (out as Record<string, string>)[k] = typeof v === "string" ? v.trim() : v;
+    (out as Record<string, unknown>)[k] = typeof v === "string" ? v.trim() : v;
   }
   return out;
 }

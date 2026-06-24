@@ -12,8 +12,14 @@ import type {
   VeredelungTier,
 } from "../modules/product/product.service.js";
 
-type StoredArticle = { id: string; sku: string; name: string; description: string; brand: string; materialComposition: string; careInstructions: string; hsCode: string; originCountry: string };
-const emptyPim = { description: "", brand: "", materialComposition: "", careInstructions: "", hsCode: "", originCountry: "" };
+type StoredArticle = {
+  id: string; sku: string; name: string; description: string; brand: string; materialComposition: string; careInstructions: string; hsCode: string; originCountry: string;
+  itemGroup: string; stockUom: string; isSalesItem: boolean; isPurchaseItem: boolean; minOrderQty: number | null; maxDiscountPct: number | null; leadTimeDays: number | null; gender: string; gm2: number | null; styleFit: string;
+};
+const emptyPim = {
+  description: "", brand: "", materialComposition: "", careInstructions: "", hsCode: "", originCountry: "",
+  itemGroup: "", stockUom: "Stk", isSalesItem: true, isPurchaseItem: true, minOrderQty: null, maxDiscountPct: null, leadTimeDays: null, gender: "", gm2: null, styleFit: "",
+};
 
 export class InMemoryProductRepository implements ProductRepository {
   private readonly articles = new Map<string, StoredArticle>();

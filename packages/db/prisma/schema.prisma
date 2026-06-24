@@ -357,6 +357,18 @@ model Article {
   brand               String?
   hsCode              String? // Zolltarifnummer
   originCountry       String?
+  // ERPNext-Item-Angleichung (Textil-Subset, Kap. 31): Artikelgruppe, Einheit, Verkauf/
+  // Einkauf-Flags, Mindestbestellmenge, Max.-Rabatt, Lieferzeit + textilspezifisch.
+  itemGroup      String? // Artikelgruppe (item_group)
+  stockUom       String  @default("Stk") // Standardmaßeinheit (stock_uom)
+  isSalesItem    Boolean @default(true) // Verkauf erlauben (is_sales_item)
+  isPurchaseItem Boolean @default(true) // Einkauf zulassen (is_purchase_item)
+  minOrderQty    Int? // Mindestbestellmenge (min_order_qty)
+  maxDiscountPct Int? // Maximaler Rabatt % (max_discount)
+  leadTimeDays   Int? // Lieferzeit in Tagen (lead_time_days)
+  gender         String? // Herren/Damen/Kinder/Unisex (aus Lieferanten-Feeds)
+  gm2            Int? // Flächengewicht g/m² (aus Lieferanten-Feeds)
+  styleFit       String? // Passform (Slim/Regular/… aus Lieferanten-Feeds)
   collectionId String?
   collection   Collection? @relation(fields: [collectionId], references: [id])
   variants    Variant[]

@@ -1025,6 +1025,13 @@ export const appRouter = router({
           name: z.string().optional(), description: z.string().optional(), brand: z.string().optional(),
           materialComposition: z.string().optional(), careInstructions: z.string().optional(),
           hsCode: z.string().optional(), originCountry: z.string().optional(),
+          // ERPNext-Item-Angleichung (Textil-Subset).
+          itemGroup: z.string().optional(), stockUom: z.string().optional(),
+          isSalesItem: z.boolean().optional(), isPurchaseItem: z.boolean().optional(),
+          minOrderQty: z.number().int().nonnegative().nullable().optional(),
+          maxDiscountPct: z.number().int().min(0).max(100).nullable().optional(),
+          leadTimeDays: z.number().int().nonnegative().nullable().optional(),
+          gender: z.string().optional(), gm2: z.number().int().nonnegative().nullable().optional(), styleFit: z.string().optional(),
         }),
       }))
       .mutation(async ({ input, ctx }) => {
