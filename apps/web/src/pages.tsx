@@ -352,9 +352,9 @@ export function SuppliersPage({ focusId }: { focusId?: string } = {}): JSX.Eleme
       {openSupplier && <SupplierDetailPanel supplierId={openSupplier} />}
 
       <Title order={4} mt="lg">Katalog</Title>
+      <Text size="xs" c="dimmed" mt={2}>Lieferant in der Tabelle „Katalog" wählen oder hier direkt:</Text>
       <Group mt="xs" gap="xs" align="end">
-        <TextInput label="Lieferanten-ID" value={sid} onChange={(e) => setSid(e.currentTarget.value)} w={200} />
-        <Button size="sm" variant="default" onClick={() => setApplied(sid)}>Anzeigen</Button>
+        <SupplierPicker value={sid} onChange={(id) => { setSid(id); setApplied(id); }} label="Lieferant" w={260} />
       </Group>
       <ListPage key={applied} module="Einkauf / Lieferanten" title={`Katalog · ${applied}`}
         load={() => trpc.suppliers.list.query({ supplierId: applied, limit: 100 }) as Promise<Row[]>} />
@@ -4657,10 +4657,18 @@ export function LagerPage(): JSX.Element {
       <DocListHeader module="Lager" title="Lager & Bestand"
         hint="Mehrere Läger (Stammdaten) + schlanke Bestandsführung über Bewegungen (F4): Bestand = Summe der Buchungen. Inventur bucht die Differenz (Ist − Soll)." />
       {err && <Alert color="red" mt="sm">{err}</Alert>}
-      <WarehousesSection />
       {msg && <Alert color="green" mt="sm">{msg}</Alert>}
 
-      <Group gap="md" mt="md" align="end" wrap="wrap">
+      <Tabs defaultValue="bestand" mt="md" keepMounted={false}>
+        <Tabs.List>
+          <Tabs.Tab value="bestand">Bestand</Tabs.Tab>
+          <Tabs.Tab value="buchen">Buchen</Tabs.Tab>
+          <Tabs.Tab value="laeger">Läger</Tabs.Tab>
+          <Tabs.Tab value="verfuegbar">Verfügbarkeit &amp; Reservierung</Tabs.Tab>
+        </Tabs.List>
+
+        <Tabs.Panel value="buchen" pt="md">
+      <Group gap="md" align="end" wrap="wrap">
         <Box p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
           <Text size="sm" fw={600}>Zugang / Abgang (beliebiges Lager)</Text>
           <Group gap="xs" align="end" mt="xs">
@@ -4698,8 +4706,10 @@ export function LagerPage(): JSX.Element {
           </Group>
         </Box>
       </Group>
+        </Tabs.Panel>
 
-      <Title order={4} mt="xl">Bestandsübersicht</Title>
+        <Tabs.Panel value="bestand" pt="md">
+      <Title order={4}>Bestandsübersicht</Title>
       {rows.length === 0 ? <Text size="sm" c="dimmed" mt="xs">Noch keine Lagerbewegungen.</Text> : (
         <Table mt="xs" withTableBorder withColumnBorders>
           <Table.Thead><Table.Tr>
@@ -4720,8 +4730,16 @@ export function LagerPage(): JSX.Element {
       <Title order={4} mt="xl">Bestand je Lager (Multi-Lager)</Title>
       <Text size="xs" c="dimmed" mb={4}>Bestand je Warehouse × Variante aus dem Bewegungs-Ledger — zeigt auch neu angelegte Läger.</Text>
       <AutoTable rows={whBalances.map((b) => ({ Lager: `${b.warehouseCode} · ${b.warehouseName}`, SKU: b.sku, Artikel: b.name, Bestand: b.qty }))} />
+        </Tabs.Panel>
 
-      <LagerVerfuegbarkeit />
+        <Tabs.Panel value="laeger" pt="md">
+          <WarehousesSection />
+        </Tabs.Panel>
+
+        <Tabs.Panel value="verfuegbar" pt="md">
+          <LagerVerfuegbarkeit />
+        </Tabs.Panel>
+      </Tabs>
     </>
   );
 }

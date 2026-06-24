@@ -249,13 +249,17 @@ function SideNav({ active, collapsed, onNavigate }: { active: string; collapsed:
           const open = !closed.has(g.group);
           return (
             <Box key={g.group}>
-              <UnstyledButton onClick={() => toggleGroup(g.group)} aria-expanded={open}
+              {/* Klick auf den Gruppenkopf navigiert zum ersten Eintrag (und klappt auf);
+                  der Chevron ist ein separater Auf-/Zuklapp-Schalter (QA: Kopf wirkte
+                  klickbar, klappte aber nur ein). */}
+              <UnstyledButton onClick={() => { if (g.items[0]) onNavigate(g.items[0].key); if (closed.has(g.group)) toggleGroup(g.group); }} aria-expanded={open}
                 style={{ display: "block", width: "100%", borderRadius: 6, padding: "6px 8px", marginTop: 4 }}
                 className="erp-nav-group">
                 <Group gap={8} wrap="nowrap">
                   <Box c={activeGroup === g.group ? "navy.9" : "dimmed"} style={{ display: "inline-flex" }}><NavIcon name={g.icon} /></Box>
                   <Text size="xs" fw={700} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.4, flex: 1 }}>{g.group}</Text>
-                  <Box c="dimmed" style={{ display: "inline-flex" }}><Chevron open={open} /></Box>
+                  <Box c="dimmed" style={{ display: "inline-flex", cursor: "pointer" }} role="button" aria-label={open ? "Gruppe einklappen" : "Gruppe ausklappen"}
+                    onClick={(e) => { e.stopPropagation(); toggleGroup(g.group); }}><Chevron open={open} /></Box>
                 </Group>
               </UnstyledButton>
               <Collapse in={open}>
