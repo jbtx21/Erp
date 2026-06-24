@@ -6,6 +6,7 @@ import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } fr
 import { Alert, Badge, Box, Button, Card, Checkbox, Group, Loader, Modal, NumberInput, PasswordInput, Select, SimpleGrid, Switch, Table, Tabs, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { validateVatId } from "@texma/shared/vat";
+import { resolveMarkupFactor, DEFAULT_MARKUP_CONFIG, type MarkupConfig } from "@texma/shared/markup";
 import { trpc } from "./trpc.js";
 import { AufschlagsfaktorenSection, LogosStickereiSection, StickereiAusschreibungSection, StickereiStaffelnSection, Postcalc } from "./Differentiators.js";
 import { euro, numTd, statusMantineColor } from "./theme.js";
@@ -1069,6 +1070,22 @@ function LogoArticleDialog({ onClose, onCreated }: { onClose: () => void; onCrea
 
 export function LinesEditor({ lines, onChange, quoteMode = false, companyId }: { lines: EditorLine[]; onChange: (l: EditorLine[]) => void; quoteMode?: boolean; companyId?: string }): JSX.Element {
   const set = (i: number, patch: Partial<EditorLine>): void => onChange(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+  // Aufschlagsfaktor-Konfiguration (Kap. 4.4) für die automatische VK-Ableitung aus dem EK.
+  const [markupCfg, setMarkupCfg] = useState<MarkupConfig | null>(null);
+  useEffect(() => { void trpc.stickerei.markup.getConfig.query().then((c) => setMarkupCfg(c as MarkupConfig)).catch(() => undefined); }, []);
+  // EK setzen: bei freien/temporären Positionen (kein Katalogartikel) den VK automatisch
+  // aus dem Aufschlagsfaktor ableiten, solange noch kein VK manuell gesetzt wurde (Kap. 4.4).
+  const applyEk = (i: number, l: EditorLine, raw: number | string): void => {
+    if (raw === "") { set(i, { ekEuro: undefined }); return; }
+    const ek = Number(raw);
+    const patch: Partial<EditorLine> = { ekEuro: ek };
+    const isFree = !l.variantId && !l.articleId;
+    if (isFree && ek > 0 && !l.euro) {
+      const { factor } = resolveMarkupFactor(markupCfg ?? DEFAULT_MARKUP_CONFIG, { menge: l.qty, ekCents: Math.round(ek * 100) });
+      patch.euro = Math.round(ek * factor * 100) / 100;
+    }
+    set(i, patch);
+  };
   const [bundleFor, setBundleFor] = useState<number | null>(null); // Index der Zeile mit offenem Stücklisten-Editor
   const [shown, setShown] = useState<Record<number, boolean>>({}); // aufgeklappte Stücklisten-Vorschauen
   const [logoOpen, setLogoOpen] = useState(false); // Dialog „Logo/Veredelung anlegen"
@@ -1114,7 +1131,7 @@ export function LinesEditor({ lines, onChange, quoteMode = false, companyId }: {
           <NumberInput label={i === 0 ? "Menge" : undefined} value={l.qty} onChange={(v) => set(i, { qty: Number(v) || 1 })}
             onBlur={() => { if (companyId && l.variantId) void resolve(l.variantId, l.qty).then((p) => { if (p.euro !== undefined || p.ekEuro !== undefined) set(i, p); }); }}
             min={1} w={70} />
-          <NumberInput label={i === 0 ? "EK (€)" : undefined} value={l.ekEuro ?? ""} onChange={(v) => set(i, { ekEuro: v === "" ? undefined : Number(v) })} min={0} decimalScale={2} w={90} placeholder="—" />
+          <NumberInput label={i === 0 ? "EK (€)" : undefined} value={l.ekEuro ?? ""} onChange={(v) => applyEk(i, l, v)} min={0} decimalScale={2} w={90} placeholder="—" title="Einkaufspreis — VK wird bei freien Positionen automatisch über den Aufschlagsfaktor berechnet" />
           <NumberInput label={i === 0 ? "VK (€)" : undefined} value={l.euro} onChange={(v) => set(i, { euro: Number(v) || 0 })} min={0} decimalScale={2} w={90} />
           <NumberInput label={i === 0 ? "Rabatt %" : undefined} value={l.rabattPct ?? ""} onChange={(v) => set(i, { rabattPct: v === "" ? undefined : Math.min(100, Math.max(0, Number(v))) })} min={0} max={100} decimalScale={1} w={80} placeholder="0" />
           <Select label={i === 0 ? "USt" : undefined} w={80} value={String(l.taxRatePct ?? 19)} onChange={(v) => set(i, { taxRatePct: Number(v) })}
