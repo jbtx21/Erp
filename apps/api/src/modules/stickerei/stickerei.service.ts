@@ -86,6 +86,8 @@ export interface StoredLogoFile {
 
 export interface StickereiRepository {
   contextForCompany(companyId: string): Promise<StickereiContext | null>;
+  /** Setzt/entfernt den hinterlegten Stickerei-Partner (Lieferant) einer Firma. */
+  setPartner(companyId: string, supplierId: string | null): Promise<void>;
   /** Auswahlliste aller Logos (für den Picker). */
   listLogos(): Promise<LogoOption[]>;
   /** Firmen für die Logo-Zuordnung. */
@@ -184,12 +186,20 @@ export class StickereiService {
   }
 
   /** Stickerei-Plan einer Firma (Kap. 5.4): Weg + Digitalisierungsbedarf + Begründung. */
-  async routeForCompany(companyId: string): Promise<{ companyId: string } & StickereiPlan> {
+  async routeForCompany(companyId: string): Promise<{ companyId: string; stickereiPartnerId: string | null } & StickereiPlan> {
     const ctx = await this.repo.contextForCompany(companyId);
     if (!ctx) {
       throw new Error(`Firma ${companyId} nicht gefunden.`);
     }
-    return { companyId, ...planStickerei(ctx) };
+    return { companyId, stickereiPartnerId: ctx.stickereiPartnerId, ...planStickerei(ctx) };
+  }
+
+  /**
+   * Hinterlegt die (per Mail-Ausschreibung) gewählte Stickerei als Partner der Firma —
+   * danach ist bei vorhandener Stickdatei der Weg automatisch DIREKT (Kap. 5.4).
+   */
+  async setPartner(companyId: string, supplierId: string | null): Promise<void> {
+    await this.repo.setPartner(companyId, supplierId);
   }
 
   /** Baut die Aufschlags-Auflösung eines Logos: globale Konfig + Kontext + Logo-Override. */

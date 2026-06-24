@@ -60,6 +60,10 @@ export class PrismaStickereiRepository implements StickereiRepository {
     return { stickereiPartnerId: c.stickereiPartnerId, hatStickdatei: c.hatStickdatei };
   }
 
+  async setPartner(companyId: string, supplierId: string | null): Promise<void> {
+    await prisma.company.update({ where: { id: companyId }, data: { stickereiPartnerId: supplierId } });
+  }
+
   async listLogos(): Promise<LogoOption[]> {
     const rows = await prisma.logoVersion.findMany({
       select: { id: true, companyId: true, version: true, active: true, fileName: true, company: { select: { name: true } } },

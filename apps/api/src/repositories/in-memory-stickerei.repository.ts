@@ -59,6 +59,11 @@ export class InMemoryStickereiRepository implements StickereiRepository {
     return this.byCompany[companyId] ?? null;
   }
 
+  async setPartner(companyId: string, supplierId: string | null): Promise<void> {
+    const ctx = this.byCompany[companyId] ?? { stickereiPartnerId: null, hatStickdatei: false };
+    this.byCompany[companyId] = { ...ctx, stickereiPartnerId: supplierId };
+  }
+
   async listLogos(): Promise<LogoOption[]> {
     return this.logos.map((l) => ({ ...l }));
   }

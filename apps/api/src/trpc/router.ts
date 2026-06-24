@@ -654,6 +654,11 @@ export const appRouter = router({
       .input(z.object({ companyId: z.string().min(1) }))
       .query(async ({ input, ctx }) => ctx.stickerei.routeForCompany(input.companyId)),
 
+    /** Gewählte Stickerei (Lieferant) als Partner der Firma hinterlegen (Mail-Ausschreibung). */
+    setPartner: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ companyId: z.string().min(1), supplierId: z.string().min(1).nullable() }))
+      .mutation(async ({ input, ctx }) => { await ctx.stickerei.setPartner(input.companyId, input.supplierId); return { ok: true as const }; }),
+
     /** Mengenstaffeln je Logo (Stick-EK je Stück → unser VK = EK × 1,88, Kap. 4.4 / T-15). */
     staffeln: router({
       /** Staffeln eines Logos inkl. berechneter VKs/DB (preis-sensibel, kein PRODUKTION). */

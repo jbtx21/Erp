@@ -197,16 +197,32 @@ function PricingTools(): JSX.Element {
 // Digitalisierung (Punch) nötig. Macht den von decideStickereiRoute ermittelten Weg sichtbar.
 function StickereiRouteCard(): JSX.Element {
   const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
+  const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([]);
   const [companyId, setCompanyId] = useState("");
+  const [partnerId, setPartnerId] = useState<string | null>(null);
+  const [savingPartner, setSavingPartner] = useState(false);
+  const [partnerMsg, setPartnerMsg] = useState<string | null>(null);
   const [plan, setPlan] = useState<Awaited<ReturnType<typeof trpc.stickerei.routeForCompany.query>> | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  useEffect(() => { void (async () => { try { setCompanies(await trpc.stickerei.companies.query()); } catch { /* leer */ } })(); }, []);
+  useEffect(() => { void (async () => {
+    try { setCompanies(await trpc.stickerei.companies.query()); } catch { /* leer */ }
+    try { setSuppliers((await trpc.suppliers.listAll.query()).map((s) => ({ id: s.id, name: s.name }))); } catch { /* leer */ }
+  })(); }, []);
   const choose = async (id: string): Promise<void> => {
-    setCompanyId(id); setPlan(null); setErr(null);
-    if (!id) return;
-    try { setPlan(await trpc.stickerei.routeForCompany.query({ companyId: id })); }
+    setCompanyId(id); setPlan(null); setErr(null); setPartnerMsg(null);
+    if (!id) { setPartnerId(null); return; }
+    try { const p = await trpc.stickerei.routeForCompany.query({ companyId: id }); setPlan(p); setPartnerId(p.stickereiPartnerId); }
     catch (e) { setErr(errMsg(e)); }
+  };
+  const savePartner = async (): Promise<void> => {
+    if (!companyId) return;
+    setSavingPartner(true); setPartnerMsg(null); setErr(null);
+    try {
+      await trpc.stickerei.setPartner.mutate({ companyId, supplierId: partnerId });
+      const p = await trpc.stickerei.routeForCompany.query({ companyId }); setPlan(p); setPartnerId(p.stickereiPartnerId);
+      setPartnerMsg("Stickerei-Partner gespeichert.");
+    } catch (e) { setErr(errMsg(e)); } finally { setSavingPartner(false); }
   };
 
   const direkt = plan?.route === "DIREKT";
@@ -226,6 +242,19 @@ function StickereiRouteCard(): JSX.Element {
           </Group>
         )}
       </Group>
+      {plan && (
+        <Group mt="sm" align="end" gap="sm" wrap="wrap">
+          <Select label="Gewählte Stickerei (Partner der Firma)" placeholder="kein Partner" searchable clearable w={300}
+            value={partnerId} data={suppliers.map((s) => ({ value: s.id, label: s.name }))} onChange={setPartnerId} />
+          <Button variant="light" loading={savingPartner} onClick={() => void savePartner()}>Partner speichern</Button>
+          {partnerMsg && <Text size="sm" c="teal">{partnerMsg}</Text>}
+        </Group>
+      )}
+      {plan && (
+        <Text size="xs" c="dimmed" mt={4}>
+          Per Mail ausgeschrieben? Die beste Stickerei hier als Partner hinterlegen — bei vorhandener Stickdatei wird der Weg dann automatisch zum Direktauftrag.
+        </Text>
+      )}
       {err && <Text size="sm" c="red" mt="xs">{err}</Text>}
       {plan && <Text size="sm" mt="sm">{plan.reason}</Text>}
       {plan && !direkt && (

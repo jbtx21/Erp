@@ -33,6 +33,18 @@ describe("StickereiService.routeForCompany (Kap. 5.4)", () => {
   it("wirft für eine unbekannte Firma", async () => {
     await expect(service().routeForCompany("x")).rejects.toThrow(/nicht gefunden/);
   });
+
+  it("setPartner: gewählte Stickerei hinterlegen → Weg wird DIREKT (mit Stickdatei)", async () => {
+    const svc = service();
+    // 'ohne_datei' hat Partner aber keine Datei → AUSSCHREIBUNG; 'neu' hat weder noch.
+    expect((await svc.routeForCompany("neu")).route).toBe("AUSSCHREIBUNG");
+    await svc.setPartner("neu", "stickerei-nord");
+    const afterPartner = await svc.routeForCompany("neu");
+    expect(afterPartner.stickereiPartnerId).toBe("stickerei-nord");
+    expect(afterPartner.route).toBe("AUSSCHREIBUNG"); // noch keine Stickdatei
+    await svc.setPartner("neu", null);
+    expect((await svc.routeForCompany("neu")).stickereiPartnerId).toBeNull();
+  });
 });
 
 describe("StickereiService Mengenstaffeln je Logo (Kap. 4.4 / T-15)", () => {
