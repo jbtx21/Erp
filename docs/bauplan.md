@@ -1,9 +1,17 @@
 # TEXMA-ERP — Finaler Bauplan (entscheidungsvollständig, keine offenen Punkte)
 
-> Stand: 2026-06-21 · Branch `claude/texma-erp-migration-zrtoab`.
-> Quellen: `docs/sprint-audit.md` (Ist), `docs/roadmap.md` (Backlog-Narrativ).
+> Stand: 2026-06-24 · Branch `claude/texma-erp-migration-zrtoab`.
+> Quellen: `docs/sprint-audit.md` (Ist), `docs/roadmap.md` (Backlog-Narrativ),
+> **`docs/erp-prozessketten-audit.md` (neu: gerissene Verkettungen aus 2× manueller E2E-QA)**.
 > Dieses Dokument ist die **ausführbare Spezifikation**: jede Entscheidung getroffen,
 > jedes Item mit Schema · Shared · API · Tests · Gate · Abhängigkeit.
+
+> **Aktiver Fokus (2026-06-24): Prozessketten schließen.** Die manuelle QA (Lead →
+> „FAKTURIERT") zeigte: Grundgerüst steht, aber der Status-Automat schaltete Labels,
+> ohne Folgevorgänge auszulösen. Bereits behoben: Faktura erzeugt echte Rechnung;
+> Wareneingang/Lieferung buchen Lagerbewegungen; Anfrage-Inhalt wandert ins Angebot;
+> AF-Nummernkollision. Nächste P0: offener Bedarf → Beschaffung; Lieferschein-Auto-Trigger
+> + Produktions-Gate. Volle Liste/Status in `docs/erp-prozessketten-audit.md`.
 
 ## 0. Getroffene Entscheidungen (fix)
 | Thema | Entscheidung |
