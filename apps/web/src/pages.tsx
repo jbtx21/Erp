@@ -374,6 +374,7 @@ export const IncomingInvoicesPage = (): JSX.Element => (
 export function ReorderPage(): JSX.Element {
   const [proposals, setProposals] = useState<Row[]>([]);
   const [demand, setDemand] = useState<Awaited<ReturnType<typeof trpc.reorder.demandProposals.query>>>([]);
+  const [grouped, setGrouped] = useState<Awaited<ReturnType<typeof trpc.reorder.demandGrouped.query>>>([]);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -381,6 +382,7 @@ export function ReorderPage(): JSX.Element {
     try {
       setProposals((await trpc.reorder.proposals.query()) as Row[]);
       setDemand(await trpc.reorder.demandProposals.query());
+      setGrouped(await trpc.reorder.demandGrouped.query());
       setErr(null);
     } catch (e) { setErr(errMsg(e)); }
   }, []);
@@ -414,6 +416,40 @@ export function ReorderPage(): JSX.Element {
                 <Table.Td><Text size="xs" c="dimmed">{d.sources.map((s) => `${s.source === "ORDER" ? "Auftrag" : "Leihe"} ${s.ref}: ${s.qty}`).join(" · ")}</Text></Table.Td>
               </Table.Tr>
             ))}
+          </Table.Tbody>
+        </Table>
+      )}
+
+      <Title order={4} mt="xl">Bestellvorschlag nach Marke / Artikel / Farbe / Größe</Title>
+      <Text size="sm" c="dimmed" mt={4}>Konsolidierter Bedarf aller offenen Aufträge, gruppiert nach Marke und sortiert nach Artikel, Farbe und Größe (XS…XXL bzw. numerisch).</Text>
+      {grouped.length === 0 ? <Text size="sm" c="dimmed" mt="xs">Kein offener variantenbezogener Bedarf.</Text> : (
+        <Table mt="xs" withTableBorder withColumnBorders striped>
+          <Table.Thead><Table.Tr>
+            <Table.Th>Artikel</Table.Th><Table.Th>Farbe</Table.Th><Table.Th>Größe</Table.Th>
+            <Table.Th ta="right">Bedarf</Table.Th><Table.Th ta="right">Bestand</Table.Th><Table.Th ta="right">Bestellen</Table.Th><Table.Th>Lieferant</Table.Th>
+          </Table.Tr></Table.Thead>
+          <Table.Tbody>
+            {grouped.map((d, i) => {
+              const newBrand = i === 0 || grouped[i - 1]!.brand !== d.brand;
+              return (
+                <Fragment key={d.variantId}>
+                  {newBrand && (
+                    <Table.Tr style={{ background: "var(--mantine-color-gray-1)" }}>
+                      <Table.Td colSpan={7}><Text size="sm" fw={700}>{d.brand ?? "Ohne Marke"}</Text></Table.Td>
+                    </Table.Tr>
+                  )}
+                  <Table.Tr>
+                    <Table.Td><Text size="sm">{d.articleName}</Text> <Text span size="xs" c="dimmed">{d.sku}</Text></Table.Td>
+                    <Table.Td>{d.farbe ?? "—"}</Table.Td>
+                    <Table.Td>{d.groesse ?? "—"}</Table.Td>
+                    <Table.Td ta="right">{d.requiredQty}</Table.Td>
+                    <Table.Td ta="right">{d.stockQty}</Table.Td>
+                    <Table.Td ta="right"><b>{d.orderQty}</b></Table.Td>
+                    <Table.Td>{d.supplierId ?? <Text span c="red" size="xs">kein Hauptlieferant</Text>}</Table.Td>
+                  </Table.Tr>
+                </Fragment>
+              );
+            })}
           </Table.Tbody>
         </Table>
       )}

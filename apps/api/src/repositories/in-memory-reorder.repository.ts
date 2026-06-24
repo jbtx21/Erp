@@ -4,6 +4,7 @@ import type { DemandItem, DemandStock, DemandSupplier, ReorderCandidate, Supplie
 import type {
   CreatedReorderPo,
   ReorderRepository,
+  VariantMeta,
 } from "../modules/reorder/reorder.service.js";
 
 export class InMemoryReorderRepository implements ReorderRepository {
@@ -12,6 +13,10 @@ export class InMemoryReorderRepository implements ReorderRepository {
   demand: DemandItem[] = [];
   stock: DemandStock[] = [];
   suppliers: DemandSupplier[] = [];
+  meta = new Map<string, VariantMeta>();
+  async variantMeta(variantIds: string[]): Promise<Map<string, VariantMeta>> {
+    return new Map(variantIds.filter((id) => this.meta.has(id)).map((id) => [id, this.meta.get(id)!]));
+  }
 
   constructor(private readonly candidates: ReorderCandidate[]) {}
 

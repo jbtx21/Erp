@@ -34,6 +34,34 @@ export interface ReorderRepository {
   stockLevels(): Promise<DemandStock[]>;
   /** Hauptlieferant + EK je Variante. */
   variantSuppliers(): Promise<DemandSupplier[]>;
+  /** Stammdaten je Variante (Marke/Artikel/Farbe/Größe) für die gruppierte Sortierung. */
+  variantMeta(variantIds: string[]): Promise<Map<string, VariantMeta>>;
+}
+
+export interface VariantMeta {
+  sku: string;
+  articleName: string;
+  brand: string | null;
+  farbe: string | null;
+  groesse: string | null;
+}
+
+export interface GroupedDemandRow extends VariantMeta {
+  variantId: string;
+  requiredQty: number;
+  stockQty: number;
+  orderQty: number;
+  supplierId: string | null;
+}
+
+// Natürliche Größenordnung (Textil): XS < S < M < L < XL … ; numerische Größen numerisch.
+const SIZE_ORDER = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "3XL", "4XL", "5XL"];
+function sizeRank(size: string | null): number {
+  if (!size) return 999;
+  const idx = SIZE_ORDER.indexOf(size.toUpperCase().replace(/\s/g, ""));
+  if (idx >= 0) return idx;
+  const num = Number(size.replace(",", "."));
+  return Number.isFinite(num) ? 100 + num : 998; // numerische Größen hinter den Buchstaben, untereinander numerisch
 }
 
 export class ReorderService {
@@ -58,6 +86,39 @@ export class ReorderService {
       this.repo.openDemand(), this.repo.stockLevels(), this.repo.variantSuppliers(),
     ]);
     return aggregateDemand(demand, stock, suppliers);
+  }
+
+  /**
+   * Bestellvorschlag aller offenen Aufträge, angereichert um Stammdaten und sortiert
+   * nach Marke → Artikel → Farbe → Größe (Größe in natürlicher Reihenfolge XS…XXL bzw.
+   * numerisch). Grundlage für die gruppierte Beschaffungsansicht.
+   */
+  async demandGrouped(): Promise<GroupedDemandRow[]> {
+    const props = await this.demandProposals();
+    const meta = await this.repo.variantMeta(props.map((p) => p.variantId));
+    const rows: GroupedDemandRow[] = props.map((p) => {
+      const m = meta.get(p.variantId);
+      return {
+        variantId: p.variantId,
+        sku: m?.sku ?? p.variantId,
+        articleName: m?.articleName ?? p.variantId,
+        brand: m?.brand ?? null,
+        farbe: m?.farbe ?? null,
+        groesse: m?.groesse ?? null,
+        requiredQty: p.requiredQty,
+        stockQty: p.stockQty,
+        orderQty: p.orderQty,
+        supplierId: p.supplierId,
+      };
+    });
+    return rows.sort(
+      (a, b) =>
+        (a.brand ?? "~").localeCompare(b.brand ?? "~") ||
+        a.articleName.localeCompare(b.articleName) ||
+        (a.farbe ?? "").localeCompare(b.farbe ?? "") ||
+        sizeRank(a.groesse) - sizeRank(b.groesse) ||
+        (a.groesse ?? "").localeCompare(b.groesse ?? "")
+    );
   }
 
   /** Erzeugt aus dem aktuellen Vorschlag je Lieferant eine Bestellung (Kap. 6.1). */

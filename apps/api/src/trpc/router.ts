@@ -809,6 +809,9 @@ export const appRouter = router({
     /** Auftragsübergreifender Bedarf: gesammelt aus allen Aufträgen + Muster-Leihen. */
     demandProposals: roleProcedure(...supplierRoles).query(async ({ ctx }) => ctx.reorder.demandProposals()),
 
+    /** Bestellvorschlag aller offenen Aufträge, sortiert nach Marke → Artikel → Farbe → Größe. */
+    demandGrouped: roleProcedure(...supplierRoles).query(async ({ ctx }) => ctx.reorder.demandGrouped()),
+
     /** Erzeugt aus dem Vorschlag je Lieferant eine Bestellung (Kap. 6.1). */
     createPurchaseOrders: roleProcedure("ADMIN", "BUERO").mutation(async ({ ctx }) =>
       ctx.reorder.createPurchaseOrders()

@@ -37,6 +37,19 @@ export class PrismaReorderRepository implements ReorderRepository {
     return rows.map((r) => ({ variantId: r.variantId, supplierId: r.supplierId, ekCents: r.ekCents }));
   }
 
+  async variantMeta(variantIds: string[]): Promise<Map<string, import("../modules/reorder/reorder.service.js").VariantMeta>> {
+    if (variantIds.length === 0) return new Map();
+    const rows = await prisma.variant.findMany({
+      where: { id: { in: variantIds } },
+      select: { id: true, sku: true, article: { select: { name: true, brand: true } }, attributes: { select: { name: true, value: true } } },
+    });
+    return new Map(rows.map((v) => {
+      const farbe = v.attributes.find((a) => a.name === "Farbe")?.value ?? null;
+      const groesse = v.attributes.find((a) => a.name === "Größe")?.value ?? null;
+      return [v.id, { sku: v.sku, articleName: v.article.name, brand: v.article.brand, farbe, groesse }];
+    }));
+  }
+
   async belowMinStock(): Promise<ReorderCandidate[]> {
     const stocks = await prisma.stockLevel.findMany({
       where: { minStock: { gt: 0 } },
