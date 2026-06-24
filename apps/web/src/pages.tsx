@@ -117,9 +117,9 @@ export function AutoTable({ rows, hide = [], action, onRowClick, highlightId }: 
 
 /** Standard-Seitenrahmen: Titel, Hinweis, Aktualisieren, Lade-/Fehlerzustand. */
 export function ListPage({
-  title, hint, load, hide, action, toolbar,
+  title, hint, load, hide, action, toolbar, module,
 }: {
-  title: string; hint?: string; load: () => Promise<Row[]>; hide?: string[];
+  title: string; hint?: string; load: () => Promise<Row[]>; hide?: string[]; module?: string;
   action?: (r: Row, reload: () => Promise<void>) => ReactNode; toolbar?: (reload: () => Promise<void>) => ReactNode;
 }): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
@@ -135,14 +135,10 @@ export function ListPage({
 
   return (
     <>
-      <Group justify="space-between" align="center">
-        <Title order={3}>{title}</Title>
-        <Group gap="xs">
-          {toolbar?.(reload)}
-          <Button variant="default" size="xs" onClick={() => void reload()}>Aktualisieren</Button>
-        </Group>
-      </Group>
-      {hint && <Text size="sm" c="dimmed" mt={4}>{hint}</Text>}
+      <DocListHeader module={module} title={title} hint={hint} action={<>
+        {toolbar?.(reload)}
+        <Button variant="default" size="xs" onClick={() => void reload()}>Aktualisieren</Button>
+      </>} />
       {error && <Alert color="red" mt="sm" title="Fehler">{error}</Alert>}
       {loading ? <Group mt="sm" gap="xs"><Loader size="sm" /><Text size="sm">lädt…</Text></Group>
         : <AutoTable rows={rows} action={action ? (r) => action(r, reload) : undefined} />}
@@ -667,8 +663,7 @@ export function ProductsPage({ focusId }: { focusId?: string } = {}): JSX.Elemen
 
   return (
     <>
-      <Title order={3}>Artikel &amp; Varianten (PIM)</Title>
-      <Text size="sm" c="dimmed" mt={4}>Stammdaten (B16): Artikel direkt in der Tabelle bearbeiten (Schnellbearbeitung), Vollständigkeit je Artikel, Massenbearbeitung über mehrere SKUs, Farbe×Größe-Varianten.</Text>
+      <DocListHeader module="Lager / Artikel" title="Artikel & Varianten" hint="Stammdaten (B16): Artikel direkt in der Tabelle bearbeiten (Schnellbearbeitung), Vollständigkeit je Artikel, Massenbearbeitung über mehrere SKUs, Farbe×Größe-Varianten." />
       <Group mt="sm" gap="xs" align="end">
         <TextInput label="Artikel-SKU" value={sku} onChange={(e) => setSku(e.currentTarget.value)} placeholder="POLO-PREMIUM" w={160} />
         <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Premium-Poloshirt" />
@@ -2446,8 +2441,7 @@ export function CompaniesPage({ focusId }: { focusId?: string } = {}): JSX.Eleme
 
   return (
     <>
-      <Title order={3}>Firmen / Kunden</Title>
-      <Text size="sm" c="dimmed" mt={4}>Stammdaten (B3). Sperren/Anonymisieren erfolgt separat (DSGVO).</Text>
+      <DocListHeader module="Vertrieb / Kunden" title="Kunden" hint="Stammdaten (B3). Sperren/Anonymisieren erfolgt separat (DSGVO)." />
       <Group mt="sm" gap="xs" align="end">
         <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Neue Firma GmbH" />
         <TextInput label="Branche" value={branche} onChange={(e) => setBranche(e.currentTarget.value)} w={140} />
@@ -2513,8 +2507,7 @@ export function InquiriesPage(): JSX.Element {
 
   return (
     <>
-      <Title order={3}>Anfragen</Title>
-      <Text size="sm" c="dimmed" mt={4}>Anfrage-Funnel NEU → In Bearbeitung → Angebot (B20, AF-Nummer aus F1). Maileingang wird per IMAP zu Anfragen, Absender mit Kundenstammdaten abgeglichen.</Text>
+      <DocListHeader module="CRM / Anfragen" title="Anfragen" hint="Anfrage-Funnel NEU → In Bearbeitung → Angebot (B20, AF-Nummer aus F1). Maileingang wird per IMAP zu Anfragen, Absender mit Kundenstammdaten abgeglichen." />
       <Button size="compact-sm" variant="light" mt="xs" onClick={() => void act(async () => {
         const r = await trpc.mail.pollInbox.mutate();
         window.alert(`Posteingang: ${r.created} neue Anfrage(n), ${r.matched} Kunde(n) zugeordnet, ${r.skipped} übersprungen.`);
@@ -2575,8 +2568,7 @@ export function LeadsPage({ focusId }: { focusId?: string } = {}): JSX.Element {
 
   return (
     <>
-      <Title order={3}>Leads / Interessenten</Title>
-      <Text size="sm" c="dimmed" mt={4}>Funnel NEU → Kontaktiert → Qualifiziert → konvertiert zu Firma (B15, Kap. 18.1). Firma wird beim Konvertieren zum Firmennamen, der Ansprechpartner zum Kontakt.</Text>
+      <DocListHeader module="CRM / Leads" title="Leads / Interessenten" hint="Funnel NEU → Kontaktiert → Qualifiziert → konvertiert zu Firma (B15, Kap. 18.1). Firma wird beim Konvertieren zum Firmennamen, der Ansprechpartner zum Kontakt." />
       <Group mt="sm" gap="xs" align="end">
         <TextInput label="Ansprechpartner" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Max Mustermann" />
         <TextInput label="Firma" value={firma} onChange={(e) => setFirma(e.currentTarget.value)} placeholder="Interessent GmbH" />
@@ -3901,8 +3893,7 @@ export function OpportunitiesPage(): JSX.Element {
 
   return (
     <>
-      <Title order={3}>Verkaufschancen (CRM-Pipeline)</Title>
-      <Text size="sm" c="dimmed" mt={4}>Gewichteter Forecast = Wert × Wahrscheinlichkeit der offenen Chancen. Hubspot-Spiegelung optional (HUBSPOT_TOKEN).</Text>
+      <DocListHeader module="CRM / Verkaufschancen" title="Verkaufschancen" hint="Gewichteter Forecast = Wert × Wahrscheinlichkeit der offenen Chancen. Hubspot-Spiegelung optional (HUBSPOT_TOKEN)." />
       {err && <Alert color="red" mt="sm">{err}</Alert>}
 
       {pipeline && (
