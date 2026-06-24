@@ -193,6 +193,7 @@ model LogoVersion {
   fileData   Bytes?
 
   stickereiStaffeln StickereiStaffel[]
+  ausschreibungen   StickereiAusschreibung[]
 
   @@unique([companyId, version])
   @@index([companyId, active])
@@ -238,6 +239,45 @@ model StickereiStaffel {
 
   @@unique([logoVersionId, minMenge])
   @@index([logoVersionId])
+}
+
+// Ausschreibung eines Logos an mehrere Stickerei-Partner (Kap. 5.4): neues Logo / kein
+// Partner → mehrere Angebote (Stick-EK-Staffeln) einholen, vergleichen, eines wählen.
+model StickereiAusschreibung {
+  id            String      @id @default(cuid())
+  logoVersionId String
+  logoVersion   LogoVersion @relation(fields: [logoVersionId], references: [id], onDelete: Cascade)
+  status        String      @default("OFFEN") // OFFEN | ENTSCHIEDEN | ABGEBROCHEN
+  gewinnerAngebotId String?
+  createdAt     DateTime    @default(now())
+  decidedAt     DateTime?
+  angebote      StickereiAngebot[]
+
+  @@index([logoVersionId])
+}
+
+// Angebot eines Stickerei-Partners in einer Ausschreibung (Stick-EK je Mengenstaffel).
+model StickereiAngebot {
+  id              String   @id @default(cuid())
+  ausschreibungId String
+  ausschreibung   StickereiAusschreibung @relation(fields: [ausschreibungId], references: [id], onDelete: Cascade)
+  supplierId      String
+  supplier        Supplier @relation("StickereiAngebote", fields: [supplierId], references: [id])
+  notiz           String?
+  createdAt       DateTime @default(now())
+  staffeln        StickereiAngebotStaffel[]
+
+  @@index([ausschreibungId])
+}
+
+model StickereiAngebotStaffel {
+  id        String @id @default(cuid())
+  angebotId String
+  angebot   StickereiAngebot @relation(fields: [angebotId], references: [id], onDelete: Cascade)
+  minMenge  Int
+  ekCents   Int
+
+  @@unique([angebotId, minMenge])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -456,6 +496,7 @@ model Supplier {
   veredelungsArtikel Article[] @relation("ArticleVeredler") // als Veredler zugewiesene Logo-/Veredelungsartikel
   subProductions  SubProductionOrder[]
   stickereiKunden Company[] @relation("StickereiPartner")
+  stickereiAngebote StickereiAngebot[] @relation("StickereiAngebote")
   purchaseOrders  PurchaseOrder[]
   incomingInvoices IncomingInvoice[]
   sampleLoanLines  SampleLoanLine[]
