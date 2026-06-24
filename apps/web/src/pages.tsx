@@ -51,6 +51,9 @@ function downloadBase64(filename: string, base64: string, type: string): void {
 // Deutsche Spaltenbezeichnungen statt roher Feldnamen ("Don't ship the schema").
 const COL_LABELS: Record<string, string> = {
   id: "ID", number: "Nr.", name: "Name", status: "Status", kind: "Art", quelle: "Quelle",
+  richtung: "Richtung", telefonnummer: "Telefonnr.", companyName: "Firma",
+  bearbeiter: "Bearbeiter", zeitpunkt: "Zeitpunkt", dauerSek: "Dauer (s)", grund: "Grund/Anliegen",
+  ergebnis: "Ergebnis", firma: "Firma", webseite: "Webseite", verantwortlicher: "Verantwortlich",
   companyId: "Firma", supplierId: "Lieferant", variantId: "Variante", articleId: "Artikel",
   email: "E-Mail", phone: "Telefon", branche: "Branche", vatId: "USt-IdNr.", iban: "IBAN", bic: "BIC",
   active: "Aktiv", mahnsperre: "Mahnsperre", gesperrt: "Gesperrt", priceGroupKind: "Preisgruppe",
@@ -2542,6 +2545,87 @@ export function LeadsPage({ focusId }: { focusId?: string } = {}): JSX.Element {
       </Group>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
       <AutoTable rows={rows} hide={["note", "webseite", "convertedCompanyId"]} highlightId={focusId} action={actionsFor} />
+    </>
+  );
+}
+
+// Telefon-Modul / Anrufliste: erfassen wer/wann/weswegen telefoniert hat, optional je
+// Firma, mit Rückruf-Nachverfolgung (Status RUECKRUF → ERLEDIGT).
+export function CallLogsPage(): JSX.Element {
+  const [rows, setRows] = useState<Row[]>([]);
+  const [richtung, setRichtung] = useState("EINGEHEND");
+  const [telefonnummer, setTelefonnummer] = useState("");
+  const [kontaktName, setKontaktName] = useState("");
+  const [companyId, setCompanyId] = useState("");
+  const [grund, setGrund] = useState("");
+  const [dauer, setDauer] = useState<number | "">("");
+  const [ergebnis, setErgebnis] = useState("");
+  const [status, setStatus] = useState("ERLEDIGT");
+  const [filter, setFilter] = useState("ALLE");
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const input = filter === "ALLE" ? undefined : { status: filter as "ERLEDIGT" | "OFFEN" | "RUECKRUF" };
+      setRows((await trpc.callLogs.list.query(input)) as Row[]); setErr(null);
+    } catch (e) { setErr(errMsg(e)); }
+  }, [filter]);
+  useEffect(() => { void load(); }, [load]);
+
+  const act = async (fn: () => Promise<unknown>) => {
+    setErr(null);
+    try { await fn(); await load(); } catch (e) { setErr(errMsg(e)); }
+  };
+
+  const actionsFor = (r: Row): ReactNode => {
+    const id = String(r.id);
+    return String(r.status) === "RUECKRUF"
+      ? <Button size="compact-xs" color="green" onClick={() => void act(() => trpc.callLogs.setStatus.mutate({ id, status: "ERLEDIGT" }))}>Rückruf erledigt</Button>
+      : null;
+  };
+
+  const create = async () => {
+    setBusy(true); setErr(null);
+    try {
+      await trpc.callLogs.create.mutate({
+        richtung: richtung as "EINGEHEND" | "AUSGEHEND",
+        telefonnummer: telefonnummer.trim(),
+        grund: grund.trim(),
+        kontaktName: kontaktName.trim() || undefined,
+        companyId: companyId || undefined,
+        dauerSek: typeof dauer === "number" ? dauer : undefined,
+        ergebnis: ergebnis.trim() || undefined,
+        status: status as "ERLEDIGT" | "OFFEN" | "RUECKRUF",
+      });
+      setTelefonnummer(""); setKontaktName(""); setCompanyId(""); setGrund(""); setDauer(""); setErgebnis(""); setStatus("ERLEDIGT");
+      await load();
+    } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+
+  return (
+    <>
+      <Title order={3}>Anrufliste / Telefon</Title>
+      <Text size="sm" c="dimmed" mt={4}>Nachvollziehbar wer wann mit wem worüber telefoniert hat. Offene Rückrufe über den Status „Rückruf" nachverfolgen.</Text>
+      <Group mt="sm" gap="xs" align="end" wrap="wrap">
+        <Select label="Richtung" value={richtung} onChange={(v) => v && setRichtung(v)} w={130}
+          data={[{ value: "EINGEHEND", label: "Eingehend" }, { value: "AUSGEHEND", label: "Ausgehend" }]} />
+        <TextInput label="Telefonnr." value={telefonnummer} onChange={(e) => setTelefonnummer(e.currentTarget.value)} w={150} placeholder="+49 …" />
+        <TextInput label="Kontakt" value={kontaktName} onChange={(e) => setKontaktName(e.currentTarget.value)} w={150} placeholder="Name" />
+        <CompanyPicker value={companyId} onChange={setCompanyId} label="Firma (optional)" w={200} allowEmpty />
+        <TextInput label="Grund/Anliegen" value={grund} onChange={(e) => setGrund(e.currentTarget.value)} w={220} placeholder="weswegen?" />
+        <NumberInput label="Dauer (s)" value={dauer} onChange={(v) => setDauer(typeof v === "number" ? v : "")} min={0} w={100} />
+        <Select label="Status" value={status} onChange={(v) => v && setStatus(v)} w={130}
+          data={[{ value: "ERLEDIGT", label: "Erledigt" }, { value: "OFFEN", label: "Offen" }, { value: "RUECKRUF", label: "Rückruf" }]} />
+        <TextInput label="Ergebnis (optional)" value={ergebnis} onChange={(e) => setErgebnis(e.currentTarget.value)} w={200} />
+        <Button loading={busy} disabled={!telefonnummer.trim() || !grund.trim()} onClick={() => void create()}>Anruf erfassen</Button>
+      </Group>
+      <Group mt="md" gap="xs" align="end">
+        <Select label="Filter" value={filter} onChange={(v) => v && setFilter(v)} w={160}
+          data={[{ value: "ALLE", label: "Alle" }, { value: "RUECKRUF", label: "Nur Rückrufe" }, { value: "OFFEN", label: "Nur offene" }, { value: "ERLEDIGT", label: "Nur erledigte" }]} />
+      </Group>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      <AutoTable rows={rows} hide={["id", "companyId", "createdAt"]} action={actionsFor} />
     </>
   );
 }

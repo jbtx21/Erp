@@ -61,6 +61,8 @@ import { CostCenterService } from "./modules/cost-center/cost-center.service.js"
 import { PrismaCostCenterRepository } from "./repositories/prisma-cost-center.repository.js";
 import { LeadService } from "./modules/lead/lead.service.js";
 import { PrismaLeadRepository } from "./repositories/prisma-lead.repository.js";
+import { CallLogService } from "./modules/call-log/call-log.service.js";
+import { PrismaCallLogRepository } from "./repositories/prisma-call-log.repository.js";
 import { InquiryService } from "./modules/inquiry/inquiry.service.js";
 import { PrismaInquiryRepository } from "./repositories/prisma-inquiry.repository.js";
 import { SampleLoanService } from "./modules/sample/sample.service.js";
@@ -216,6 +218,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const productionReporting = new ProductionReportingService(new PrismaProductionReportingRepository());
   const costCenters = new CostCenterService(new PrismaCostCenterRepository(), new PrismaAuditSink());
   const leads = new LeadService(new PrismaLeadRepository(), new PrismaAuditSink());
+  const callLogs = new CallLogService(new PrismaCallLogRepository(), new PrismaAuditSink());
   const inquiries = new InquiryService(
     new PrismaInquiryRepository(),
     new NumberingService(new PrismaNumberingRepository()),
@@ -409,6 +412,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           productionReporting,
           costCenters,
           leads,
+          callLogs,
           inquiries,
           sampleLoans,
           companies,

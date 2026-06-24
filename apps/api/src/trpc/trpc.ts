@@ -23,6 +23,7 @@ import type { ReportingService } from "../modules/reporting/reporting.service.js
 import type { ProductionReportingService } from "../modules/production-reporting/production-reporting.service.js";
 import type { CostCenterService } from "../modules/cost-center/cost-center.service.js";
 import type { LeadService } from "../modules/lead/lead.service.js";
+import type { CallLogService } from "../modules/call-log/call-log.service.js";
 import type { InquiryService } from "../modules/inquiry/inquiry.service.js";
 import type { SampleLoanService } from "../modules/sample/sample.service.js";
 import type { CompanyService } from "../modules/company/company.service.js";
@@ -98,6 +99,7 @@ export interface Context {
   productionReporting: ProductionReportingService;
   costCenters: CostCenterService;
   leads: LeadService;
+  callLogs: CallLogService;
   inquiries: InquiryService;
   sampleLoans: SampleLoanService;
   companies: CompanyService;

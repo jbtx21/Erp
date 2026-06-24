@@ -1,0 +1,104 @@
+// Telefon-Modul / Anrufprotokoll: nachvollziehbar wer wann mit wem worüber telefoniert
+// hat. Optional an eine Firma/Kunde verknüpft; Rückrufe lassen sich über den Status
+// nachverfolgen (RUECKRUF → ERLEDIGT). Reine Erfassung, keine Telefonanlagen-Integration.
+
+import { buildEntry, type AuditSink } from "@texma/audit";
+
+export type CallDirection = "EINGEHEND" | "AUSGEHEND";
+export type CallStatus = "ERLEDIGT" | "OFFEN" | "RUECKRUF";
+
+export interface CreateCallLogInput {
+  richtung: CallDirection;
+  telefonnummer: string;
+  grund: string;
+  kontaktName?: string | null;
+  companyId?: string | null;
+  bearbeiter?: string | null;
+  zeitpunkt?: Date | null;
+  dauerSek?: number | null;
+  ergebnis?: string | null;
+  status?: CallStatus | null;
+}
+
+export interface CallLogRow {
+  id: string;
+  richtung: CallDirection;
+  telefonnummer: string;
+  kontaktName: string | null;
+  companyId: string | null;
+  companyName: string | null;
+  bearbeiter: string | null;
+  zeitpunkt: Date;
+  dauerSek: number | null;
+  grund: string;
+  ergebnis: string | null;
+  status: CallStatus;
+  createdAt: Date;
+}
+
+export interface CallLogFilter {
+  companyId?: string | null;
+  status?: CallStatus | null;
+}
+
+export interface CallLogRepository {
+  create(input: CreateCallLogInput): Promise<{ id: string }>;
+  list(filter?: CallLogFilter): Promise<CallLogRow[]>;
+  setStatus(id: string, status: CallStatus): Promise<void>;
+  /** Anzahl offener Rückrufe (für ein Badge/Arbeitsliste). */
+  openCallbackCount(): Promise<number>;
+}
+
+export class CallLogError extends Error {}
+
+export class CallLogService {
+  constructor(
+    private readonly repo: CallLogRepository,
+    private readonly audit: AuditSink
+  ) {}
+
+  /** Erfasst einen Anruf. Telefonnummer und Grund sind Pflicht. */
+  async create(input: CreateCallLogInput): Promise<{ id: string }> {
+    if (!input.telefonnummer || input.telefonnummer.trim().length === 0) {
+      throw new CallLogError("Telefonnummer ist Pflicht.");
+    }
+    if (!input.grund || input.grund.trim().length === 0) {
+      throw new CallLogError("Grund/Anliegen ist Pflicht.");
+    }
+    if (input.dauerSek != null && (!Number.isFinite(input.dauerSek) || input.dauerSek < 0)) {
+      throw new CallLogError("Dauer darf nicht negativ sein.");
+    }
+    const { id } = await this.repo.create({
+      ...input,
+      telefonnummer: input.telefonnummer.trim(),
+      grund: input.grund.trim(),
+    });
+    await this.audit.append(
+      buildEntry({
+        entity: "CallLog",
+        entityId: id,
+        action: "CREATE",
+        after: { richtung: input.richtung, telefonnummer: input.telefonnummer.trim(), grund: input.grund.trim() },
+      })
+    );
+    return { id };
+  }
+
+  /** Anrufliste (neueste zuerst), optional je Firma/Status gefiltert. */
+  async list(filter?: CallLogFilter): Promise<CallLogRow[]> {
+    return this.repo.list(filter);
+  }
+
+  /** Setzt den Status (z. B. offenen Rückruf auf ERLEDIGT). */
+  async setStatus(id: string, status: CallStatus): Promise<void> {
+    await this.repo.setStatus(id, status);
+    await this.audit.append(
+      buildEntry({ entity: "CallLog", entityId: id, action: "UPDATE", after: { status } })
+    );
+  }
+
+  /** Anzahl offener Rückrufe (Badge/Arbeitsliste). */
+  async openCallbackCount(): Promise<number> {
+    return this.repo.openCallbackCount();
+  }
+}

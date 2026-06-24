@@ -136,6 +136,7 @@ model Company {
   priceTiers      CustomerPriceTier[] // kundenindividuelle Mengenstaffel (B4)
   shopConnectors  ShopConnector[] // T-01: Shops mappen auf die Firma, nicht auf Mitarbeiter
   opportunities   Opportunity[] // Verkaufschancen (CRM)
+  callLogs        CallLog[] // Anrufprotokoll (Telefon-Modul)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -278,6 +279,39 @@ model StickereiAngebotStaffel {
   ekCents   Int
 
   @@unique([angebotId, minMenge])
+}
+
+// Anrufprotokoll (Telefon-Modul): nachvollziehbar wer wann mit wem worüber telefoniert
+// hat, inkl. Rückruf-Nachverfolgung. Optional an eine Firma/Kunde verknüpft.
+enum CallDirection {
+  EINGEHEND
+  AUSGEHEND
+}
+
+enum CallStatus {
+  ERLEDIGT
+  OFFEN
+  RUECKRUF
+}
+
+model CallLog {
+  id            String        @id @default(cuid())
+  richtung      CallDirection
+  telefonnummer String
+  kontaktName   String? // Name des Anrufers/Angerufenen
+  companyId     String?
+  company       Company?      @relation(fields: [companyId], references: [id])
+  bearbeiter    String? // interner Benutzer (E-Mail), der telefoniert hat
+  zeitpunkt     DateTime      @default(now())
+  dauerSek      Int?
+  grund         String // weswegen — Betreff/Anliegen
+  ergebnis      String? // Notiz/Ausgang des Gesprächs
+  status        CallStatus    @default(ERLEDIGT)
+  createdAt     DateTime      @default(now())
+
+  @@index([companyId])
+  @@index([status])
+  @@index([zeitpunkt])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

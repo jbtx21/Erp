@@ -1720,6 +1720,38 @@ export const appRouter = router({
       }),
   }),
 
+  // Telefon-Modul / Anrufprotokoll: wer/wann/weswegen telefoniert hat, mit Rückruf-Status.
+  callLogs: router({
+    list: roleProcedure(...supplierRoles)
+      .input(z.object({
+        companyId: z.string().optional(),
+        status: z.enum(["ERLEDIGT", "OFFEN", "RUECKRUF"]).optional(),
+      }).optional())
+      .query(({ input, ctx }) => ctx.callLogs.list(input)),
+    openCallbackCount: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.callLogs.openCallbackCount()),
+    create: roleProcedure(...supplierRoles)
+      .input(z.object({
+        richtung: z.enum(["EINGEHEND", "AUSGEHEND"]),
+        telefonnummer: z.string().min(1),
+        grund: z.string().min(1),
+        kontaktName: z.string().optional(),
+        companyId: z.string().optional(),
+        bearbeiter: z.string().optional(),
+        zeitpunkt: z.coerce.date().optional(),
+        dauerSek: z.number().int().nonnegative().optional(),
+        ergebnis: z.string().optional(),
+        status: z.enum(["ERLEDIGT", "OFFEN", "RUECKRUF"]).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.callLogs.create({ ...input, bearbeiter: input.bearbeiter ?? ctx.user?.email ?? null }); } catch (e) { throw toTrpcError(e); }
+      }),
+    setStatus: roleProcedure(...supplierRoles)
+      .input(z.object({ id: z.string().min(1), status: z.enum(["ERLEDIGT", "OFFEN", "RUECKRUF"]) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.callLogs.setStatus(input.id, input.status); } catch (e) { throw toTrpcError(e); }
+      }),
+  }),
+
   // Kostenstellen (B7): Stammdaten anlegen/auflisten/löschen + Auswertung je Kostenstelle.
   costCenters: router({
     list: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.costCenters.list()),
