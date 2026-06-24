@@ -14,6 +14,9 @@ import type {
 export class PrismaStockRepository implements StockRepository {
   async postMove(move: StockMoveInput): Promise<PostedMove> {
     return prisma.$transaction(async (tx) => {
+      // Klare Meldung statt rohem FK-Fehler, wenn die Varianten-ID nicht existiert.
+      const variant = await tx.variant.findUnique({ where: { id: move.variantId }, select: { id: true } });
+      if (!variant) throw new Error(`Variante „${move.variantId}" nicht gefunden — bitte eine gültige Varianten-ID/SKU verwenden.`);
       // Multi-Lager 2b: bevorzugt auf warehouseId buchen (beliebiges Lager). Das lager-Enum
       // wird aus der Warehouse-Art abgeleitet (SONSTIGE → HAUPT als Platzhalter), bis das
       // Enum in Stufe 2c entfällt. Ohne warehouseId: Seed-Mapping aus dem Enum (2a).

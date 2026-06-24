@@ -14,6 +14,8 @@ const metaSelect = { id: true, sku: true, article: { select: { name: true } } } 
 
 export class PrismaReservationRepository implements ReservationRepository {
   async createReservation(input: { variantId: string; lager: StockLager; qty: number; orderId: string | null; belegRef: string | null; note: string | null }): Promise<{ id: string }> {
+    const variant = await prisma.variant.findUnique({ where: { id: input.variantId }, select: { id: true } });
+    if (!variant) throw new Error(`Variante „${input.variantId}" nicht gefunden — bitte eine gültige Varianten-ID/SKU verwenden.`);
     // Multi-Lager Stufe 2a: warehouseId parallel mitschreiben (Seed-Mapping, Migration 0075).
     return prisma.stockReservation.create({ data: { ...input, warehouseId: `wh_${input.lager.toLowerCase()}` }, select: { id: true } });
   }

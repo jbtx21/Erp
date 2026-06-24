@@ -5379,11 +5379,16 @@ export function HomePage({ userName, onNavigate }: { userName?: string; onNaviga
 // ── Aus „Differenzierer" an die richtigen Module verteilte Werkzeuge ──────────────
 // Logo-Verwaltung + Stickerei-Weg gehören in die Artikel-Stammdaten.
 export function LogosPage(): JSX.Element {
+  const [newLogo, setNewLogo] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
   return (
     <>
-      <Title order={2}>Logos & Stickerei</Title>
-      <Text size="sm" c="dimmed">Logo-Versionen je Kunde verwalten und den Stickerei-Weg (Partner je Firma) festlegen.</Text>
-      <LogosStickereiSection />
+      <DocListHeader module="Lager / Veredelung" title="Logos & Stickerei"
+        hint="Logo-Artikel mit EK + VK-Staffelpreisen anlegen (wie in Angebot/Auftrag), Logo-Versionen je Kunde verwalten und den Stickerei-Weg festlegen."
+        action={<Button size="xs" color="dark" onClick={() => { setMsg(null); setNewLogo(true); }}>+ Neues Logo (mit Preisen)</Button>} />
+      {msg && <Alert color="green" mt="sm">{msg}</Alert>}
+      {newLogo && <LogoArticleDialog onClose={() => setNewLogo(false)} onCreated={(e) => { setNewLogo(false); setMsg(`Logo „${e.label}" angelegt — als Veredelungsartikel in Angebot/Auftrag wählbar.`); }} />}
+      <Box mt="md"><LogosStickereiSection /></Box>
     </>
   );
 }
