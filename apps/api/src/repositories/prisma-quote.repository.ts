@@ -2,7 +2,7 @@
 // offene Angebote mit überschrittener Gültigkeit und noch ohne Wiedervorlage.
 
 import { prisma } from "@texma/db";
-import type { QuoteStatus } from "@texma/shared";
+import { buildQuoteTotals, type QuoteStatus } from "@texma/shared";
 import type { CreateQuoteInput, ExpiredQuote, QuoteEditData, QuoteRepository, QuoteRow } from "../modules/quote/quote.service.js";
 
 export class PrismaQuoteRepository implements QuoteRepository {
@@ -14,16 +14,14 @@ export class PrismaQuoteRepository implements QuoteRepository {
   async list(): Promise<QuoteRow[]> {
     const rows = await prisma.quote.findMany({
       orderBy: { createdAt: "desc" },
-      select: { id: true, number: true, companyId: true, status: true, orderType: true, quotationTo: true, gueltigBisAm: true, createdAt: true, company: { select: { name: true } }, lines: { select: { qty: true, unitNetCents: true, dbCents: true, isAlternative: true } } },
+      select: { id: true, number: true, companyId: true, status: true, orderType: true, quotationTo: true, gueltigBisAm: true, createdAt: true, company: { select: { name: true } }, lines: { select: { qty: true, unitNetCents: true, taxRatePct: true, dbCents: true, isAlternative: true } } },
     });
     return rows.map((q) => {
-      const main = q.lines.filter((l) => !l.isAlternative);
-      const dbLines = main.filter((l) => l.dbCents !== null);
+      const t = buildQuoteTotals(q.lines.map((l) => ({ qty: l.qty, unitNetCents: l.unitNetCents, taxRatePct: l.taxRatePct, dbCents: l.dbCents, isAlternative: l.isAlternative })));
       return {
         id: q.id, number: q.number, companyId: q.companyId, companyName: q.company.name, status: q.status as QuoteStatus,
         orderType: q.orderType, quotationTo: q.quotationTo, gueltigBisAm: q.gueltigBisAm, createdAt: q.createdAt,
-        totalNetCents: main.reduce((s, l) => s + l.qty * l.unitNetCents, 0),
-        totalDbCents: dbLines.length ? dbLines.reduce((s, l) => s + l.qty * (l.dbCents ?? 0), 0) : null,
+        totalNetCents: t.netCents, totalTaxCents: t.taxCents, totalGrossCents: t.grossCents, totalDbCents: t.totalDbCents,
       };
     });
   }
@@ -37,7 +35,7 @@ export class PrismaQuoteRepository implements QuoteRepository {
         orderType: input.orderType ?? "SALES",
         quotationTo: input.quotationTo ?? "CUSTOMER",
         terms: input.terms ?? null,
-        lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, dbCents: l.dbCents ?? null, kind: (l.kind ?? "TEXTIL") as never, articleId: l.articleId ?? null, variantId: l.variantId ?? null, isAlternative: l.isAlternative ?? false })) },
+        lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, taxRatePct: l.taxRatePct ?? 19, dbCents: l.dbCents ?? null, kind: (l.kind ?? "TEXTIL") as never, articleId: l.articleId ?? null, variantId: l.variantId ?? null, isAlternative: l.isAlternative ?? false })) },
       },
       select: { id: true },
     });
@@ -52,13 +50,13 @@ export class PrismaQuoteRepository implements QuoteRepository {
       where: { id: quoteId },
       select: {
         id: true, companyId: true, status: true, gueltigBisAm: true, terms: true, orderType: true, quotationTo: true,
-        lines: { orderBy: { position: "asc" }, select: { description: true, qty: true, kind: true, unitNetCents: true, listNetCents: true, rabattPct: true, dbCents: true, articleId: true, variantId: true, isAlternative: true } },
+        lines: { orderBy: { position: "asc" }, select: { description: true, qty: true, kind: true, unitNetCents: true, listNetCents: true, rabattPct: true, taxRatePct: true, dbCents: true, articleId: true, variantId: true, isAlternative: true } },
       },
     });
     if (!q) return null;
     return {
       id: q.id, companyId: q.companyId, status: q.status as QuoteStatus, gueltigBisAm: q.gueltigBisAm, terms: q.terms, orderType: q.orderType, quotationTo: q.quotationTo,
-      lines: q.lines.map((l) => ({ description: l.description, qty: l.qty, kind: l.kind as never, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents, rabattPct: l.rabattPct, dbCents: l.dbCents, articleId: l.articleId, variantId: l.variantId, isAlternative: l.isAlternative })),
+      lines: q.lines.map((l) => ({ description: l.description, qty: l.qty, kind: l.kind as never, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents, rabattPct: l.rabattPct, taxRatePct: l.taxRatePct, dbCents: l.dbCents, articleId: l.articleId, variantId: l.variantId, isAlternative: l.isAlternative })),
     };
   }
 
@@ -73,7 +71,7 @@ export class PrismaQuoteRepository implements QuoteRepository {
           orderType: input.orderType ?? "SALES",
           quotationTo: input.quotationTo ?? "CUSTOMER",
           terms: input.terms ?? null,
-          lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, dbCents: l.dbCents ?? null, kind: (l.kind ?? "TEXTIL") as never, articleId: l.articleId ?? null, variantId: l.variantId ?? null, isAlternative: l.isAlternative ?? false })) },
+          lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, taxRatePct: l.taxRatePct ?? 19, dbCents: l.dbCents ?? null, kind: (l.kind ?? "TEXTIL") as never, articleId: l.articleId ?? null, variantId: l.variantId ?? null, isAlternative: l.isAlternative ?? false })) },
         },
       }),
     ]);

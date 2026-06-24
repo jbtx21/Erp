@@ -22,6 +22,8 @@ export interface QuoteRow {
   gueltigBisAm: Date | null;
   createdAt: Date;
   totalNetCents: number;
+  totalTaxCents: number; // USt-Summe (je Satz aggregiert)
+  totalGrossCents: number; // Bruttosumme (Netto + USt)
   totalDbCents: number | null; // Summe Deckungsbeitrag (null, wenn keine Position EK hat)
 }
 
@@ -31,7 +33,7 @@ export interface CreateQuoteInput {
   orderType?: string;
   quotationTo?: string;
   terms?: string | null;
-  lines: Array<{ description: string; qty: number; unitNetCents: number; listNetCents?: number | null; rabattPct?: number | null; kind?: import("@texma/shared").PositionKind; articleId?: string | null; variantId?: string | null; isAlternative?: boolean; dbCents?: number | null }>;
+  lines: Array<{ description: string; qty: number; unitNetCents: number; listNetCents?: number | null; rabattPct?: number | null; taxRatePct?: number | null; kind?: import("@texma/shared").PositionKind; articleId?: string | null; variantId?: string | null; isAlternative?: boolean; dbCents?: number | null }>;
 }
 
 export type QuoteTransition = "VERSENDET" | "NACHFASSEN" | "ANGENOMMEN";
@@ -44,6 +46,7 @@ export interface QuoteEditLine {
   unitNetCents: number;
   listNetCents: number | null;
   rabattPct: number | null;
+  taxRatePct: number;
   dbCents: number | null;
   articleId: string | null;
   variantId: string | null;

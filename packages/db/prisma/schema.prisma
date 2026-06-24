@@ -768,6 +768,7 @@ model QuoteLine {
   unitNetCents Int // effektiver Netto-Einzelpreis NACH Positionsrabatt (Kap. 4.4)
   listNetCents Int? // VK-Listenpreis je Stück VOR Rabatt (Anzeige/Beleg); null = unitNetCents
   rabattPct   Int? // artikelbezogener Positionsrabatt in Prozent (0..100)
+  taxRatePct  Int     @default(19) // USt-Satz je Position in Prozent (19 Regel, 7 ermäßigt)
   dbCents     Int? // Deckungsbeitrag bereits im Angebot sichtbar (Kap. 4.4)
   kind        PositionKind @default(TEXTIL) // Textil- vs. Veredelungsposition (Kap. 4.4/11)
   // Bezug: Hauptartikel (articleId, Variante offen) ODER konkrete Variante (variantId).

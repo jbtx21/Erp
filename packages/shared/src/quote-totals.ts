@@ -21,7 +21,7 @@ export interface QuoteTotalsLine {
   taxRatePct?: number | null;
   /** Alternativposition — zählt nicht in die Summe. */
   isAlternative?: boolean;
-  /** Deckungsbeitrag je Position (Cent), optional. */
+  /** Deckungsbeitrag je STÜCK (Cent), optional — wird mit qty zur Positions-DB. */
   dbCents?: number | null;
 }
 
@@ -56,7 +56,7 @@ export function buildQuoteTotals(lines: ReadonlyArray<QuoteTotalsLine>): QuoteTo
   );
 
   const dbLines = counting.filter((l) => l.dbCents != null);
-  const totalDbCents = dbLines.length > 0 ? dbLines.reduce((s, l) => s + (l.dbCents ?? 0), 0) : null;
+  const totalDbCents = dbLines.length > 0 ? dbLines.reduce((s, l) => s + l.qty * (l.dbCents ?? 0), 0) : null;
 
   return { ...totals, totalDbCents };
 }

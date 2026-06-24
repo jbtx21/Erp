@@ -49,13 +49,13 @@ describe("buildQuoteTotals", () => {
     expect(t).toMatchObject({ netCents: 0, taxCents: 0, grossCents: 0, totalDbCents: null });
   });
 
-  it("summiert den Deckungsbeitrag nur über zählende Positionen; null ohne DB", () => {
+  it("summiert den Deckungsbeitrag (je Stück × Menge) über zählende Positionen; null ohne DB", () => {
     expect(buildQuoteTotals([{ qty: 1, unitNetCents: 5000 }]).totalDbCents).toBeNull();
     const t = buildQuoteTotals([
-      { qty: 1, unitNetCents: 5000, dbCents: 1500 },
-      { qty: 1, unitNetCents: 5000, dbCents: 500 },
-      { qty: 1, unitNetCents: 9999, dbCents: 9999, isAlternative: true },
+      { qty: 3, unitNetCents: 5000, dbCents: 1500 }, // 3 × 1500 = 4500
+      { qty: 2, unitNetCents: 5000, dbCents: 500 }, //  2 × 500  = 1000
+      { qty: 9, unitNetCents: 9999, dbCents: 9999, isAlternative: true }, // ignoriert
     ]);
-    expect(t.totalDbCents).toBe(2000);
+    expect(t.totalDbCents).toBe(5500);
   });
 });
