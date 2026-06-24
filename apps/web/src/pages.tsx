@@ -4249,52 +4249,125 @@ export function CalendarPage(): JSX.Element {
   const [items, setItems] = useState<Row[]>([]);
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState<string>("TERMIN");
+  const [allDay, setAllDay] = useState(false);
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
   const [shared, setShared] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Angezeigter Monat (1. des Monats); Navigation ‹ / ›.
+  const [cursor, setCursor] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+
+  // Urlaub/Abwesenheit sind fachlich ganztägig → Ganztags-Schalter vorbelegen.
+  useEffect(() => { if (kind === "URLAUB" || kind === "ABWESENHEIT") setAllDay(true); }, [kind]);
 
   const load = useCallback(async () => {
-    const from = new Date(); from.setDate(from.getDate() - 7);
-    const to = new Date(); to.setDate(to.getDate() + 120);
+    // Lädt den sichtbaren Monat samt angrenzender Wochen (6-Wochen-Raster) + Vor-/Folgemonat.
+    const from = new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1);
+    const to = new Date(cursor.getFullYear(), cursor.getMonth() + 2, 0);
     try { setItems((await trpc.calendar.list.query({ from: from.toISOString(), to: to.toISOString() })) as Row[]); setErr(null); }
     catch (e) { setErr(errMsg(e)); }
-  }, []);
+  }, [cursor]);
   useEffect(() => { void load(); }, [load]);
 
-  const fmt = (d: unknown): string => new Date(String(d)).toLocaleString("de-DE", { dateStyle: "medium", timeStyle: "short" });
+  // Ganztags-Events werden auf 12:00 UTC gespeichert: ±2 h (CET/CEST) springen nie über
+  // eine Tagesgrenze → kein „02:00"-Artefakt mehr (alte Mitternachts-Daten zeigen wir
+  // ohnehin nur als Datum an).
+  const toIso = (v: string): string => (allDay ? new Date(`${v}T12:00:00.000Z`).toISOString() : new Date(v).toISOString());
+  const d0 = (d: Date): Date => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const sameDay = (a: Date, b: Date): boolean => d0(a).getTime() === d0(b).getTime();
+
+  // Anzeige: ganztägig → nur Datum (Range bei Mehrtages-Urlaub); sonst Datum + Uhrzeit.
+  const fmtEvent = (e: Row): string => {
+    const s = new Date(String(e.start)), en = new Date(String(e.end));
+    if (e.allDay) { const sd = s.toLocaleDateString("de-DE"), ed = en.toLocaleDateString("de-DE"); return sd === ed ? sd : `${sd} – ${ed}`; }
+    return `${s.toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" })}–${en.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`;
+  };
+
+  // 6-Wochen-Raster ab Montag der Woche, in der der Monatserste liegt.
+  const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+  const lead = (first.getDay() + 6) % 7; // Mo=0 … So=6
+  const gridStart = new Date(first.getFullYear(), first.getMonth(), 1 - lead);
+  const cells = Array.from({ length: 42 }, (_, i) => new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i));
+  const today = new Date();
+
+  const eventsOnDay = (day: Date): Row[] => items.filter((e) => {
+    const s = d0(new Date(String(e.start))), en = d0(new Date(String(e.end)));
+    const d = d0(day);
+    return s.getTime() <= d.getTime() && d.getTime() <= en.getTime();
+  });
+  const colorOf = (k: unknown): string => CAL_KINDS.find((x) => x.value === String(k))?.color ?? "gray";
+  const monthLabel = cursor.toLocaleDateString("de-DE", { month: "long", year: "numeric" });
+  const shiftMonth = (n: number): void => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + n, 1));
+  const upcoming = [...items].filter((e) => new Date(String(e.end)) >= d0(today)).sort((a, b) => new Date(String(a.start)).getTime() - new Date(String(b.start)).getTime());
 
   return (
     <>
       <Title order={3}>Kalender</Title>
       <Text size="sm" c="dimmed" mt={4}>Büro-Termine, Urlaub und Abwesenheiten. „Geteilt" = für alle sichtbar. Externe Sync (CalDAV/Google) als Add-on vorgesehen.</Text>
-      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      {err && <Alert color="red" mt="sm" withCloseButton onClose={() => setErr(null)}>{err}</Alert>}
 
       <Group gap="xs" align="end" mt="md" wrap="wrap">
         <TextInput label="Titel" value={title} onChange={(e) => setTitle(e.currentTarget.value)} w={200} />
         <Select label="Art" value={kind} onChange={(v) => v && setKind(v)} data={CAL_KINDS.map((k) => ({ value: k.value, label: k.label }))} w={150} />
-        <TextInput label="Von" type="datetime-local" value={start} onChange={(e) => setStart(e.currentTarget.value)} w={200} />
-        <TextInput label="Bis" type="datetime-local" value={end} onChange={(e) => setEnd(e.currentTarget.value)} w={200} />
+        <Switch label="Ganztägig" checked={allDay} onChange={(e) => setAllDay(e.currentTarget.checked)} mb={8} />
+        <TextInput label="Von" type={allDay ? "date" : "datetime-local"} value={start} onChange={(e) => setStart(e.currentTarget.value)} w={allDay ? 160 : 200} />
+        <TextInput label={allDay ? "Bis (optional)" : "Bis"} type={allDay ? "date" : "datetime-local"} value={end} onChange={(e) => setEnd(e.currentTarget.value)} w={allDay ? 160 : 200} />
         <Switch label="Geteilt" checked={shared} onChange={(e) => setShared(e.currentTarget.checked)} mb={8} />
-        <Button disabled={!title.trim() || !start || !end} onClick={async () => {
+        <Button disabled={!title.trim() || !start || (!allDay && !end)} onClick={async () => {
           setErr(null);
           try {
-            await trpc.calendar.create.mutate({ title, kind: kind as "TERMIN", shared, start: new Date(start).toISOString(), end: new Date(end).toISOString(), allDay: false });
+            await trpc.calendar.create.mutate({ title, kind: kind as "TERMIN", shared, allDay, start: toIso(start), end: toIso(end || start) });
             setTitle(""); setStart(""); setEnd(""); setShared(false); await load();
           } catch (e) { setErr(errMsg(e)); }
         }}>Eintragen</Button>
       </Group>
 
+      {/* Monatsraster (echter Kalender, nicht nur Liste) */}
+      <Group justify="space-between" mt="xl" mb="xs">
+        <Button size="compact-sm" variant="default" onClick={() => shiftMonth(-1)}>‹ Monat</Button>
+        <Group gap="sm">
+          <Title order={4} tt="capitalize">{monthLabel}</Title>
+          <Button size="compact-xs" variant="subtle" onClick={() => setCursor(new Date(today.getFullYear(), today.getMonth(), 1))}>Heute</Button>
+        </Group>
+        <Button size="compact-sm" variant="default" onClick={() => shiftMonth(1)}>Monat ›</Button>
+      </Group>
+      <Box style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 1, background: "var(--mantine-color-gray-3)", border: "1px solid var(--mantine-color-gray-3)" }}>
+        {["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].map((w) => (
+          <Box key={w} style={{ background: "var(--mantine-color-gray-1)", padding: "4px 6px", textAlign: "center" }}><Text size="xs" fw={600} c="dimmed">{w}</Text></Box>
+        ))}
+        {cells.map((day) => {
+          const inMonth = day.getMonth() === cursor.getMonth();
+          const isToday = sameDay(day, today);
+          const evs = eventsOnDay(day);
+          return (
+            <Box key={day.toISOString()} style={{ background: "var(--mantine-color-body)", minHeight: 92, padding: 4, opacity: inMonth ? 1 : 0.45 }}>
+              <Text size="xs" fw={isToday ? 700 : 500} c={isToday ? "navy.9" : undefined}
+                style={isToday ? { background: "var(--mantine-color-navy-1)", borderRadius: 4, padding: "0 5px", display: "inline-block" } : undefined}>
+                {day.getDate()}
+              </Text>
+              {evs.slice(0, 3).map((e) => (
+                <Box key={String(e.id)} title={`${String(e.title)} · ${fmtEvent(e)}`}
+                  style={{ marginTop: 2, fontSize: 10.5, lineHeight: 1.3, background: `var(--mantine-color-${colorOf(e.kind)}-1)`, color: `var(--mantine-color-${colorOf(e.kind)}-9)`, borderRadius: 3, padding: "1px 4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {!e.allDay && <span>{new Date(String(e.start)).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })} </span>}
+                  {String(e.title)}
+                </Box>
+              ))}
+              {evs.length > 3 && <Text size="xs" c="dimmed" mt={2}>+{evs.length - 3} weitere</Text>}
+            </Box>
+          );
+        })}
+      </Box>
+
       <Title order={4} mt="xl">Anstehend</Title>
-      {items.length === 0 ? <Text size="sm" c="dimmed" mt="xs">Keine Einträge im Zeitraum.</Text> : (
+      {upcoming.length === 0 ? <Text size="sm" c="dimmed" mt="xs">Keine Einträge im Zeitraum.</Text> : (
         <Box mt="xs">
-          {items.map((e) => {
+          {upcoming.map((e) => {
             const k = CAL_KINDS.find((x) => x.value === String(e.kind));
             return (
               <Group key={String(e.id)} gap="sm" py={6} style={{ borderBottom: "1px solid var(--mantine-color-gray-2)" }}>
                 <Badge color={k?.color ?? "gray"} variant="light" w={120}>{k?.label}</Badge>
                 <Text size="sm" fw={600} style={{ flex: 1 }}>{String(e.title)}{e.ownerEmail ? "" : " · geteilt"}</Text>
-                <Text size="sm" c="dimmed">{fmt(e.start)} – {fmt(e.end)}</Text>
+                <Text size="sm" c="dimmed">{fmtEvent(e)}</Text>
                 <Button size="compact-xs" variant="subtle" color="red" onClick={async () => { try { await trpc.calendar.remove.mutate({ id: String(e.id) }); await load(); } catch (er) { setErr(errMsg(er)); } }}>✕</Button>
               </Group>
             );
