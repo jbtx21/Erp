@@ -1303,6 +1303,8 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => { try { await ctx.reservations.setThreshold(input.variantId, input.lager, input.minQty); return { ok: true as const }; } catch (e) { throw toTrpcError(e); } }),
     /** Meldebestände prüfen + bei Neu-Unterschreitung benachrichtigen (manuell/Cron). */
     checkLowStock: roleProcedure(...supplierRoles).mutation(({ ctx }) => ctx.reservations.checkLowStock()),
+    /** „Wann bestellt / wann eingelagert" je Artikel (Scheibe 2). */
+    supplyTimeline: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.reservations.supplyTimeline()),
   }),
 
   // Admin-Portal: zentrale Einstellungen (Briefkopf, Freigabeschwellen, Aufschlag).

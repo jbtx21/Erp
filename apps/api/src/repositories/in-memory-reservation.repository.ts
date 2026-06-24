@@ -4,6 +4,7 @@ import type { StockLager } from "@texma/shared";
 import type {
   ReservationRepository,
   ReservationView,
+  SupplyRow,
   ThresholdRecord,
 } from "../modules/stock/reservation.service.js";
 
@@ -25,8 +26,11 @@ export class InMemoryReservationRepository implements ReservationRepository {
   private readonly thresholds = new Map<string, ThresholdRecord>();
   private seq = 0;
 
-  /** `meta`: variantId → {sku,name} für die Anzeige (Tests). */
-  constructor(private readonly meta: Record<string, { sku: string; name: string }> = {}) {}
+  /** `meta`: variantId → {sku,name} für die Anzeige (Tests); `supply`: Bestell-/Einlager-Historie. */
+  constructor(
+    private readonly meta: Record<string, { sku: string; name: string }> = {},
+    private readonly supply: SupplyRow[] = []
+  ) {}
 
   private metaOf(variantId: string): { sku: string; name: string } {
     return this.meta[variantId] ?? { sku: variantId, name: variantId };
@@ -95,5 +99,9 @@ export class InMemoryReservationRepository implements ReservationRepository {
   async setAlerting(variantId: string, lager: StockLager, alerting: boolean): Promise<void> {
     const t = this.thresholds.get(this.tkey(variantId, lager));
     if (t) t.alerting = alerting;
+  }
+
+  async supplyTimeline(): Promise<SupplyRow[]> {
+    return this.supply.map((r) => ({ ...r }));
   }
 }

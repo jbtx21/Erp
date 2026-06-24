@@ -4246,14 +4246,15 @@ export function LagerPage(): JSX.Element {
 function LagerVerfuegbarkeit(): JSX.Element {
   const [avail, setAvail] = useState<Awaited<ReturnType<typeof trpc.stock.availability.query>>>([]);
   const [reservs, setReservs] = useState<Awaited<ReturnType<typeof trpc.stock.reservations.query>>>([]);
+  const [supply, setSupply] = useState<Awaited<ReturnType<typeof trpc.stock.supplyTimeline.query>>>([]);
   const [rv, setRv] = useState(""); const [rl, setRl] = useState("TRANSFERDRUCK"); const [rq, setRq] = useState(0); const [rref, setRref] = useState("");
   const [tv, setTv] = useState(""); const [tl, setTl] = useState("TRANSFERDRUCK"); const [tq, setTq] = useState(0);
   const [msg, setMsg] = useState<string | null>(null); const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [a, r] = await Promise.all([trpc.stock.availability.query(), trpc.stock.reservations.query({ status: "AKTIV" })]);
-      setAvail(a); setReservs(r); setErr(null);
+      const [a, r, s] = await Promise.all([trpc.stock.availability.query(), trpc.stock.reservations.query({ status: "AKTIV" }), trpc.stock.supplyTimeline.query()]);
+      setAvail(a); setReservs(r); setSupply(s); setErr(null);
     } catch (e) { setErr(errMsg(e)); }
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -4331,6 +4332,32 @@ function LagerVerfuegbarkeit(): JSX.Element {
                   <Table.Td>{r.belegRef ?? r.orderId ?? "—"}</Table.Td>
                   <Table.Td>{new Date(r.createdAt).toLocaleDateString("de-DE")}</Table.Td>
                   <Table.Td><Button size="compact-xs" variant="subtle" color="red" onClick={() => void wrap(async () => { await trpc.stock.release.mutate({ id: r.id, status: "STORNIERT" }); return "Vormerkung freigegeben."; })}>freigeben</Button></Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </>
+      )}
+
+      {supply.length > 0 && (
+        <>
+          <Title order={5} mt="lg">Bestell- & Einlagerungs-Historie</Title>
+          <Text size="sm" c="dimmed" mt={2}>Je Artikel: wann zuletzt bestellt, wann zuletzt eingelagert und wie viel noch unterwegs ist (bestellt − erhalten).</Text>
+          <Table mt="xs" withTableBorder withColumnBorders verticalSpacing="xs" fz="sm">
+            <Table.Thead><Table.Tr>
+              <Table.Th>SKU</Table.Th><Table.Th>Artikel</Table.Th>
+              <Table.Th ta="right">Bestellt</Table.Th><Table.Th>Zuletzt bestellt</Table.Th>
+              <Table.Th ta="right">Eingelagert</Table.Th><Table.Th>Zuletzt eingelagert</Table.Th>
+              <Table.Th ta="right">Unterwegs</Table.Th></Table.Tr></Table.Thead>
+            <Table.Tbody>
+              {supply.map((r) => (
+                <Table.Tr key={r.variantId}>
+                  <Table.Td>{r.sku}</Table.Td><Table.Td>{r.name}</Table.Td>
+                  <Table.Td ta="right">{r.orderedQty}</Table.Td>
+                  <Table.Td>{r.lastOrderedAt ? new Date(r.lastOrderedAt).toLocaleDateString("de-DE") : "—"}</Table.Td>
+                  <Table.Td ta="right">{r.receivedQty}</Table.Td>
+                  <Table.Td>{r.lastReceivedAt ? new Date(r.lastReceivedAt).toLocaleDateString("de-DE") : "—"}</Table.Td>
+                  <Table.Td ta="right">{r.unterwegs > 0 ? <Badge color="blue" variant="light" size="sm">{r.unterwegs}</Badge> : 0}</Table.Td>
                 </Table.Tr>
               ))}
             </Table.Tbody>

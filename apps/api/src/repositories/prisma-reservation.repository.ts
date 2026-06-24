@@ -5,6 +5,7 @@ import type { StockLager } from "@texma/shared";
 import type {
   ReservationRepository,
   ReservationView,
+  SupplyRow,
   ThresholdRecord,
 } from "../modules/stock/reservation.service.js";
 
@@ -86,5 +87,34 @@ export class PrismaReservationRepository implements ReservationRepository {
 
   async setAlerting(variantId: string, lager: StockLager, alerting: boolean): Promise<void> {
     await prisma.stockThreshold.updateMany({ where: { variantId, lager }, data: { alerting } });
+  }
+
+  async supplyTimeline(): Promise<SupplyRow[]> {
+    // Bestellt = Positionen aus tatsächlich abgesetzten Bestellungen (nicht ENTWURF).
+    const orderLines = await prisma.purchaseOrderLine.findMany({
+      where: { purchaseOrder: { status: { in: ["BESTELLT", "TEILWEISE_ERHALTEN", "ERHALTEN"] } } },
+      select: { variantId: true, qty: true, purchaseOrder: { select: { createdAt: true } }, variant: { select: metaSelect } },
+    });
+    const grLines = await prisma.goodsReceiptLine.findMany({
+      select: { variantId: true, receivedQty: true, goodsReceipt: { select: { receivedAt: true } }, variant: { select: metaSelect } },
+    });
+    const map = new Map<string, SupplyRow>();
+    const ensure = (variantId: string, sku: string, name: string): SupplyRow => {
+      let r = map.get(variantId);
+      if (!r) { r = { variantId, sku, name, orderedQty: 0, lastOrderedAt: null, receivedQty: 0, lastReceivedAt: null, unterwegs: 0 }; map.set(variantId, r); }
+      return r;
+    };
+    for (const l of orderLines) {
+      const r = ensure(l.variantId, l.variant.sku, l.variant.article.name);
+      r.orderedQty += l.qty;
+      if (!r.lastOrderedAt || l.purchaseOrder.createdAt > r.lastOrderedAt) r.lastOrderedAt = l.purchaseOrder.createdAt;
+    }
+    for (const l of grLines) {
+      const r = ensure(l.variantId, l.variant.sku, l.variant.article.name);
+      r.receivedQty += l.receivedQty;
+      if (!r.lastReceivedAt || l.goodsReceipt.receivedAt > r.lastReceivedAt) r.lastReceivedAt = l.goodsReceipt.receivedAt;
+    }
+    for (const r of map.values()) r.unterwegs = Math.max(0, r.orderedQty - r.receivedQty);
+    return [...map.values()];
   }
 }

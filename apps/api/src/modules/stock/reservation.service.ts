@@ -70,6 +70,19 @@ export interface ThresholdRecord {
   alerting: boolean;
 }
 
+/** „Wann bestellt / wann eingelagert" je Artikel (Scheibe 2). */
+export interface SupplyRow {
+  variantId: string;
+  sku: string;
+  name: string;
+  orderedQty: number;
+  lastOrderedAt: Date | null;
+  receivedQty: number;
+  lastReceivedAt: Date | null;
+  /** Noch nicht eingelagert (bestellt − erhalten, ≥ 0) = unterwegs. */
+  unterwegs: number;
+}
+
 /** Empfänger der automatischen Meldung (Server bindet das an Benachrichtigungen). */
 export interface LowStockNotifier {
   notify(alert: LowStockAlert): Promise<void>;
@@ -96,6 +109,8 @@ export interface ReservationRepository {
   setThreshold(variantId: string, lager: StockLager, minQty: number): Promise<void>;
   removeThreshold(variantId: string, lager: StockLager): Promise<void>;
   setAlerting(variantId: string, lager: StockLager, alerting: boolean): Promise<void>;
+  /** Bestell-/Einlagerungs-Historie je Artikel (aus Bestellungen + Eingangsbelegen). */
+  supplyTimeline(): Promise<SupplyRow[]>;
 }
 
 export class ReservationError extends Error {}
@@ -145,6 +160,12 @@ export class ReservationService {
 
   listReservations(filter?: { variantId?: string; orderId?: string; status?: "AKTIV" | "ERLEDIGT" | "STORNIERT"; lager?: StockLager }): Promise<ReservationView[]> {
     return this.repo.listReservations(filter);
+  }
+
+  /** „Wann bestellt / wann eingelagert" je Artikel (Scheibe 2) — sortiert nach unterwegs. */
+  async supplyTimeline(): Promise<SupplyRow[]> {
+    const rows = await this.repo.supplyTimeline();
+    return rows.sort((a, b) => b.unterwegs - a.unterwegs || a.sku.localeCompare(b.sku));
   }
 
   /** Verfügbarer Bestand (Ist − reserviert) für eine Variante×Lager. */

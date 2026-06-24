@@ -89,6 +89,17 @@ describe("ReservationService", () => {
     expect(v2).toMatchObject({ onHand: 10, reserved: 0, available: 10, minQty: 25, below: true });
   });
 
+  it("supplyTimeline berechnet unterwegs (bestellt − erhalten) und sortiert danach", async () => {
+    const supply = [
+      { variantId: "v1", sku: "TD-001", name: "A", orderedQty: 100, lastOrderedAt: new Date("2026-06-01"), receivedQty: 60, lastReceivedAt: new Date("2026-06-10"), unterwegs: 40 },
+      { variantId: "v2", sku: "TD-002", name: "B", orderedQty: 50, lastOrderedAt: new Date("2026-06-05"), receivedQty: 50, lastReceivedAt: new Date("2026-06-12"), unterwegs: 0 },
+    ];
+    const s = new ReservationService(new InMemoryReservationRepository(meta, supply), new FakeOnHand({}));
+    const rows = await s.supplyTimeline();
+    expect(rows.map((r) => r.variantId)).toEqual(["v1", "v2"]); // unterwegs 40 vor 0
+    expect(rows[0]).toMatchObject({ orderedQty: 100, receivedQty: 60, unterwegs: 40 });
+  });
+
   it("releaseByOrder schließt alle Vormerkungen eines Auftrags", async () => {
     await svc.reserve({ variantId: "v1", lager: "TRANSFERDRUCK", qty: 10, orderId: "ord-9" });
     await svc.reserve({ variantId: "v2", lager: "TRANSFERDRUCK", qty: 5, orderId: "ord-9" });
