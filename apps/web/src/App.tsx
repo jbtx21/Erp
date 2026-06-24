@@ -11,6 +11,7 @@ import { Banking } from "./Banking.js";
 import {
   CompaniesPage, CallLogsPage, CostCentersPage, DunningPage, InquiriesPage, IncomingInvoicesPage, LeadsPage, MailAccountsPage, OrdersPage, ProcurementPage, ProductionReportingPage,
   ProductsPage, PricingPage, EmailTemplatesPage, DashboardsPage, DataIoPage, EanImportPage, FinanceReportingPage, WareneingangPage, ZahlungenPage, NewsletterPage, OpportunitiesPage, CalendarPage, MessagesPage, AdminPage, ArchivePage, AuditLogPage, AutomationPage, TasksPage, HomePage, LagerPage, HrPage, IntegrationsPage, SecurityPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
+  LogosPage, AufschlagPage, AusschreibungenPage, NachkalkulationPage,
 } from "./pages.js";
 import { trpc } from "./trpc.js";
 
@@ -24,10 +25,10 @@ const NAV: ReadonlyArray<{ group: string; icon: NavIconName; items: ReadonlyArra
   { group: "Vertrieb", icon: "vertrieb", items: [{ key: "companies", label: "Firmen/Kunden" }, { key: "leads", label: "Leads" }, { key: "opportunities", label: "Verkaufschancen" }, { key: "calllogs", label: "Anrufliste" }, { key: "inquiries", label: "Anfragen" }, { key: "quotes", label: "Angebote" }, { key: "orders", label: "Aufträge" }, { key: "reklamation", label: "Reklamation" }] },
   { group: "Beschaffung", icon: "beschaffung", items: [
     { key: "suppliers", label: "Lieferanten" }, { key: "procurement", label: "Beschaffung" },
-    { key: "reorder", label: "Nachbestellung" }, { key: "incoming", label: "Eingangsrechnungen" },
+    { key: "reorder", label: "Nachbestellung" }, { key: "ausschreibungen", label: "Stickerei-Ausschreibungen" }, { key: "incoming", label: "Eingangsrechnungen" },
   ] },
-  { group: "Stammdaten", icon: "stammdaten", items: [{ key: "products", label: "Artikel/Varianten" }, { key: "pricing", label: "Preise/Staffel" }, { key: "eanimport", label: "EAN-Listen-Import" }] },
-  { group: "Produktion", icon: "produktion", items: [{ key: "differentiators", label: "Differenzierer" }, { key: "subproduction", label: "Fremdvergabe" }, { key: "prodreport", label: "Produktions-Reporting" }] },
+  { group: "Stammdaten", icon: "stammdaten", items: [{ key: "products", label: "Artikel/Varianten" }, { key: "logos", label: "Logos & Stickerei" }, { key: "pricing", label: "Preise/Staffel" }, { key: "eanimport", label: "EAN-Listen-Import" }] },
+  { group: "Produktion", icon: "produktion", items: [{ key: "differentiators", label: "Fremdvergabe (alt)" }, { key: "subproduction", label: "Fremdvergabe" }, { key: "prodreport", label: "Produktions-Reporting" }, { key: "nachkalk", label: "Nachkalkulation" }] },
   { group: "Logistik", icon: "logistik", items: [
     { key: "wareneingang", label: "Wareneingang" }, { key: "lager", label: "Lager & Inventur" },
     { key: "samples", label: "Muster-Leihgut" }, { key: "shipments", label: "Versand" },
@@ -35,10 +36,10 @@ const NAV: ReadonlyArray<{ group: string; icon: NavIconName; items: ReadonlyArra
   { group: "Finanzen", icon: "finanzen", items: [
     { key: "zahlungen", label: "Zahlungseingänge" }, { key: "banking", label: "Banking" },
     { key: "finance", label: "Offene Posten (OP-Aging)" }, { key: "dunning", label: "Mahnwesen" },
-    { key: "costcenters", label: "Kostenstellen" }, { key: "reporting", label: "Auswertungen" },
+    { key: "costcenters", label: "Kostenstellen" }, { key: "nachkalkfin", label: "Nachkalkulation" }, { key: "reporting", label: "Auswertungen" },
   ] },
   { group: "System", icon: "system", items: [{ key: "mailaccounts", label: "E-Mail-Konten" }, { key: "emailtemplates", label: "E-Mail-Vorlagen" }, { key: "dataio", label: "Import/Export" }, { key: "newsletter", label: "Newsletter" }, { key: "archive", label: "GoBD-Archiv" }, { key: "auditlog", label: "Audit-Protokoll" }, { key: "integrations", label: "Schnittstellen" }] },
-  { group: "Einstellungen", icon: "einstellungen", items: [{ key: "admin", label: "Einstellungen" }, { key: "automation", label: "Automationen" }, { key: "hr", label: "Personalwesen" }, { key: "security", label: "Mein Konto (2FA)" }] },
+  { group: "Einstellungen", icon: "einstellungen", items: [{ key: "admin", label: "Einstellungen" }, { key: "aufschlag", label: "Aufschlagsfaktoren" }, { key: "automation", label: "Automationen" }, { key: "hr", label: "Personalwesen" }, { key: "security", label: "Mein Konto (2FA)" }] },
 ];
 const ALL_KEYS = NAV.flatMap((g) => g.items.map((i) => i.key));
 const hashKey = (): string => {
@@ -373,6 +374,10 @@ function Page({ k, role, userName, onNavigate, focusId }: { k: string; role: str
     case "hr": return <HrPage />;
     case "integrations": return <IntegrationsPage />;
     case "differentiators": return <Differentiators role={role} />;
+    case "logos": return <LogosPage />;
+    case "aufschlag": return <AufschlagPage />;
+    case "ausschreibungen": return <AusschreibungenPage />;
+    case "nachkalk": case "nachkalkfin": return <NachkalkulationPage />;
     case "subproduction": return <SubproductionPage />;
     case "prodreport": return <ProductionReportingPage />;
     case "shipments": return <ShipmentsPage />;

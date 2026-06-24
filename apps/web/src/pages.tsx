@@ -7,6 +7,7 @@ import { Alert, Badge, Box, Button, Checkbox, Group, Loader, Modal, NumberInput,
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { validateVatId } from "@texma/shared/vat";
 import { trpc } from "./trpc.js";
+import { AufschlagsfaktorenSection, LogosStickereiSection, StickereiAusschreibungSection, Postcalc } from "./Differentiators.js";
 import { euro, numTd, statusMantineColor } from "./theme.js";
 
 type Row = Record<string, unknown>;
@@ -5093,6 +5094,51 @@ export function HomePage({ userName, onNavigate }: { userName?: string; onNaviga
         {card("Finanzen", [{ label: "Mahnwesen", navKey: "dunning" }, { label: "Banking", navKey: "banking" }, { label: "Auswertungen", navKey: "reporting" }, { label: "GoBD-Archiv", navKey: "archive" }, { label: "Kostenstellen", navKey: "costcenters" }])}
         {card("Produktion & System", [{ label: "Produktions-Reporting", navKey: "prodreport" }, { label: "Fremdvergabe", navKey: "subproduction" }, { label: "Automationen", navKey: "automation" }, { label: "Einstellungen", navKey: "admin" }, { label: "Personalwesen", navKey: "hr" }])}
       </Group>
+    </>
+  );
+}
+
+// ── Aus „Differenzierer" an die richtigen Module verteilte Werkzeuge ──────────────
+// Logo-Verwaltung + Stickerei-Weg gehören in die Artikel-Stammdaten.
+export function LogosPage(): JSX.Element {
+  return (
+    <>
+      <Title order={2}>Logos & Stickerei</Title>
+      <Text size="sm" c="dimmed">Logo-Versionen je Kunde verwalten und den Stickerei-Weg (Partner je Firma) festlegen.</Text>
+      <LogosStickereiSection />
+    </>
+  );
+}
+
+// Aufschlagsfaktoren sind eine Preis-Grundeinstellung → Einstellungen.
+export function AufschlagPage(): JSX.Element {
+  return (
+    <>
+      <Title order={2}>Aufschlagsfaktoren</Title>
+      <Text size="sm" c="dimmed">Aufschlagsregeln je Veredelungsart (VK aus EK). Grundlage für Angebot/Auftrag und Nachkalkulation.</Text>
+      <AufschlagsfaktorenSection />
+    </>
+  );
+}
+
+// Ausschreibung je Logo an Stickerei-Partner → Beschaffung/Einkauf.
+export function AusschreibungenPage(): JSX.Element {
+  return (
+    <>
+      <Title order={2}>Stickerei-Ausschreibungen</Title>
+      <Text size="sm" c="dimmed">Neues Logo an Stickerei-Partner ausschreiben und den günstigsten Anbieter wählen (Kap. 5.4).</Text>
+      <StickereiAusschreibungSection />
+    </>
+  );
+}
+
+// Nachkalkulation Soll-Ist (T-10) — sowohl in der Produktion als auch in den Finanzen sichtbar.
+export function NachkalkulationPage(): JSX.Element {
+  return (
+    <>
+      <Title order={2}>Nachkalkulation Soll-Ist</Title>
+      <Text size="sm" c="dimmed">Plan-DB vs. Ist-DB je Auftrag (aus Zeiten + Material, T-10).</Text>
+      <Postcalc />
     </>
   );
 }

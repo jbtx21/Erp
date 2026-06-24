@@ -21,8 +21,6 @@ import {
 import { trpc } from "./trpc.js";
 import { euro, numTd, statusMantineColor, statusOf } from "./theme.js";
 
-const countColor: Record<string, string> = { ROT: "red", GELB: "amber.7", GRUEN: "green" };
-
 /** Ampel-Status als Badge: Farbe + Text (Skill erp-ui-design: Signal nie allein über Farbe). */
 function StatusBadge({ s }: { s: string }): JSX.Element {
   return <Badge color={statusMantineColor[s] ?? "gray"} variant="light" radius="sm">{statusOf(s).label}</Badge>;
@@ -32,110 +30,20 @@ function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+// Die Sammelseite ist aufgelöst: Aufschlagsfaktoren → Einstellungen, Logo-Verwaltung +
+// Stickerei-Weg → Stammdaten, Stickerei-Staffeln → Angebot/Auftrag, Ausschreibung →
+// Beschaffung, Nachkalkulation → Produktion-Reporting + Finanzen, Termin-Ampel → Übersicht.
+// Es verbleibt nur die mehrstufige Fremdvergabe (Einordnung noch in Klärung).
 export function Differentiators({ role }: { role: string }): JSX.Element {
-  const priceAllowed = role !== "PRODUKTION";
   return (
     <>
-      <Title order={2}>Differenzierer (TEXMA-Moat)</Title>
+      <Title order={2}>Mehrstufige Fremdvergabe</Title>
       <Text size="sm" c="dimmed">
-        Die vier selbst gebauten Spezialmodule — kein Standard-ERP kann das von der Stange.
+        Plan + Aktionen je Produktionsauftrag (T-04). Hinweis: Diese Funktion gibt es auch
+        unter Produktion → Fremdvergabe — die Zusammenführung ist noch in Abstimmung.
       </Text>
-      <AmpelDashboard />
-      {priceAllowed ? (
-        <PricingTools />
-      ) : (
-        <Card withBorder mt="md" padding="md">
-          <Text size="sm" c="dimmed">
-            Aufschlagsfaktoren, Stickerei-Mengenstaffeln und Nachkalkulation sind preis-sensibel
-            und für die Rolle PRODUKTION ausgeblendet (Kap. 12).
-          </Text>
-        </Card>
-      )}
       <SubproductionPlan role={role} />
     </>
-  );
-}
-
-// ── Ampel-Terminübersicht (Kap. 35.4) ───────────────────────────────────────────
-interface AmpelSummary {
-  total: number;
-  rot: number;
-  gelb: number;
-  gruen: number;
-  overdue: number;
-  kritisch: number;
-  mostUrgent: { label: string; level: string; ampel: string; daysRemaining: number; overdueDays: number } | null;
-  byLevel: Record<string, { rot: number; gelb: number; gruen: number }>;
-}
-
-function AmpelDashboard(): JSX.Element {
-  const [data, setData] = useState<AmpelSummary | null>(null);
-  const [err, setErr] = useState("");
-
-  const load = useCallback(async () => {
-    setErr("");
-    try {
-      setData((await trpc.ampel.summary.query({})) as AmpelSummary);
-    } catch (e) {
-      setErr(errMsg(e));
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  return (
-    <Card withBorder mt="md" padding="md">
-      <Group justify="space-between">
-        <Title order={4}>Termin-Ampel — ebenenübergreifend (Kap. 35.4)</Title>
-        <Button variant="default" size="xs" onClick={() => void load()}>Aktualisieren</Button>
-      </Group>
-      {err && <Text c="red" size="sm" mt="xs">Fehler: {err}</Text>}
-      {data && (
-        <>
-          <Group gap="md" mt="sm">
-            <Text size="sm">Vorgänge: <b>{data.total}</b></Text>
-            <Badge color="red" variant="light">ROT {data.rot}</Badge>
-            <Badge color="amber" variant="light">GELB {data.gelb}</Badge>
-            <Badge color="green" variant="light">GRÜN {data.gruen}</Badge>
-            <Text size="sm">überfällig: <b>{data.overdue}</b></Text>
-            <Text size="sm">kritisch: <b>{data.kritisch}</b></Text>
-          </Group>
-          {data.mostUrgent && (
-            <Group gap="xs" mt="xs">
-              <Text size="sm">Dringendster Vorgang: <b>{data.mostUrgent.label}</b> ({data.mostUrgent.level})</Text>
-              <StatusBadge s={data.mostUrgent.ampel} />
-              <Text size="sm" c="dimmed">
-                {data.mostUrgent.overdueDays > 0
-                  ? `${data.mostUrgent.overdueDays} Tage überfällig`
-                  : `${data.mostUrgent.daysRemaining} Tage Restlauf`}
-              </Text>
-            </Group>
-          )}
-          <Table striped withTableBorder mt="sm" verticalSpacing="xs">
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Ebene</Table.Th>
-                <Table.Th ta="right">ROT</Table.Th>
-                <Table.Th ta="right">GELB</Table.Th>
-                <Table.Th ta="right">GRÜN</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {Object.entries(data.byLevel).map(([level, c]) => (
-                <Table.Tr key={level}>
-                  <Table.Td>{level}</Table.Td>
-                  <Table.Td style={numTd}><Text span c={countColor.ROT} fw={700}>{c.rot}</Text></Table.Td>
-                  <Table.Td style={numTd}><Text span c={countColor.GELB} fw={700}>{c.gelb}</Text></Table.Td>
-                  <Table.Td style={numTd}><Text span c={countColor.GRUEN} fw={700}>{c.gruen}</Text></Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </>
-      )}
-    </Card>
   );
 }
 
@@ -158,38 +66,60 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-function PricingTools(): JSX.Element {
+// ── Modulare Sektionen (an die richtigen Module verteilt, statt Sammelseite) ──────
+// Jede Sektion lädt ihre eigenen Daten (Aufschlags-Konfig / Logo-Liste) und rendert
+// die passende Karte. So liegen Aufschlagsfaktoren in Einstellungen, Logo-Verwaltung
+// in den Stammdaten, Ausschreibungen in der Beschaffung usw.
+
+/** Aufschlagsfaktoren-Konfiguration (→ Einstellungen). */
+export function AufschlagsfaktorenSection(): JSX.Element {
   const [config, setConfig] = useState<MarkupConfig | null>(null);
-  const [logos, setLogos] = useState<LogoOption[]>([]);
-  const reloadLogos = useCallback(async () => {
-    try {
-      setLogos(await trpc.stickerei.logos.list.query());
-    } catch {
-      /* Picker bleibt leer */
-    }
-  }, []);
   useEffect(() => {
     void (async () => {
-      try {
-        setConfig((await trpc.stickerei.markup.getConfig.query()) as MarkupConfig);
-      } catch {
-        setConfig(DEFAULT_MARKUP_CONFIG);
-      }
+      try { setConfig((await trpc.stickerei.markup.getConfig.query()) as MarkupConfig); }
+      catch { setConfig(DEFAULT_MARKUP_CONFIG); }
     })();
   }, []);
-  useEffect(() => {
-    void reloadLogos();
-  }, [reloadLogos]);
+  return <MarkupConfigCard config={config} onSaved={setConfig} />;
+}
+
+/** Logo-Verwaltung + Stickerei-Weg je Firma (→ Stammdaten). */
+export function LogosStickereiSection(): JSX.Element {
+  const [logos, setLogos] = useState<LogoOption[]>([]);
+  const reloadLogos = useCallback(async () => {
+    try { setLogos(await trpc.stickerei.logos.list.query()); } catch { /* Picker bleibt leer */ }
+  }, []);
+  useEffect(() => { void reloadLogos(); }, [reloadLogos]);
   return (
     <>
-      <MarkupConfigCard config={config} onSaved={setConfig} />
-      <StickereiRouteCard />
       <LogoVerwaltung logos={logos} onChanged={reloadLogos} />
-      <StickereiStaffeln config={config} logos={logos} />
-      <StickereiAusschreibungen logos={logos} onDecided={reloadLogos} />
-      <Postcalc />
+      <StickereiRouteCard />
     </>
   );
+}
+
+/** Stickerei-Mengenstaffeln je Logo (→ Angebot-/Auftrags-Erfassung). */
+export function StickereiStaffelnSection(): JSX.Element {
+  const [config, setConfig] = useState<MarkupConfig | null>(null);
+  const [logos, setLogos] = useState<LogoOption[]>([]);
+  useEffect(() => {
+    void (async () => {
+      try { setConfig((await trpc.stickerei.markup.getConfig.query()) as MarkupConfig); }
+      catch { setConfig(DEFAULT_MARKUP_CONFIG); }
+      try { setLogos(await trpc.stickerei.logos.list.query()); } catch { /* leer */ }
+    })();
+  }, []);
+  return <StickereiStaffeln config={config} logos={logos} />;
+}
+
+/** Ausschreibung je Logo an Stickerei-Partner (→ Beschaffung). */
+export function StickereiAusschreibungSection(): JSX.Element {
+  const [logos, setLogos] = useState<LogoOption[]>([]);
+  const reloadLogos = useCallback(async () => {
+    try { setLogos(await trpc.stickerei.logos.list.query()); } catch { /* leer */ }
+  }, []);
+  useEffect(() => { void reloadLogos(); }, [reloadLogos]);
+  return <StickereiAusschreibungen logos={logos} onDecided={reloadLogos} />;
 }
 
 // ── Stickerei-Weg (Kap. 5.4): Direktauftrag vs. Ausschreibung je Firma ───────────
@@ -892,7 +822,7 @@ interface PostcalcResult {
   };
 }
 
-function Postcalc(): JSX.Element {
+export function Postcalc(): JSX.Element {
   const [productionId, setProductionId] = useState("");
   const [revenueEuro, setRevenueEuro] = useState(1000);
   const [materialEuro, setMaterialEuro] = useState(400);
