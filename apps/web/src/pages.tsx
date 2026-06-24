@@ -450,11 +450,57 @@ export const ProcurementPage = (): JSX.Element => {
 };
 
 // ── Logistik / Finanzen ─────────────────────────────────────────────────────
-export const ShipmentsPage = (): JSX.Element => (
-  <ListPage module="Logistik / Versand" title="Versand" hint="Versandbereite Aufträge → als versendet bestätigen (DPD-Label/Tracking, T-06)."
-    load={() => trpc.shipments.listShippable.query({ limit: 100 }) as Promise<Row[]>}
-    action={(r, reload) => <ConfirmShipBtn orderId={String((r as Row).id ?? (r as Row).orderId ?? "")} reload={reload} />} />
-);
+export function ShipmentsPage({ onOpen }: { onOpen?: (navKey: string, id: string) => void } = {}): JSX.Element {
+  return (
+    <>
+      <ListPage module="Logistik / Versand" title="Versand" hint="Versandbereite Aufträge → als versendet bestätigen (Carrier + Tracking, T-06). Manuelles Etikett unten."
+        load={() => trpc.shipments.listShippable.query({ limit: 100 }) as Promise<Row[]>}
+        action={(r, reload) => {
+          const oid = String((r as Row).id ?? (r as Row).orderId ?? "");
+          return (
+            <Group gap={4} justify="flex-end" wrap="nowrap">
+              {onOpen && <Button size="compact-xs" variant="subtle" onClick={() => onOpen("orders", oid)} title="Auftrag öffnen">↗ Auftrag</Button>}
+              <ConfirmShipBtn orderId={oid} reload={reload} />
+            </Group>
+          );
+        }} />
+      <ManualShipmentBox onOpen={onOpen} />
+    </>
+  );
+}
+
+// Manuelles Versandetikett: Versand für einen beliebigen Auftrag manuell erfassen
+// (Carrier + Tracking), auch wenn er nicht in der versandbereiten Liste steht.
+function ManualShipmentBox({ onOpen }: { onOpen?: (navKey: string, id: string) => void }): JSX.Element {
+  const [orderId, setOrderId] = useState("");
+  const [carrier, setCarrier] = useState<CarrierKind>("DPD");
+  const [tracking, setTracking] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  return (
+    <Box mt="lg" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, maxWidth: 720 }}>
+      <Text size="sm" fw={600}>Manuelles Versandetikett</Text>
+      <Text size="xs" c="dimmed" mb="xs">Versand für einen Auftrag manuell erfassen — auch wenn er nicht in der Liste steht. Setzt den Auftrag auf VERSENDET und meldet Status/Tracking an Shop bzw. Kunde.</Text>
+      <Group gap="xs" align="end" wrap="wrap">
+        <TextInput label="Auftrags-ID" value={orderId} onChange={(e) => setOrderId(e.currentTarget.value)} w={200} placeholder="ord-…" />
+        <Select label="Carrier" value={carrier} onChange={(v) => v && setCarrier(v as CarrierKind)} data={[...CARRIERS]} w={110} />
+        <TextInput label="Tracking-Nr." value={tracking} onChange={(e) => setTracking(e.currentTarget.value)} w={170} placeholder="leer = automatisch" />
+        <Button loading={busy} disabled={!orderId.trim()} onClick={async () => {
+          setBusy(true); setErr(null); setMsg(null);
+          try {
+            const trackingNumber = tracking.trim() || `${carrier}-${Date.now().toString().slice(-9)}`;
+            await trpc.shipments.confirmShipped.mutate({ orderId: orderId.trim(), trackingNumber, carrier });
+            setMsg(`Versand erfasst (${carrier} · ${trackingNumber}).`); setOrderId(""); setTracking("");
+          } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+        }}>Als versendet erfassen</Button>
+        {onOpen && orderId.trim() && <Button variant="subtle" size="compact-sm" onClick={() => onOpen("orders", orderId.trim())}>↗ Auftrag öffnen</Button>}
+      </Group>
+      {msg && <Alert color="green" mt="sm">{msg}</Alert>}
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+    </Box>
+  );
+}
 
 const CARRIERS = ["DPD", "DHL", "GLS", "UPS", "HERMES", "SONSTIGE"] as const;
 type CarrierKind = (typeof CARRIERS)[number];

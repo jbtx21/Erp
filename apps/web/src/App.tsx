@@ -293,6 +293,12 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<voi
     setFocus({ navKey: hit.navKey, id: hit.id });
     if (typeof location !== "undefined") location.hash = hit.navKey;
   }, []);
+  // Hotlink/Direktlink in eine andere Maske mit Beleg-Fokus (z. B. Versand → Auftrag).
+  const openEntity = useCallback((navKey: string, id: string) => {
+    setActiveState(navKey);
+    setFocus({ navKey, id });
+    if (typeof location !== "undefined") location.hash = navKey;
+  }, []);
 
   // Genauer Seitentitel je Bereich (Web Interface Guidelines: accurate page titles).
   useEffect(() => {
@@ -329,14 +335,14 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<voi
       </AppShell.Navbar>
 
       <AppShell.Main>
-        <Page k={active} role={user.role} userName={user.name} onNavigate={setActive}
+        <Page k={active} role={user.role} userName={user.name} onNavigate={setActive} onOpen={openEntity}
           focusId={focus && focus.navKey === active ? focus.id : undefined} />
       </AppShell.Main>
     </AppShell>
   );
 }
 
-function Page({ k, role, userName, onNavigate, focusId }: { k: string; role: string; userName: string; onNavigate: (k: string) => void; focusId?: string }): ReactNode {
+function Page({ k, role, userName, onNavigate, onOpen, focusId }: { k: string; role: string; userName: string; onNavigate: (k: string) => void; onOpen: (navKey: string, id: string) => void; focusId?: string }): ReactNode {
   switch (k) {
     case "home": return <HomePage userName={userName} onNavigate={onNavigate} />;
     case "dashboard": return <Dashboard />;
@@ -380,7 +386,7 @@ function Page({ k, role, userName, onNavigate, focusId }: { k: string; role: str
     case "nachkalkfin": return <NachkalkulationPage />;
     case "subproduction": return <SubproductionPage />;
     case "prodreport": return <ProductionReportingPage />;
-    case "shipments": return <ShipmentsPage />;
+    case "shipments": return <ShipmentsPage onOpen={onOpen} />;
     case "dunning": return <DunningPage />;
     case "banking": return <Banking role={role} />;
     case "zahlungen": return <ZahlungenPage />;
