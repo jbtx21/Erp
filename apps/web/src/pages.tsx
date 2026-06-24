@@ -586,6 +586,7 @@ export function SampleLoansPage({ onOpen }: { onOpen?: (navKey: string, id: stri
   // Mehrartikel-Leihe (mehrere Lieferanten)
   const [multiCompany, setMultiCompany] = useState("co-muster");
   const [multiZweck, setMultiZweck] = useState("Anprobe");
+  const [multiQuote, setMultiQuote] = useState("");
   const [multiLines, setMultiLines] = useState<{ description: string; variantId: string; supplierId: string; menge: number }[]>([{ description: "", variantId: "", supplierId: "", menge: 1 }]);
   const [fromQuote, setFromQuote] = useState("");
 
@@ -642,6 +643,7 @@ export function SampleLoansPage({ onOpen }: { onOpen?: (navKey: string, id: stri
         <Group gap="xs" align="end" mt="xs">
           <CompanyPicker value={multiCompany} onChange={setMultiCompany} w={200} />
           <TextInput label="Zweck" value={multiZweck} onChange={(e) => setMultiZweck(e.currentTarget.value)} w={140} />
+          <TextInput label="Angebot (optional)" value={multiQuote} onChange={(e) => setMultiQuote(e.currentTarget.value)} w={160} placeholder="quo-… zuordnen" />
         </Group>
         {multiLines.map((l, i) => (
           <Group key={i} gap="xs" mt={4} align="end">
@@ -658,16 +660,19 @@ export function SampleLoansPage({ onOpen }: { onOpen?: (navKey: string, id: stri
         <Group gap="xs" mt="xs">
           <Button size="compact-xs" variant="light" onClick={() => setMultiLines((ls) => [...ls, { description: "", variantId: "", supplierId: "", menge: 1 }])}>+ Artikel</Button>
           <Button size="compact-sm" disabled={!multiLines.some((l) => l.description.trim())} onClick={() => void act(async () => {
-            await trpc.sampleLoans.issueMulti.mutate({ companyId: multiCompany, zweck: multiZweck, lines: multiLines.filter((l) => l.description.trim()).map((l) => ({ description: l.description.trim(), variantId: l.variantId.trim() || undefined, supplierId: l.supplierId.trim() || undefined, menge: l.menge })) });
-            setMultiLines([{ description: "", variantId: "", supplierId: "", menge: 1 }]);
+            await trpc.sampleLoans.issueMulti.mutate({ companyId: multiCompany, zweck: multiZweck, quoteId: multiQuote.trim() || undefined, lines: multiLines.filter((l) => l.description.trim()).map((l) => ({ description: l.description.trim(), variantId: l.variantId.trim() || undefined, supplierId: l.supplierId.trim() || undefined, menge: l.menge })) });
+            setMultiLines([{ description: "", variantId: "", supplierId: "", menge: 1 }]); setMultiQuote("");
           })}>Mehrartikel-Leihe anlegen</Button>
         </Group>
       </Box>
 
       <AutoTable rows={rows} hide={["lines"]} action={(r) => (
-        String(r.status) === "VERLIEHEN"
-          ? <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.sampleLoans.returnSample.mutate({ loanId: String(r.id) }))}>Zurückgenommen</Button>
-          : <Text size="xs" c="dimmed">—</Text>
+        <Group gap={4} justify="flex-end" wrap="nowrap">
+          {onOpen && r.quoteId ? <Button size="compact-xs" variant="subtle" onClick={() => onOpen("quotes", String(r.quoteId))} title="zugeordnetes Angebot öffnen">↗ Angebot</Button> : null}
+          {String(r.status) === "VERLIEHEN"
+            ? <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.sampleLoans.returnSample.mutate({ loanId: String(r.id) }))}>Zurückgenommen</Button>
+            : <Text size="xs" c="dimmed">—</Text>}
+        </Group>
       )} />
     </>
   );

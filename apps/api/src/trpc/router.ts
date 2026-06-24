@@ -1736,7 +1736,7 @@ export const appRouter = router({
     // Mehrartikel-Leihe (Muster/Anprobe, mehrere Lieferanten).
     issueMulti: roleProcedure(...supplierRoles)
       .input(z.object({
-        companyId: z.string().min(1), zweck: z.string().optional(),
+        companyId: z.string().min(1), zweck: z.string().optional(), quoteId: z.string().optional(),
         lines: z.array(z.object({ description: z.string().min(1), variantId: z.string().optional(), supplierId: z.string().optional(), menge: z.number().int().positive() })).min(1),
       }))
       .mutation(async ({ input, ctx }) => {

@@ -22,23 +22,23 @@ export class PrismaSampleLoanRepository implements SampleLoanRepository {
   async list(): Promise<SampleLoanRow[]> {
     const rows = await prisma.sampleLoan.findMany({
       orderBy: { ausgegebenAm: "desc" },
-      select: { id: true, companyId: true, variantId: true, menge: true, zweck: true, ausgegebenAm: true, status: true, invoiceId: true, lines: { select: { description: true, variantId: true, supplierId: true, menge: true } } },
+      select: { id: true, companyId: true, variantId: true, menge: true, zweck: true, ausgegebenAm: true, status: true, invoiceId: true, quoteId: true, lines: { select: { description: true, variantId: true, supplierId: true, menge: true } } },
     });
     return rows.map((r) => ({ ...r, lines: r.lines as LoanLine[] }));
   }
 
-  async issueMulti(input: { companyId: string; zweck: string | null; ausgegebenAm: Date; lines: LoanLine[] }): Promise<{ id: string }> {
+  async issueMulti(input: { companyId: string; zweck: string | null; ausgegebenAm: Date; lines: LoanLine[]; quoteId?: string | null }): Promise<{ id: string }> {
     return prisma.$transaction(async (tx) => {
       const loan = await tx.sampleLoan.create({
         data: {
-          companyId: input.companyId, zweck: input.zweck, ausgegebenAm: input.ausgegebenAm,
+          companyId: input.companyId, zweck: input.zweck, ausgegebenAm: input.ausgegebenAm, quoteId: input.quoteId ?? null,
           lines: { create: input.lines.map((l) => ({ description: l.description, variantId: l.variantId ?? null, supplierId: l.supplierId ?? null, menge: l.menge })) },
         },
         select: { id: true },
       });
       // Muster-Abgang nur für Katalog-Varianten (mit variantId).
       for (const l of input.lines) {
-        if (l.variantId) await tx.stockMove.create({ data: { variantId: l.variantId, deltaQty: -l.menge, grund: "MUSTER", lager: "MUSTER", belegRef: `SampleLoan:${loan.id}` } });
+        if (l.variantId) await tx.stockMove.create({ data: { variantId: l.variantId, deltaQty: -l.menge, grund: "MUSTER", lager: "MUSTER", warehouseId: "wh_muster", belegRef: `SampleLoan:${loan.id}` } });
       }
       await tx.dueItem.create({ data: { entity: "SampleLoan", entityId: loan.id, dueDate: input.ausgegebenAm, note: "Muster/Anprobe-Rückgabe" } });
       return loan;

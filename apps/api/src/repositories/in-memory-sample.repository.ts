@@ -19,6 +19,7 @@ interface Loan {
   ausgegebenAm: Date;
   status: SampleLoanStatus;
   invoiceId: string | null;
+  quoteId: string | null;
   lines: LoanLine[];
 }
 
@@ -56,14 +57,14 @@ export class InMemorySampleLoanRepository implements SampleLoanRepository {
     dueDate: Date;
   }): Promise<{ id: string }> {
     const id = `loan-${++this.seq}`;
-    this.loans.set(id, { id, companyId: input.companyId, variantId: input.variantId, menge: input.menge, zweck: null, ausgegebenAm: input.ausgegebenAm, status: "VERLIEHEN", invoiceId: null, lines: [] });
+    this.loans.set(id, { id, companyId: input.companyId, variantId: input.variantId, menge: input.menge, zweck: null, ausgegebenAm: input.ausgegebenAm, status: "VERLIEHEN", invoiceId: null, quoteId: null, lines: [] });
     this.moveMuster(input.variantId, -input.menge); // Muster-Abgang
     return { id };
   }
 
-  async issueMulti(input: { companyId: string; zweck: string | null; ausgegebenAm: Date; lines: LoanLine[] }): Promise<{ id: string }> {
+  async issueMulti(input: { companyId: string; zweck: string | null; ausgegebenAm: Date; lines: LoanLine[]; quoteId?: string | null }): Promise<{ id: string }> {
     const id = `loan-${++this.seq}`;
-    this.loans.set(id, { id, companyId: input.companyId, variantId: null, menge: null, zweck: input.zweck, ausgegebenAm: input.ausgegebenAm, status: "VERLIEHEN", invoiceId: null, lines: input.lines });
+    this.loans.set(id, { id, companyId: input.companyId, variantId: null, menge: null, zweck: input.zweck, ausgegebenAm: input.ausgegebenAm, status: "VERLIEHEN", invoiceId: null, quoteId: input.quoteId ?? null, lines: input.lines });
     for (const l of input.lines) if (l.variantId) this.moveMuster(l.variantId, -l.menge);
     return { id };
   }
