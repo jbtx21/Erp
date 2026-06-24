@@ -5,7 +5,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Alert, Badge, Box, Button, Checkbox, Group, Loader, Modal, NumberInput, Select, Switch, Table, Tabs, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
-import { validateVatId } from "@texma/shared";
+import { validateVatId } from "@texma/shared/vat";
 import { trpc } from "./trpc.js";
 import { euro, numTd, statusMantineColor } from "./theme.js";
 
@@ -2489,6 +2489,8 @@ export function InquiriesPage(): JSX.Element {
 export function LeadsPage({ focusId }: { focusId?: string } = {}): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [name, setName] = useState("");
+  const [firma, setFirma] = useState("");
+  const [verantwortlicher, setVerantwortlicher] = useState("");
   const [quelle, setQuelle] = useState("WEB");
   const [email, setEmail] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -2525,19 +2527,21 @@ export function LeadsPage({ focusId }: { focusId?: string } = {}): JSX.Element {
   return (
     <>
       <Title order={3}>Leads / Interessenten</Title>
-      <Text size="sm" c="dimmed" mt={4}>Funnel NEU → Kontaktiert → Qualifiziert → konvertiert zu Firma (B15, Kap. 18.1).</Text>
+      <Text size="sm" c="dimmed" mt={4}>Funnel NEU → Kontaktiert → Qualifiziert → konvertiert zu Firma (B15, Kap. 18.1). Firma wird beim Konvertieren zum Firmennamen, der Ansprechpartner zum Kontakt.</Text>
       <Group mt="sm" gap="xs" align="end">
-        <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Interessent GmbH" />
+        <TextInput label="Ansprechpartner" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Max Mustermann" />
+        <TextInput label="Firma" value={firma} onChange={(e) => setFirma(e.currentTarget.value)} placeholder="Interessent GmbH" />
         <Select label="Quelle" value={quelle} onChange={(v) => v && setQuelle(v)} data={["WEB", "EMAIL", "SHOP", "TELEFON"]} w={120} />
         <TextInput label="E-Mail (optional)" value={email} onChange={(e) => setEmail(e.currentTarget.value)} />
+        <TextInput label="Verantwortlich (optional)" value={verantwortlicher} onChange={(e) => setVerantwortlicher(e.currentTarget.value)} placeholder="vertrieb@texma-gmbh.de" w={200} />
         <Button loading={busy} disabled={!name.trim()} onClick={async () => {
           setBusy(true); setErr(null);
-          try { await trpc.leads.create.mutate({ name: name.trim(), quelle: quelle as "WEB" | "EMAIL" | "SHOP" | "TELEFON", email: email || undefined }); setName(""); setEmail(""); await load(); }
+          try { await trpc.leads.create.mutate({ name: name.trim(), quelle: quelle as "WEB" | "EMAIL" | "SHOP" | "TELEFON", firma: firma.trim() || undefined, verantwortlicher: verantwortlicher.trim() || undefined, email: email || undefined }); setName(""); setFirma(""); setVerantwortlicher(""); setEmail(""); await load(); }
           catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
         }}>Lead anlegen</Button>
       </Group>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
-      <AutoTable rows={rows} hide={["note", "convertedCompanyId"]} highlightId={focusId} action={actionsFor} />
+      <AutoTable rows={rows} hide={["note", "webseite", "convertedCompanyId"]} highlightId={focusId} action={actionsFor} />
     </>
   );
 }

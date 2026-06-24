@@ -664,6 +664,9 @@ enum LeadStatus {
 model Lead {
   id                 String        @id @default(cuid())
   name               String
+  firma              String?
+  webseite           String?
+  verantwortlicher   String?       // Lead-Owner (Benutzer-E-Mail), für Zuweisung
   email              String?
   phone              String?
   quelle             InquirySource

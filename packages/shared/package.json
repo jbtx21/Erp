@@ -25,6 +25,10 @@
     "./order": {
       "types": "./dist/order.d.ts",
       "import": "./dist/order.js"
+    },
+    "./vat": {
+      "types": "./dist/vat.d.ts",
+      "import": "./dist/vat.js"
     }
   },
   "scripts": {

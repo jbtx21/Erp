@@ -6,6 +6,9 @@ import type { CreateLeadInput, LeadRepository, LeadRow } from "../modules/lead/l
 interface Lead {
   id: string;
   name: string;
+  firma: string | null;
+  webseite: string | null;
+  verantwortlicher: string | null;
   email: string | null;
   phone: string | null;
   quelle: InquirySource;
@@ -33,6 +36,9 @@ export class InMemoryLeadRepository implements LeadRepository {
     this.leads.set(id, {
       id,
       name: input.name,
+      firma: input.firma ?? null,
+      webseite: input.webseite ?? null,
+      verantwortlicher: input.verantwortlicher ?? null,
       email: input.email ?? null,
       phone: input.phone ?? null,
       quelle: input.quelle,
@@ -47,7 +53,7 @@ export class InMemoryLeadRepository implements LeadRepository {
 
   async load(id: string) {
     const l = this.leads.get(id);
-    return l ? { status: l.status, name: l.name, email: l.email, phone: l.phone } : null;
+    return l ? { status: l.status, name: l.name, firma: l.firma, email: l.email, phone: l.phone } : null;
   }
 
   async setStatus(id: string, status: LeadStatus): Promise<void> {
@@ -65,7 +71,7 @@ export class InMemoryLeadRepository implements LeadRepository {
 
   async convert(
     id: string,
-    _input: { name: string; email: string | null; phone: string | null }
+    _input: { name: string; firma: string | null; email: string | null; phone: string | null }
   ): Promise<{ companyId: string }> {
     const l = this.leads.get(id);
     if (!l) throw new Error(`Lead ${id} nicht gefunden`);

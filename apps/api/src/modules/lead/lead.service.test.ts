@@ -23,6 +23,16 @@ describe("LeadService (B15)", () => {
     expect(repo.get(lead.id)).toMatchObject({ status: "KONVERTIERT", convertedCompanyId: companyId });
   });
 
+  it("übernimmt B2B-Felder (Firma/Verantwortlicher) beim Anlegen", async () => {
+    const { repo, service } = setup();
+    const { id } = await service.create({
+      name: "Max Mustermann", quelle: "TELEFON", firma: "Interessent GmbH", verantwortlicher: "vertrieb@texma-gmbh.de",
+    });
+    expect(repo.get(id)).toMatchObject({ firma: "Interessent GmbH", verantwortlicher: "vertrieb@texma-gmbh.de", name: "Max Mustermann" });
+    const [row] = await service.list();
+    expect(row).toMatchObject({ firma: "Interessent GmbH", webseite: null });
+  });
+
   it("ein nicht qualifizierter Lead ist nicht konvertierbar", async () => {
     const { service } = setup();
     const lead = await service.create({ name: "Acme", quelle: "WEB" });

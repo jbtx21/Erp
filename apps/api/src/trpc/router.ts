@@ -1693,6 +1693,9 @@ export const appRouter = router({
       .input(z.object({
         name: z.string().min(1),
         quelle: z.enum(["WEB", "EMAIL", "SHOP", "TELEFON"]),
+        firma: z.string().optional(),
+        webseite: z.string().optional(),
+        verantwortlicher: z.string().optional(),
         email: z.string().optional(),
         phone: z.string().optional(),
         note: z.string().optional(),

@@ -18,6 +18,9 @@ export class PrismaLeadRepository implements LeadRepository {
       data: {
         name: input.name,
         quelle: input.quelle,
+        firma: input.firma ?? null,
+        webseite: input.webseite ?? null,
+        verantwortlicher: input.verantwortlicher ?? null,
         email: input.email ?? null,
         phone: input.phone ?? null,
         note: input.note ?? null,
@@ -27,8 +30,8 @@ export class PrismaLeadRepository implements LeadRepository {
   }
 
   async load(id: string) {
-    const l = await prisma.lead.findUnique({ where: { id }, select: { status: true, name: true, email: true, phone: true } });
-    return l ? { status: l.status as LeadStatus, name: l.name, email: l.email, phone: l.phone } : null;
+    const l = await prisma.lead.findUnique({ where: { id }, select: { status: true, name: true, firma: true, email: true, phone: true } });
+    return l ? { status: l.status as LeadStatus, name: l.name, firma: l.firma, email: l.email, phone: l.phone } : null;
   }
 
   async setStatus(id: string, status: LeadStatus): Promise<void> {
@@ -39,7 +42,7 @@ export class PrismaLeadRepository implements LeadRepository {
     await prisma.lead.update({ where: { id }, data: { status: "VERWORFEN", verworfenGrund: grund } });
   }
 
-  async convert(id: string, input: { name: string; email: string | null; phone: string | null }): Promise<{ companyId: string }> {
+  async convert(id: string, input: { name: string; firma: string | null; email: string | null; phone: string | null }): Promise<{ companyId: string }> {
     const priceGroup = await prisma.priceGroup.findUnique({ where: { kind: "STANDARD" }, select: { id: true } });
     if (!priceGroup) throw new Error("Standard-Preisgruppe fehlt — Lead-Konvertierung nicht möglich");
 
@@ -51,9 +54,10 @@ export class PrismaLeadRepository implements LeadRepository {
       });
       if (gate.count === 0) throw new Error(`Lead ${id} ist nicht (mehr) konvertierbar`);
 
+      // B2B: Firmenname = firma (falls erfasst), die Person wird zum Ansprechpartner.
       const company = await tx.company.create({
         data: {
-          name: input.name,
+          name: input.firma?.trim() || input.name,
           priceGroupId: priceGroup.id,
           contacts:
             input.email || input.phone
