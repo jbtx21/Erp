@@ -7,8 +7,10 @@ import { formatEur, lineNet, type Cents } from "./money.js";
 export interface BelegPosition {
   menge: number;
   bezeichnung: string;
-  /** Formatierter Einzelpreis (nur Rechnung). */
+  /** Formatierter Einzelpreis (nur Rechnung). Bei Rabatt = VK-Listenpreis vor Rabatt. */
   einzelpreis?: string;
+  /** Formatierter Positionsrabatt, z. B. "10 %" (nur wenn gewährt). */
+  rabatt?: string;
   /** Formatierter Zeilenbetrag (nur Rechnung). */
   gesamt?: string;
 }
@@ -102,7 +104,7 @@ export interface RechnungInput {
   nummer: string;
   datum: Date;
   empfaenger: string[];
-  positionen: { menge: number; bezeichnung: string; einzelpreisCents: Cents }[];
+  positionen: PreisPosition[];
   netCents: Cents;
   taxCents: Cents;
   grossCents: Cents;
@@ -111,12 +113,25 @@ export interface RechnungInput {
   absender?: string[];
 }
 
-/** Gemeinsame Preis-Positionen (Einzel-/Zeilenpreis) für Rechnung/Angebot/AB. */
-function preisPositionen(ps: { menge: number; bezeichnung: string; einzelpreisCents: Cents }[]): BelegPosition[] {
+/** Preis-Position für Rechnung/Angebot/AB. einzelpreisCents = effektiver Netto NACH Rabatt. */
+export interface PreisPosition {
+  menge: number;
+  bezeichnung: string;
+  einzelpreisCents: Cents;
+  /** VK-Listenpreis je Stück VOR Rabatt (Anzeige in der Einzel-Spalte, wenn Rabatt gewährt). */
+  listenpreisCents?: Cents | null;
+  /** Positionsrabatt in Prozent (0..100); nur gesetzt, wenn gewährt. */
+  rabattPct?: number | null;
+}
+
+/** Gemeinsame Preis-Positionen (Einzel-/Rabatt-/Zeilenpreis) für Rechnung/Angebot/AB. */
+function preisPositionen(ps: PreisPosition[]): BelegPosition[] {
   return ps.map((p) => ({
     menge: p.menge,
     bezeichnung: p.bezeichnung,
-    einzelpreis: formatEur(p.einzelpreisCents),
+    // Einzelpreis = VK-Liste (vor Rabatt), sonst der effektive Netto; Zeilenbetrag = effektiver Netto × Menge.
+    einzelpreis: formatEur(p.listenpreisCents ?? p.einzelpreisCents),
+    ...(p.rabattPct ? { rabatt: `${p.rabattPct} %` } : {}),
     gesamt: formatEur(lineNet(p.menge, p.einzelpreisCents)),
   }));
 }
@@ -154,7 +169,7 @@ export interface AngebotInput {
   nummer: string;
   datum: Date;
   empfaenger: string[];
-  positionen: { menge: number; bezeichnung: string; einzelpreisCents: Cents }[];
+  positionen: PreisPosition[];
   netCents: Cents;
   taxCents: Cents;
   grossCents: Cents;
@@ -187,7 +202,7 @@ export interface AuftragsbestaetigungInput {
   nummer: string;
   datum: Date;
   empfaenger: string[];
-  positionen: { menge: number; bezeichnung: string; einzelpreisCents: Cents }[];
+  positionen: PreisPosition[];
   netCents: Cents;
   taxCents: Cents;
   grossCents: Cents;

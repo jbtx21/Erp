@@ -53,6 +53,26 @@ describe("Angebot / Auftragsbestätigung", () => {
     expect(d.hinweise.some((h) => h.includes("Geschäftsbedingungen"))).toBe(true);
   });
 
+  it("weist den Positionsrabatt aus: Einzel = VK-Liste, Rabatt-Spalte, Gesamt = Netto nach Rabatt", () => {
+    const d = angebotDokument({
+      nummer: "AN-2026-0002", datum: new Date("2026-06-22"), empfaenger: ["Muster GmbH"],
+      // VK-Liste 1500, 10 % Rabatt → effektiver Netto 1350; Zeilenbetrag 5 × 1350 = 6750.
+      positionen: [{ menge: 5, bezeichnung: "Sonder-Polo", einzelpreisCents: 1350, listenpreisCents: 1500, rabattPct: 10 }],
+      netCents: 6750, taxCents: 1283, grossCents: 8033,
+    });
+    expect(d.positionen[0]?.einzelpreis).toContain("15,00"); // VK-Liste
+    expect(d.positionen[0]?.rabatt).toBe("10 %");
+    expect(d.positionen[0]?.gesamt).toContain("67,50"); // Netto nach Rabatt × Menge
+  });
+
+  it("ohne Rabatt bleibt die Rabatt-Spalte leer", () => {
+    const d = angebotDokument({
+      nummer: "AN-2026-0003", datum: new Date("2026-06-22"), empfaenger: ["X"],
+      positionen: pos, netCents: 19900, taxCents: 3781, grossCents: 23681,
+    });
+    expect(d.positionen[0]?.rabatt).toBeUndefined();
+  });
+
   it("Auftragsbestätigung mit Liefertermin und Bestellbezug", () => {
     const d = auftragsbestaetigungDokument({
       nummer: "AB-2026-0007", datum: new Date("2026-06-22"), empfaenger: ["Muster GmbH"],

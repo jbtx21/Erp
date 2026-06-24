@@ -82,14 +82,14 @@ export class PrismaPrintRepository implements PrintRepository {
       select: {
         number: true, issuedAt: true, netCents: true, taxCents: true, grossCents: true,
         company: { select: { name: true, street: true, zip: true, city: true, country: true, vatId: true } },
-        order: { select: { deliveryAddress: { select: { street: true, zip: true, city: true } }, lines: { orderBy: { position: "asc" }, select: { qty: true, description: true, unitNetCents: true } } } },
+        order: { select: { deliveryAddress: { select: { street: true, zip: true, city: true } }, lines: { orderBy: { position: "asc" }, select: { qty: true, description: true, unitNetCents: true, listNetCents: true, rabattPct: true } } } },
       },
     });
     if (!i) return null;
     return {
       number: i.number, issuedAt: i.issuedAt,
       empfaenger: recipientLines(i.company, i.order?.deliveryAddress ?? null),
-      positionen: (i.order?.lines ?? []).map((l) => ({ menge: l.qty, bezeichnung: l.description, einzelpreisCents: l.unitNetCents })),
+      positionen: (i.order?.lines ?? []).map((l) => ({ menge: l.qty, bezeichnung: l.description, einzelpreisCents: l.unitNetCents, listenpreisCents: l.listNetCents, rabattPct: l.rabattPct })),
       netCents: i.netCents, taxCents: i.taxCents, grossCents: i.grossCents,
     };
   }
@@ -100,11 +100,11 @@ export class PrismaPrintRepository implements PrintRepository {
       select: {
         number: true, createdAt: true, gueltigBisAm: true,
         company: { select: { name: true, street: true, zip: true, city: true, country: true, vatId: true } },
-        lines: { orderBy: { position: "asc" }, select: { qty: true, description: true, unitNetCents: true } },
+        lines: { orderBy: { position: "asc" }, select: { qty: true, description: true, unitNetCents: true, listNetCents: true, rabattPct: true } },
       },
     });
     if (!q) return null;
-    const positionen: PricePrintLine[] = q.lines.map((l) => ({ menge: l.qty, bezeichnung: l.description, einzelpreisCents: l.unitNetCents }));
+    const positionen: PricePrintLine[] = q.lines.map((l) => ({ menge: l.qty, bezeichnung: l.description, einzelpreisCents: l.unitNetCents, listenpreisCents: l.listNetCents, rabattPct: l.rabattPct }));
     return { number: q.number, datum: q.createdAt, empfaenger: recipientLines(q.company, null), positionen, ...totals(positionen), gueltigBis: q.gueltigBisAm };
   }
 
@@ -115,11 +115,11 @@ export class PrismaPrintRepository implements PrintRepository {
         number: true, createdAt: true, zugesagterLiefertermin: true, externalNumber: true,
         company: { select: { name: true, street: true, zip: true, city: true, country: true, vatId: true } },
         deliveryAddress: { select: { street: true, zip: true, city: true } },
-        lines: { orderBy: { position: "asc" }, select: { qty: true, description: true, unitNetCents: true } },
+        lines: { orderBy: { position: "asc" }, select: { qty: true, description: true, unitNetCents: true, listNetCents: true, rabattPct: true } },
       },
     });
     if (!o) return null;
-    const positionen: PricePrintLine[] = o.lines.map((l) => ({ menge: l.qty, bezeichnung: l.description, einzelpreisCents: l.unitNetCents }));
+    const positionen: PricePrintLine[] = o.lines.map((l) => ({ menge: l.qty, bezeichnung: l.description, einzelpreisCents: l.unitNetCents, listenpreisCents: l.listNetCents, rabattPct: l.rabattPct }));
     return {
       number: o.number, datum: o.createdAt, empfaenger: recipientLines(o.company, o.deliveryAddress),
       positionen, ...totals(positionen), liefertermin: o.zugesagterLiefertermin, bestellreferenz: o.externalNumber,

@@ -40,12 +40,16 @@ export async function renderBelegPdf(beleg: BelegDokument): Promise<Uint8Array> 
   // Tabellenkopf
   const xMenge = MARGIN;
   const xBez = MARGIN + 50;
-  const xEinzel = A4.width - MARGIN - 180;
+  const xEinzel = A4.width - MARGIN - 230;
+  const xRabatt = A4.width - MARGIN - 140;
   const xGesamt = A4.width - MARGIN - 70;
+  // Rabatt-Spalte nur einblenden, wenn mindestens eine Position einen Positionsrabatt trägt.
+  const zeigeRabatt = beleg.zeigePreise && beleg.positionen.some((p) => p.rabatt);
   page.drawText("Menge", { x: xMenge, y, size: 9, font: bold, color: navy });
   page.drawText("Bezeichnung", { x: xBez, y, size: 9, font: bold, color: navy });
   if (beleg.zeigePreise) {
     page.drawText("Einzel", { x: xEinzel, y, size: 9, font: bold, color: navy });
+    if (zeigeRabatt) page.drawText("Rabatt", { x: xRabatt, y, size: 9, font: bold, color: navy });
     page.drawText("Gesamt", { x: xGesamt, y, size: 9, font: bold, color: navy });
   }
   y -= 4;
@@ -57,6 +61,7 @@ export async function renderBelegPdf(beleg: BelegDokument): Promise<Uint8Array> 
     page.drawText(p.bezeichnung.slice(0, 60), { x: xBez, y, size: 10, font });
     if (beleg.zeigePreise) {
       if (p.einzelpreis) page.drawText(p.einzelpreis, { x: xEinzel, y, size: 10, font });
+      if (zeigeRabatt && p.rabatt) page.drawText(p.rabatt, { x: xRabatt, y, size: 10, font });
       if (p.gesamt) page.drawText(p.gesamt, { x: xGesamt, y, size: 10, font });
     }
     y -= 15;

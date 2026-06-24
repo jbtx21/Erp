@@ -5,7 +5,7 @@
 import { angebotDokument, auftragsbestaetigungDokument, laufzettelDokument, lieferscheinDokument, rechnungDokument, type PositionKind } from "@texma/shared";
 import { renderBelegPdf } from "../../pdf/beleg-pdf.js";
 
-export interface PricePrintLine { menge: number; bezeichnung: string; einzelpreisCents: number }
+export interface PricePrintLine { menge: number; bezeichnung: string; einzelpreisCents: number; listenpreisCents?: number | null; rabattPct?: number | null }
 
 export interface DeliveryNotePrintData {
   number: string;
@@ -18,7 +18,7 @@ export interface InvoicePrintData {
   number: string;
   issuedAt: Date;
   empfaenger: string[];
-  positionen: { menge: number; bezeichnung: string; einzelpreisCents: number }[];
+  positionen: PricePrintLine[];
   netCents: number;
   taxCents: number;
   grossCents: number;
