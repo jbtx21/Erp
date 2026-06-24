@@ -717,7 +717,7 @@ export type PositionKind = "TEXTIL" | "VEREDELUNG" | "SONSTIGE";
 // Eine Position kann auf eine konkrete Variante (variantId) ODER nur auf einen
 // Hauptartikel (articleId, Farbe×Größe noch offen) verweisen; isAlternative kennzeichnet
 // ein unverbindliches Alternativangebot (wird beim Wandeln in den Auftrag weggelassen).
-export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind; variantId?: string; articleId?: string; isAlternative?: boolean; ekEuro?: number; isBundle?: boolean }
+export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind; variantId?: string; articleId?: string; isAlternative?: boolean; ekEuro?: number; isBundle?: boolean; rabattPct?: number }
 
 // Artikel-Picker: durchsuchbare Auswahl aus dem Artikelstamm (ERPNext „Link field").
 // Bei Auswahl wird eine Position vorbefüllt (Bezeichnung, Standardpreis, Variante).
@@ -900,9 +900,12 @@ export function SupplierPicker({ value, onChange, label, w = 200 }: { value: str
   );
 }
 
-// Deckungsbeitrag je Position (VK − EK) × Menge in Cent; null wenn kein EK bekannt.
+// Effektiver Netto-Einzelpreis (VK − Positionsrabatt) in Euro.
+const effUnitEuro = (l: EditorLine): number => l.euro * (1 - (l.rabattPct ?? 0) / 100);
+
+// Deckungsbeitrag je Position (effektiver VK − EK) × Menge in Cent; null wenn kein EK bekannt.
 const lineDbCents = (l: EditorLine): number | null =>
-  l.ekEuro === undefined ? null : Math.round((l.euro - l.ekEuro) * 100) * l.qty;
+  l.ekEuro === undefined ? null : Math.round((effUnitEuro(l) - l.ekEuro) * 100) * l.qty;
 
 interface BundleRow { description: string; qty: number; componentVariantId: string | null }
 
@@ -1075,18 +1078,22 @@ export function LinesEditor({ lines, onChange, quoteMode = false, companyId }: {
       {logoOpen && <LogoArticleDialog onClose={() => setLogoOpen(false)} onCreated={(e) => { addLine({ description: e.label, qty: 1, euro: e.unitNetCents / 100, kind: "VEREDELUNG", variantId: e.variantId }); setLogoOpen(false); }} />}
       {lines.map((l, i) => {
         const db = lineDbCents(l);
-        const margePct = db !== null && l.euro > 0 ? (l.euro - (l.ekEuro ?? 0)) / l.euro : null;
+        const effEuro = effUnitEuro(l);
+        const margePct = db !== null && effEuro > 0 ? (effEuro - (l.ekEuro ?? 0)) / effEuro : null;
+        const hasRabatt = (l.rabattPct ?? 0) > 0;
         return (
         <Group key={i} gap="xs" mt={4} align="end">
           <Select label={i === 0 ? "Art" : undefined} w={120} value={l.kind} onChange={(v) => v && set(i, { kind: v as PositionKind })}
             data={[{ value: "TEXTIL", label: "Textil" }, { value: "VEREDELUNG", label: "Veredelung" }, { value: "SONSTIGE", label: "Sonstiges" }]} />
-          <TextInput label={i === 0 ? "Beschreibung" : undefined} value={l.description} onChange={(e) => set(i, { description: e.currentTarget.value })} placeholder="200 Polos bestickt" w={220} />
+          <TextInput label={i === 0 ? "Beschreibung" : undefined} value={l.description} onChange={(e) => set(i, { description: e.currentTarget.value })} placeholder="200 Polos bestickt" w={200} />
           <NumberInput label={i === 0 ? "Menge" : undefined} value={l.qty} onChange={(v) => set(i, { qty: Number(v) || 1 })}
             onBlur={() => { if (companyId && l.variantId) void resolve(l.variantId, l.qty).then((p) => { if (p.euro !== undefined || p.ekEuro !== undefined) set(i, p); }); }}
-            min={1} w={80} />
-          <NumberInput label={i === 0 ? "Einzel (€)" : undefined} value={l.euro} onChange={(v) => set(i, { euro: Number(v) || 0 })} min={0} decimalScale={2} w={100} />
+            min={1} w={70} />
           <NumberInput label={i === 0 ? "EK (€)" : undefined} value={l.ekEuro ?? ""} onChange={(v) => set(i, { ekEuro: v === "" ? undefined : Number(v) })} min={0} decimalScale={2} w={90} placeholder="—" />
-          {db !== null && <Badge color={db >= 0 ? "teal" : "red"} variant="light" size="sm" title="Deckungsbeitrag (VK − EK) × Menge">DB {euro(db)}{margePct !== null ? ` · ${(margePct * 100).toFixed(0)}%` : ""}</Badge>}
+          <NumberInput label={i === 0 ? "VK (€)" : undefined} value={l.euro} onChange={(v) => set(i, { euro: Number(v) || 0 })} min={0} decimalScale={2} w={90} />
+          <NumberInput label={i === 0 ? "Rabatt %" : undefined} value={l.rabattPct ?? ""} onChange={(v) => set(i, { rabattPct: v === "" ? undefined : Math.min(100, Math.max(0, Number(v))) })} min={0} max={100} decimalScale={1} w={80} placeholder="0" />
+          {hasRabatt && <Text size="xs" c="dimmed" title="Netto-Einzelpreis nach Rabatt">= {euro(Math.round(effEuro * 100))}</Text>}
+          {db !== null && <Badge color={db >= 0 ? "teal" : "red"} variant="light" size="sm" title="Deckungsbeitrag (VK nach Rabatt − EK) × Menge">DB {euro(db)}{margePct !== null ? ` · ${(margePct * 100).toFixed(0)}%` : ""}</Badge>}
           {l.isBundle && <Badge color="grape" variant="light" size="sm" title="Set/Bundle — löst sich in eine Stückliste auf">Set</Badge>}
           {quoteMode && l.articleId && !l.variantId && <Badge color="orange" variant="light" size="sm" title="Farbe & Größe werden beim Wandeln in den Auftrag abgefragt">Variante offen</Badge>}
           {l.variantId && <Button size="compact-xs" variant={l.isBundle ? "light" : "subtle"} color="grape" onClick={() => { if (l.isBundle) setShown((s) => ({ ...s, [i]: !s[i] })); else setBundleFor(i); }} title="Stückliste anzeigen/bearbeiten">⊟ Stückliste</Button>}
@@ -1116,35 +1123,45 @@ export function LinesEditor({ lines, onChange, quoteMode = false, companyId }: {
 function LineTotals({ lines }: { lines: EditorLine[] }): JSX.Element {
   // Alternativpositionen zählen nicht zur Angebotssumme (unverbindlich).
   const main = lines.filter((l) => l.description.trim() && !l.isAlternative);
-  const netCents = main.reduce((s, l) => s + Math.round(l.qty * l.euro * 100), 0);
+  const netCents = main.reduce((s, l) => s + Math.round(l.qty * effUnitEuro(l) * 100), 0);
+  // Gewährter Rabatt gegenüber den VK-Listenpreisen (für die Summenanzeige).
+  const listCents = main.reduce((s, l) => s + Math.round(l.qty * l.euro * 100), 0);
+  const rabattCents = listCents - netCents;
   const taxCents = Math.round(netCents * 0.19);
   const dbLines = main.filter((l) => l.ekEuro !== undefined);
   const dbCents = dbLines.reduce((s, l) => s + (lineDbCents(l) ?? 0), 0);
-  const dbMargePct = dbLines.length && netCents > 0 ? dbCents / main.reduce((s, l) => s + Math.round(l.qty * l.euro * 100), 0) : null;
+  const dbMargePct = dbLines.length && netCents > 0 ? dbCents / netCents : null;
   return (
     <Group gap="lg" mt="sm" justify="flex-end">
       {dbLines.length > 0 && <Text size="sm" c={dbCents >= 0 ? "teal" : "red"}>DB: <b>{euro(dbCents)}</b>{dbMargePct !== null ? ` (${(dbMargePct * 100).toFixed(0)} %)` : ""}</Text>}
+      {rabattCents > 0 && <Text size="sm" c="dimmed">Rabatt: <b>−{euro(rabattCents)}</b></Text>}
       <Text size="sm" c="dimmed">Netto: <b>{euro(netCents)}</b></Text>
       <Text size="sm" c="dimmed">USt 19 %: <b>{euro(taxCents)}</b></Text>
       <Text size="sm">Brutto: <b>{euro(netCents + taxCents)}</b></Text>
     </Group>
   );
 }
-export const toApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; kind: PositionKind; variantId?: string; dbCents?: number }[] =>
-  lines.filter((l) => l.description.trim()).map((l) => {
-    const dbPerUnit = l.ekEuro === undefined ? undefined : Math.round((l.euro - l.ekEuro) * 100);
-    return { description: l.description.trim(), qty: l.qty, unitNetCents: Math.round(l.euro * 100), kind: l.kind, ...(l.variantId ? { variantId: l.variantId } : {}), ...(dbPerUnit !== undefined ? { dbCents: dbPerUnit } : {}) };
-  });
+// Positionsrabatt: unitNetCents = effektiver Netto (nach Rabatt); listNetCents = VK-Liste;
+// rabattPct nur bei gewährtem Rabatt. dbCents = (effektiver VK − EK).
+const lineMoney = (l: EditorLine): { unitNetCents: number; listNetCents?: number; rabattPct?: number; dbCents?: number } => {
+  const listCents = Math.round(l.euro * 100);
+  const r = l.rabattPct ?? 0;
+  const unitNetCents = Math.round(l.euro * (1 - r / 100) * 100);
+  const dbPerUnit = l.ekEuro === undefined ? undefined : unitNetCents - Math.round(l.ekEuro * 100);
+  return { unitNetCents, ...(r > 0 ? { listNetCents: listCents, rabattPct: r } : {}), ...(dbPerUnit !== undefined ? { dbCents: dbPerUnit } : {}) };
+};
+
+export const toApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; kind: PositionKind; variantId?: string; dbCents?: number }[] =>
+  lines.filter((l) => l.description.trim()).map((l) => ({
+    description: l.description.trim(), qty: l.qty, kind: l.kind, ...lineMoney(l), ...(l.variantId ? { variantId: l.variantId } : {}),
+  }));
 
 // Wie toApiLines, aber inkl. Artikel-/Varianten-Referenz und Alternativ-Kennzeichen (Angebot).
-export const toQuoteApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; kind: PositionKind; articleId?: string; variantId?: string; isAlternative?: boolean; dbCents?: number }[] =>
-  lines.filter((l) => l.description.trim()).map((l) => {
-    const dbPerUnit = l.ekEuro === undefined ? undefined : Math.round((l.euro - l.ekEuro) * 100);
-    return {
-      description: l.description.trim(), qty: l.qty, unitNetCents: Math.round(l.euro * 100), kind: l.kind,
-      ...(l.articleId ? { articleId: l.articleId } : {}), ...(l.variantId ? { variantId: l.variantId } : {}), ...(l.isAlternative ? { isAlternative: true } : {}), ...(dbPerUnit !== undefined ? { dbCents: dbPerUnit } : {}),
-    };
-  });
+export const toQuoteApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; kind: PositionKind; articleId?: string; variantId?: string; isAlternative?: boolean; dbCents?: number }[] =>
+  lines.filter((l) => l.description.trim()).map((l) => ({
+    description: l.description.trim(), qty: l.qty, kind: l.kind, ...lineMoney(l),
+    ...(l.articleId ? { articleId: l.articleId } : {}), ...(l.variantId ? { variantId: l.variantId } : {}), ...(l.isAlternative ? { isAlternative: true } : {}),
+  }));
 
 // Angebot → Auftrag: fragt für Hauptartikel ohne Variante (needsVariant) die genaue
 // Farbe×Größe ab und übergibt die Auflösung an convertQuote. Alternativen werden vom

@@ -9,7 +9,9 @@ import type { NumberingService } from "../numbering/numbering.service.js";
 export interface SalesLine {
   description: string;
   qty: number;
-  unitNetCents: number;
+  unitNetCents: number; // effektiver Netto-Einzelpreis NACH Positionsrabatt
+  listNetCents?: number | null; // VK-Listenpreis je Stück VOR Rabatt (Anzeige/Beleg)
+  rabattPct?: number | null; // artikelbezogener Positionsrabatt in Prozent (0..100)
   kind?: PositionKind;
   variantId?: string;
   dbCents?: number | null; // Deckungsbeitrag je Stück (VK − EK), Kap. 4.4
@@ -32,6 +34,8 @@ export interface ConversionPlanLine {
   description: string;
   qty: number;
   unitNetCents: number;
+  listNetCents: number | null;
+  rabattPct: number | null;
   kind: PositionKind;
   articleId: string | null;
   articleName: string | null;
@@ -114,7 +118,7 @@ export class SalesOrderService {
         // → beim Wandeln immer als fester Artikel anlegen. SONSTIGE bleibt freie Position.
         const materialize = !variantId && !l.articleId && (l.kind === "TEXTIL" || l.kind === "VEREDELUNG");
         return {
-          description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, kind: l.kind, variantId, dbCents: l.dbCents,
+          description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents, rabattPct: l.rabattPct, kind: l.kind, variantId, dbCents: l.dbCents,
           ...(materialize ? { materializeArticle: { sku: `${number}-P${l.position}`, name: l.description.trim(), isVeredelung: l.kind === "VEREDELUNG" } } : {}),
         };
       });

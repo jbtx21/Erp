@@ -10,6 +10,8 @@ export interface MemQuoteLine {
   description: string;
   qty: number;
   unitNetCents: number;
+  listNetCents?: number | null;
+  rabattPct?: number | null;
   kind?: PositionKind;
   articleId?: string | null;
   articleName?: string | null;
@@ -46,6 +48,8 @@ export class InMemorySalesOrderRepository implements SalesOrderRepository {
         description: l.description,
         qty: l.qty,
         unitNetCents: l.unitNetCents,
+        listNetCents: l.listNetCents ?? null,
+        rabattPct: l.rabattPct ?? null,
         kind: l.kind ?? "TEXTIL",
         articleId: l.articleId ?? null,
         articleName: l.articleName ?? null,

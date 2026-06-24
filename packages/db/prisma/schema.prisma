@@ -661,7 +661,9 @@ model QuoteLine {
   position    Int
   description String
   qty         Int
-  unitNetCents Int // jede Veredelung als eigene Position, kein Pauschalpreis (Kap. 4.4)
+  unitNetCents Int // effektiver Netto-Einzelpreis NACH Positionsrabatt (Kap. 4.4)
+  listNetCents Int? // VK-Listenpreis je Stück VOR Rabatt (Anzeige/Beleg); null = unitNetCents
+  rabattPct   Int? // artikelbezogener Positionsrabatt in Prozent (0..100)
   dbCents     Int? // Deckungsbeitrag bereits im Angebot sichtbar (Kap. 4.4)
   kind        PositionKind @default(TEXTIL) // Textil- vs. Veredelungsposition (Kap. 4.4/11)
   // Bezug: Hauptartikel (articleId, Variante offen) ODER konkrete Variante (variantId).
@@ -738,7 +740,9 @@ model OrderLine {
   position    Int
   description String
   qty         Int
-  unitNetCents Int
+  unitNetCents Int // effektiver Netto-Einzelpreis NACH Positionsrabatt
+  listNetCents Int? // VK-Listenpreis je Stück VOR Rabatt (Anzeige/Beleg); null = unitNetCents
+  rabattPct   Int? // artikelbezogener Positionsrabatt in Prozent (0..100)
   dbCents     Int? // Deckungsbeitrag je Stück (VK − EK) zum Auftragszeitpunkt (Kap. 4.4)
   kind        PositionKind @default(TEXTIL) // Textil- vs. Veredelungsposition (Kap. 4.4/11)
   variantId   String? // optionale Artikel-/Variantenverknüpfung (Bedarfsermittlung)

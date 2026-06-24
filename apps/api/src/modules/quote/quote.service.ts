@@ -31,7 +31,7 @@ export interface CreateQuoteInput {
   orderType?: string;
   quotationTo?: string;
   terms?: string | null;
-  lines: Array<{ description: string; qty: number; unitNetCents: number; kind?: import("@texma/shared").PositionKind; articleId?: string | null; variantId?: string | null; isAlternative?: boolean; dbCents?: number | null }>;
+  lines: Array<{ description: string; qty: number; unitNetCents: number; listNetCents?: number | null; rabattPct?: number | null; kind?: import("@texma/shared").PositionKind; articleId?: string | null; variantId?: string | null; isAlternative?: boolean; dbCents?: number | null }>;
 }
 
 export type QuoteTransition = "VERSENDET" | "NACHFASSEN" | "ANGENOMMEN";

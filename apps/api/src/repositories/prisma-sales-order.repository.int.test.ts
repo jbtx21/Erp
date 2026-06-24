@@ -50,7 +50,8 @@ if (!dbConfigured) {
         data: {
           id: Q, number: "AN-SO-1", companyId: CO, status: "VERSENDET",
           lines: { create: [
-            { position: 1, description: "Sonder-Polo SO", qty: 5, unitNetCents: 1500, kind: "TEXTIL" },
+            // P1 mit 10 % Positionsrabatt: VK-Liste 1500, effektiv 1350.
+            { position: 1, description: "Sonder-Polo SO", qty: 5, unitNetCents: 1350, listNetCents: 1500, rabattPct: 10, kind: "TEXTIL" },
             { position: 2, description: "Sonderstick SO", qty: 5, unitNetCents: 400, kind: "VEREDELUNG" },
             { position: 3, description: "Versand", qty: 1, unitNetCents: 590, kind: "SONSTIGE" },
           ] },
@@ -62,16 +63,18 @@ if (!dbConfigured) {
     it("legt feste Artikel an, setzt STANDARD-Preis und verknüpft die Auftragsposition", async () => {
       const res = await svc.convertQuote(Q);
 
-      const order = await prisma.order.findFirst({ where: { quoteId: Q }, select: { id: true, lines: { orderBy: { position: "asc" }, select: { description: true, variantId: true } } } });
+      const order = await prisma.order.findFirst({ where: { quoteId: Q }, select: { id: true, lines: { orderBy: { position: "asc" }, select: { description: true, variantId: true, unitNetCents: true, listNetCents: true, rabattPct: true } } } });
       const lines = order!.lines;
       // TEXTIL + VEREDELUNG → feste Variante verknüpft; SONSTIGE bleibt frei (variantId null).
       expect(lines[0]?.variantId).toBeTruthy();
       expect(lines[1]?.variantId).toBeTruthy();
       expect(lines[2]?.variantId).toBeNull();
+      // Positionsrabatt bleibt erhalten: effektiver Netto 1350, VK-Liste 1500, 10 %.
+      expect(lines[0]).toMatchObject({ unitNetCents: 1350, listNetCents: 1500, rabattPct: 10 });
 
       const polo = await prisma.article.findFirst({ where: { sku: `${res.number}-P1` }, select: { name: true, isVeredelung: true, variants: { select: { id: true, prices: { select: { netCents: true } } } } } });
       expect(polo).toMatchObject({ name: "Sonder-Polo SO", isVeredelung: false });
-      expect(polo?.variants[0]?.prices[0]?.netCents).toBe(1500); // STANDARD-Preis = VK
+      expect(polo?.variants[0]?.prices[0]?.netCents).toBe(1500); // STANDARD-Preis = VK-Liste (ohne Rabatt)
 
       const stick = await prisma.article.findFirst({ where: { sku: `${res.number}-P2` }, select: { isVeredelung: true } });
       expect(stick?.isVeredelung).toBe(true);

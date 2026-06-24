@@ -1005,7 +1005,7 @@ export const appRouter = router({
         orderType: z.enum(["SALES", "MAINTENANCE", "SHOPPING_CART"]).optional(),
         quotationTo: z.enum(["CUSTOMER", "LEAD"]).optional(),
         terms: z.string().optional(),
-        lines: z.array(z.object({ description: z.string().min(1), qty: z.number().int().positive(), unitNetCents: z.number().int().nonnegative(), kind: z.enum(["TEXTIL", "VEREDELUNG", "SONSTIGE"]).optional(), articleId: z.string().optional(), variantId: z.string().optional(), isAlternative: z.boolean().optional(), dbCents: z.number().int().optional() })).min(1),
+        lines: z.array(z.object({ description: z.string().min(1), qty: z.number().int().positive(), unitNetCents: z.number().int().nonnegative(), listNetCents: z.number().int().nonnegative().optional(), rabattPct: z.number().int().min(0).max(100).optional(), kind: z.enum(["TEXTIL", "VEREDELUNG", "SONSTIGE"]).optional(), articleId: z.string().optional(), variantId: z.string().optional(), isAlternative: z.boolean().optional(), dbCents: z.number().int().optional() })).min(1),
       }))
       .mutation(async ({ input, ctx }) => {
         try { return await ctx.quotes.create({ ...input, gueltigBisAm: input.gueltigBisAm ? new Date(input.gueltigBisAm) : null }); }
@@ -1371,7 +1371,7 @@ export const appRouter = router({
     createOrder: roleProcedure("ADMIN", "BUERO")
       .input(z.object({
         companyId: z.string().min(1),
-        lines: z.array(z.object({ description: z.string().min(1), qty: z.number().int().positive(), unitNetCents: z.number().int().min(0), kind: z.enum(["TEXTIL", "VEREDELUNG", "SONSTIGE"]).optional(), variantId: z.string().optional(), dbCents: z.number().int().optional() })).min(1),
+        lines: z.array(z.object({ description: z.string().min(1), qty: z.number().int().positive(), unitNetCents: z.number().int().min(0), listNetCents: z.number().int().min(0).optional(), rabattPct: z.number().int().min(0).max(100).optional(), kind: z.enum(["TEXTIL", "VEREDELUNG", "SONSTIGE"]).optional(), variantId: z.string().optional(), dbCents: z.number().int().optional() })).min(1),
       }))
       .mutation(async ({ input, ctx }) => {
         try { return await ctx.salesOrders.createManual(input.companyId, input.lines); }

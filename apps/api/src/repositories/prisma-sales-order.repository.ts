@@ -27,7 +27,8 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
         });
         const variantId = art.variants[0]!.id;
         variantByIndex.set(i, variantId);
-        if (stdId) await tx.priceGroupPrice.create({ data: { variantId, priceGroupId: stdId, netCents: input.lines[i]!.unitNetCents } });
+        // STANDARD-Preis des neuen Artikels = VK-Liste (ohne den einmaligen Positionsrabatt).
+        if (stdId) await tx.priceGroupPrice.create({ data: { variantId, priceGroupId: stdId, netCents: input.lines[i]!.listNetCents ?? input.lines[i]!.unitNetCents } });
       }
       return tx.order.create({
         data: {
@@ -35,7 +36,7 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
           companyId: input.companyId,
           quoteId: input.quoteId,
           status: "ANGELEGT",
-          lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, dbCents: l.dbCents ?? null, kind: (l.kind ?? "TEXTIL") as never, variantId: l.variantId ?? variantByIndex.get(i) ?? null })) },
+          lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, dbCents: l.dbCents ?? null, kind: (l.kind ?? "TEXTIL") as never, variantId: l.variantId ?? variantByIndex.get(i) ?? null })) },
         },
         select: { id: true },
       });
@@ -49,7 +50,7 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
         companyId: true,
         lines: {
           orderBy: { position: "asc" },
-          select: { position: true, description: true, qty: true, unitNetCents: true, dbCents: true, kind: true, articleId: true, variantId: true, isAlternative: true },
+          select: { position: true, description: true, qty: true, unitNetCents: true, listNetCents: true, rabattPct: true, dbCents: true, kind: true, articleId: true, variantId: true, isAlternative: true },
         },
       },
     });
@@ -71,6 +72,8 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
         description: l.description,
         qty: l.qty,
         unitNetCents: l.unitNetCents,
+        listNetCents: l.listNetCents ?? null,
+        rabattPct: l.rabattPct ?? null,
         kind: l.kind as PositionKind,
         articleId: l.articleId ?? null,
         articleName: l.articleId ? nameById.get(l.articleId) ?? null : null,
