@@ -44,6 +44,8 @@ import { PrismaOrderRepository } from "./repositories/prisma-order.repository.js
 import { PrismaSupplierRepository } from "./repositories/prisma-supplier.repository.js";
 import { PrismaIncomingInvoiceRepository } from "./repositories/prisma-incoming-invoice.repository.js";
 import { PrismaShipmentRepository } from "./repositories/prisma-shipment.repository.js";
+import { OrderStatusSyncService } from "./modules/order-status-sync/order-status-sync.service.js";
+import { PrismaOrderStatusSyncRepository } from "./repositories/prisma-order-status-sync.repository.js";
 import { PrismaBankingRepository } from "./repositories/prisma-banking.repository.js";
 import { PrismaDunningRepository } from "./repositories/prisma-dunning.repository.js";
 import { PrismaProcurementRepository } from "./repositories/prisma-procurement.repository.js";
@@ -266,6 +268,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
       envSender
     )
   );
+  const orderStatusSync = new OrderStatusSyncService(new PrismaOrderStatusSyncRepository(), mailSend, new PrismaAuditSink());
   const mailIntake = new MailIntakeService(new ImapMailFetcher(), new PrismaMailIntakeRepository(), new NumberingService(new PrismaNumberingRepository()), new PrismaAuditSink());
   const newsletterProvider = process.env.BREVO_API_KEY
     ? new BrevoNewsletterProvider(process.env.BREVO_API_KEY, { name: process.env.BREVO_SENDER_NAME ?? "TEXMA", email: process.env.BREVO_SENDER_EMAIL ?? "info@texma-gmbh.de" })
@@ -420,6 +423,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           incomingInvoiceImport,
           incomingInvoices: incomingInvoiceRepo,
           shipments,
+          orderStatusSync,
           bankingImport,
           banking: bankingRepo,
           bankConnections,

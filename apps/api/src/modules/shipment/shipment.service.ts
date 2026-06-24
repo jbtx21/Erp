@@ -4,7 +4,7 @@
 // ein Outbox-Event `order.status.update` eingereiht (Shop-Push übernimmt der Relay).
 // Repository als Interface → testbar ohne DB.
 
-import type { ShippingAddress } from "@texma/shared";
+import type { Carrier, ShippingAddress } from "@texma/shared";
 import { buildEntry, type AuditSink } from "@texma/audit";
 
 export interface ShippableOrder {
@@ -29,7 +29,7 @@ export interface ShipmentRepository {
    * Setzt den Auftrag auf VERSENDET + Trackingnummer und reiht — in derselben
    * Transaktion — ein Outbox-Event `order.status.update` ein (Shop-Rückmeldung).
    */
-  confirmShipped(input: { orderId: string; trackingNumber: string }): Promise<ConfirmShippedResult>;
+  confirmShipped(input: { orderId: string; trackingNumber: string; carrier?: Carrier }): Promise<ConfirmShippedResult>;
 }
 
 export class ShipmentService {
@@ -42,14 +42,14 @@ export class ShipmentService {
     return this.repo.listShippable(limit);
   }
 
-  async confirmShipped(input: { orderId: string; trackingNumber: string }): Promise<ConfirmShippedResult> {
+  async confirmShipped(input: { orderId: string; trackingNumber: string; carrier?: Carrier }): Promise<ConfirmShippedResult> {
     const res = await this.repo.confirmShipped(input);
     await this.audit.append(
       buildEntry({
         entity: "Order",
         entityId: input.orderId,
         action: "UPDATE",
-        after: { status: "VERSENDET", trackingNumber: input.trackingNumber },
+        after: { status: "VERSENDET", trackingNumber: input.trackingNumber, carrier: input.carrier ?? null },
       })
     );
     return res;

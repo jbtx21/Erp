@@ -4,6 +4,7 @@
 // VERSENDET + Trackingnummer und reiht das Outbox-Event `order.status.update` ein.
 
 import { prisma } from "@texma/db";
+import type { Carrier } from "@texma/shared";
 import type {
   ConfirmShippedResult,
   ShipmentRepository,
@@ -46,11 +47,11 @@ export class PrismaShipmentRepository implements ShipmentRepository {
       }));
   }
 
-  async confirmShipped(input: { orderId: string; trackingNumber: string }): Promise<ConfirmShippedResult> {
+  async confirmShipped(input: { orderId: string; trackingNumber: string; carrier?: Carrier }): Promise<ConfirmShippedResult> {
     return prisma.$transaction(async (tx) => {
       const order = await tx.order.update({
         where: { id: input.orderId },
-        data: { status: "VERSENDET", trackingNumber: input.trackingNumber },
+        data: { status: "VERSENDET", trackingNumber: input.trackingNumber, ...(input.carrier ? { carrier: input.carrier } : {}) },
         select: { id: true, externalNumber: true, shopConnectorId: true },
       });
       await tx.outboxEvent.create({
@@ -63,6 +64,7 @@ export class PrismaShipmentRepository implements ShipmentRepository {
             shopConnectorId: order.shopConnectorId,
             status: "VERSENDET",
             trackingNumber: input.trackingNumber,
+            carrier: input.carrier ?? null,
           },
         },
       });

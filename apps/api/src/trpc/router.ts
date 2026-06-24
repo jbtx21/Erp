@@ -200,6 +200,9 @@ export const appRouter = router({
           await ctx.notifications.notify(ctx.user.email, `Auftrag → ${input.to}`, `Auftrag ${input.orderId} ist jetzt ${input.to}.`, "orders");
           // Regel-Engine: konfigurierte Automationen zum Statuswechsel auslösen (Event → Aktion).
           await ctx.automation.handleEvent("order.status.changed", { orderId: input.orderId, status: input.to, userEmail: ctx.user.email });
+          // Rückmeldung (Kap. 4.2): Shop-Auftrag → Status an den Shop (inkl. Storno); Auftrag
+          // ohne Shop → Versand-/Storno-Mail direkt an den Kunden (Workflow-Automatisierung).
+          await ctx.orderStatusSync.onStatusChanged(input.orderId, input.to, { enqueueShopPush: true });
           return res;
         } catch (e) { throw new TRPCError({ code: "CONFLICT", message: (e as Error).message }); }
       }),
@@ -322,10 +325,20 @@ export const appRouter = router({
       .input(z.object({ limit: z.number().int().positive().max(200) }).optional())
       .query(async ({ input, ctx }) => ctx.shipments.listShippable(input?.limit ?? 50)),
 
-    /** Bestätigt den Versand: Auftrag → VERSENDET, Tracking gespeichert, Shop-Push eingereiht. */
+    /** Bestätigt den Versand: Auftrag → VERSENDET, Tracking + Carrier gespeichert, Shop-Push
+     *  eingereiht; bei Aufträgen ohne Shop zusätzlich Versand-Mail an den Kunden (Kap. 4.2). */
     confirmShipped: roleProcedure("ADMIN", "BUERO")
-      .input(z.object({ orderId: z.string().min(1), trackingNumber: z.string().min(1) }))
-      .mutation(async ({ input, ctx }) => ctx.shipments.confirmShipped(input)),
+      .input(z.object({
+        orderId: z.string().min(1),
+        trackingNumber: z.string().min(1),
+        carrier: z.enum(["DPD", "DHL", "GLS", "UPS", "HERMES", "SONSTIGE"]).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const res = await ctx.shipments.confirmShipped(input);
+        // Shop-Push hat confirmShipped bereits eingereiht → nur Kunden-Mail für Nicht-Shop-Aufträge.
+        await ctx.orderStatusSync.onStatusChanged(res.orderId, "VERSENDET", { enqueueShopPush: false });
+        return res;
+      }),
   }),
 
   banking: router({

@@ -456,17 +456,26 @@ export const ShipmentsPage = (): JSX.Element => (
     action={(r, reload) => <ConfirmShipBtn orderId={String((r as Row).id ?? (r as Row).orderId ?? "")} reload={reload} />} />
 );
 
+const CARRIERS = ["DPD", "DHL", "GLS", "UPS", "HERMES", "SONSTIGE"] as const;
+type CarrierKind = (typeof CARRIERS)[number];
+
 function ConfirmShipBtn({ orderId, reload }: { orderId: string; reload: () => Promise<void> }): JSX.Element {
   const [busy, setBusy] = useState(false);
+  const [carrier, setCarrier] = useState<CarrierKind>("DPD");
+  const [tracking, setTracking] = useState("");
   return (
-    <Button size="xs" variant="light" loading={busy} disabled={!orderId} onClick={async () => {
-      setBusy(true);
-      try {
-        // Demo: Tracking-Nummer (DPD) automatisch vergeben, Pflichtfeld der API.
-        await trpc.shipments.confirmShipped.mutate({ orderId, trackingNumber: `DPD-${Date.now().toString().slice(-9)}` });
-        await reload();
-      } finally { setBusy(false); }
-    }}>Versendet</Button>
+    <Group gap={4} justify="flex-end" wrap="nowrap">
+      <Select size="xs" w={92} value={carrier} onChange={(v) => v && setCarrier(v as CarrierKind)} data={[...CARRIERS]} title="Versanddienstleister — bestimmt den Tracking-Link" />
+      <TextInput size="xs" w={140} value={tracking} onChange={(e) => setTracking(e.currentTarget.value)} placeholder="Tracking-Nr." />
+      <Button size="xs" variant="light" loading={busy} disabled={!orderId} onClick={async () => {
+        setBusy(true);
+        try {
+          const trackingNumber = tracking.trim() || `${carrier}-${Date.now().toString().slice(-9)}`;
+          await trpc.shipments.confirmShipped.mutate({ orderId, trackingNumber, carrier });
+          await reload();
+        } finally { setBusy(false); }
+      }}>Versendet</Button>
+    </Group>
   );
 }
 

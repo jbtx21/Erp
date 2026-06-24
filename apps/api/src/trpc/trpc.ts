@@ -6,6 +6,7 @@ import type { OrderImportService } from "../modules/shop-import/order-import.ser
 import type { SupplierImportService } from "../modules/supplier-import/supplier-import.service.js";
 import type { IncomingInvoiceService } from "../modules/incoming-invoice/incoming-invoice.service.js";
 import type { ShipmentService } from "../modules/shipment/shipment.service.js";
+import type { OrderStatusSyncService } from "../modules/order-status-sync/order-status-sync.service.js";
 import type { BankingImportService } from "../modules/banking/banking-import.service.js";
 import type { BankConnectionService } from "../modules/banking/bank-connection.service.js";
 import type { DunningService } from "../modules/dunning/dunning.service.js";
@@ -82,6 +83,7 @@ export interface Context {
   incomingInvoiceImport: IncomingInvoiceService;
   incomingInvoices: IncomingInvoiceQueryRepository;
   shipments: ShipmentService;
+  orderStatusSync: OrderStatusSyncService;
   bankingImport: BankingImportService;
   banking: BankingQueryRepository;
   bankConnections: BankConnectionService;
