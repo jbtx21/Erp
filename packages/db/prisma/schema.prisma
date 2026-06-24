@@ -657,6 +657,9 @@ model Quote {
   wiedervorlageAm DateTime? // Nachfass-Termin (Kap. 35.1)
   gueltigBisAm DateTime? // Angebotsverfall (B8, Kap. 35.1)
   verlustgrund String? // Grund bei Ablehnung (B8, Kap. 35.1)
+  zahlungszielTage Int? // Zahlungsziel in Tagen (Kopf; Default aus Kundenstamm)
+  incoterm    String? // Lieferbedingung (Incoterm), z. B. EXW/DAP
+  versandregel String? // Versandkosten-/Versandregel (frei/pauschal/nach Gewicht …)
   lines     QuoteLine[]
   order     Order?
   inquiry   Inquiry? // Ursprungs-Anfrage (B20)

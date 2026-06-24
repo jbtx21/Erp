@@ -33,6 +33,9 @@ export interface CreateQuoteInput {
   orderType?: string;
   quotationTo?: string;
   terms?: string | null;
+  zahlungszielTage?: number | null;
+  incoterm?: string | null;
+  versandregel?: string | null;
   lines: Array<{ description: string; qty: number; unitNetCents: number; listNetCents?: number | null; rabattPct?: number | null; taxRatePct?: number | null; kind?: import("@texma/shared").PositionKind; articleId?: string | null; variantId?: string | null; isAlternative?: boolean; dbCents?: number | null }>;
 }
 
@@ -61,6 +64,9 @@ export interface QuoteEditData {
   terms: string | null;
   orderType: string;
   quotationTo: string;
+  zahlungszielTage: number | null;
+  incoterm: string | null;
+  versandregel: string | null;
   lines: QuoteEditLine[];
 }
 

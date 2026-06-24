@@ -1286,6 +1286,9 @@ export function QuotesPage(): JSX.Element {
   const [orderType, setOrderType] = useState("SALES");
   const [quotationTo, setQuotationTo] = useState("CUSTOMER");
   const [terms, setTerms] = useState("");
+  const [zahlungszielTage, setZahlungszielTage] = useState<number | "">("");
+  const [incoterm, setIncoterm] = useState("");
+  const [versandregel, setVersandregel] = useState("");
   const [exempt, setExempt] = useState(false);
   const [busy, setBusy] = useState(false);
   // Quick-Filter + Sortierung (clientseitig)
@@ -1337,6 +1340,7 @@ export function QuotesPage(): JSX.Element {
 
   const resetForm = (): void => {
     setLines([{ description: "", qty: 10, euro: 12.9, kind: "TEXTIL" }]); setCompanyId(""); setTerms(""); setEditId(null);
+    setZahlungszielTage(""); setIncoterm(""); setVersandregel(""); setExempt(false);
   };
   const startEdit = async (id: string): Promise<void> => {
     setErr(null);
@@ -1344,6 +1348,7 @@ export function QuotesPage(): JSX.Element {
       const q = await trpc.quotes.forEdit.query({ id });
       setEditId(id); setCompanyId(q.companyId); setTerms(q.terms ?? "");
       setOrderType(q.orderType); setQuotationTo(q.quotationTo);
+      setZahlungszielTage(q.zahlungszielTage ?? ""); setIncoterm(q.incoterm ?? ""); setVersandregel(q.versandregel ?? "");
       if (q.gueltigBisAm) setGueltigBis(new Date(q.gueltigBisAm).toISOString().slice(0, 10));
       setLines(fromStoredLines(q.lines));
       setView("create");
@@ -1358,6 +1363,9 @@ export function QuotesPage(): JSX.Element {
         orderType: orderType as "SALES" | "MAINTENANCE" | "SHOPPING_CART",
         quotationTo: quotationTo as "CUSTOMER" | "LEAD",
         terms: terms.trim() || undefined,
+        zahlungszielTage: zahlungszielTage === "" ? undefined : Number(zahlungszielTage),
+        incoterm: incoterm.trim() || undefined,
+        versandregel: versandregel.trim() || undefined,
       };
       if (editId) await trpc.quotes.update.mutate({ id: editId, ...payload });
       else await trpc.quotes.create.mutate(payload);
@@ -1406,6 +1414,10 @@ export function QuotesPage(): JSX.Element {
             <Checkbox mt="xs" label="Kunde ist von der Umsatzsteuer befreit (innergemeinschaftlich / Reverse-Charge)" checked={exempt}
               onChange={(e) => { const ex = e.currentTarget.checked; setExempt(ex); setLines((ls) => ls.map((l) => ({ ...l, taxRatePct: ex ? 0 : 19 }))); }} />
             <Text size="xs" c="dimmed" mt={4}>{exempt ? "Steuerbefreit: alle Positionen 0 % USt." : "USt je Position wählbar (19 % Standard, 7 % ermäßigt) — Summen werden automatisch berechnet."}</Text>
+            <Group gap="md" align="end" wrap="wrap" mt="md">
+              <TextInput label="Incoterm" placeholder="z. B. EXW, DAP" value={incoterm} onChange={(e) => setIncoterm(e.currentTarget.value)} w={160} />
+              <TextInput label="Versandregel" placeholder="z. B. frei Haus, pauschal" value={versandregel} onChange={(e) => setVersandregel(e.currentTarget.value)} w={220} />
+            </Group>
           </Tabs.Panel>
 
           <Tabs.Panel value="adresse" pt="md">
@@ -1414,7 +1426,10 @@ export function QuotesPage(): JSX.Element {
 
           <Tabs.Panel value="terms" pt="md">
             <Title order={5}>Zahlungsbedingungen</Title>
-            <Text size="sm" c="dimmed" mt={4}>Standard: Zahlungsziel des Kunden (Kundenstamm). Ratenpläne folgen als nächste Slice.</Text>
+            <Group gap="md" align="end" mt="xs">
+              <NumberInput label="Zahlungsziel (Tage)" value={zahlungszielTage} onChange={(v) => setZahlungszielTage(v === "" ? "" : Number(v))} min={0} max={365} w={180} placeholder="aus Kundenstamm" />
+            </Group>
+            <Text size="xs" c="dimmed" mt={4}>Leer = Zahlungsziel des Kunden (Kundenstamm). Ratenpläne folgen als nächste Slice.</Text>
             <Title order={5} mt="lg">Allgemeine Geschäftsbedingungen</Title>
             <Textarea label="Details der Geschäftsbedingungen" autosize minRows={4} maxRows={12} mt="xs" value={terms} onChange={(e) => setTerms(e.currentTarget.value)} placeholder="AGB-/Bedingungstext für dieses Angebot…" />
           </Tabs.Panel>

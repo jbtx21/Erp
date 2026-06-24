@@ -18,6 +18,9 @@ interface Quote {
   quotationTo: string;
   gueltigBisAm: Date | null;
   terms: string | null;
+  zahlungszielTage: number | null;
+  incoterm: string | null;
+  versandregel: string | null;
   createdAt: Date;
   verlustgrund: string | null;
   totalNetCents: number;
@@ -46,6 +49,7 @@ export class InMemoryQuoteRepository implements QuoteRepository {
       id, number: input.number, companyId: input.companyId, status: "ENTWURF",
       orderType: input.orderType ?? "SALES", quotationTo: input.quotationTo ?? "CUSTOMER",
       gueltigBisAm: input.gueltigBisAm ?? null, terms: input.terms ?? null, createdAt: new Date(), verlustgrund: null,
+      zahlungszielTage: input.zahlungszielTage ?? null, incoterm: input.incoterm ?? null, versandregel: input.versandregel ?? null,
       ...totalsOf(input.lines),
       hasDueItem: false, lines: input.lines,
     });
@@ -57,6 +61,7 @@ export class InMemoryQuoteRepository implements QuoteRepository {
     if (!q) return null;
     return {
       id: q.id, companyId: q.companyId, status: q.status, gueltigBisAm: q.gueltigBisAm, terms: q.terms, orderType: q.orderType, quotationTo: q.quotationTo,
+      zahlungszielTage: q.zahlungszielTage, incoterm: q.incoterm, versandregel: q.versandregel,
       lines: q.lines.map((l) => ({
         description: l.description, qty: l.qty, kind: l.kind ?? "TEXTIL", unitNetCents: l.unitNetCents,
         listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, taxRatePct: l.taxRatePct ?? 19, dbCents: l.dbCents ?? null,
@@ -73,6 +78,9 @@ export class InMemoryQuoteRepository implements QuoteRepository {
     q.quotationTo = input.quotationTo ?? "CUSTOMER";
     q.gueltigBisAm = input.gueltigBisAm ?? null;
     q.terms = input.terms ?? null;
+    q.zahlungszielTage = input.zahlungszielTage ?? null;
+    q.incoterm = input.incoterm ?? null;
+    q.versandregel = input.versandregel ?? null;
     q.lines = input.lines;
     Object.assign(q, totalsOf(input.lines));
   }
@@ -83,7 +91,7 @@ export class InMemoryQuoteRepository implements QuoteRepository {
   }
 
   seed(id: string, status: QuoteStatus, gueltigBisAm: Date | null = null): void {
-    this.quotes.set(id, { id, number: id, companyId: "co", status, orderType: "SALES", quotationTo: "CUSTOMER", gueltigBisAm, terms: null, createdAt: new Date(), verlustgrund: null, totalNetCents: 0, totalTaxCents: 0, totalGrossCents: 0, totalDbCents: null, hasDueItem: false, lines: [] });
+    this.quotes.set(id, { id, number: id, companyId: "co", status, orderType: "SALES", quotationTo: "CUSTOMER", gueltigBisAm, terms: null, zahlungszielTage: null, incoterm: null, versandregel: null, createdAt: new Date(), verlustgrund: null, totalNetCents: 0, totalTaxCents: 0, totalGrossCents: 0, totalDbCents: null, hasDueItem: false, lines: [] });
   }
 
   get(id: string): Quote | undefined {
