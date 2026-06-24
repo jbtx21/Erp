@@ -10,6 +10,7 @@ import { trpc } from "./trpc.js";
 import { AufschlagsfaktorenSection, LogosStickereiSection, StickereiAusschreibungSection, StickereiStaffelnSection, Postcalc } from "./Differentiators.js";
 import { euro, numTd, statusMantineColor } from "./theme.js";
 import { MultiLineChart } from "./charts.js";
+import { DocFormShell, DocListHeader } from "./doc-layout.js";
 
 type Row = Record<string, unknown>;
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
@@ -313,21 +314,24 @@ export function SuppliersPage({ focusId }: { focusId?: string } = {}): JSX.Eleme
 
   return (
     <>
-      <Title order={3}>Lieferanten</Title>
-      <Text size="sm" c="dimmed" mt={4}>Stammsätze + Katalog je Lieferant (EK nur ADMIN/Büro/Buchhaltung, Kap. 12).</Text>
-      <Group mt="sm" gap="xs" align="end">
-        <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Neuer Lieferant GmbH" />
-        <Box>
-          <TextInput label="USt-IdNr." value={vatId} onChange={(e) => setVatId(e.currentTarget.value)} w={150} />
-          <VatBadge value={vatId} />
-        </Box>
-        <TextInput label="IBAN" value={iban} onChange={(e) => setIban(e.currentTarget.value)} w={200} />
-        <Button loading={busy} disabled={!name.trim()} onClick={async () => {
-          setBusy(true); setErr(null);
-          try { await trpc.suppliers.create.mutate({ name: name.trim(), vatId: vatId || undefined, iban: iban || undefined }); setName(""); setVatId(""); setIban(""); await load(); }
-          catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
-        }}>Lieferant anlegen</Button>
-      </Group>
+      <DocListHeader
+        module="Einkauf / Lieferanten"
+        title="Lieferanten"
+        hint="Stammsätze + Katalog je Lieferant (EK nur ADMIN/Büro/Buchhaltung, Kap. 12)."
+        filters={<>
+          <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Neuer Lieferant GmbH" />
+          <Box>
+            <TextInput label="USt-IdNr." value={vatId} onChange={(e) => setVatId(e.currentTarget.value)} w={150} />
+            <VatBadge value={vatId} />
+          </Box>
+          <TextInput label="IBAN" value={iban} onChange={(e) => setIban(e.currentTarget.value)} w={200} />
+          <Button mt={22} loading={busy} disabled={!name.trim()} onClick={async () => {
+            setBusy(true); setErr(null);
+            try { await trpc.suppliers.create.mutate({ name: name.trim(), vatId: vatId || undefined, iban: iban || undefined }); setName(""); setVatId(""); setIban(""); await load(); }
+            catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+          }}>Lieferant anlegen</Button>
+        </>}
+      />
       {err && <Alert color="red" mt="sm">{err}</Alert>}
       <AutoTable rows={rows} highlightId={focusId} onRowClick={(r) => setOpenSupplier((c) => c === String(r.id) ? null : String(r.id))} action={(r) => (
         <Group gap={4} justify="flex-end" wrap="nowrap">
@@ -1378,13 +1382,16 @@ export function QuotesPage(): JSX.Element {
   if (view === "create") {
     return (
       <>
-        <Group justify="space-between" align="center">
-          <Text size="sm" c="dimmed">Vertrieb / Angebot / <b>{editId ? "Angebot bearbeiten" : "Neu Angebot"}</b> {!editId && <Badge color="orange" variant="light" ml={6}>Nicht gespeichert</Badge>}</Text>
-          <Group gap="xs">
+        <DocFormShell
+          breadcrumb="Vertrieb / Angebote"
+          title={editId ? "Angebot bearbeiten" : "Neues Angebot"}
+          status={editId ? undefined : "Nicht gespeichert"}
+          statusColor="orange"
+          actions={<>
             <Button variant="default" onClick={() => { resetForm(); setView("list"); }}>Abbrechen</Button>
             <Button color="dark" loading={busy} disabled={!companyId.trim() || toApiLines(lines).length === 0} onClick={() => void saveQuote()}>Speichern</Button>
-          </Group>
-        </Group>
+          </>}
+        >
         {err && <Alert color="red" mt="sm">{err}</Alert>}
         <Tabs defaultValue="details" mt="md" keepMounted={false}>
           <Tabs.List>
@@ -1441,6 +1448,7 @@ export function QuotesPage(): JSX.Element {
             <Collapsible title="Zusätzliche Information"><Text size="sm" c="dimmed">Kampagne/Quelle/Auto-Wiederholung — folgt.</Text></Collapsible>
           </Tabs.Panel>
         </Tabs>
+        </DocFormShell>
       </>
     );
   }
@@ -1464,15 +1472,16 @@ export function QuotesPage(): JSX.Element {
   return (
     <>
       {convertId && <ConvertQuoteDialog quoteId={convertId} onClose={() => setConvertId(null)} onDone={(no) => { setConvertId(null); window.alert(`Auftrag ${no} angelegt.`); void load(); }} />}
-      <Group justify="space-between" align="center">
-        <Text size="sm" c="dimmed">⌂ Vertrieb / <b>Angebot</b></Text>
-        <Group gap="xs">
+      <DocListHeader
+        module="⌂ Vertrieb"
+        title="Angebote"
+        action={<>
           <Select size="xs" w={190} data={[{ value: "createdAt", label: "Erstellt am" }, { value: "companyName", label: "Kundenname" }, { value: "number", label: "ID" }, { value: "totalNetCents", label: "Gesamtbetrag" }]} value={sortBy} onChange={(v) => v && setSortBy(v)} />
           <Button size="xs" variant="default" onClick={() => setSortDesc((d) => !d)}>{sortDesc ? "↓" : "↑"}</Button>
           <Button size="xs" variant="default" onClick={() => void load()}>Aktualisieren</Button>
           <Button size="xs" color="dark" onClick={() => setView("create")}>+ Angebot hinzufügen</Button>
-        </Group>
-      </Group>
+        </>}
+      />
       {err && <Alert color="red" mt="sm">{err}</Alert>}
 
       {/* Quick-Filter-Leiste */}
