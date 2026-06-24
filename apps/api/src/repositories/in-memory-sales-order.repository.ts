@@ -1,7 +1,7 @@
 // In-Memory-Auftragserstellung für Tests.
 
 import type { PositionKind } from "@texma/shared";
-import type { ConversionPlan, SalesLine, SalesOrderRepository } from "../modules/sales/sales-order.service.js";
+import type { ConversionPlan, OrderEditData, SalesLine, SalesOrderRepository } from "../modules/sales/sales-order.service.js";
 
 interface MemOrder { id: string; number: string; companyId: string; quoteId?: string; lines: SalesLine[] }
 /** Angebotsposition im Testspeicher (mit optionaler Artikel-/Varianten-/Alternativ-Info). */
@@ -35,6 +35,23 @@ export class InMemorySalesOrderRepository implements SalesOrderRepository {
     const id = `order_${String(++this.seq)}`;
     this.orders.push({ id, ...input });
     return { id };
+  }
+
+  /** Sperrflags je Auftrag (für Edit-Gate-Tests setzbar). */
+  readonly orderLocks = new Map<string, { invoiced?: boolean; inProduction?: boolean; delivered?: boolean }>();
+  async orderForEdit(orderId: string): Promise<OrderEditData | null> {
+    const o = this.orders.find((x) => x.id === orderId);
+    if (!o) return null;
+    const lock = this.orderLocks.get(orderId) ?? {};
+    return {
+      id: o.id, number: o.number, companyId: o.companyId,
+      invoiced: !!lock.invoiced, inProduction: !!lock.inProduction, delivered: !!lock.delivered,
+      lines: o.lines.map((l) => ({ description: l.description, qty: l.qty, kind: l.kind ?? "TEXTIL", unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, dbCents: l.dbCents ?? null, variantId: l.variantId ?? null })),
+    };
+  }
+  async updateOrder(orderId: string, companyId: string, lines: SalesLine[]): Promise<void> {
+    const o = this.orders.find((x) => x.id === orderId);
+    if (o) { o.companyId = companyId; o.lines = lines; }
   }
   async conversionPlan(quoteId: string): Promise<ConversionPlan | null> {
     const q = this.quotes.find((x) => x.id === quoteId);

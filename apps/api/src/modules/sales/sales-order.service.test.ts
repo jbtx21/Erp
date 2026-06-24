@@ -86,6 +86,29 @@ describe("SalesOrderService (Auftragserstellung)", () => {
     await svc.convertQuote("q-1");
     expect(repo.orders[0]?.lines[0]?.materializeArticle).toBeUndefined();
   });
+});
+
+describe("SalesOrderService.updateOrder (vollständige Bearbeitung)", () => {
+  it("ersetzt Positionen, solange nicht fakturiert/geliefert/in Produktion", async () => {
+    const { svc, repo } = setup();
+    const { id } = await svc.createManual("co-1", [{ description: "Polo", qty: 5, unitNetCents: 1200 }]);
+    await svc.updateOrder(id, "co-1", [{ description: "Polo bestickt", qty: 8, unitNetCents: 1350, listNetCents: 1500, rabattPct: 10, dbCents: 600 }]);
+    const o = await svc.getOrderForEdit(id);
+    expect(o.lines).toHaveLength(1);
+    expect(o.lines[0]).toMatchObject({ qty: 8, unitNetCents: 1350, listNetCents: 1500, rabattPct: 10 });
+  });
+
+  it.each([
+    ["invoiced", { invoiced: true }],
+    ["delivered", { delivered: true }],
+    ["inProduction", { inProduction: true }],
+  ])("blockt die Bearbeitung, wenn %s", async (_label, lock) => {
+    const { svc, repo } = setup();
+    const { id } = await svc.createManual("co-1", [{ description: "Polo", qty: 5, unitNetCents: 1200 }]);
+    repo.orderLocks.set(id, lock);
+    await expect(svc.updateOrder(id, "co-1", [{ description: "X", qty: 1, unitNetCents: 100 }]))
+      .rejects.toBeInstanceOf(SalesOrderError);
+  });
 
   it("übernimmt konkrete Varianten direkt und lässt Alternativen weg", async () => {
     const { svc, repo } = setup();

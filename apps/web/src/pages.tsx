@@ -1987,6 +1987,7 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
   const [plan, setPlan] = useState<SchedulePlan | null>(null);
   // Manuelle Auftragserstellung (ADMIN/BUERO).
   const [showCreate, setShowCreate] = useState(false);
+  const [editOrderId, setEditOrderId] = useState<string | null>(null); // gesetzt = Auftrag bearbeiten
   const [newCompany, setNewCompany] = useState("co-muster");
   const [newLines, setNewLines] = useState<EditorLine[]>([{ description: "", qty: 10, euro: 12.9, kind: "TEXTIL" }]);
 
@@ -1999,6 +2000,32 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
   useEffect(() => { if (focusId) setTermOrder(focusId); }, [focusId]);
 
   const canAct = role === "ADMIN" || role === "BUERO";
+  const resetOrderForm = (): void => { setNewLines([{ description: "", qty: 10, euro: 12.9, kind: "TEXTIL" }]); setEditOrderId(null); setShowCreate(false); };
+  const startEditOrder = async (id: string): Promise<void> => {
+    setErr(null);
+    try {
+      const o = await trpc.sales.orderForEdit.query({ orderId: id });
+      if (o.invoiced || o.delivered || o.inProduction) {
+        const grund = o.invoiced ? "bereits fakturiert" : o.delivered ? "bereits (teil-)geliefert" : "bereits in Produktion";
+        window.alert(`Auftrag ${o.number} kann nicht mehr bearbeitet werden (${grund}).`);
+        return;
+      }
+      setEditOrderId(id); setNewCompany(o.companyId); setNewLines(fromStoredLines(o.lines)); setShowCreate(true);
+    } catch (e) { setErr(errMsg(e)); }
+  };
+  const saveOrder = async (): Promise<void> => {
+    setErr(null);
+    try {
+      if (editOrderId) {
+        await trpc.sales.updateOrder.mutate({ orderId: editOrderId, companyId: newCompany, lines: toApiLines(newLines) });
+        window.alert("Auftrag gespeichert.");
+      } else {
+        const r = await trpc.sales.createOrder.mutate({ companyId: newCompany, lines: toApiLines(newLines) });
+        window.alert(`Auftrag ${r.number} angelegt.`);
+      }
+      resetOrderForm(); await load();
+    } catch (e) { setErr(errMsg(e)); }
+  };
 
   return (
     <>
@@ -2009,28 +2036,25 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
       {err && <Alert color="red" mt="sm">{err}</Alert>}
       {canAct && (
         <Box mt="sm">
-          <Button size="compact-sm" variant="light" onClick={() => setShowCreate((v) => !v)}>{showCreate ? "Erfassung schließen" : "+ Auftrag manuell anlegen"}</Button>
+          <Button size="compact-sm" variant="light" onClick={() => { if (showCreate) resetOrderForm(); else setShowCreate(true); }}>{showCreate ? "Erfassung schließen" : "+ Auftrag manuell anlegen"}</Button>
           {showCreate && (
             <Box mt="xs" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+              <Text size="sm" fw={600} mb={4}>{editOrderId ? "Auftrag bearbeiten" : "Neuer Auftrag"}</Text>
               <CompanyPicker value={newCompany} onChange={setNewCompany} w={240} />
               <LinesEditor lines={newLines} onChange={setNewLines} companyId={newCompany || undefined} />
-              <Button mt="sm" disabled={!newCompany.trim() || toApiLines(newLines).length === 0} onClick={async () => {
-                setErr(null);
-                try {
-                  const r = await trpc.sales.createOrder.mutate({ companyId: newCompany, lines: toApiLines(newLines) });
-                  window.alert(`Auftrag ${r.number} angelegt.`);
-                  setNewLines([{ description: "", qty: 10, euro: 12.9, kind: "TEXTIL" }]); setShowCreate(false); await load();
-                } catch (e) { setErr(errMsg(e)); }
-              }}>Auftrag anlegen</Button>
+              <Button mt="sm" disabled={!newCompany.trim() || toApiLines(newLines).length === 0} onClick={() => void saveOrder()}>
+                {editOrderId ? "Änderungen speichern" : "Auftrag anlegen"}
+              </Button>
             </Box>
           )}
         </Box>
       )}
       <AutoTable rows={rows} hide={["rawPayload"]} action={!canAct ? undefined : (r) => {
         const next = orderStatusMachine.next(String(r.status) as OrderStatus);
-        if (next.length === 0) return <Text size="xs" c="dimmed">—</Text>;
         return (
           <Group gap={4} justify="flex-end" wrap="nowrap">
+            <Button size="compact-xs" variant="subtle" onClick={() => void startEditOrder(String(r.id))}>Bearbeiten</Button>
+            {next.length === 0 && <Text size="xs" c="dimmed">—</Text>}
             {next.map((to) => (
               <Button key={to} size="compact-xs" variant={to === "STORNIERT" ? "light" : "default"} color={to === "STORNIERT" ? "red" : undefined}
                 onClick={async () => {

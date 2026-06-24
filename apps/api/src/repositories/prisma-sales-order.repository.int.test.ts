@@ -79,5 +79,20 @@ if (!dbConfigured) {
       const stick = await prisma.article.findFirst({ where: { sku: `${res.number}-P2` }, select: { isVeredelung: true } });
       expect(stick?.isVeredelung).toBe(true);
     });
+
+    it("orderForEdit + updateOrder: lädt und ersetzt die Positionen (vor Fakturierung)", async () => {
+      const order = await prisma.order.findFirst({ where: { quoteId: Q }, select: { id: true } });
+      const edit = await svc.getOrderForEdit(order!.id);
+      expect(edit.invoiced).toBe(false);
+      expect(edit.inProduction).toBe(false);
+      expect(edit.delivered).toBe(false);
+      expect(edit.lines.length).toBe(3);
+
+      await svc.updateOrder(order!.id, CO, [
+        { description: "Neu-Polo", qty: 7, unitNetCents: 1800, listNetCents: 2000, rabattPct: 10, kind: "TEXTIL", dbCents: 800 },
+      ]);
+      const after = await prisma.orderLine.findMany({ where: { orderId: order!.id }, orderBy: { position: "asc" }, select: { description: true, qty: true, unitNetCents: true, listNetCents: true, rabattPct: true } });
+      expect(after).toEqual([{ description: "Neu-Polo", qty: 7, unitNetCents: 1800, listNetCents: 2000, rabattPct: 10 }]);
+    });
   });
 }

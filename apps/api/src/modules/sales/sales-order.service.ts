@@ -52,12 +52,39 @@ export interface ConversionPlan {
   lines: ConversionPlanLine[];
 }
 
+/** Auftragsposition für die Bearbeitung (rekonstruiert die Erfassungsmaske). */
+export interface OrderEditLine {
+  description: string;
+  qty: number;
+  kind: PositionKind;
+  unitNetCents: number;
+  listNetCents: number | null;
+  rabattPct: number | null;
+  dbCents: number | null;
+  variantId: string | null;
+}
+
+export interface OrderEditData {
+  id: string;
+  number: string;
+  companyId: string;
+  /** Sperrgründe gegen die Bearbeitung (leer = voll bearbeitbar). */
+  invoiced: boolean;
+  inProduction: boolean;
+  delivered: boolean;
+  lines: OrderEditLine[];
+}
+
 export interface SalesOrderRepository {
   createOrder(input: { number: string; companyId: string; quoteId?: string; lines: SalesLine[] }): Promise<{ id: string }>;
   /** Angebotsdaten für die Umwandlung (inkl. Artikel-/Varianten-/Alternativ-Info); null wenn unbekannt. */
   conversionPlan(quoteId: string): Promise<ConversionPlan | null>;
   markQuoteAccepted(quoteId: string): Promise<void>;
   companyExists(companyId: string): Promise<boolean>;
+  /** Auftrag mit Positionen + Sperrstatus für die Bearbeitung laden. */
+  orderForEdit(orderId: string): Promise<OrderEditData | null>;
+  /** Positionen (und Kunde) eines Auftrags ersetzen. */
+  updateOrder(orderId: string, companyId: string, lines: SalesLine[]): Promise<void>;
 }
 
 export class SalesOrderError extends Error {}
@@ -130,5 +157,30 @@ export class SalesOrderService {
       after: { number, fromQuote: quoteId, lineCount: lines.length, droppedAlternatives: plan.lines.filter((l) => l.isAlternative).length, materialisierteArtikel: lines.filter((l) => l.materializeArticle).length },
     }));
     return { id, number };
+  }
+
+  /** Auftrag für die Bearbeitung laden (Positionen + Sperrstatus). */
+  async getOrderForEdit(orderId: string): Promise<OrderEditData> {
+    const data = await this.repo.orderForEdit(orderId);
+    if (!data) throw new SalesOrderError("Auftrag nicht gefunden.");
+    return data;
+  }
+
+  /**
+   * Vollständige Bearbeitung eines Auftrags (Kunde + Positionen), solange er weder
+   * fakturiert noch (teil-)geliefert noch in Produktion ist — danach gesperrt, um die
+   * Belegkette (Rechnung/Lieferung/PA) konsistent zu halten.
+   */
+  async updateOrder(orderId: string, companyId: string, lines: SalesLine[]): Promise<void> {
+    const data = await this.repo.orderForEdit(orderId);
+    if (!data) throw new SalesOrderError("Auftrag nicht gefunden.");
+    if (data.invoiced) throw new SalesOrderError("Auftrag ist bereits fakturiert — keine Bearbeitung mehr möglich.");
+    if (data.delivered) throw new SalesOrderError("Auftrag ist bereits (teil-)geliefert — keine Bearbeitung mehr möglich.");
+    if (data.inProduction) throw new SalesOrderError("Auftrag ist bereits in Produktion — keine Bearbeitung mehr möglich.");
+    if (!companyId.trim()) throw new SalesOrderError("Firma ist Pflicht.");
+    validateLines(lines);
+    if (!(await this.repo.companyExists(companyId))) throw new SalesOrderError("Unbekannte Firma.");
+    await this.repo.updateOrder(orderId, companyId, lines);
+    await this.audit.append(buildEntry({ entity: "Order", entityId: orderId, action: "UPDATE", after: { lineCount: lines.length, companyId } }));
   }
 }

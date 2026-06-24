@@ -2,11 +2,43 @@
 
 import { prisma } from "@texma/db";
 import type { PositionKind } from "@texma/shared";
-import type { ConversionPlan, SalesLine, SalesOrderRepository } from "../modules/sales/sales-order.service.js";
+import type { ConversionPlan, OrderEditData, SalesLine, SalesOrderRepository } from "../modules/sales/sales-order.service.js";
 
 export class PrismaSalesOrderRepository implements SalesOrderRepository {
   async companyExists(companyId: string): Promise<boolean> {
     return (await prisma.company.count({ where: { id: companyId } })) > 0;
+  }
+
+  async orderForEdit(orderId: string): Promise<OrderEditData | null> {
+    const o = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        id: true, number: true, companyId: true,
+        invoice: { select: { id: true } },
+        production: { select: { id: true } },
+        _count: { select: { deliveryNotes: true } },
+        lines: { orderBy: { position: "asc" }, select: { description: true, qty: true, kind: true, unitNetCents: true, listNetCents: true, rabattPct: true, dbCents: true, variantId: true } },
+      },
+    });
+    if (!o) return null;
+    return {
+      id: o.id, number: o.number, companyId: o.companyId,
+      invoiced: o.invoice !== null, inProduction: o.production !== null, delivered: o._count.deliveryNotes > 0,
+      lines: o.lines.map((l) => ({ description: l.description, qty: l.qty, kind: l.kind as PositionKind, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents, rabattPct: l.rabattPct, dbCents: l.dbCents, variantId: l.variantId })),
+    };
+  }
+
+  async updateOrder(orderId: string, companyId: string, lines: SalesLine[]): Promise<void> {
+    await prisma.$transaction([
+      prisma.orderLine.deleteMany({ where: { orderId } }),
+      prisma.order.update({
+        where: { id: orderId },
+        data: {
+          companyId,
+          lines: { create: lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, dbCents: l.dbCents ?? null, kind: (l.kind ?? "TEXTIL") as never, variantId: l.variantId ?? null })) },
+        },
+      }),
+    ]);
   }
 
   async createOrder(input: { number: string; companyId: string; quoteId?: string; lines: SalesLine[] }): Promise<{ id: string }> {
