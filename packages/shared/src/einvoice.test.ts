@@ -45,11 +45,39 @@ describe("E-Rechnung Erzeugung (Kap. 19)", () => {
     });
     expect(xml).toContain("Meyer &amp; Söhne &lt;KG&gt;");
   });
+
+  it("weist den Positionsrabatt als Preisabschlag aus (BT-148/147/146)", () => {
+    const xml = buildEInvoiceXml({
+      ...model,
+      lines: [{ id: "1", name: "Polo", qty: 10, unitNetCents: 1350, lineNetCents: 13500, vatRatePercent: 19, grossUnitNetCents: 1500, discountReason: "Positionsrabatt 10 %" }],
+      netCents: 13500, taxCents: 2565, grossCents: 16065,
+    });
+    expect(xml).toContain("<ram:GrossPriceProductTradePrice><ram:ChargeAmount>15.00</ram:ChargeAmount>");
+    expect(xml).toContain("<udt:Indicator>false</udt:Indicator>");
+    expect(xml).toContain("<ram:ActualAmount>1.50</ram:ActualAmount>"); // Abschlag je Stück
+    expect(xml).toContain("<ram:Reason>Positionsrabatt 10 %</ram:Reason>");
+    expect(xml).toContain("<ram:NetPriceProductTradePrice><ram:ChargeAmount>13.50</ram:ChargeAmount>");
+  });
+
+  it("ohne Rabatt bleibt der Preisblock unverändert (nur Netto-Preis)", () => {
+    const xml = buildEInvoiceXml(model);
+    expect(xml).not.toContain("GrossPriceProductTradePrice");
+  });
 });
 
 describe("E-Rechnung Eingangsvalidierung (Kap. 19)", () => {
   it("akzeptiert eine vollständige Rechnung", () => {
     expect(validateEInvoice(model)).toEqual({ valid: true, errors: [] });
+  });
+
+  it("lehnt einen Brutto-Einzelpreis unter dem Netto-Preis ab (BT-148)", () => {
+    const r = validateEInvoice({
+      ...model,
+      lines: [{ id: "1", name: "Polo", qty: 10, unitNetCents: 1500, lineNetCents: 15000, vatRatePercent: 19, grossUnitNetCents: 1400 }],
+      netCents: 15000, taxCents: 2850, grossCents: 17850,
+    });
+    expect(r.valid).toBe(false);
+    expect(r.errors.some((e) => e.includes("BT-148"))).toBe(true);
   });
 
   it("meldet fehlende Pflichtfelder und Summenfehler", () => {

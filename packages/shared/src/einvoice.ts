@@ -16,9 +16,13 @@ export interface EInvoiceLine {
   id: string;
   name: string;
   qty: number;
-  unitNetCents: Cents;
-  lineNetCents: Cents;
+  unitNetCents: Cents; // Netto-Einzelpreis NACH Rabatt (BT-146)
+  lineNetCents: Cents; // Zeilenbetrag = unitNetCents × qty (BT-131)
   vatRatePercent: number; // z. B. 19
+  /** VK-Listenpreis je Stück VOR Rabatt (BT-148); gesetzt → Positionsrabatt wird ausgewiesen. */
+  grossUnitNetCents?: Cents;
+  /** Grund/Bezeichnung des Positionsrabatts (BT-139), z. B. "Positionsrabatt 10 %". */
+  discountReason?: string;
 }
 
 export interface EInvoiceModel {
@@ -58,12 +62,21 @@ function esc(s: string): string {
  * Grundlage für die PDF/A-3-Einbettung (ZUGFeRD) bzw. den XRechnung-Versand.
  */
 export function buildEInvoiceXml(m: EInvoiceModel): string {
+  // Preisblock je Position: bei Positionsrabatt Brutto-Listenpreis (BT-148) + Abschlag
+  // (AppliedTradeAllowanceCharge, BT-147/139) zusätzlich zum Netto-Einzelpreis (BT-146).
+  const agreement = (l: EInvoiceLine): string => {
+    if (l.grossUnitNetCents != null && l.grossUnitNetCents > l.unitNetCents) {
+      const allowance = l.grossUnitNetCents - l.unitNetCents;
+      return `<ram:SpecifiedLineTradeAgreement><ram:GrossPriceProductTradePrice><ram:ChargeAmount>${dec(l.grossUnitNetCents)}</ram:ChargeAmount><ram:AppliedTradeAllowanceCharge><ram:ChargeIndicator><udt:Indicator>false</udt:Indicator></ram:ChargeIndicator><ram:ActualAmount>${dec(allowance)}</ram:ActualAmount>${l.discountReason ? `<ram:Reason>${esc(l.discountReason)}</ram:Reason>` : ""}</ram:AppliedTradeAllowanceCharge></ram:GrossPriceProductTradePrice><ram:NetPriceProductTradePrice><ram:ChargeAmount>${dec(l.unitNetCents)}</ram:ChargeAmount></ram:NetPriceProductTradePrice></ram:SpecifiedLineTradeAgreement>`;
+    }
+    return `<ram:SpecifiedLineTradeAgreement><ram:NetPriceProductTradePrice><ram:ChargeAmount>${dec(l.unitNetCents)}</ram:ChargeAmount></ram:NetPriceProductTradePrice></ram:SpecifiedLineTradeAgreement>`;
+  };
   const lines = m.lines
     .map(
       (l) => `    <ram:IncludedSupplyChainTradeLineItem>
       <ram:AssociatedDocumentLineDocument><ram:LineID>${esc(l.id)}</ram:LineID></ram:AssociatedDocumentLineDocument>
       <ram:SpecifiedTradeProduct><ram:Name>${esc(l.name)}</ram:Name></ram:SpecifiedTradeProduct>
-      <ram:SpecifiedLineTradeAgreement><ram:NetPriceProductTradePrice><ram:ChargeAmount>${dec(l.unitNetCents)}</ram:ChargeAmount></ram:NetPriceProductTradePrice></ram:SpecifiedLineTradeAgreement>
+      ${agreement(l)}
       <ram:SpecifiedLineTradeDelivery><ram:BilledQuantity unitCode="C62">${l.qty}</ram:BilledQuantity></ram:SpecifiedLineTradeDelivery>
       <ram:SpecifiedLineTradeSettlement>
         <ram:ApplicableTradeTax><ram:TypeCode>VAT</ram:TypeCode><ram:CategoryCode>S</ram:CategoryCode><ram:RateApplicablePercent>${l.vatRatePercent}</ram:RateApplicablePercent></ram:ApplicableTradeTax>
@@ -134,6 +147,10 @@ export function validateEInvoice(m: Partial<EInvoiceModel>): EInvoiceValidationR
       if (!l.name) errors.push(`BR-25 Artikelname fehlt (Zeile ${n})`);
       if (!(l.qty > 0)) errors.push(`BT-129 Menge fehlt/≤0 (Zeile ${n})`);
       if (l.vatRatePercent == null) errors.push(`BR-CO-4 USt-Satz der Position fehlt (Zeile ${n})`);
+      // Positionsrabatt: Brutto-Listenpreis (BT-148) darf nicht unter dem Netto-Preis (BT-146) liegen.
+      if (l.grossUnitNetCents != null && l.grossUnitNetCents < l.unitNetCents) {
+        errors.push(`BT-148 Brutto-Einzelpreis < Netto-Einzelpreis (Zeile ${n})`);
+      }
     });
     if (m.netCents != null) {
       const lineSum = m.lines.reduce((s, l) => s + (l.lineNetCents ?? 0), 0);
