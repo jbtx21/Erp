@@ -1781,6 +1781,53 @@ export const appRouter = router({
       }),
   }),
 
+  // Multi-Mailkonten (IONOS): mehrere Konten, je eines Standard ein-/ausgehend, Passwort
+  // verschlüsselt. Nur ADMIN (sensible Zugangsdaten); Passwort nie ausgeliefert.
+  mailAccounts: router({
+    list: roleProcedure("ADMIN").query(({ ctx }) => ctx.mailAccounts.list()),
+    create: roleProcedure("ADMIN")
+      .input(z.object({
+        name: z.string().min(1),
+        emailAddress: z.string().email(),
+        imapHost: z.string().optional(),
+        imapPort: z.number().int().positive().optional(),
+        smtpHost: z.string().optional(),
+        smtpPort: z.number().int().positive().optional(),
+        username: z.string().nullable().optional(),
+        password: z.string().nullable().optional(),
+        enableIncoming: z.boolean().optional(),
+        enableOutgoing: z.boolean().optional(),
+        defaultIncoming: z.boolean().optional(),
+        defaultOutgoing: z.boolean().optional(),
+        disabled: z.boolean().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => { try { return await ctx.mailAccounts.create(input); } catch (e) { throw toTrpcError(e); } }),
+    update: roleProcedure("ADMIN")
+      .input(z.object({
+        id: z.string().min(1),
+        name: z.string().optional(),
+        emailAddress: z.string().email().optional(),
+        imapHost: z.string().optional(),
+        imapPort: z.number().int().positive().optional(),
+        smtpHost: z.string().optional(),
+        smtpPort: z.number().int().positive().optional(),
+        username: z.string().nullable().optional(),
+        password: z.string().nullable().optional(),
+        enableIncoming: z.boolean().optional(),
+        enableOutgoing: z.boolean().optional(),
+        defaultIncoming: z.boolean().optional(),
+        defaultOutgoing: z.boolean().optional(),
+        disabled: z.boolean().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => { const { id, ...patch } = input; try { return await ctx.mailAccounts.update(id, patch as Parameters<typeof ctx.mailAccounts.update>[1]); } catch (e) { throw toTrpcError(e); } }),
+    setDefault: roleProcedure("ADMIN")
+      .input(z.object({ id: z.string().min(1), kind: z.enum(["incoming", "outgoing"]) }))
+      .mutation(async ({ input, ctx }) => { try { await ctx.mailAccounts.setDefault(input.id, input.kind); return { ok: true as const }; } catch (e) { throw toTrpcError(e); } }),
+    remove: roleProcedure("ADMIN")
+      .input(z.object({ id: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => { try { await ctx.mailAccounts.remove(input.id); return { ok: true as const }; } catch (e) { throw toTrpcError(e); } }),
+  }),
+
   // Kostenstellen (B7): Stammdaten anlegen/auflisten/löschen + Auswertung je Kostenstelle.
   costCenters: router({
     list: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.costCenters.list()),

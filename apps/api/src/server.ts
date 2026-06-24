@@ -97,8 +97,11 @@ import { PrismaSalesOrderRepository } from "./repositories/prisma-sales-order.re
 import { MailIntakeService } from "./modules/mail/mail.service.js";
 import { PrismaMailIntakeRepository } from "./repositories/prisma-mail.repository.js";
 import { ImapMailFetcher } from "./modules/mail/imap-fetcher.js";
-import { MailSendService, LoggingMailSender } from "./modules/mail/mail.service.js";
-import { SmtpMailSender, smtpConfigFromEnv } from "./modules/mail/smtp-sender.js";
+import { MailSendService, LoggingMailSender, ResolvingMailSender } from "./modules/mail/mail.service.js";
+import { SmtpMailSender, smtpConfigFromEnv, type SmtpConfig } from "./modules/mail/smtp-sender.js";
+import { MailAccountService } from "./modules/mail/mail-account.service.js";
+import { PrismaMailAccountRepository } from "./repositories/prisma-mail-account.repository.js";
+import { loadSecretsKey } from "@texma/shared";
 import { NewsletterService, StubNewsletterProvider } from "./modules/newsletter/newsletter.service.js";
 import { BrevoNewsletterProvider } from "./modules/newsletter/brevo-provider.js";
 import { PrismaNewsletterRepository } from "./repositories/prisma-newsletter.repository.js";
@@ -248,8 +251,19 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const dataIo = new DataIoService(new PrismaDataIoRepository(), new PrismaAuditSink());
   const print = new PrintService(new PrismaPrintRepository());
   const salesOrders = new SalesOrderService(new PrismaSalesOrderRepository(), new NumberingService(new PrismaNumberingRepository()), new PrismaAuditSink());
+  // Multi-Mailkonten: Standard-Ausgangskonto aus der DB hat Vorrang, sonst ENV-Fallback.
+  let secretsKey: Buffer | null = null;
+  try { secretsKey = loadSecretsKey(); } catch { secretsKey = null; }
+  const mailAccounts = new MailAccountService(new PrismaMailAccountRepository(), secretsKey);
   const smtpCfg = smtpConfigFromEnv();
-  const mailSend = new MailSendService(smtpCfg ? new SmtpMailSender(smtpCfg) : new LoggingMailSender());
+  const envSender = smtpCfg ? new SmtpMailSender(smtpCfg) : new LoggingMailSender();
+  const mailSend = new MailSendService(
+    new ResolvingMailSender(
+      () => mailAccounts.defaultOutgoingConfig(),
+      (cfg) => new SmtpMailSender(cfg as SmtpConfig),
+      envSender
+    )
+  );
   const mailIntake = new MailIntakeService(new ImapMailFetcher(), new PrismaMailIntakeRepository(), new NumberingService(new PrismaNumberingRepository()), new PrismaAuditSink());
   const newsletterProvider = process.env.BREVO_API_KEY
     ? new BrevoNewsletterProvider(process.env.BREVO_API_KEY, { name: process.env.BREVO_SENDER_NAME ?? "TEXMA", email: process.env.BREVO_SENDER_EMAIL ?? "info@texma-gmbh.de" })
@@ -432,6 +446,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           salesOrders,
           mailIntake,
           mailSend,
+          mailAccounts,
           newsletter,
           opportunities,
           calendar,

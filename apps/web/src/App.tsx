@@ -8,7 +8,7 @@ import { Reporting } from "./Reporting.js";
 import { Differentiators } from "./Differentiators.js";
 import { Banking } from "./Banking.js";
 import {
-  CompaniesPage, CallLogsPage, CostCentersPage, DunningPage, InquiriesPage, IncomingInvoicesPage, LeadsPage, OrdersPage, ProcurementPage, ProductionReportingPage,
+  CompaniesPage, CallLogsPage, CostCentersPage, DunningPage, InquiriesPage, IncomingInvoicesPage, LeadsPage, MailAccountsPage, OrdersPage, ProcurementPage, ProductionReportingPage,
   ProductsPage, PricingPage, EmailTemplatesPage, DashboardsPage, DataIoPage, EanImportPage, FinanceReportingPage, WareneingangPage, ZahlungenPage, NewsletterPage, OpportunitiesPage, CalendarPage, MessagesPage, AdminPage, ArchivePage, AuditLogPage, AutomationPage, TasksPage, HomePage, LagerPage, HrPage, IntegrationsPage, SecurityPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
 } from "./pages.js";
 import { trpc } from "./trpc.js";
@@ -31,7 +31,7 @@ const NAV: ReadonlyArray<{ group: string; items: ReadonlyArray<{ key: string; la
     { key: "banking", label: "Banking" }, { key: "zahlungen", label: "Zahlungseingänge" }, { key: "costcenters", label: "Kostenstellen" },
     { key: "reporting", label: "Auswertungen" }, { key: "finance", label: "Offene Posten (OP-Aging)" },
   ] },
-  { group: "System", items: [{ key: "emailtemplates", label: "E-Mail-Vorlagen" }, { key: "dataio", label: "Import/Export" }, { key: "newsletter", label: "Newsletter" }, { key: "archive", label: "GoBD-Archiv" }, { key: "auditlog", label: "Audit-Protokoll" }, { key: "automation", label: "Automationen" }, { key: "admin", label: "Einstellungen" }, { key: "hr", label: "Personalwesen" }, { key: "integrations", label: "Schnittstellen" }] },
+  { group: "System", items: [{ key: "mailaccounts", label: "E-Mail-Konten" }, { key: "emailtemplates", label: "E-Mail-Vorlagen" }, { key: "dataio", label: "Import/Export" }, { key: "newsletter", label: "Newsletter" }, { key: "archive", label: "GoBD-Archiv" }, { key: "auditlog", label: "Audit-Protokoll" }, { key: "automation", label: "Automationen" }, { key: "admin", label: "Einstellungen" }, { key: "hr", label: "Personalwesen" }, { key: "integrations", label: "Schnittstellen" }] },
 ];
 const ALL_KEYS = NAV.flatMap((g) => g.items.map((i) => i.key));
 const hashKey = (): string => {
@@ -251,6 +251,7 @@ function Page({ k, role, userName, onNavigate, focusId }: { k: string; role: str
     case "companies": return <CompaniesPage focusId={focusId} />;
     case "leads": return <LeadsPage focusId={focusId} />;
     case "calllogs": return <CallLogsPage />;
+    case "mailaccounts": return <MailAccountsPage />;
     case "inquiries": return <InquiriesPage />;
     case "quotes": return <QuotesPage />;
     case "reklamation": return <ReklamationPage />;

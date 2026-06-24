@@ -25,6 +25,8 @@ import { LeadService } from "../modules/lead/lead.service.js";
 import { InMemoryLeadRepository } from "../repositories/in-memory-lead.repository.js";
 import { CallLogService } from "../modules/call-log/call-log.service.js";
 import { InMemoryCallLogRepository } from "../repositories/in-memory-call-log.repository.js";
+import { MailAccountService } from "../modules/mail/mail-account.service.js";
+import { InMemoryMailAccountRepository } from "../repositories/in-memory-mail-account.repository.js";
 import { InquiryService } from "../modules/inquiry/inquiry.service.js";
 import { InMemoryInquiryRepository } from "../repositories/in-memory-inquiry.repository.js";
 import { SampleLoanService } from "../modules/sample/sample.service.js";
@@ -312,6 +314,7 @@ function setup(user: AuthUser | null = BUERO) {
     costCenters: new CostCenterService(new InMemoryCostCenterRepository(), new MemoryAuditSink()),
     leads: new LeadService(new InMemoryLeadRepository(), new MemoryAuditSink()),
     callLogs: new CallLogService(new InMemoryCallLogRepository(), new MemoryAuditSink()),
+    mailAccounts: new MailAccountService(new InMemoryMailAccountRepository(), null),
     inquiries: new InquiryService(new InMemoryInquiryRepository(), new NumberingService(new InMemoryNumberingRepository()), new MemoryAuditSink()),
     sampleLoans: new SampleLoanService(new InMemorySampleLoanRepository(), new NumberingService(new InMemoryNumberingRepository()), new MemoryAuditSink()),
     companies: new CompanyService(new InMemoryCompanyRepository(), new MemoryAuditSink()),
@@ -439,6 +442,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       costCenters: {} as Context["costCenters"],
       leads: {} as Context["leads"],
       callLogs: {} as Context["callLogs"],
+      mailAccounts: {} as Context["mailAccounts"],
       inquiries: {} as Context["inquiries"],
       sampleLoans: {} as Context["sampleLoans"],
       companies: {} as Context["companies"],

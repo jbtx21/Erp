@@ -88,6 +88,26 @@ export class LoggingMailSender implements MailSender {
   }
 }
 
+/**
+ * Wählt das ausgehende Konto je Versand: gibt es ein verschlüsseltes Standard-Konto in der
+ * DB (Multi-Mailkonten), wird darüber versendet; sonst greift der Fallback-Sender (ENV).
+ * Der Resolver liefert eine fertige SmtpConfig oder null — das Bauen des SMTP-Senders je
+ * Config übernimmt `buildSender`, damit dieses Modul keine SMTP-Implementierung importiert.
+ */
+export class ResolvingMailSender implements MailSender {
+  constructor(
+    private readonly resolveConfig: () => Promise<unknown | null>,
+    private readonly buildSender: (config: unknown) => MailSender,
+    private readonly fallback: MailSender
+  ) {}
+  async send(mail: OutgoingMail): Promise<void> {
+    let config: unknown | null = null;
+    try { config = await this.resolveConfig(); } catch { config = null; }
+    const sender = config ? this.buildSender(config) : this.fallback;
+    return sender.send(mail);
+  }
+}
+
 export class MailSendService {
   constructor(private readonly sender: MailSender) {}
   send(mail: OutgoingMail): Promise<void> { return this.sender.send(mail); }

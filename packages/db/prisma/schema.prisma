@@ -294,6 +294,30 @@ enum CallStatus {
   RUECKRUF
 }
 
+// Mehrere E-Mail-Konten (IONOS-Postfächer): Senden/Empfangen je Konto, je eines als
+// Standard für ein-/ausgehend. Passwort AES-256-GCM verschlüsselt (nie im Klartext/Log).
+model MailAccount {
+  id              String   @id @default(cuid())
+  name            String // Anzeigename
+  emailAddress    String   @unique // Absender (From) + Login
+  imapHost        String   @default("imap.ionos.de")
+  imapPort        Int      @default(993)
+  smtpHost        String   @default("smtp.ionos.de")
+  smtpPort        Int      @default(587)
+  username        String? // Login, falls abweichend von emailAddress
+  passwordEnc     String? // AES-256-GCM-verschlüsseltes Passwort (Kap. 28)
+  enableIncoming  Boolean  @default(true)
+  enableOutgoing  Boolean  @default(true)
+  defaultIncoming Boolean  @default(false)
+  defaultOutgoing Boolean  @default(false)
+  disabled        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([defaultOutgoing])
+  @@index([defaultIncoming])
+}
+
 model CallLog {
   id            String        @id @default(cuid())
   richtung      CallDirection

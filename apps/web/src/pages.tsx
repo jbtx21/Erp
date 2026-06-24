@@ -3,7 +3,7 @@
 // Bereiche mit wenig Code anbindbar sind. Interaktive Aktionen (Versand bestätigen,
 // Mahnlauf, Reorder→Bestellungen) sind je Seite ergänzt.
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Alert, Badge, Box, Button, Checkbox, Group, Loader, Modal, NumberInput, Select, Switch, Table, Tabs, Text, Textarea, TextInput, Title } from "@mantine/core";
+import { Alert, Badge, Box, Button, Checkbox, Group, Loader, Modal, NumberInput, PasswordInput, Select, Switch, Table, Tabs, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { validateVatId } from "@texma/shared/vat";
 import { trpc } from "./trpc.js";
@@ -2626,6 +2626,80 @@ export function CallLogsPage(): JSX.Element {
       </Group>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
       <AutoTable rows={rows} hide={["id", "companyId", "createdAt"]} action={actionsFor} />
+    </>
+  );
+}
+
+// Multi-Mailkonten (IONOS): mehrere Postfächer verwalten, je eines Standard ein-/ausgehend.
+// Passwörter werden verschlüsselt gespeichert und nie zurückgeliefert (nur „gesetzt"-Status).
+type MailAccount = Awaited<ReturnType<typeof trpc.mailAccounts.list.query>>[number];
+export function MailAccountsPage(): JSX.Element {
+  const [rows, setRows] = useState<MailAccount[]>([]);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [defOut, setDefOut] = useState(true);
+  const [defIn, setDefIn] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try { setRows(await trpc.mailAccounts.list.query()); setErr(null); } catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  const act = async (fn: () => Promise<unknown>) => { setErr(null); try { await fn(); await load(); } catch (e) { setErr(errMsg(e)); } };
+
+  const create = async () => {
+    setBusy(true); setErr(null);
+    try {
+      await trpc.mailAccounts.create.mutate({ name: name.trim(), emailAddress: email.trim(), password: password || undefined, defaultOutgoing: defOut, defaultIncoming: defIn });
+      setName(""); setEmail(""); setPassword(""); await load();
+    } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+
+  return (
+    <>
+      <Title order={3}>E-Mail-Konten</Title>
+      <Text size="sm" c="dimmed" mt={4}>Mehrere IONOS-Postfächer für Senden/Empfangen. Je eines ist Standard für aus- und eingehend. Passwörter werden verschlüsselt gespeichert und nie angezeigt; ohne DB-Konto greift das ENV-Konto.</Text>
+      <Group mt="sm" gap="xs" align="end" wrap="wrap">
+        <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Vertrieb" w={160} />
+        <TextInput label="E-Mail-Adresse" value={email} onChange={(e) => setEmail(e.currentTarget.value)} placeholder="vertrieb@texma-gmbh.de" w={240} />
+        <PasswordInput label="Passwort" value={password} onChange={(e) => setPassword(e.currentTarget.value)} w={180} />
+        <Checkbox label="Standard ausgehend" checked={defOut} onChange={(e) => setDefOut(e.currentTarget.checked)} />
+        <Checkbox label="Standard eingehend" checked={defIn} onChange={(e) => setDefIn(e.currentTarget.checked)} />
+        <Button loading={busy} disabled={!name.trim() || !email.trim()} onClick={() => void create()}>Konto anlegen</Button>
+      </Group>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      {rows.length === 0 ? <Text c="dimmed" mt="md">Noch keine Konten — es greift das ENV-Konto (IONOS).</Text> : (
+        <Table striped withTableBorder mt="md" verticalSpacing="xs" fz="sm">
+          <Table.Thead><Table.Tr>
+            <Table.Th>Name</Table.Th><Table.Th>E-Mail</Table.Th><Table.Th>SMTP</Table.Th><Table.Th>Passwort</Table.Th><Table.Th>Standard</Table.Th><Table.Th /></Table.Tr></Table.Thead>
+          <Table.Tbody>
+            {rows.map((a) => (
+              <Table.Tr key={a.id}>
+                <Table.Td>{a.name}{a.disabled && <Badge ml="xs" size="sm" color="gray">deaktiviert</Badge>}</Table.Td>
+                <Table.Td>{a.emailAddress}</Table.Td>
+                <Table.Td>{a.smtpHost}:{a.smtpPort}</Table.Td>
+                <Table.Td>{a.hasPassword ? <Badge color="green" variant="light" size="sm">gesetzt</Badge> : <Badge color="red" variant="light" size="sm">fehlt</Badge>}</Table.Td>
+                <Table.Td>
+                  <Group gap={4}>
+                    {a.defaultOutgoing && <Badge color="blue" variant="light" size="sm">Ausgang</Badge>}
+                    {a.defaultIncoming && <Badge color="grape" variant="light" size="sm">Eingang</Badge>}
+                  </Group>
+                </Table.Td>
+                <Table.Td>
+                  <Group gap={4} justify="flex-end" wrap="nowrap">
+                    {!a.defaultOutgoing && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.mailAccounts.setDefault.mutate({ id: a.id, kind: "outgoing" }))}>→ Ausgang</Button>}
+                    {!a.defaultIncoming && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.mailAccounts.setDefault.mutate({ id: a.id, kind: "incoming" }))}>→ Eingang</Button>}
+                    <Button size="compact-xs" color="red" variant="light" onClick={() => { if (typeof window === "undefined" || window.confirm(`Konto „${a.name}" löschen?`)) void act(() => trpc.mailAccounts.remove.mutate({ id: a.id })); }}>Löschen</Button>
+                  </Group>
+                </Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      )}
     </>
   );
 }

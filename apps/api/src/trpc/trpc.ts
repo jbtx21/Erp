@@ -41,6 +41,7 @@ import type { DataIoService } from "../modules/dataio/dataio.service.js";
 import type { PrintService } from "../modules/print/print.service.js";
 import type { SalesOrderService } from "../modules/sales/sales-order.service.js";
 import type { MailIntakeService, MailSendService } from "../modules/mail/mail.service.js";
+import type { MailAccountService } from "../modules/mail/mail-account.service.js";
 import type { NewsletterService } from "../modules/newsletter/newsletter.service.js";
 import type { OpportunityService } from "../modules/opportunity/opportunity.service.js";
 import type { CalendarService } from "../modules/calendar/calendar.service.js";
@@ -119,6 +120,7 @@ export interface Context {
   salesOrders: SalesOrderService;
   mailIntake: MailIntakeService;
   mailSend: MailSendService;
+  mailAccounts: MailAccountService;
   newsletter: NewsletterService;
   opportunities: OpportunityService;
   calendar: CalendarService;
