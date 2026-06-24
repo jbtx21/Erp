@@ -63,3 +63,5 @@ export {
 } from "./rest-client.js";
 export { TrpcSupplierIntake } from "./trpc-intake.js";
 export { runSupplierSync, type RunnerEnv, type SupplierRunSummary } from "./runner.js";
+export { IdIdentityFeedClient, ID_IDENTITY_FEEDS, type IdIdentityFeedClientOptions } from "./id-identity-client.js";
+export { StanleyStellaClient, type StanleyStellaClientOptions } from "./stanleystella-client.js";

@@ -7,8 +7,8 @@ describe("SupplierConnector (Kap. 6/32, C3)", () => {
     const client: SupplierCatalogClient = {
       fetchCatalogSince: vi.fn().mockResolvedValue({
         items: [
-          { articleNumber: "IDI-1", manufacturerSku: "0020-RED-L", purchasePriceEur: "5.90", stock: 120 },
-          { articleNumber: "IDI-2", manufacturerSku: "0021-BLK-M", purchasePriceEur: "7.45", stock: 0 },
+          { StockLevel: 120, ProductFields: { ItemId: "IDI-1", EAN13Code: "0020-RED-L" }, Prices: { Price: { Price: "5.90" } } },
+          { StockLevel: 0, ProductFields: { ItemId: "IDI-2", EAN13Code: "0021-BLK-M" }, Prices: { Price: { Price: "7.45" } } },
         ],
         nextCursor: "2026-06-18T10:00:00Z",
       }),
