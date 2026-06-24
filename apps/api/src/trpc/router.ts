@@ -210,6 +210,11 @@ export const appRouter = router({
             // Statuswechsel bestehen (lieferstatus dann unverändert, manuell nachholbar).
             try { await ctx.deliveries.deliverRemaining(input.orderId); } catch { /* nicht blockierend */ }
           }
+          if (input.to === "STORNIERT") {
+            // Storno gibt die noch offenen Bestands-Reservierungen des Auftrags frei
+            // (verfügbarer Bestand steigt wieder).
+            try { await ctx.reservations.releaseByOrder(input.orderId, "STORNIERT"); } catch { /* nicht blockierend */ }
+          }
           // G-5: In-App-Benachrichtigung über den Statuswechsel.
           await ctx.notifications.notify(ctx.user.email, `Auftrag → ${input.to}`, `Auftrag ${input.orderId} ist jetzt ${input.to}.`, "orders");
           // Regel-Engine: konfigurierte Automationen zum Statuswechsel auslösen (Event → Aktion).

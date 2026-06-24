@@ -84,7 +84,7 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
         // STANDARD-Preis des neuen Artikels = VK-Liste (ohne den einmaligen Positionsrabatt).
         if (stdId) await tx.priceGroupPrice.create({ data: { variantId, priceGroupId: stdId, netCents: input.lines[i]!.listNetCents ?? input.lines[i]!.unitNetCents } });
       }
-      return tx.order.create({
+      const order = await tx.order.create({
         data: {
           number: input.number,
           companyId: input.companyId,
@@ -94,6 +94,17 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
         },
         select: { id: true },
       });
+      // Verfügbarkeits-Reservierung (Lager-Scheibe): jede variantengebundene Position reserviert
+      // Bestand im Hauptlager, sodass „verfügbar" = Bestand − aktive Reservierungen die
+      // Doppelvergabe desselben Bestands an mehrere Aufträge verhindert. Freigabe bei
+      // Lieferung (verbraucht) bzw. Storno (s. delivery-/transition-Pfad).
+      for (let i = 0; i < input.lines.length; i++) {
+        const l = input.lines[i]!;
+        const variantId = l.variantId ?? variantByIndex.get(i);
+        if (!variantId || l.qty <= 0) continue;
+        await tx.stockReservation.create({ data: { variantId, lager: "HAUPT", warehouseId: "wh_haupt", qty: l.qty, orderId: order.id, belegRef: input.number, status: "AKTIV" } });
+      }
+      return order;
     });
   }
 

@@ -57,6 +57,16 @@ export class PrismaDeliveryRepository implements DeliveryRepository {
           create: { variantId, qty: -l.qty },
           update: { qty: { decrement: l.qty } },
         });
+        // Reservierung verbrauchen: die gelieferte Menge ist nun physisch abgegangen, daher
+        // die aktive Auftrags-Reservierung dieser Variante entsprechend reduzieren/schließen —
+        // sonst würde „verfügbar" doppelt sinken (Ledger −qty UND Reservierung).
+        let remaining = l.qty;
+        const reservations = await tx.stockReservation.findMany({ where: { orderId, variantId, status: "AKTIV" }, orderBy: { createdAt: "asc" }, select: { id: true, qty: true } });
+        for (const res of reservations) {
+          if (remaining <= 0) break;
+          if (res.qty <= remaining) { await tx.stockReservation.update({ where: { id: res.id }, data: { status: "ERLEDIGT", releasedAt: new Date() } }); remaining -= res.qty; }
+          else { await tx.stockReservation.update({ where: { id: res.id }, data: { qty: res.qty - remaining } }); remaining = 0; }
+        }
       }
       return note;
     });
