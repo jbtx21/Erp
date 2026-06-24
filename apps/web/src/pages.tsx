@@ -342,14 +342,14 @@ export function SuppliersPage({ focusId }: { focusId?: string } = {}): JSX.Eleme
         <TextInput label="Lieferanten-ID" value={sid} onChange={(e) => setSid(e.currentTarget.value)} w={200} />
         <Button size="sm" variant="default" onClick={() => setApplied(sid)}>Anzeigen</Button>
       </Group>
-      <ListPage key={applied} title={`Katalog · ${applied}`}
+      <ListPage key={applied} module="Einkauf / Lieferanten" title={`Katalog · ${applied}`}
         load={() => trpc.suppliers.list.query({ supplierId: applied, limit: 100 }) as Promise<Row[]>} />
     </>
   );
 }
 
 export const IncomingInvoicesPage = (): JSX.Element => (
-  <ListPage title="Eingangsrechnungen" hint="Erfasste Kreditorenrechnungen (3-Wege-Match, Kap. 9)."
+  <ListPage module="Einkauf / Eingangsrechnungen" title="Eingangsrechnungen" hint="Erfasste Kreditorenrechnungen (3-Wege-Match, Kap. 9)."
     load={() => trpc.incomingInvoices.list.query({ limit: 100 }) as Promise<Row[]>} />
 );
 
@@ -445,7 +445,7 @@ export const ProcurementPage = (): JSX.Element => {
 
 // ── Logistik / Finanzen ─────────────────────────────────────────────────────
 export const ShipmentsPage = (): JSX.Element => (
-  <ListPage title="Versand" hint="Versandbereite Aufträge → als versendet bestätigen (DPD-Label/Tracking, T-06)."
+  <ListPage module="Logistik / Versand" title="Versand" hint="Versandbereite Aufträge → als versendet bestätigen (DPD-Label/Tracking, T-06)."
     load={() => trpc.shipments.listShippable.query({ limit: 100 }) as Promise<Row[]>}
     action={(r, reload) => <ConfirmShipBtn orderId={String((r as Row).id ?? (r as Row).orderId ?? "")} reload={reload} />} />
 );
@@ -465,7 +465,7 @@ function ConfirmShipBtn({ orderId, reload }: { orderId: string; reload: () => Pr
 }
 
 export const DunningPage = (): JSX.Element => (
-  <ListPage title="Mahnwesen" hint="Offene Posten / Mahnstufen (Gebühr + Historie, Kap. 9.5)."
+  <ListPage module="Finanzen / Mahnwesen" title="Mahnwesen" hint="Offene Posten / Mahnstufen (Gebühr + Historie, Kap. 9.5)."
     load={() => trpc.dunning.list.query({ limit: 100 }) as Promise<Row[]>}
     toolbar={(reload) => <RunDunningBtn reload={reload} />} />
 );
@@ -2089,27 +2089,41 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
 
   return (
     <>
-      <Title order={3}>Aufträge</Title>
-      <Text size="sm" c="dimmed" mt={4}>
-        {role === "PRODUKTION" ? "Rolle PRODUKTION: Preise/Kundendaten ausgeblendet (Kap. 12)." : "Status weiterschalten — illegale Übergänge blockiert (F2, Kap. 35.2)."}
-      </Text>
+      <DocListHeader
+        module="Vertrieb / Aufträge"
+        title="Aufträge"
+        hint={role === "PRODUKTION" ? "Rolle PRODUKTION: Preise/Kundendaten ausgeblendet (Kap. 12)." : "Status weiterschalten — illegale Übergänge blockiert (F2, Kap. 35.2)."}
+        action={canAct ? <Button size="xs" color="dark" onClick={() => { if (showCreate) resetOrderForm(); else setShowCreate(true); }}>{showCreate ? "Erfassung schließen" : "+ Auftrag manuell anlegen"}</Button> : undefined}
+      />
       {err && <Alert color="red" mt="sm">{err}</Alert>}
-      {canAct && (
-        <Box mt="sm">
-          <Button size="compact-sm" variant="light" onClick={() => { if (showCreate) resetOrderForm(); else setShowCreate(true); }}>{showCreate ? "Erfassung schließen" : "+ Auftrag manuell anlegen"}</Button>
-          {showCreate && (
-            <Box mt="xs" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
-              <Text size="sm" fw={600} mb={4}>{editOrderId ? "Auftrag bearbeiten" : "Neuer Auftrag"}</Text>
-              <CompanyPicker value={newCompany} onChange={setNewCompany} w={240} />
-              <LinesEditor lines={newLines} onChange={setNewLines} companyId={newCompany || undefined} />
-              <Collapsible title="Stickerei-Mengenstaffeln je Logo (Referenz)">
-                <StickereiStaffelnSection />
-              </Collapsible>
-              <Button mt="sm" disabled={!newCompany.trim() || toApiLines(newLines).length === 0} onClick={() => void saveOrder()}>
+      {canAct && showCreate && (
+        <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+          <DocFormShell
+            breadcrumb="Vertrieb / Aufträge"
+            title={editOrderId ? "Auftrag bearbeiten" : "Neuer Auftrag"}
+            status={editOrderId ? undefined : "Nicht gespeichert"}
+            statusColor="orange"
+            actions={<>
+              <Button variant="default" onClick={resetOrderForm}>Abbrechen</Button>
+              <Button color="dark" disabled={!newCompany.trim() || toApiLines(newLines).length === 0} onClick={() => void saveOrder()}>
                 {editOrderId ? "Änderungen speichern" : "Auftrag anlegen"}
               </Button>
-            </Box>
-          )}
+            </>}
+          >
+            <Tabs defaultValue="details" mt="md" keepMounted={false}>
+              <Tabs.List>
+                <Tabs.Tab value="details">Details</Tabs.Tab>
+                <Tabs.Tab value="stickerei">Stickerei-Referenz</Tabs.Tab>
+              </Tabs.List>
+              <Tabs.Panel value="details" pt="md">
+                <CompanyPicker value={newCompany} onChange={setNewCompany} w={240} />
+                <LinesEditor lines={newLines} onChange={setNewLines} companyId={newCompany || undefined} />
+              </Tabs.Panel>
+              <Tabs.Panel value="stickerei" pt="md">
+                <StickereiStaffelnSection />
+              </Tabs.Panel>
+            </Tabs>
+          </DocFormShell>
         </Box>
       )}
       <AutoTable rows={rows} hide={["rawPayload"]} action={!canAct ? undefined : (r) => {
