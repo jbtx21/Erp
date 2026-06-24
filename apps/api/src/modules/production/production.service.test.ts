@@ -18,6 +18,8 @@ class FakeRepo implements ProductionRepository {
   }
   async setOrderInProduction(orderId: string): Promise<void> { this.inProduction.push(orderId); }
   async releaseOrder(orderId: string): Promise<void> { this.released.push(orderId); if (this.order) this.order = { ...this.order, freigegeben: true }; }
+  facts: { orderValueCents: number; discountPct: number } = { orderValueCents: 0, discountPct: 0 };
+  async approvalFacts(): Promise<{ orderValueCents: number; discountPct: number } | null> { return this.order ? this.facts : null; }
   async status(): Promise<ProductionStatus | null> {
     return this.order ? { freigegeben: this.order.freigegeben, productionId: this.order.existingProductionId, productionNumber: this.order.existingProductionNumber, finishingProfile: null, dueDate: null } : null;
   }
@@ -133,5 +135,36 @@ describe("ProductionService — Auftrag → Produktionsauftrag (Kap. 5.2)", () =
     expect(audit.entries.at(-1)).toMatchObject({ entity: "Order", after: { freigegeben: true } });
     await svc.release("ord_1"); // idempotent: kein zweiter releaseOrder-Call
     expect(repo.released).toHaveLength(1);
+  });
+
+  it("Freigabe-Gate (K-10): BÜRO darf über der Rabattgrenze NICHT freigeben", async () => {
+    const { svc, repo } = svcFor(baseOrder({ freigegeben: false }));
+    repo.facts = { orderValueCents: 50000, discountPct: 20 };
+    await expect(
+      svc.release("ord_1", { role: "BUERO", thresholds: { maxDiscountPct: 15, maxOrderValueCents: null } })
+    ).rejects.toBeInstanceOf(ProductionError);
+    expect(repo.released).toHaveLength(0);
+  });
+
+  it("Freigabe-Gate: ADMIN darf über der Grenze freigeben", async () => {
+    const { svc, repo } = svcFor(baseOrder({ freigegeben: false }));
+    repo.facts = { orderValueCents: 50000, discountPct: 20 };
+    await svc.release("ord_1", { role: "ADMIN", thresholds: { maxDiscountPct: 15, maxOrderValueCents: null } });
+    expect(repo.released).toContain("ord_1");
+  });
+
+  it("Freigabe-Gate: BÜRO darf innerhalb der Grenzen freigeben", async () => {
+    const { svc, repo } = svcFor(baseOrder({ freigegeben: false }));
+    repo.facts = { orderValueCents: 50000, discountPct: 10 };
+    await svc.release("ord_1", { role: "BUERO", thresholds: { maxDiscountPct: 15, maxOrderValueCents: 100000 } });
+    expect(repo.released).toContain("ord_1");
+  });
+
+  it("Freigabe-Gate: greift über dem Auftragswert", async () => {
+    const { svc, repo } = svcFor(baseOrder({ freigegeben: false }));
+    repo.facts = { orderValueCents: 200000, discountPct: 0 };
+    await expect(
+      svc.release("ord_1", { role: "BUERO", thresholds: { maxDiscountPct: null, maxOrderValueCents: 100000 } })
+    ).rejects.toBeInstanceOf(ProductionError);
   });
 });

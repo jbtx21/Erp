@@ -80,6 +80,17 @@ export class PrismaProductionRepository implements ProductionRepository {
     await prisma.order.update({ where: { id: orderId }, data: { freigegeben: true } });
   }
 
+  async approvalFacts(orderId: string): Promise<{ orderValueCents: number; discountPct: number } | null> {
+    const o = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: { lines: { select: { qty: true, unitNetCents: true, rabattPct: true } } },
+    });
+    if (!o) return null;
+    const orderValueCents = o.lines.reduce((s, l) => s + l.qty * l.unitNetCents, 0);
+    const discountPct = o.lines.reduce((m, l) => Math.max(m, l.rabattPct ?? 0), 0);
+    return { orderValueCents, discountPct };
+  }
+
   async status(orderId: string): Promise<ProductionStatus | null> {
     const o = await prisma.order.findUnique({
       where: { id: orderId },

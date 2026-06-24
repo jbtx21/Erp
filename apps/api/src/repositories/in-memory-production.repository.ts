@@ -37,6 +37,15 @@ export class InMemoryProductionRepository implements ProductionRepository {
     if (o) o.freigegeben = true;
   }
 
+  /** Optionale Freigabe-Kennzahlen je Auftrag (für Gate-Tests setzbar). */
+  readonly approvalFactsByOrder = new Map<string, { orderValueCents: number; discountPct: number }>();
+  setApprovalFacts(orderId: string, facts: { orderValueCents: number; discountPct: number }): void { this.approvalFactsByOrder.set(orderId, facts); }
+
+  async approvalFacts(orderId: string): Promise<{ orderValueCents: number; discountPct: number } | null> {
+    if (!this.orders.has(orderId)) return null;
+    return this.approvalFactsByOrder.get(orderId) ?? { orderValueCents: 0, discountPct: 0 };
+  }
+
   async status(orderId: string): Promise<ProductionStatus | null> {
     const o = this.orders.get(orderId);
     if (!o) return null;

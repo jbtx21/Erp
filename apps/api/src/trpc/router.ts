@@ -882,8 +882,15 @@ export const appRouter = router({
     release: roleProcedure("ADMIN", "BUERO")
       .input(z.object({ orderId: z.string().min(1) }))
       .mutation(async ({ input, ctx }) => {
-        try { await ctx.production.release(input.orderId); return { ok: true as const }; }
-        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+        try {
+          // Freigabe-Gate (K-10): über der Rabatt-/Wertgrenze nur durch die Geschäftsleitung.
+          const s = await ctx.settings.get();
+          await ctx.production.release(input.orderId, {
+            role: ctx.user.role,
+            thresholds: { maxDiscountPct: s.maxDiscountPct, maxOrderValueCents: s.maxOrderValueEuro === null ? null : Math.round(s.maxOrderValueEuro * 100) },
+          });
+          return { ok: true as const };
+        } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
     // Terminvorschlag (Werktage-Rückwärtsterminierung) je Veredelungsweg — manuell zu bestätigen.
     schedulePreview: roleProcedure(...supplierRoles)

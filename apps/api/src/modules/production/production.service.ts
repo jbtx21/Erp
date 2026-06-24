@@ -6,9 +6,11 @@
 // (T-11) aus dem PA gerendert.
 
 import {
+  checkApproval,
   explodeComponents,
   FINISHING_LEAD_PROFILES,
   proposeProductionDueDate,
+  type ApprovalThresholds,
   type FinishingLeadProfile,
   type VariantComponentDef,
 } from "@texma/shared";
@@ -79,7 +81,22 @@ export interface ProductionRepository {
   /** Gibt den Auftrag für die Produktion frei (Kap. 5.2/7.2). */
   releaseOrder(orderId: string): Promise<void>;
   status(orderId: string): Promise<ProductionStatus | null>;
+  /** Kennzahlen für das Freigabe-Gate (K-10): Auftragswert + höchster Positionsrabatt. */
+  approvalFacts(orderId: string): Promise<{ orderValueCents: number; discountPct: number } | null>;
 }
+
+/** Optionen der Freigabe: GL-Gate gegen die Schwellen (K-10). */
+export interface ReleaseOptions {
+  /** Rolle des Freigebenden; nur ADMIN darf über den Schwellen freigeben. */
+  role?: string;
+  /** Freigabeschwellen (aus den Einstellungen); ohne Angabe greift kein Gate. */
+  thresholds?: ApprovalThresholds;
+}
+
+const APPROVAL_REASON_TEXT: Record<string, string> = {
+  RABATT_UEBER_SCHWELLE: "Rabatt über der Freigabegrenze",
+  AUFTRAGSWERT_UEBER_SCHWELLE: "Auftragswert über der Freigabegrenze",
+};
 
 export class ProductionError extends Error {}
 
@@ -97,12 +114,25 @@ export class ProductionService {
   }
 
   /** Gibt den Auftrag für die Produktion frei (Voraussetzung für den PA, Kap. 5.2/7.2). */
-  async release(orderId: string): Promise<void> {
+  async release(orderId: string, opts: ReleaseOptions = {}): Promise<void> {
     const s = await this.repo.status(orderId);
     if (!s) throw new ProductionError("Auftrag nicht gefunden.");
     if (s.freigegeben) return;
+
+    // Freigabe-Gate (K-10): über der Rabatt-/Wertgrenze nur durch die Geschäftsleitung.
+    if (opts.thresholds && opts.role !== "ADMIN") {
+      const facts = await this.repo.approvalFacts(orderId);
+      if (facts) {
+        const chk = checkApproval(facts, opts.thresholds);
+        if (chk.required) {
+          const why = chk.reasons.map((r) => APPROVAL_REASON_TEXT[r] ?? r).join(", ");
+          throw new ProductionError(`Freigabe nur durch die Geschäftsleitung (${why}).`);
+        }
+      }
+    }
+
     await this.repo.releaseOrder(orderId);
-    await this.audit.append(buildEntry({ entity: "Order", entityId: orderId, action: "UPDATE", after: { freigegeben: true } }));
+    await this.audit.append(buildEntry({ entity: "Order", entityId: orderId, action: "UPDATE", after: { freigegeben: true, freigegebenVon: opts.role ?? null } }));
   }
 
   /** Baut die Fertigungsstückliste aus den Auftragspositionen (Set → Komponenten × Menge). */
