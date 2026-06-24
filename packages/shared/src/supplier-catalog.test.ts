@@ -10,45 +10,43 @@ import {
 } from "./supplier-catalog.js";
 
 describe("mapIdIdentityCatalog (C3)", () => {
-  it("normalisiert Artikelnummer, Hersteller-SKU, EK und Bestand", () => {
+  it("mappt ProductFields.ItemId→supplierSku, EAN13Code→sku, Prices.Price.Price→EK, StockLevel", () => {
     const item = mapIdIdentityCatalog({
-      articleNumber: "IDI-0020",
-      manufacturerSku: "0020-RED-L",
-      purchasePriceEur: "5.90",
-      stock: 120,
+      StockLevel: 120,
+      ProductFields: { ItemId: "0020-001-007", EAN13Code: "5709245283029" },
+      Prices: { Price: { Price: "5.90" } },
     });
     expect(item).toEqual({
-      supplierSku: "IDI-0020",
-      sku: "0020-RED-L",
+      supplierSku: "0020-001-007",
+      sku: "5709245283029",
       ekCents: 590,
       availableQty: 120,
     });
   });
 
-  it("setzt availableQty auf null, wenn der Bestand fehlt", () => {
+  it("setzt availableQty auf null, wenn StockLevel fehlt", () => {
     const item = mapIdIdentityCatalog({
-      articleNumber: "IDI-0021",
-      manufacturerSku: "0021-BLK-M",
-      purchasePriceEur: 7.45,
+      ProductFields: { ItemId: "0021-002-003", EAN13Code: "5709245283030" },
+      Prices: { Price: { Price: 7.45 } },
     });
     expect(item.availableQty).toBeNull();
     expect(item.ekCents).toBe(745);
   });
 
-  it("wirft bei fehlender Hersteller-SKU", () => {
+  it("wirft bei fehlender EAN13Code", () => {
     expect(() =>
-      mapIdIdentityCatalog({ articleNumber: "IDI-0022", purchasePriceEur: "1.00" })
+      mapIdIdentityCatalog({ ProductFields: { ItemId: "0022-001-001" }, Prices: { Price: { Price: "1.00" } } })
     ).toThrow(SupplierCatalogError);
   });
 });
 
 describe("mapStanleyStellaCatalog (C3)", () => {
-  it("mappt Variantencode→supplierSku, EAN→sku, B2B-Preis→ekCents", () => {
+  it("mappt B2BSKUREF→supplierSku, EAN→sku, zusammengeführten EK/Bestand", () => {
     const item = mapStanleyStellaCatalog({
-      variantCode: "STTU755C001L",
-      ean: "3666341234567",
-      prices: { wholesale: "4.25" },
-      availableQuantity: 1500,
+      B2BSKUREF: "STTU755C001L",
+      EAN: "3666341234567",
+      ekEur: "4.25",
+      stockQty: 1500,
     });
     expect(item).toEqual({
       supplierSku: "STTU755C001L",
@@ -107,8 +105,8 @@ describe("mapSupplierCatalog Dispatcher", () => {
   it("verteilt eine Liste nach Connector-Art", () => {
     const items = mapSupplierCatalog(
       [
-        { articleNumber: "A1", manufacturerSku: "S1", purchasePriceEur: "1.00", stock: 5 },
-        { articleNumber: "A2", manufacturerSku: "S2", purchasePriceEur: "2.50", stock: 0 },
+        { StockLevel: 5, ProductFields: { ItemId: "A1", EAN13Code: "S1" }, Prices: { Price: { Price: "1.00" } } },
+        { StockLevel: 0, ProductFields: { ItemId: "A2", EAN13Code: "S2" }, Prices: { Price: { Price: "2.50" } } },
       ],
       "ID_IDENTITY"
     );

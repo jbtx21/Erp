@@ -42,41 +42,50 @@ export class SupplierCatalogError extends Error {
 const PriceLike = z.union([z.string(), z.number()]);
 const QtyLike = z.number().int().nonnegative().nullish();
 
-// ── ID Identity ──────────────────────────────────────────────────────────────
-// REST-Katalog: Lieferanten-Artikelnummer + Hersteller-SKU, EK in Euro, Bestand.
+// ── ID Identity (id.dk) ───────────────────────────────────────────────────────
+// Täglicher JSON-Feed (products-de-de.json, EUR). Eine Zeile je Variante. Schlüssel
+// laut Doku: ProductFields.ItemId ("0300-001-007" = Style-Farbe-Größe) → supplierSku,
+// ProductFields.EAN13Code (eindeutige Varianten-EAN) → interne Variant.sku,
+// StockLevel → Bestand, Prices.Price.Price (EUR) → EK. Die verschachtelten Preis-/
+// Bestandspfade sind die Doku-Lesart und vor Go-Live an einer Sample-Antwort zu prüfen.
 const IdIdentitySchema = z.object({
-  articleNumber: z.string().min(1), // Lieferanten-Artikelnummer → supplierSku
-  manufacturerSku: z.string().min(1), // Hersteller-SKU = interne Variant.sku
-  purchasePriceEur: PriceLike, // EK in Euro
-  stock: QtyLike,
+  StockLevel: QtyLike,
+  ProductFields: z.object({
+    ItemId: z.string().min(1),
+    EAN13Code: z.string().min(1),
+  }),
+  Prices: z.object({ Price: z.object({ Price: PriceLike }) }),
 });
 
 export function mapIdIdentityCatalog(raw: unknown): SupplierCatalogItem {
   const r = parse(IdIdentitySchema, raw, "ID Identity");
   return {
-    supplierSku: r.articleNumber,
-    sku: r.manufacturerSku,
-    ekCents: eurToCents(r.purchasePriceEur),
-    availableQty: r.stock ?? null,
+    supplierSku: r.ProductFields.ItemId,
+    sku: r.ProductFields.EAN13Code,
+    ekCents: eurToCents(r.Prices.Price.Price),
+    availableQty: r.StockLevel ?? null,
   };
 }
 
 // ── Stanley/Stella ───────────────────────────────────────────────────────────
-// Feed: Varianten-Code (S/S) + EAN, B2B-Preis in Euro, verfügbare Menge.
+// Die S/S-Produkt-API liefert Preis/Bestand nur veraltet — der Connector ruft Produkt-,
+// Preis- und Stock-API getrennt und führt sie zu EINEM Roh-Item zusammen (siehe
+// stanleystella-client). Kanonische Schlüssel laut Doku: B2BSKUREF (SKU) → supplierSku,
+// EAN → interne Variant.sku, EK in Euro aus der Preis-API, Bestand aus der Stock-API.
 const StanleyStellaSchema = z.object({
-  variantCode: z.string().min(1), // S/S-Variantencode → supplierSku
-  ean: z.string().min(1), // EAN = interne Variant.sku
-  prices: z.object({ wholesale: PriceLike }),
-  availableQuantity: QtyLike,
+  B2BSKUREF: z.string().min(1), // S/S-SKU → supplierSku
+  EAN: z.string().min(1), // EAN = interne Variant.sku
+  ekEur: PriceLike, // EK in Euro (aus get_prices, zusammengeführt)
+  stockQty: QtyLike, // Bestand (aus stock/get_json, zusammengeführt)
 });
 
 export function mapStanleyStellaCatalog(raw: unknown): SupplierCatalogItem {
   const r = parse(StanleyStellaSchema, raw, "Stanley/Stella");
   return {
-    supplierSku: r.variantCode,
-    sku: r.ean,
-    ekCents: eurToCents(r.prices.wholesale),
-    availableQty: r.availableQuantity ?? null,
+    supplierSku: r.B2BSKUREF,
+    sku: r.EAN,
+    ekCents: eurToCents(r.ekEur),
+    availableQty: r.stockQty ?? null,
   };
 }
 
