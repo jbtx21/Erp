@@ -575,7 +575,7 @@ export const ProductionReportingPage = (): JSX.Element => {
   );
 };
 
-export function SampleLoansPage(): JSX.Element {
+export function SampleLoansPage({ onOpen }: { onOpen?: (navKey: string, id: string) => void } = {}): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [companyId, setCompanyId] = useState("co-muster");
   const [variantId, setVariantId] = useState("var-polo-navy-l");
@@ -586,7 +586,8 @@ export function SampleLoansPage(): JSX.Element {
   // Mehrartikel-Leihe (mehrere Lieferanten)
   const [multiCompany, setMultiCompany] = useState("co-muster");
   const [multiZweck, setMultiZweck] = useState("Anprobe");
-  const [multiLines, setMultiLines] = useState<{ description: string; supplierId: string; menge: number }[]>([{ description: "", supplierId: "", menge: 1 }]);
+  const [multiLines, setMultiLines] = useState<{ description: string; variantId: string; supplierId: string; menge: number }[]>([{ description: "", variantId: "", supplierId: "", menge: 1 }]);
+  const [fromQuote, setFromQuote] = useState("");
 
   const load = useCallback(async () => {
     try { setRows((await trpc.sampleLoans.list.query()) as Row[]); setErr(null); }
@@ -601,9 +602,21 @@ export function SampleLoansPage(): JSX.Element {
 
   return (
     <>
-      <Title order={3}>Muster-Leihgut</Title>
-      <Text size="sm" c="dimmed" mt={4}>Ausgabe als Leihgut; Rückgabe unter 21 Tagen → keine Rechnung, sonst Musterrechnung zum Listenpreis (B5).</Text>
-      <Group mt="sm" gap="xs" align="end">
+      <DocListHeader module="Lager / Muster-Leihgut" title="Muster-Leihgut"
+        hint="Ausgabe als Leihgut; Rückgabe unter 21 Tagen → keine Rechnung, sonst Musterrechnung zum Listenpreis (B5). Aus Angebot wandelbar." />
+      <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, maxWidth: 560 }}>
+        <Text size="sm" fw={600}>Aus Angebot wandeln</Text>
+        <Text size="xs" c="dimmed" mb="xs">Angebot (Won-Verzweigung Muster/Anprobe) direkt in eine Muster-Leihe überführen.</Text>
+        <Group gap="xs" align="end">
+          <TextInput label="Angebots-ID" value={fromQuote} onChange={(e) => setFromQuote(e.currentTarget.value)} w={200} placeholder="quo-…" />
+          {onOpen && fromQuote.trim() && <Button variant="subtle" size="compact-sm" onClick={() => onOpen("quotes", fromQuote.trim())}>↗ Angebot öffnen</Button>}
+          <Button disabled={!fromQuote.trim()} onClick={() => void act(async () => {
+            await trpc.sampleLoans.convertQuote.mutate({ quoteId: fromQuote.trim() });
+            setFromQuote(""); setStatus("Angebot in Muster-Leihe gewandelt.");
+          })}>In Leihgut wandeln</Button>
+        </Group>
+      </Box>
+      <Group mt="md" gap="xs" align="end">
         <CompanyPicker value={companyId} onChange={setCompanyId} w={200} />
         <Box>
           <Text size="sm" fw={500} mb={2}>Artikel/Variante</Text>
@@ -632,17 +645,21 @@ export function SampleLoansPage(): JSX.Element {
         </Group>
         {multiLines.map((l, i) => (
           <Group key={i} gap="xs" mt={4} align="end">
-            <TextInput label={i === 0 ? "Artikel" : undefined} value={l.description} onChange={(e) => setMultiLines((ls) => ls.map((x, j) => j === i ? { ...x, description: e.currentTarget.value } : x))} w={240} placeholder="Polo blau M" />
+            <Box>
+              {i === 0 ? <Text size="sm" fw={500} mb={2}>Artikel (Stammdaten)</Text> : null}
+              <ArticlePicker onPick={(e) => setMultiLines((ls) => ls.map((x, j) => j === i ? { ...x, description: e.label, variantId: e.variantId } : x))} />
+              <TextInput mt={2} value={l.description} onChange={(e) => setMultiLines((ls) => ls.map((x, j) => j === i ? { ...x, description: e.currentTarget.value } : x))} w={240} placeholder="aus Katalog wählen oder frei" size="xs" />
+            </Box>
             <Box>{i === 0 ? <Text size="sm" fw={500} mb={2}>Lieferant</Text> : null}<SupplierPicker value={l.supplierId} onChange={(id) => setMultiLines((ls) => ls.map((x, j) => j === i ? { ...x, supplierId: id } : x))} w={180} /></Box>
             <NumberInput label={i === 0 ? "Menge" : undefined} value={l.menge} onChange={(v) => setMultiLines((ls) => ls.map((x, j) => j === i ? { ...x, menge: Number(v) || 1 } : x))} min={1} w={90} />
             <Button size="compact-sm" variant="subtle" color="red" disabled={multiLines.length === 1} onClick={() => setMultiLines((ls) => ls.filter((_, j) => j !== i))}>✕</Button>
           </Group>
         ))}
         <Group gap="xs" mt="xs">
-          <Button size="compact-xs" variant="light" onClick={() => setMultiLines((ls) => [...ls, { description: "", supplierId: "", menge: 1 }])}>+ Artikel</Button>
+          <Button size="compact-xs" variant="light" onClick={() => setMultiLines((ls) => [...ls, { description: "", variantId: "", supplierId: "", menge: 1 }])}>+ Artikel</Button>
           <Button size="compact-sm" disabled={!multiLines.some((l) => l.description.trim())} onClick={() => void act(async () => {
-            await trpc.sampleLoans.issueMulti.mutate({ companyId: multiCompany, zweck: multiZweck, lines: multiLines.filter((l) => l.description.trim()).map((l) => ({ description: l.description.trim(), supplierId: l.supplierId.trim() || undefined, menge: l.menge })) });
-            setMultiLines([{ description: "", supplierId: "", menge: 1 }]);
+            await trpc.sampleLoans.issueMulti.mutate({ companyId: multiCompany, zweck: multiZweck, lines: multiLines.filter((l) => l.description.trim()).map((l) => ({ description: l.description.trim(), variantId: l.variantId.trim() || undefined, supplierId: l.supplierId.trim() || undefined, menge: l.menge })) });
+            setMultiLines([{ description: "", variantId: "", supplierId: "", menge: 1 }]);
           })}>Mehrartikel-Leihe anlegen</Button>
         </Group>
       </Box>

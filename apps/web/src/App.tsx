@@ -360,7 +360,7 @@ function Page({ k, role, userName, onNavigate, onOpen, focusId }: { k: string; r
     case "procurement": return <ProcurementPage />;
     case "reorder": return <ReorderPage />;
     case "wareneingang": return <WareneingangPage />;
-    case "samples": return <SampleLoansPage />;
+    case "samples": return <SampleLoansPage onOpen={onOpen} />;
     case "products": return <ProductsPage focusId={focusId} />;
     case "pricing": return <PricingPage />;
     case "emailtemplates": return <EmailTemplatesPage />;
