@@ -1,6 +1,7 @@
 // Prisma-Read-Repo für die Belegkette eines Auftrags. Ein Query mit Includes über die
 // vorhandenen Relationen; daraus wird der phasen-gruppierte Graph gebaut.
 import { prisma } from "@texma/db";
+import { formatEur } from "@texma/shared";
 import type { ConnectionGroup, ConnectionNode, ConnectionsRepository, OrderConnections } from "../modules/connections/connections.service.js";
 
 export class PrismaConnectionsRepository implements ConnectionsRepository {
@@ -42,7 +43,7 @@ export class PrismaConnectionsRepository implements ConnectionsRepository {
     // Zahlung: offener Posten + zugeordnete Zahlungen
     if (o.invoice?.openItem) {
       const pay: ConnectionNode[] = [
-        { entity: "OpenItem", id: o.invoice.openItem.id, label: `Offen ${(o.invoice.openItem.openCents / 100).toFixed(2)} €`, status: o.invoice.openItem.openCents === 0 ? "BEZAHLT" : "OFFEN", navKey: "banking" },
+        { entity: "OpenItem", id: o.invoice.openItem.id, label: `Offen ${formatEur(o.invoice.openItem.openCents)}`, status: o.invoice.openItem.openCents === 0 ? "BEZAHLT" : "OFFEN", navKey: "banking" },
       ];
       for (const a of o.invoice.openItem.payments) pay.push({ entity: "Payment", id: a.payment.id, label: a.payment.externalRef ?? a.payment.id, navKey: "banking" });
       groups.push({ phase: "Zahlung", nodes: pay });

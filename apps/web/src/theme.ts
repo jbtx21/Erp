@@ -97,6 +97,8 @@ export const mantineTheme = createTheme({
     Button: { defaultProps: { radius: "sm" } },
     Alert: { defaultProps: { radius: "md", variant: "light" } },
     Tooltip: { defaultProps: { openDelay: 300, withArrow: true } },
+    // Deutsche Zahleneingabe: Dezimaltrenner = Komma, Tausender = Punkt (z. B. 1.234,56).
+    NumberInput: { defaultProps: { decimalSeparator: ",", thousandSeparator: "." } },
   },
 });
 

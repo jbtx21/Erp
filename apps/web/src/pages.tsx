@@ -3492,7 +3492,7 @@ export function EanImportPage(): JSX.Element {
                   <Table.Td>{r.fields.name}</Table.Td>
                   <Table.Td><Badge size="xs" variant="light" color={EAN_MATCH_COLOR[r.match]}>{r.match === "NONE" ? "neu" : r.match}</Badge></Table.Td>
                   <Table.Td><Text size="xs" c="dimmed">{r.matchLabel ?? "—"}</Text></Table.Td>
-                  <Table.Td ta="right">{r.fields.ekCents != null ? `${(r.fields.ekCents / 100).toFixed(2)} €` : "—"}</Table.Td>
+                  <Table.Td ta="right">{r.fields.ekCents != null ? euro(r.fields.ekCents) : "—"}</Table.Td>
                 </Table.Tr>
               ))}
             </Table.Tbody>
@@ -3533,7 +3533,8 @@ export function FinanceReportingPage(): JSX.Element {
 
   const exportCsv = (): void => {
     if (!data) return;
-    const lines = ["Bucket;Betrag (EUR)", ...buckets.map((b) => `${b.label};${(Number(data[b.key]) / 100).toFixed(2)}`), `Gesamt;${(total / 100).toFixed(2)}`];
+    const euroCsv = (cents: number): string => (cents / 100).toFixed(2).replace(".", ","); // dt. CSV (;-getrennt) → Komma
+    const lines = ["Bucket;Betrag (EUR)", ...buckets.map((b) => `${b.label};${euroCsv(Number(data[b.key]))}`), `Gesamt;${euroCsv(total)}`];
     downloadText(`op-aging-${asOf}.csv`, "﻿" + lines.join("\n"), "text/csv");
   };
 
