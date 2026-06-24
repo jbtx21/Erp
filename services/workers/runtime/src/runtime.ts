@@ -20,13 +20,28 @@ import { WooRestClient, runWooSync } from "@texma/connector-woocommerce";
 import { runSupplierSync } from "@texma/connector-supplier";
 import { dpdAuthFromEnv, runDpdShipments } from "@texma/connector-dpd";
 import { createOrderStatusUpdateHandler, type ShopWriter } from "./order-status-handler.js";
+import { ShopifyWriter } from "./shopify-writer.js";
 
-/** Baut den Shop-Schreibclient für eine Connector-Id aus den DB-Daten (Secret via Port). */
+/**
+ * Baut den Shop-Schreibclient je Connector-Art aus den DB-Daten (Secret via Port) —
+ * shop-übergreifend (WooCommerce/Shopify). So läuft die Status-/Tracking-Rückmeldung
+ * für jeden angebundenen Shop über denselben Outbox-Handler.
+ */
 function prismaShopWriterResolver(secrets: SecretsProvider) {
   return async (shopConnectorId: string): Promise<ShopWriter> => {
     const sc = await prisma.shopConnector.findUnique({ where: { id: shopConnectorId } });
-    if (!sc || !sc.consumerKey || !sc.consumerSecretEnc) {
+    if (!sc || !sc.consumerSecretEnc) {
       throw new Error(`ShopConnector ${shopConnectorId} ohne Zugangsdaten — Status-Push nicht möglich.`);
+    }
+    if (sc.kind === "SHOPIFY") {
+      // baseUrl = myshopify-Domain, Secret = Admin-API-Access-Token.
+      return new ShopifyWriter({
+        shopDomain: sc.baseUrl,
+        accessToken: await secrets.resolve(sc.consumerSecretEnc),
+      });
+    }
+    if (!sc.consumerKey) {
+      throw new Error(`ShopConnector ${shopConnectorId} (WooCommerce) ohne Consumer Key — Status-Push nicht möglich.`);
     }
     return new WooRestClient({
       baseUrl: sc.baseUrl,

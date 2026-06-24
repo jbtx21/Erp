@@ -3,8 +3,17 @@
 // Robuste Orchestrierung (Retry/Backoff/Rate-Limit, Outbox) ist bewusst Block C2 —
 // hier ein schlanker, paginierender „seit Cursor"-Poll.
 
-import type { WooStatus } from "@texma/shared";
+import type { Carrier, WooStatus } from "@texma/shared";
 import type { WooClient } from "./index.js";
+
+/** Was an die Shop-Bestellung geschrieben wird (Status + optional Tracking/Carrier/Link). */
+export interface ShopOrderStatusWrite {
+  externalNumber: string;
+  status: WooStatus;
+  trackingNumber?: string;
+  carrier?: Carrier;
+  trackingUrl?: string;
+}
 
 export interface WooRestClientOptions {
   baseUrl: string;
@@ -80,15 +89,15 @@ export class WooRestClient implements WooClient {
    * (T-06/T-09). PUT /wp-json/wc/v3/orders/{id}; die Trackingnummer wird als
    * Order-Meta (`_dpd_tracking`) gesetzt. `externalNumber` = Shop-Bestell-Id.
    */
-  async updateOrderStatus(
-    externalNumber: string,
-    status: WooStatus,
-    trackingNumber?: string
-  ): Promise<void> {
+  async updateOrderStatus(update: ShopOrderStatusWrite): Promise<void> {
+    const { externalNumber, status, trackingNumber, carrier, trackingUrl } = update;
     const url = `${this.base}/wp-json/wc/v3/orders/${encodeURIComponent(externalNumber)}`;
     const body: Record<string, unknown> = { status };
     if (trackingNumber) {
-      body.meta_data = [{ key: "_dpd_tracking", value: trackingNumber }];
+      const meta: Array<{ key: string; value: string }> = [{ key: "_dpd_tracking", value: trackingNumber }];
+      if (carrier) meta.push({ key: "_tracking_carrier", value: carrier });
+      if (trackingUrl) meta.push({ key: "_tracking_url", value: trackingUrl });
+      body.meta_data = meta;
     }
     const res = await this.fetchImpl(url, {
       method: "PUT",
