@@ -743,14 +743,14 @@ export type PositionKind = "TEXTIL" | "VEREDELUNG" | "SONSTIGE";
 // Eine Position kann auf eine konkrete Variante (variantId) ODER nur auf einen
 // Hauptartikel (articleId, Farbe×Größe noch offen) verweisen; isAlternative kennzeichnet
 // ein unverbindliches Alternativangebot (wird beim Wandeln in den Auftrag weggelassen).
-export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind; variantId?: string; articleId?: string; isAlternative?: boolean; ekEuro?: number; isBundle?: boolean; rabattPct?: number; taxRatePct?: number }
+export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind; variantId?: string; articleId?: string; articleNumber?: string; articleName?: string; isAlternative?: boolean; ekEuro?: number; isBundle?: boolean; rabattPct?: number; taxRatePct?: number }
 
 // Artikel-Picker: durchsuchbare Auswahl aus dem Artikelstamm (ERPNext „Link field").
 // Bei Auswahl wird eine Position vorbefüllt (Bezeichnung, Standardpreis, Variante).
 // Artikel-Picker: durchsuchbarer Katalog (Artikel×Variante) für die Positionserfassung.
 // Kein Treffer → „+ anlegen" öffnet ein kompaktes Inline-Formular (SKU + optional
 // Farbe/Größe); legt Artikel + Basis-Variante an und wählt sie direkt (ERPNext „Create a new…").
-export function ArticlePicker({ onPick }: { onPick: (e: { label: string; unitNetCents: number; variantId: string; isBundle?: boolean }) => void }): JSX.Element {
+export function ArticlePicker({ onPick }: { onPick: (e: { label: string; unitNetCents: number; variantId: string; isBundle?: boolean; sku?: string; articleName?: string; articleId?: string }) => void }): JSX.Element {
   const [catalog, setCatalog] = useState<Awaited<ReturnType<typeof trpc.products.catalog.query>>>([]);
   const [value, setValue] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -800,7 +800,7 @@ export function ArticlePicker({ onPick }: { onPick: (e: { label: string; unitNet
         }}
         onChange={(v) => {
           const e = catalog.find((c) => c.variantId === v);
-          if (e) onPick({ label: e.label, unitNetCents: e.unitNetCents, variantId: e.variantId, isBundle: e.isBundle });
+          if (e) onPick({ label: e.label, unitNetCents: e.unitNetCents, variantId: e.variantId, isBundle: e.isBundle, sku: e.sku, articleName: e.articleName, articleId: e.articleId });
           setValue(null);
         }} />
       {!creating && search.trim().length >= 2 && !hasMatch && (
@@ -828,7 +828,7 @@ export function ArticlePicker({ onPick }: { onPick: (e: { label: string; unitNet
               try {
                 const entry = await trpc.products.quickCreate.mutate({ sku: sku.trim(), name: search.trim(), ...(beschreibung.trim() ? { description: beschreibung.trim() } : {}), attributes });
                 await reload();
-                onPick({ label: entry.label, unitNetCents: entry.unitNetCents, variantId: entry.variantId });
+                onPick({ label: entry.label, unitNetCents: entry.unitNetCents, variantId: entry.variantId, sku: sku.trim(), articleName: search.trim() });
                 setValue(null); setSearch(""); reset();
               } catch (e) { setErr(e instanceof Error ? e.message : "Anlegen fehlgeschlagen."); }
             }}>Anlegen & übernehmen</Button>
@@ -843,7 +843,7 @@ export function ArticlePicker({ onPick }: { onPick: (e: { label: string; unitNet
 // Hauptartikel-Picker: wählt einen Artikel OHNE Festlegung auf Farbe×Größe (für
 // Angebote, wenn die genaue Variante noch offen ist). Beim Wandeln in den Auftrag wird
 // die Variante dann abgefragt. Aggregiert den Varianten-Katalog auf Artikel-Ebene.
-export function HauptartikelPicker({ onPick }: { onPick: (e: { articleId: string; articleName: string; unitNetCents: number }) => void }): JSX.Element {
+export function HauptartikelPicker({ onPick }: { onPick: (e: { articleId: string; articleName: string; unitNetCents: number; sku?: string }) => void }): JSX.Element {
   const [catalog, setCatalog] = useState<Awaited<ReturnType<typeof trpc.products.catalog.query>>>([]);
   const [value, setValue] = useState<string | null>(null);
   useEffect(() => { void (async () => { try { setCatalog(await trpc.products.catalog.query()); } catch { /* ignore */ } })(); }, []);
@@ -873,7 +873,7 @@ export function HauptartikelPicker({ onPick }: { onPick: (e: { articleId: string
       }}
       onChange={(v) => {
         const a = v ? articles.get(v) : null;
-        if (v && a) onPick({ articleId: v, articleName: a.articleName, unitNetCents: a.unitNetCents });
+        if (v && a) onPick({ articleId: v, articleName: a.articleName, unitNetCents: a.unitNetCents, sku: a.sku });
         setValue(null);
       }} />
   );
@@ -1071,6 +1071,11 @@ function LogoArticleDialog({ onClose, onCreated }: { onClose: () => void; onCrea
 export function LinesEditor({ lines, onChange, quoteMode = false, companyId, taxRate }: { lines: EditorLine[]; onChange: (l: EditorLine[]) => void; quoteMode?: boolean; companyId?: string; taxRate?: number }): JSX.Element {
   const fetchedTaxRate = useDefaultTaxRate();
   const effTaxRate = taxRate ?? fetchedTaxRate;
+  // Katalog laden → Varianten je Artikel für die Inline-Variantenwahl (Farbe×Größe) gruppieren.
+  const [catalog, setCatalog] = useState<Awaited<ReturnType<typeof trpc.products.catalog.query>>>([]);
+  useEffect(() => { void trpc.products.catalog.query().then(setCatalog).catch(() => undefined); }, []);
+  const variantsByArticle = new Map<string, typeof catalog>();
+  for (const c of catalog) { const arr = variantsByArticle.get(c.articleId) ?? []; arr.push(c); variantsByArticle.set(c.articleId, arr); }
   const set = (i: number, patch: Partial<EditorLine>): void => onChange(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
   // Aufschlagsfaktor-Konfiguration (Kap. 4.4) für die automatische VK-Ableitung aus dem EK.
   const [markupCfg, setMarkupCfg] = useState<MarkupConfig | null>(null);
@@ -1105,12 +1110,19 @@ export function LinesEditor({ lines, onChange, quoteMode = false, companyId, tax
       return { euro: r.netCents / 100, ...(r.ekCents != null ? { ekEuro: r.ekCents / 100 } : {}) };
     } catch { return {}; }
   };
-  const addFromCatalog = (e: { label: string; unitNetCents: number; variantId: string; isBundle?: boolean }): void => {
-    const idx = addLine({ description: e.label, qty: 1, euro: e.unitNetCents / 100, kind: "TEXTIL", variantId: e.variantId, isBundle: e.isBundle });
+  const addFromCatalog = (e: { label: string; unitNetCents: number; variantId: string; isBundle?: boolean; sku?: string; articleName?: string; articleId?: string }): void => {
+    const idx = addLine({ description: e.label, qty: 1, euro: e.unitNetCents / 100, kind: "TEXTIL", variantId: e.variantId, isBundle: e.isBundle, articleNumber: e.sku, articleName: e.articleName, articleId: e.articleId });
     void resolve(e.variantId, 1).then((p) => { if (p.euro !== undefined || p.ekEuro !== undefined) set(idx, p); });
   };
-  const addHauptartikel = (e: { articleId: string; articleName: string; unitNetCents: number }): void =>
-    void addLine({ description: e.articleName, qty: 1, euro: e.unitNetCents / 100, kind: "TEXTIL", articleId: e.articleId });
+  const addHauptartikel = (e: { articleId: string; articleName: string; unitNetCents: number; sku?: string }): void =>
+    void addLine({ description: e.articleName, qty: 1, euro: e.unitNetCents / 100, kind: "TEXTIL", articleId: e.articleId, articleNumber: e.sku, articleName: e.articleName });
+  // Inline-Variantenwahl: andere Farbe×Größe desselben Artikels wählen → Variante + Nr. + Preis übernehmen.
+  const pickVariant = (i: number, l: EditorLine, variantId: string): void => {
+    const v = catalog.find((c) => c.variantId === variantId);
+    if (!v) return;
+    set(i, { variantId, articleNumber: v.sku, articleName: v.articleName, isBundle: v.isBundle });
+    void resolve(variantId, l.qty).then((p) => { if (p.euro !== undefined || p.ekEuro !== undefined) set(i, p); });
+  };
   return (
     <Box>
       <Group gap="xs" mb={6}>
@@ -1125,11 +1137,19 @@ export function LinesEditor({ lines, onChange, quoteMode = false, companyId, tax
         const effEuro = effUnitEuro(l);
         const margePct = db !== null && effEuro > 0 ? (effEuro - (l.ekEuro ?? 0)) / effEuro : null;
         const hasRabatt = (l.rabattPct ?? 0) > 0;
+        const artVariants = l.articleId ? variantsByArticle.get(l.articleId) : undefined;
         return (
         <Group key={i} gap="xs" mt={4} align="end">
-          <Select label={i === 0 ? "Art" : undefined} w={120} value={l.kind} onChange={(v) => v && set(i, { kind: v as PositionKind })}
+          <Select label={i === 0 ? "Art" : undefined} w={110} value={l.kind} onChange={(v) => v && set(i, { kind: v as PositionKind })}
             data={[{ value: "TEXTIL", label: "Textil" }, { value: "VEREDELUNG", label: "Veredelung" }, { value: "SONSTIGE", label: "Sonstiges" }]} />
-          <TextInput label={i === 0 ? "Beschreibung" : undefined} value={l.description} onChange={(e) => set(i, { description: e.currentTarget.value })} placeholder="200 Polos bestickt" w={200} />
+          <TextInput label={i === 0 ? "Artikel-Nr." : undefined} value={l.articleNumber ?? ""} onChange={(e) => set(i, { articleNumber: e.currentTarget.value || undefined })} placeholder="—" w={110} title="Artikelnummer (SKU) — bei Katalogartikeln automatisch" />
+          <TextInput label={i === 0 ? "Artikelname" : undefined} value={l.articleName ?? ""} onChange={(e) => set(i, { articleName: e.currentTarget.value || undefined })} placeholder="—" w={150} title="Artikelname — bei Katalogartikeln automatisch" />
+          {artVariants && artVariants.length > 0 && (
+            <Select label={i === 0 ? "Variante" : undefined} w={150} value={l.variantId ?? null} searchable placeholder="Farbe×Größe"
+              data={artVariants.map((c) => ({ value: c.variantId, label: c.label }))}
+              onChange={(v) => v && pickVariant(i, l, v)} title="Variantenstruktur (Farbe×Größe) aus dem PIM" />
+          )}
+          <TextInput label={i === 0 ? "Beschreibung" : undefined} value={l.description} onChange={(e) => set(i, { description: e.currentTarget.value })} placeholder="200 Polos bestickt" w={180} />
           <NumberInput label={i === 0 ? "Menge" : undefined} value={l.qty} onChange={(v) => set(i, { qty: Number(v) || 1 })}
             onBlur={() => { if (companyId && l.variantId) void resolve(l.variantId, l.qty).then((p) => { if (p.euro !== undefined || p.ekEuro !== undefined) set(i, p); }); }}
             min={1} w={70} />
