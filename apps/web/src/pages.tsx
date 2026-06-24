@@ -4235,6 +4235,108 @@ export function LagerPage(): JSX.Element {
           </Table.Tbody>
         </Table>
       )}
+
+      <LagerVerfuegbarkeit />
+    </>
+  );
+}
+
+// Verfügbarkeit (Ist − reserviert), Vormerkung gegen Aufträge, Meldebestände mit
+// automatischer Benachrichtigung (Lager-Scheibe 1: Reservierung + Auto-Meldung).
+function LagerVerfuegbarkeit(): JSX.Element {
+  const [avail, setAvail] = useState<Awaited<ReturnType<typeof trpc.stock.availability.query>>>([]);
+  const [reservs, setReservs] = useState<Awaited<ReturnType<typeof trpc.stock.reservations.query>>>([]);
+  const [rv, setRv] = useState(""); const [rl, setRl] = useState("TRANSFERDRUCK"); const [rq, setRq] = useState(0); const [rref, setRref] = useState("");
+  const [tv, setTv] = useState(""); const [tl, setTl] = useState("TRANSFERDRUCK"); const [tq, setTq] = useState(0);
+  const [msg, setMsg] = useState<string | null>(null); const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const [a, r] = await Promise.all([trpc.stock.availability.query(), trpc.stock.reservations.query({ status: "AKTIV" })]);
+      setAvail(a); setReservs(r); setErr(null);
+    } catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  const wrap = async (fn: () => Promise<string>) => { setErr(null); setMsg(null); try { setMsg(await fn()); await load(); } catch (e) { setErr(errMsg(e)); } };
+
+  return (
+    <>
+      <Title order={4} mt="xl">Verfügbarkeit & Vormerkung</Title>
+      <Text size="sm" c="dimmed" mt={4}>Verfügbar = Ist − aktive Reservierungen. Unterschreitet der verfügbare Bestand den Meldebestand, geht automatisch eine Benachrichtigung an Büro/Admin (v. a. Transferdrucke).</Text>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      {msg && <Alert color="green" mt="sm">{msg}</Alert>}
+
+      <Group gap="md" mt="md" align="end" wrap="wrap">
+        <Box p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+          <Text size="sm" fw={600}>Bestand für Auftrag vormerken</Text>
+          <Group gap="xs" align="end" mt="xs">
+            <TextInput label="Varianten-ID" value={rv} onChange={(e) => setRv(e.currentTarget.value)} w={160} />
+            <Select label="Lager" value={rl} onChange={(v) => v && setRl(v)} data={LAGER.map((l) => ({ value: l.value, label: l.label }))} w={140} />
+            <NumberInput label="Menge" value={rq} onChange={(v) => setRq(Number(v) || 0)} min={1} w={90} />
+            <TextInput label="Beleg/Auftrag" value={rref} onChange={(e) => setRref(e.currentTarget.value)} w={130} />
+            <Button disabled={!rv.trim() || rq <= 0} onClick={() => void wrap(async () => {
+              const r = await trpc.stock.reserve.mutate({ variantId: rv, lager: rl as "HAUPT", qty: rq, belegRef: rref || undefined });
+              setRq(0); setRref(""); return `Vorgemerkt. Verfügbar jetzt: ${r.available}.`;
+            })}>Vormerken</Button>
+          </Group>
+        </Box>
+        <Box p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+          <Text size="sm" fw={600}>Meldebestand setzen</Text>
+          <Group gap="xs" align="end" mt="xs">
+            <TextInput label="Varianten-ID" value={tv} onChange={(e) => setTv(e.currentTarget.value)} w={160} />
+            <Select label="Lager" value={tl} onChange={(v) => v && setTl(v)} data={LAGER.map((l) => ({ value: l.value, label: l.label }))} w={140} />
+            <NumberInput label="Meldebestand" value={tq} onChange={(v) => setTq(Number(v) || 0)} min={0} w={120} />
+            <Button variant="light" disabled={!tv.trim()} onClick={() => void wrap(async () => {
+              await trpc.stock.setThreshold.mutate({ variantId: tv, lager: tl as "HAUPT", minQty: tq });
+              return tq > 0 ? "Meldebestand gesetzt." : "Meldebestand entfernt.";
+            })}>Speichern</Button>
+          </Group>
+        </Box>
+        <Button variant="default" onClick={() => void wrap(async () => {
+          const alerts = await trpc.stock.checkLowStock.mutate();
+          return alerts.length === 0 ? "Geprüft — keine neuen Unterschreitungen." : `${alerts.length} neue Meldung(en) versendet.`;
+        })}>Meldebestände prüfen</Button>
+      </Group>
+
+      {avail.length > 0 && (
+        <Table mt="md" withTableBorder withColumnBorders verticalSpacing="xs" fz="sm">
+          <Table.Thead><Table.Tr>
+            <Table.Th>SKU</Table.Th><Table.Th>Artikel</Table.Th><Table.Th>Lager</Table.Th>
+            <Table.Th ta="right">Ist</Table.Th><Table.Th ta="right">Reserviert</Table.Th><Table.Th ta="right">Verfügbar</Table.Th>
+            <Table.Th ta="right">Meldebestand</Table.Th><Table.Th>Status</Table.Th></Table.Tr></Table.Thead>
+          <Table.Tbody>
+            {avail.map((r) => (
+              <Table.Tr key={`${r.variantId}|${r.lager}`} style={r.below ? { background: "var(--mantine-color-red-0)" } : undefined}>
+                <Table.Td>{r.sku}</Table.Td><Table.Td>{r.name}</Table.Td><Table.Td>{r.lager}</Table.Td>
+                <Table.Td ta="right">{r.onHand}</Table.Td><Table.Td ta="right">{r.reserved}</Table.Td>
+                <Table.Td ta="right" fw={600}>{r.available}</Table.Td>
+                <Table.Td ta="right">{r.minQty ?? "—"}</Table.Td>
+                <Table.Td>{r.below ? <Badge color="red" variant="light" size="sm">unter Meldebestand</Badge> : r.minQty != null ? <Badge color="green" variant="light" size="sm">ok</Badge> : "—"}</Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      )}
+
+      {reservs.length > 0 && (
+        <>
+          <Title order={5} mt="lg">Aktive Vormerkungen</Title>
+          <Table mt="xs" withTableBorder verticalSpacing="xs" fz="sm">
+            <Table.Thead><Table.Tr><Table.Th>SKU</Table.Th><Table.Th>Lager</Table.Th><Table.Th ta="right">Menge</Table.Th><Table.Th>Beleg</Table.Th><Table.Th>Seit</Table.Th><Table.Th /></Table.Tr></Table.Thead>
+            <Table.Tbody>
+              {reservs.map((r) => (
+                <Table.Tr key={r.id}>
+                  <Table.Td>{r.sku}</Table.Td><Table.Td>{r.lager}</Table.Td><Table.Td ta="right">{r.qty}</Table.Td>
+                  <Table.Td>{r.belegRef ?? r.orderId ?? "—"}</Table.Td>
+                  <Table.Td>{new Date(r.createdAt).toLocaleDateString("de-DE")}</Table.Td>
+                  <Table.Td><Button size="compact-xs" variant="subtle" color="red" onClick={() => void wrap(async () => { await trpc.stock.release.mutate({ id: r.id, status: "STORNIERT" }); return "Vormerkung freigegeben."; })}>freigeben</Button></Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </>
+      )}
     </>
   );
 }

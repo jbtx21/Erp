@@ -27,6 +27,8 @@ import { CallLogService } from "../modules/call-log/call-log.service.js";
 import { InMemoryCallLogRepository } from "../repositories/in-memory-call-log.repository.js";
 import { MailAccountService } from "../modules/mail/mail-account.service.js";
 import { InMemoryMailAccountRepository } from "../repositories/in-memory-mail-account.repository.js";
+import { ReservationService } from "../modules/stock/reservation.service.js";
+import { InMemoryReservationRepository } from "../repositories/in-memory-reservation.repository.js";
 import { InquiryService } from "../modules/inquiry/inquiry.service.js";
 import { InMemoryInquiryRepository } from "../repositories/in-memory-inquiry.repository.js";
 import { SampleLoanService } from "../modules/sample/sample.service.js";
@@ -315,6 +317,7 @@ function setup(user: AuthUser | null = BUERO) {
     leads: new LeadService(new InMemoryLeadRepository(), new MemoryAuditSink()),
     callLogs: new CallLogService(new InMemoryCallLogRepository(), new MemoryAuditSink()),
     mailAccounts: new MailAccountService(new InMemoryMailAccountRepository(), null),
+    reservations: new ReservationService(new InMemoryReservationRepository(), { balance: async () => ({ HAUPT: 0, MUSTER: 0, SHOWROOM: 0, TRANSFERDRUCK: 0 }), listBalances: async () => [] }),
     inquiries: new InquiryService(new InMemoryInquiryRepository(), new NumberingService(new InMemoryNumberingRepository()), new MemoryAuditSink()),
     sampleLoans: new SampleLoanService(new InMemorySampleLoanRepository(), new NumberingService(new InMemoryNumberingRepository()), new MemoryAuditSink()),
     companies: new CompanyService(new InMemoryCompanyRepository(), new MemoryAuditSink()),
@@ -443,6 +446,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       leads: {} as Context["leads"],
       callLogs: {} as Context["callLogs"],
       mailAccounts: {} as Context["mailAccounts"],
+      reservations: {} as Context["reservations"],
       inquiries: {} as Context["inquiries"],
       sampleLoans: {} as Context["sampleLoans"],
       companies: {} as Context["companies"],

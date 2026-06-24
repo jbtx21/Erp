@@ -117,6 +117,8 @@ import { PrismaWorkflowRepository } from "./repositories/prisma-workflow.reposit
 import { SettingsService } from "./modules/settings/settings.service.js";
 import { PrismaSettingsRepository } from "./repositories/prisma-settings.repository.js";
 import { StockService } from "./modules/stock/stock.service.js";
+import { ReservationService } from "./modules/stock/reservation.service.js";
+import { PrismaReservationRepository } from "./repositories/prisma-reservation.repository.js";
 import { PrismaStockRepository } from "./repositories/prisma-stock.repository.js";
 import { InventoryService } from "./modules/inventory/inventory.service.js";
 import { HrService } from "./modules/hr/hr.service.js";
@@ -277,6 +279,17 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const settings = new SettingsService(new PrismaSettingsRepository(), new PrismaAuditSink());
   const stock = new StockService(new PrismaStockRepository(), new PrismaAuditSink());
   const inventory = new InventoryService(stock);
+  // Auto-Meldung bei Unterschreitung des Meldebestands → In-App-Benachrichtigung an
+  // alle aktiven ADMIN/BUERO-Nutzer (Lager-Verantwortliche).
+  const lowStockNotifier = {
+    async notify(alert: { sku: string; name: string; lager: string; available: number; minQty: number }): Promise<void> {
+      const recipients = await prisma.user.findMany({ where: { active: true, role: { in: ["ADMIN", "BUERO"] } }, select: { email: true } });
+      const title = `Meldebestand unterschritten: ${alert.sku}`;
+      const body = `${alert.name} (${alert.lager}): nur noch ${alert.available} verfügbar — Meldebestand ${alert.minQty}. Bitte nachbestellen.`;
+      await Promise.all(recipients.map((r) => notifications.notify(r.email, title, body, "lager")));
+    },
+  };
+  const reservations = new ReservationService(new PrismaReservationRepository(), stock, lowStockNotifier);
   const hr = new HrService(new PrismaHrRepository(), new PrismaAuditSink());
   const integrations = new IntegrationsService(new PrismaIntegrationsRepository(), new PrismaAuditSink(), new HttpSlackSender());
   // GoBD-Belegarchiv (Kap. 10): WORM-Objektspeicher. Lokal Dateisystem (Read-only-Dateien);
@@ -447,6 +460,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           mailIntake,
           mailSend,
           mailAccounts,
+          reservations,
           newsletter,
           opportunities,
           calendar,

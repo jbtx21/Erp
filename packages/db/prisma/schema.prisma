@@ -431,6 +431,8 @@ model Variant {
   goodsReceiptLines  GoodsReceiptLine[]
   stockLevel StockLevel? // Lager/Bestand (T-12) — materialisierter Cache des Ledgers
   stockMoves StockMove[] // Bewegungs-Ledger (F4)
+  stockReservations StockReservation[] // Vormerkungen gegen Aufträge
+  stockThresholds   StockThreshold[]   // Meldebestände je Lager
   priceTiers PriceGroupPriceTier[] // Preisgruppen-Mengenstaffel (B4)
   customerPriceTiers CustomerPriceTier[] // kundenindividuelle Staffel (B4)
   // Set/Bundle-Stückliste (Kap. 5.1): isBundle-Variante löst sich in Komponenten auf.
@@ -1305,6 +1307,46 @@ model StockMove {
 
   @@index([variantId, lager])
   @@index([createdAt])
+}
+
+// Vormerkung/Reservierung gegen laufende Aufträge: bindet Bestand an einen Beleg, ohne
+// ihn zu verbrauchen. Verfügbar = Ledger-Saldo − Summe AKTIVer Reservierungen (je Lager).
+enum StockReservationStatus {
+  AKTIV
+  ERLEDIGT // in Verbrauch/Lieferung überführt
+  STORNIERT
+}
+
+model StockReservation {
+  id         String                 @id @default(cuid())
+  variantId  String
+  variant    Variant                @relation(fields: [variantId], references: [id])
+  lager      StockLager             @default(HAUPT)
+  qty        Int // reservierte Menge (>0)
+  orderId    String? // auslösender Auftrag (optional)
+  belegRef   String? // Anzeige-Referenz (z. B. Auftragsnummer)
+  note       String?
+  status     StockReservationStatus @default(AKTIV)
+  createdAt  DateTime               @default(now())
+  releasedAt DateTime?
+
+  @@index([variantId, lager, status])
+  @@index([orderId])
+}
+
+// Meldebestand je Variante × Lager (v. a. Transferdrucke): unterschreitet der VERFÜGBARE
+// Bestand minQty, wird automatisch benachrichtigt. `alerting` ist eine Flankensteuerung,
+// damit nur beim Übergang gemeldet wird (kein wiederholtes Spammen).
+model StockThreshold {
+  id        String     @id @default(cuid())
+  variantId String
+  variant   Variant    @relation(fields: [variantId], references: [id])
+  lager     StockLager @default(TRANSFERDRUCK)
+  minQty    Int
+  alerting  Boolean    @default(false)
+  updatedAt DateTime   @updatedAt
+
+  @@unique([variantId, lager])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

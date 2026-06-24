@@ -1278,6 +1278,31 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         try { return await ctx.inventory.recordCount(input); } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
+
+    // Verfügbarkeit (Ist − reserviert), Vormerkung gegen Aufträge, Meldebestände.
+    availability: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.reservations.availability()),
+    reservations: roleProcedure(...supplierRoles)
+      .input(z.object({ variantId: z.string().optional(), orderId: z.string().optional(), status: z.enum(["AKTIV", "ERLEDIGT", "STORNIERT"]).optional(), lager: z.enum(["HAUPT", "MUSTER", "SHOWROOM", "TRANSFERDRUCK"]).optional() }).optional())
+      .query(({ input, ctx }) => ctx.reservations.listReservations(input)),
+    reserve: roleProcedure(...supplierRoles)
+      .input(z.object({
+        variantId: z.string().min(1),
+        lager: z.enum(["HAUPT", "MUSTER", "SHOWROOM", "TRANSFERDRUCK"]).default("HAUPT"),
+        qty: z.number().int().positive(),
+        orderId: z.string().nullable().optional(),
+        belegRef: z.string().nullable().optional(),
+        note: z.string().nullable().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => { try { return await ctx.reservations.reserve(input); } catch (e) { throw toTrpcError(e); } }),
+    release: roleProcedure(...supplierRoles)
+      .input(z.object({ id: z.string().min(1), status: z.enum(["ERLEDIGT", "STORNIERT"]).default("STORNIERT") }))
+      .mutation(async ({ input, ctx }) => { try { await ctx.reservations.release(input.id, input.status); return { ok: true as const }; } catch (e) { throw toTrpcError(e); } }),
+    thresholds: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.reservations.listThresholds()),
+    setThreshold: roleProcedure(...supplierRoles)
+      .input(z.object({ variantId: z.string().min(1), lager: z.enum(["HAUPT", "MUSTER", "SHOWROOM", "TRANSFERDRUCK"]).default("TRANSFERDRUCK"), minQty: z.number().int() }))
+      .mutation(async ({ input, ctx }) => { try { await ctx.reservations.setThreshold(input.variantId, input.lager, input.minQty); return { ok: true as const }; } catch (e) { throw toTrpcError(e); } }),
+    /** Meldebestände prüfen + bei Neu-Unterschreitung benachrichtigen (manuell/Cron). */
+    checkLowStock: roleProcedure(...supplierRoles).mutation(({ ctx }) => ctx.reservations.checkLowStock()),
   }),
 
   // Admin-Portal: zentrale Einstellungen (Briefkopf, Freigabeschwellen, Aufschlag).
