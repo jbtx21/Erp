@@ -56,12 +56,27 @@ export class PrismaInvoiceRepository implements InvoiceRepository {
     };
   }
 
-  async createCreditNoteAndNeutralize(input: { invoiceId: string; orderId: string | null; number: string; amountCents: number; reason: string }): Promise<{ id: string }> {
+  async createCreditNoteAndNeutralize(input: { invoiceId: string; orderId: string | null; number: string; amountCents: number; reason: string; restock: boolean }): Promise<{ id: string }> {
     return prisma.$transaction(async (tx) => {
       const cn = await tx.creditNote.create({ data: { number: input.number, invoiceId: input.invoiceId, amountCents: input.amountCents, reason: input.reason }, select: { id: true } });
       // Offenen Posten neutralisieren (Forderung entfällt) — Rechnung selbst bleibt WORM.
       await tx.openItem.updateMany({ where: { invoiceId: input.invoiceId }, data: { openCents: 0 } });
       if (input.orderId) await tx.order.update({ where: { id: input.orderId }, data: { fakturastatus: "NICHT" } });
+      // Retoure: gelieferte Mengen des Auftrags als Lager-Zugang (KORREKTUR) zurückbuchen —
+      // kehrt genau den Versand-Abgang um (nur was physisch ausging, kommt zurück).
+      if (input.restock && input.orderId) {
+        const delivered = await tx.deliveryNoteLine.findMany({
+          where: { deliveryNote: { orderId: input.orderId }, orderLine: { variantId: { not: null } } },
+          select: { qty: true, orderLine: { select: { variantId: true } } },
+        });
+        const byVariant = new Map<string, number>();
+        for (const d of delivered) { const v = d.orderLine.variantId!; byVariant.set(v, (byVariant.get(v) ?? 0) + d.qty); }
+        for (const [variantId, qty] of byVariant) {
+          if (qty <= 0) continue;
+          await tx.stockMove.create({ data: { variantId, deltaQty: qty, grund: "KORREKTUR", lager: "HAUPT", warehouseId: "wh_haupt", belegRef: `CreditNote:${input.number}` } });
+          await tx.stockLevel.upsert({ where: { variantId }, create: { variantId, qty }, update: { qty: { increment: qty } } });
+        }
+      }
       return { id: cn.id };
     });
   }

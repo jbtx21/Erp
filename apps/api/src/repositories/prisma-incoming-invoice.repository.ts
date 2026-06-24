@@ -38,10 +38,24 @@ export class PrismaIncomingInvoiceRepository
         taxCents: input.taxCents,
         grossCents: input.grossCents,
         receivedAt: input.issueDate,
+        purchaseOrderId: input.purchaseOrderId ?? null,
+        status: input.status ?? "ERFASST",
       },
       select: { id: true },
     });
     return inv;
+  }
+
+  /** Genau eine noch nicht vollständig erhaltene Bestellung des Lieferanten + deren Soll-Netto. */
+  async findSoleOpenPoForSupplier(supplierId: string): Promise<{ id: string; expectedNetCents: number } | null> {
+    const pos = await prisma.purchaseOrder.findMany({
+      where: { supplierId, status: { not: "ERHALTEN" } },
+      select: { id: true, lines: { select: { qty: true, ekCents: true } } },
+      take: 2,
+    });
+    if (pos.length !== 1) return null;
+    const po = pos[0]!;
+    return { id: po.id, expectedNetCents: po.lines.reduce((s, l) => s + l.qty * l.ekCents, 0) };
   }
 
   async listRecent(limit: number): Promise<IncomingInvoiceListItem[]> {

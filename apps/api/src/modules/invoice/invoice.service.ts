@@ -38,13 +38,15 @@ export interface InvoiceForCredit {
 export interface InvoiceRepository {
   loadOrderForInvoice(orderId: string): Promise<OrderForInvoice | null>;
   loadInvoiceForCredit(invoiceId: string): Promise<InvoiceForCredit | null>;
-  /** Legt die Gutschrift an, neutralisiert den offenen Posten und setzt fakturastatus zurück. */
+  /** Legt die Gutschrift an, neutralisiert den offenen Posten und setzt fakturastatus zurück.
+   *  `restock` bucht zusätzlich die gelieferten Mengen des Auftrags als Lager-Zugang zurück. */
   createCreditNoteAndNeutralize(input: {
     invoiceId: string;
     orderId: string | null;
     number: string;
     amountCents: number;
     reason: string;
+    restock: boolean;
   }): Promise<{ id: string }>;
   /** Legt Rechnung + offenen Posten an und meldet den Auftrag als fakturiert zurück. */
   createInvoiceFromOrder(input: {
@@ -106,7 +108,7 @@ export class InvoiceService {
    * NICHT zusätzlich „hart" storniert werden, sobald eine Vollgutschrift existiert
    * (verhindert die doppelte Entlastung — genau wie ERPNexts „linked documents"-Sperre).
    */
-  async cancelByCreditNote(invoiceId: string, reason: string): Promise<{ id: string; number: string; amountCents: number }> {
+  async cancelByCreditNote(invoiceId: string, reason: string, restock = false): Promise<{ id: string; number: string; amountCents: number }> {
     if (!reason.trim()) throw new InvoiceError("Gutschriftsgrund ist Pflicht.");
     const inv = await this.repo.loadInvoiceForCredit(invoiceId);
     if (!inv) throw new InvoiceError("Rechnung nicht gefunden.");
@@ -121,9 +123,10 @@ export class InvoiceService {
       number,
       amountCents: remaining,
       reason: reason.trim(),
+      restock,
     });
     await this.audit.append(
-      buildEntry({ entity: "CreditNote", entityId: id, action: "STORNO", after: { number, invoice: inv.number, amountCents: remaining, reason: reason.trim() } })
+      buildEntry({ entity: "CreditNote", entityId: id, action: "STORNO", after: { number, invoice: inv.number, amountCents: remaining, reason: reason.trim(), restock } })
     );
     return { id, number, amountCents: remaining };
   }

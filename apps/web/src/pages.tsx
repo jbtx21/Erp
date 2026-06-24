@@ -2284,8 +2284,9 @@ function ConnectionsPanel({ orderId, role, onChanged }: { orderId: string; role:
                 <Button size="compact-xs" variant="light" color="red" onClick={async () => {
                   const reason = window.prompt("Gutschriftsgrund (Storno der Rechnung):");
                   if (!reason) return;
+                  const restock = window.confirm("Ware zurück ins Lager buchen? (OK = Retoure: gelieferte Mengen werden als Zugang gebucht / Abbrechen = nur Finanz-Storno)");
                   setErr(null); setMsg(null);
-                  try { const r = await trpc.invoices.cancelByCreditNote.mutate({ invoiceId: invoiceNode.id, reason }); setMsg(`Gutschrift ${r.number} gebucht (Rechnung bleibt WORM).`); await load(); onChanged(); }
+                  try { const r = await trpc.invoices.cancelByCreditNote.mutate({ invoiceId: invoiceNode.id, reason, restock }); setMsg(`Gutschrift ${r.number} gebucht (Rechnung bleibt WORM)${restock ? " · Ware zurück ins Lager" : ""}.`); await load(); onChanged(); }
                   catch (e) { setErr(errMsg(e)); }
                 }}>Storno per Gutschrift</Button>
               )}

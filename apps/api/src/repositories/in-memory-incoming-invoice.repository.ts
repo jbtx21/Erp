@@ -14,7 +14,7 @@ export interface SeedSupplier {
   vatId?: string;
 }
 
-interface StoredInvoice extends CreateIncomingInvoiceInput {
+interface StoredInvoice extends Omit<CreateIncomingInvoiceInput, "status"> {
   id: string;
   status: string;
   receivedAt: Date;
@@ -45,8 +45,13 @@ export class InMemoryIncomingInvoiceRepository
 
   async createIncomingInvoice(input: CreateIncomingInvoiceInput): Promise<{ id: string }> {
     const id = `iinv_${++this.seq}`;
-    this.invoices.push({ id, status: "ERFASST", receivedAt: new Date(), ...input });
+    this.invoices.push({ id, receivedAt: new Date(), ...input, status: input.status ?? "ERFASST" });
     return { id };
+  }
+
+  /** Ohne PO-Stammdaten im Speicher: kein Auto-Match (Tests setzen das gezielt via Override). */
+  async findSoleOpenPoForSupplier(): Promise<{ id: string; expectedNetCents: number } | null> {
+    return null;
   }
 
   async listRecent(limit: number): Promise<IncomingInvoiceListItem[]> {

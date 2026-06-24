@@ -2116,9 +2116,9 @@ export const appRouter = router({
 
     /** Storno per Gutschrift (WORM): neutralisiert die Rechnung, ohne sie zu verändern. */
     cancelByCreditNote: roleProcedure("ADMIN", "BUCHHALTUNG")
-      .input(z.object({ invoiceId: z.string().min(1), reason: z.string().min(1) }))
+      .input(z.object({ invoiceId: z.string().min(1), reason: z.string().min(1), restock: z.boolean().optional() }))
       .mutation(async ({ input, ctx }) => {
-        try { return await ctx.invoices.cancelByCreditNote(input.invoiceId, input.reason); }
+        try { return await ctx.invoices.cancelByCreditNote(input.invoiceId, input.reason, input.restock ?? false); }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
   }),

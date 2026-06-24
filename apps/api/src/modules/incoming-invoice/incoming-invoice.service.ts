@@ -14,6 +14,8 @@ export interface CreateIncomingInvoiceInput {
   taxCents: number;
   grossCents: number;
   issueDate: Date;
+  purchaseOrderId?: string | null;
+  status?: "ERFASST" | "GEPRUEFT" | "GESPERRT";
 }
 
 export interface IncomingInvoiceRepository {
@@ -21,12 +23,14 @@ export interface IncomingInvoiceRepository {
   findSupplierByVatIdOrName(vatId: string | undefined, name: string): Promise<string | null>;
   findBySupplierAndNumber(supplierId: string, number: string): Promise<{ id: string } | null>;
   createIncomingInvoice(input: CreateIncomingInvoiceInput): Promise<{ id: string }>;
+  /** Genau eine offene Bestellung des Lieferanten (für Auto-Match); null bei 0 oder >1. */
+  findSoleOpenPoForSupplier(supplierId: string): Promise<{ id: string; expectedNetCents: number } | null>;
 }
 
 export type ClarificationReason = "VALIDIERUNG" | "LIEFERANT_UNBEKANNT";
 
 export type ReceiveResult =
-  | { status: "ERFASST"; incomingInvoiceId: string; supplierId: string; number: string; created: boolean }
+  | { status: "ERFASST" | "GEPRUEFT" | "GESPERRT"; incomingInvoiceId: string; supplierId: string; number: string; created: boolean; matched: boolean }
   | { status: "KLAERUNG"; reason: ClarificationReason; details: string[] };
 
 export class IncomingInvoiceService {
@@ -54,7 +58,19 @@ export class IncomingInvoiceService {
 
     const existing = await this.repo.findBySupplierAndNumber(supplierId, d.number);
     if (existing) {
-      return { status: "ERFASST", incomingInvoiceId: existing.id, supplierId, number: d.number, created: false };
+      return { status: "ERFASST", incomingInvoiceId: existing.id, supplierId, number: d.number, created: false, matched: false };
+    }
+
+    // 3-Way-Match-Auto-Trigger (Kap. 9.6): genau eine offene Bestellung des Lieferanten →
+    // automatischer Betragsabgleich (Netto). Innerhalb Toleranz (2 % bzw. min. 1 €) → GEPRUEFT,
+    // sonst GESPERRT (Sachbearbeiter prüft). Keine/mehrere offene POs → ERFASST (manuell).
+    const po = await this.repo.findSoleOpenPoForSupplier(supplierId);
+    let status: "ERFASST" | "GEPRUEFT" | "GESPERRT" = "ERFASST";
+    let purchaseOrderId: string | null = null;
+    if (po) {
+      purchaseOrderId = po.id;
+      const tol = Math.max(Math.round(po.expectedNetCents * 0.02), 100);
+      status = Math.abs(d.netCents - po.expectedNetCents) <= tol ? "GEPRUEFT" : "GESPERRT";
     }
 
     const created = await this.repo.createIncomingInvoice({
@@ -64,6 +80,8 @@ export class IncomingInvoiceService {
       taxCents: d.taxCents,
       grossCents: d.grossCents,
       issueDate: d.issueDate,
+      purchaseOrderId,
+      status,
     });
 
     await this.audit.append(
@@ -71,10 +89,10 @@ export class IncomingInvoiceService {
         entity: "IncomingInvoice",
         entityId: created.id,
         action: "CREATE",
-        after: { source: "einvoice.inbound", supplierId, number: d.number, grossCents: d.grossCents },
+        after: { source: "einvoice.inbound", supplierId, number: d.number, grossCents: d.grossCents, purchaseOrderId, status, autoMatched: po !== null },
       })
     );
 
-    return { status: "ERFASST", incomingInvoiceId: created.id, supplierId, number: d.number, created: true };
+    return { status, incomingInvoiceId: created.id, supplierId, number: d.number, created: true, matched: po !== null };
   }
 }

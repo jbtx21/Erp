@@ -50,7 +50,7 @@ export class InMemoryInvoiceRepository implements InvoiceRepository {
     return { id: i.id, number: i.number, grossCents: i.grossCents, finalized: true, orderId: i.orderId, alreadyCreditedCents: i.creditedCents };
   }
 
-  async createCreditNoteAndNeutralize(input: { invoiceId: string; orderId: string | null; number: string; amountCents: number; reason: string }): Promise<{ id: string }> {
+  async createCreditNoteAndNeutralize(input: { invoiceId: string; orderId: string | null; number: string; amountCents: number; reason: string; restock: boolean }): Promise<{ id: string }> {
     const i = this.invoices.find((x) => x.id === input.invoiceId)!;
     i.creditedCents += input.amountCents;
     i.openCents = Math.max(0, i.openCents - input.amountCents);
