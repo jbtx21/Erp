@@ -183,10 +183,62 @@ function PricingTools(): JSX.Element {
   return (
     <>
       <MarkupConfigCard config={config} onSaved={setConfig} />
+      <StickereiRouteCard />
       <LogoVerwaltung logos={logos} onChanged={reloadLogos} />
       <StickereiStaffeln config={config} logos={logos} />
       <Postcalc />
     </>
+  );
+}
+
+// ── Stickerei-Weg (Kap. 5.4): Direktauftrag vs. Ausschreibung je Firma ───────────
+// Wiederholer mit hinterlegtem Partner UND Stickdatei → Direktauftrag (Fremdvergabe an
+// den Partner). Neues Logo / kein Partner → Ausschreibung; ohne Stickdatei zusätzlich
+// Digitalisierung (Punch) nötig. Macht den von decideStickereiRoute ermittelten Weg sichtbar.
+function StickereiRouteCard(): JSX.Element {
+  const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
+  const [companyId, setCompanyId] = useState("");
+  const [plan, setPlan] = useState<Awaited<ReturnType<typeof trpc.stickerei.routeForCompany.query>> | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => { void (async () => { try { setCompanies(await trpc.stickerei.companies.query()); } catch { /* leer */ } })(); }, []);
+  const choose = async (id: string): Promise<void> => {
+    setCompanyId(id); setPlan(null); setErr(null);
+    if (!id) return;
+    try { setPlan(await trpc.stickerei.routeForCompany.query({ companyId: id })); }
+    catch (e) { setErr(errMsg(e)); }
+  };
+
+  const direkt = plan?.route === "DIREKT";
+  return (
+    <Card withBorder mt="md" padding="md">
+      <Title order={4}>Stickerei-Weg (Kap. 5.4)</Title>
+      <Text size="sm" c="dimmed" mt={4}>
+        Firma wählen — das System entscheidet Direktauftrag (Partner + Stickdatei vorhanden) oder Ausschreibung (neues Logo / kein Partner).
+      </Text>
+      <Group mt="sm" align="end" gap="md" wrap="wrap">
+        <Select label="Firma" placeholder="Firma wählen…" searchable w={280} value={companyId || null}
+          data={companies.map((c) => ({ value: c.id, label: c.name }))} onChange={(v) => void choose(v ?? "")} />
+        {plan && (
+          <Group gap="xs">
+            <Badge size="lg" variant="light" color={direkt ? "teal" : "orange"}>{direkt ? "Direktauftrag" : "Ausschreibung nötig"}</Badge>
+            {plan.needsDigitizing && <Badge size="lg" variant="light" color="grape">Digitalisierung (Punch)</Badge>}
+          </Group>
+        )}
+      </Group>
+      {err && <Text size="sm" c="red" mt="xs">{err}</Text>}
+      {plan && <Text size="sm" mt="sm">{plan.reason}</Text>}
+      {plan && !direkt && (
+        <Text size="xs" c="dimmed" mt={4}>
+          Nächster Schritt: Ausschreibung an die Stickerei-Partner (Stick-EK-Staffeln einholen &amp; vergleichen).
+        </Text>
+      )}
+      {plan && direkt && (
+        <Text size="xs" c="dimmed" mt={4}>
+          Nächster Schritt: Direktauftrag — die Veredelung läuft als Fremdvergabe (T-04) an den hinterlegten Partner.
+        </Text>
+      )}
+    </Card>
   );
 }
 
