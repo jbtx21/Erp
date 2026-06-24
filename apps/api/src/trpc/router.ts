@@ -1225,12 +1225,15 @@ export const appRouter = router({
   // Nur ADMIN (Geschäftsleitung).
   settings: router({
     get: roleProcedure("ADMIN").query(({ ctx }) => ctx.settings.get()),
+    /** Standard-Siebdruck-Veredler (Lieferant-ID) — operativ lesbar für die Vorbelegung. */
+    siebdruckVeredler: protectedProcedure.query(({ ctx }) => ctx.settings.siebdruckVeredlerId()),
     update: roleProcedure("ADMIN")
       .input(z.object({
         briefkopf: z.array(z.string()).optional(),
         maxDiscountPct: z.number().min(0).max(100).nullable().optional(),
         maxOrderValueEuro: z.number().min(0).nullable().optional(),
         markupFactor: z.number().positive().optional(),
+        siebdruckVeredlerId: z.string().nullable().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         try { await ctx.settings.update(input); return { ok: true as const }; }

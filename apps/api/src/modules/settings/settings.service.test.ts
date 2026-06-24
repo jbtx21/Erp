@@ -29,4 +29,14 @@ describe("SettingsService (Admin-Portal)", () => {
   it("lehnt ungültigen Aufschlagsfaktor ab", async () => {
     await expect(svc().update({ markupFactor: 0 })).rejects.toBeInstanceOf(SettingsError);
   });
+
+  it("speichert den Standard-Siebdruck-Veredler und liest ihn operativ", async () => {
+    const s = svc();
+    expect((await s.get()).siebdruckVeredlerId).toBeNull();
+    await s.update({ siebdruckVeredlerId: "sup_siebdruck" });
+    expect((await s.get()).siebdruckVeredlerId).toBe("sup_siebdruck");
+    expect(await s.siebdruckVeredlerId()).toBe("sup_siebdruck");
+    await s.update({ siebdruckVeredlerId: null }); // zurücksetzen
+    expect(await s.siebdruckVeredlerId()).toBeNull();
+  });
 });

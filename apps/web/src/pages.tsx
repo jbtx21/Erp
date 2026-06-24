@@ -990,6 +990,10 @@ function LogoArticleDialog({ onClose, onCreated }: { onClose: () => void; onCrea
   const [ek, setEk] = useState<number | "">("");
   const [tiers, setTiers] = useState<TierRow[]>([{ minMenge: 1, euro: 0 }]);
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
+  // Standard-Siebdruck-Veredler: bei Veredelungsart Siebdruck vorbelegen (sofern noch leer).
+  const [siebdruckDefault, setSiebdruckDefault] = useState<string | null>(null);
+  useEffect(() => { void (async () => { try { setSiebdruckDefault(await trpc.settings.siebdruckVeredler.query()); } catch { /* ignore */ } })(); }, []);
+  useEffect(() => { if (method === "DRUCK" && siebdruckDefault && !veredlerId) setVeredlerId(siebdruckDefault); }, [method, siebdruckDefault]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setTier = (i: number, patch: Partial<TierRow>): void => setTiers((ts) => ts.map((t, j) => (j === i ? { ...t, ...patch } : t)));
   const create = async (): Promise<void> => {
@@ -3772,6 +3776,7 @@ export function AdminPage(): JSX.Element {
   const [maxDiscount, setMaxDiscount] = useState<number | "">("");
   const [maxOrderValue, setMaxOrderValue] = useState<number | "">("");
   const [markup, setMarkup] = useState<number>(1.88);
+  const [siebdruckVeredler, setSiebdruckVeredler] = useState("");
   const [testTo, setTestTo] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -3783,6 +3788,7 @@ export function AdminPage(): JSX.Element {
       setMaxDiscount(s.maxDiscountPct ?? "");
       setMaxOrderValue(s.maxOrderValueEuro ?? "");
       setMarkup(s.markupFactor);
+      setSiebdruckVeredler(s.siebdruckVeredlerId ?? "");
       setErr(null);
     } catch (e) { setErr(errMsg(e)); }
   }, []);
@@ -3804,6 +3810,11 @@ export function AdminPage(): JSX.Element {
         <NumberInput label="Aufschlagsfaktor" value={markup} onChange={(v) => setMarkup(Number(v) || 1.88)} min={0.01} step={0.01} decimalScale={2} w={160} />
       </Group>
 
+      <Group gap="md" align="end" mt="md" wrap="wrap">
+        <SupplierPicker label="Standard-Veredler Siebdruck" value={siebdruckVeredler} onChange={setSiebdruckVeredler} w={300} />
+        <Text size="xs" c="dimmed" maw={360}>Wird bei „Logo/Veredelung anlegen" für die Veredelungsart Siebdruck als Veredler vorbelegt.</Text>
+      </Group>
+
       <Button mt="lg" onClick={async () => {
         setErr(null); setMsg(null);
         try {
@@ -3812,6 +3823,7 @@ export function AdminPage(): JSX.Element {
             maxDiscountPct: maxDiscount === "" ? null : maxDiscount,
             maxOrderValueEuro: maxOrderValue === "" ? null : maxOrderValue,
             markupFactor: markup,
+            siebdruckVeredlerId: siebdruckVeredler || null,
           });
           setMsg("Einstellungen gespeichert."); await load();
         } catch (e) { setErr(errMsg(e)); }

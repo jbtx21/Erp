@@ -5,6 +5,7 @@
 import { buildEntry, type AuditSink } from "@texma/audit";
 
 export const BRIEFKOPF_KEY = "briefkopf";
+export const SIEBDRUCK_VEREDLER_KEY = "siebdruck_veredler";
 
 export interface AppSettings {
   /** Briefkopf-Zeilen (Absender auf Lieferschein/Rechnung). */
@@ -14,6 +15,8 @@ export interface AppSettings {
   maxOrderValueEuro: number | null;
   /** Aufschlagsfaktor (Kap. 4.4). */
   markupFactor: number;
+  /** Standard-Veredler für Siebdruck (Lieferant-ID) — Vorbelegung bei Logo/Siebdruck. */
+  siebdruckVeredlerId: string | null;
 }
 
 export interface SettingsRepository {
@@ -36,21 +39,31 @@ export class SettingsService {
     return raw ? raw.split("\n").map((l) => l.trim()).filter(Boolean) : [];
   }
 
+  /** Standard-Siebdruck-Veredler (Lieferant-ID) — auch operativ lesbar für die Vorbelegung. */
+  async siebdruckVeredlerId(): Promise<string | null> {
+    const v = await this.repo.getSetting(SIEBDRUCK_VEREDLER_KEY);
+    return v && v.trim() ? v.trim() : null;
+  }
+
   async get(): Promise<AppSettings> {
-    const [briefkopf, thr, markupFactor] = await Promise.all([
-      this.briefkopf(), this.repo.getApprovalThreshold(), this.repo.getMarkupFactor(),
+    const [briefkopf, thr, markupFactor, siebdruckVeredlerId] = await Promise.all([
+      this.briefkopf(), this.repo.getApprovalThreshold(), this.repo.getMarkupFactor(), this.siebdruckVeredlerId(),
     ]);
     return {
       briefkopf,
       maxDiscountPct: thr.maxDiscountPct,
       maxOrderValueEuro: thr.maxOrderValueCents === null ? null : thr.maxOrderValueCents / 100,
       markupFactor,
+      siebdruckVeredlerId,
     };
   }
 
-  async update(patch: Partial<{ briefkopf: string[]; maxDiscountPct: number | null; maxOrderValueEuro: number | null; markupFactor: number }>): Promise<void> {
+  async update(patch: Partial<{ briefkopf: string[]; maxDiscountPct: number | null; maxOrderValueEuro: number | null; markupFactor: number; siebdruckVeredlerId: string | null }>): Promise<void> {
     if (patch.briefkopf !== undefined) {
       await this.repo.setSetting(BRIEFKOPF_KEY, patch.briefkopf.join("\n"));
+    }
+    if (patch.siebdruckVeredlerId !== undefined) {
+      await this.repo.setSetting(SIEBDRUCK_VEREDLER_KEY, patch.siebdruckVeredlerId?.trim() ?? "");
     }
     if (patch.maxDiscountPct !== undefined || patch.maxOrderValueEuro !== undefined) {
       const cur = await this.repo.getApprovalThreshold();
