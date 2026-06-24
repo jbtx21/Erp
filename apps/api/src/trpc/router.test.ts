@@ -309,7 +309,7 @@ function setup(user: AuthUser | null = BUERO) {
     postcalc,
     reklamation,
     ampel,
-    statusAmpel: { auftragsampel: async () => [] } as unknown as Context["statusAmpel"],
+    statusAmpel: { auftragsampel: async () => [], auftragDetail: async () => null, triggerFacts: async () => null } as unknown as Context["statusAmpel"],
     stickerei,
     reorder,
     productionSheet,

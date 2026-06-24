@@ -40,6 +40,9 @@ export interface FiredAction {
 
 const KNOWN_TRIGGERS = [
   "order.status.changed",
+  // Auftragsampel auf Auftragsebene: Prozessstufe gewechselt bzw. Ampel auf ROT (Eskalation).
+  "order.stage.changed",
+  "auftragsampel.red",
   "invoice.created",
   "invoice.credited",
   "lead.created",

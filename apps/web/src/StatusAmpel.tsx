@@ -121,6 +121,56 @@ function TerminAmpel({ level, leer }: { level: "ANGEBOT" | "PRODUKTION"; leer: s
   );
 }
 
+// ── Auftragsebene: Ampel-Matrix + Prozesskette EINES Auftrags (Auftragsdetail-Tab) ──
+type StageState = "DONE" | "AKTIV" | "OFFEN" | "NA";
+const STAGE_COLOR: Record<StageState, string> = { DONE: "green", AKTIV: "blue", OFFEN: "gray", NA: "gray" };
+const STAGE_ICON: Record<StageState, string> = { DONE: "✓", AKTIV: "→", OFFEN: "○", NA: "–" };
+
+export function OrderAmpelDetail({ orderId }: { orderId: string }): JSX.Element {
+  const [data, setData] = useState<Awaited<ReturnType<typeof trpc.ampel.auftragDetail.query>> | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => { void (async () => {
+    setLoading(true);
+    try { setData(await trpc.ampel.auftragDetail.query({ orderId })); setErr(null); }
+    catch (e) { setErr(errMsg(e)); } finally { setLoading(false); }
+  })(); }, [orderId]);
+
+  if (loading) return <Loader mt="md" />;
+  if (err) return <Alert color="red" mt="md">{err}</Alert>;
+  if (!data) return <Text c="dimmed" mt="md">Keine Daten.</Text>;
+
+  return (
+    <Group align="flex-start" gap="xl" mt="xs" wrap="wrap">
+      <Box style={{ minWidth: 260 }}>
+        <Group gap="xs" mb="xs">
+          <Text fw={600}>Auftragsampel</Text>
+          <Badge color={LAMP_COLOR[data.overall as Lamp]} variant="filled">{LAMP_LABEL[data.overall as Lamp]}</Badge>
+        </Group>
+        {data.checks.map((c) => (
+          <Group key={c.key} gap="sm" py={4} wrap="nowrap" style={{ borderBottom: "1px solid var(--mantine-color-gray-2)" }}>
+            <Dot lamp={c.lamp as Lamp} />
+            <Text size="sm" style={{ width: 140 }}>{c.label}</Text>
+            <Text size="xs" c="dimmed" style={{ flex: 1 }}>{c.hint}</Text>
+          </Group>
+        ))}
+      </Box>
+      <Box style={{ minWidth: 280 }}>
+        <Text fw={600} mb="xs">Prozesskette</Text>
+        {data.prozess.map((s) => (
+          <Group key={s.key} gap="sm" py={4} wrap="nowrap" style={{ opacity: s.state === "NA" ? 0.5 : 1 }}>
+            <Badge w={24} h={24} circle color={STAGE_COLOR[s.state as StageState]} variant={s.state === "AKTIV" ? "filled" : "light"} p={0}>{STAGE_ICON[s.state as StageState]}</Badge>
+            <Box>
+              <Text size="sm" fw={s.state === "AKTIV" ? 700 : 500}>{s.label}</Text>
+              <Text size="xs" c="dimmed">{s.hint}</Text>
+            </Box>
+          </Group>
+        ))}
+      </Box>
+    </Group>
+  );
+}
+
 export function StatusAmpelPage(): JSX.Element {
   return (
     <>

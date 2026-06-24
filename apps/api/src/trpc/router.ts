@@ -219,6 +219,18 @@ export const appRouter = router({
           await ctx.notifications.notify(ctx.user.email, `Auftrag → ${input.to}`, `Auftrag ${input.orderId} ist jetzt ${input.to}.`, "orders");
           // Regel-Engine: konfigurierte Automationen zum Statuswechsel auslösen (Event → Aktion).
           await ctx.automation.handleEvent("order.status.changed", { orderId: input.orderId, status: input.to, userEmail: ctx.user.email });
+          // Auftragsampel-Trigger: aktuelle Prozessstufe + Gesamtampel nachrechnen und als
+          // Events feuern (z. B. „Stufe versandfertig erreicht" → Benachrichtigung; „Ampel ROT"
+          // → Eskalation). Best-effort, blockiert den Statuswechsel nicht.
+          try {
+            const tf = await ctx.statusAmpel.triggerFacts(input.orderId);
+            if (tf) {
+              await ctx.automation.handleEvent("order.stage.changed", { orderId: input.orderId, stage: tf.stage, status: input.to, ampel: tf.overall, userEmail: ctx.user.email });
+              if (tf.overall === "ROT") {
+                await ctx.automation.handleEvent("auftragsampel.red", { orderId: input.orderId, status: input.to, blocker: tf.blocker ?? "", userEmail: ctx.user.email });
+              }
+            }
+          } catch { /* Trigger-Auswertung ist nicht kritisch für den Statuswechsel */ }
           // Rückmeldung (Kap. 4.2): Shop-Auftrag → Status an den Shop (inkl. Storno); Auftrag
           // ohne Shop → Versand-/Storno-Mail direkt an den Kunden (Workflow-Automatisierung).
           await ctx.orderStatusSync.onStatusChanged(input.orderId, input.to, { enqueueShopPush: true });
@@ -621,6 +633,15 @@ export const appRouter = router({
      *  Liefertermin, Lieferung, Faktura, Zahlung, Produktion, Freigabe, Liefersperre) + Gesamt. */
     auftragsampel: roleProcedure("ADMIN", "BUERO", "BUCHHALTUNG")
       .query(({ ctx }) => ctx.statusAmpel.auftragsampel()),
+
+    /** Auftragsampel + Prozesskette EINES Auftrags (Auftragsdetail-Tab, Auftragsebene). */
+    auftragDetail: roleProcedure("ADMIN", "BUERO", "BUCHHALTUNG")
+      .input(z.object({ orderId: z.string().min(1) }))
+      .query(async ({ input, ctx }) => {
+        const d = await ctx.statusAmpel.auftragDetail(input.orderId);
+        if (!d) throw new TRPCError({ code: "NOT_FOUND", message: "Auftrag nicht gefunden." });
+        return d;
+      }),
 
     /** Ebenenübergreifende Terminübersicht (Kap. 35.4): kritisch/ROT zuerst (operativ). */
     overview: protectedProcedure

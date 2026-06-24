@@ -12,6 +12,7 @@ import { AufschlagsfaktorenSection, LogosStickereiSection, StickereiAusschreibun
 import { euro, numTd, statusMantineColor, prettyStatus } from "./theme.js";
 import { MultiLineChart } from "./charts.js";
 import { DocFormShell, DocListHeader, StatusDot } from "./doc-layout.js";
+import { OrderAmpelDetail } from "./StatusAmpel.js";
 
 type Row = Record<string, unknown>;
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
@@ -2407,6 +2408,7 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
               <Tabs.List>
                 <Tabs.Tab value="details">Details</Tabs.Tab>
                 <Tabs.Tab value="stickerei">Stickerei-Referenz</Tabs.Tab>
+                {editOrderId && <Tabs.Tab value="ampel">Auftragsampel</Tabs.Tab>}
               </Tabs.List>
               <Tabs.Panel value="details" pt="md">
                 <CompanyPicker value={newCompany} onChange={setNewCompany} w={240} />
@@ -2415,6 +2417,11 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
               <Tabs.Panel value="stickerei" pt="md">
                 <StickereiStaffelnSection />
               </Tabs.Panel>
+              {editOrderId && (
+                <Tabs.Panel value="ampel" pt="md">
+                  <OrderAmpelDetail orderId={editOrderId} />
+                </Tabs.Panel>
+              )}
             </Tabs>
           </DocFormShell>
         </Box>
