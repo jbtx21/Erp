@@ -10,6 +10,9 @@ import {
   type StickereiStaffel,
 } from "@texma/shared";
 import type {
+  AusschreibungRaw,
+  AusschreibungStatus,
+  AusschreibungSummary,
   CompanyOption,
   LogoFile,
   LogoMarkupContext,
@@ -267,5 +270,100 @@ export class PrismaStickereiRepository implements StickereiRepository {
 
   async setLogoOverride(logoVersionId: string, factor: number | null): Promise<void> {
     await prisma.logoVersion.update({ where: { id: logoVersionId }, data: { markupFactor: factor } });
+  }
+
+  async createAusschreibung(logoVersionId: string): Promise<{ id: string }> {
+    return prisma.stickereiAusschreibung.create({ data: { logoVersionId }, select: { id: true } });
+  }
+
+  async addAngebot(
+    ausschreibungId: string,
+    supplierId: string,
+    staffeln: ReadonlyArray<StickereiStaffel>,
+    notiz: string | null
+  ): Promise<{ id: string }> {
+    return prisma.stickereiAngebot.create({
+      data: {
+        ausschreibungId,
+        supplierId,
+        notiz,
+        staffeln: { create: staffeln.map((s) => ({ minMenge: s.minMenge, ekCents: s.ekCents })) },
+      },
+      select: { id: true },
+    });
+  }
+
+  async listAusschreibungen(logoVersionId: string): Promise<AusschreibungSummary[]> {
+    const rows = await prisma.stickereiAusschreibung.findMany({
+      where: { logoVersionId },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, logoVersionId: true, status: true, gewinnerAngebotId: true, createdAt: true, _count: { select: { angebote: true } } },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      logoVersionId: r.logoVersionId,
+      status: r.status as AusschreibungStatus,
+      gewinnerAngebotId: r.gewinnerAngebotId,
+      angebotCount: r._count.angebote,
+      createdAt: r.createdAt,
+    }));
+  }
+
+  async getAusschreibung(id: string): Promise<AusschreibungRaw | null> {
+    const a = await prisma.stickereiAusschreibung.findUnique({
+      where: { id },
+      include: {
+        angebote: {
+          orderBy: { createdAt: "asc" },
+          include: { supplier: { select: { name: true } }, staffeln: { orderBy: { minMenge: "asc" } } },
+        },
+      },
+    });
+    if (!a) return null;
+    return {
+      id: a.id,
+      logoVersionId: a.logoVersionId,
+      status: a.status as AusschreibungStatus,
+      gewinnerAngebotId: a.gewinnerAngebotId,
+      angebote: a.angebote.map((ang) => ({
+        id: ang.id,
+        supplierId: ang.supplierId,
+        supplierName: ang.supplier?.name ?? null,
+        notiz: ang.notiz,
+        staffeln: ang.staffeln.map((s) => ({ minMenge: s.minMenge, ekCents: s.ekCents })),
+      })),
+    };
+  }
+
+  async decideAusschreibung(ausschreibungId: string, gewinnerAngebotId: string): Promise<{ logoVersionId: string }> {
+    return prisma.$transaction(async (tx) => {
+      const ausschreibung = await tx.stickereiAusschreibung.findUnique({
+        where: { id: ausschreibungId },
+        select: { id: true, status: true, logoVersionId: true, logoVersion: { select: { companyId: true } } },
+      });
+      if (!ausschreibung) throw new Error(`Ausschreibung ${ausschreibungId} nicht gefunden.`);
+      if (ausschreibung.status !== "OFFEN") throw new Error("Ausschreibung ist nicht (mehr) offen.");
+
+      const angebot = await tx.stickereiAngebot.findUnique({
+        where: { id: gewinnerAngebotId },
+        include: { staffeln: true },
+      });
+      if (!angebot || angebot.ausschreibungId !== ausschreibungId) {
+        throw new Error("Gewinner-Angebot gehört nicht zu dieser Ausschreibung.");
+      }
+
+      await tx.stickereiAusschreibung.update({
+        where: { id: ausschreibungId },
+        data: { status: "ENTSCHIEDEN", gewinnerAngebotId, decidedAt: new Date() },
+      });
+      // Lieferant als Stickerei-Partner der Firma hinterlegen.
+      await tx.company.update({ where: { id: ausschreibung.logoVersion.companyId }, data: { stickereiPartnerId: angebot.supplierId } });
+      // Gewinner-Staffeln ans Logo übernehmen (Set-Semantik).
+      await tx.stickereiStaffel.deleteMany({ where: { logoVersionId: ausschreibung.logoVersionId } });
+      await tx.stickereiStaffel.createMany({
+        data: angebot.staffeln.map((s) => ({ logoVersionId: ausschreibung.logoVersionId, minMenge: s.minMenge, ekCents: s.ekCents })),
+      });
+      return { logoVersionId: ausschreibung.logoVersionId };
+    });
   }
 }

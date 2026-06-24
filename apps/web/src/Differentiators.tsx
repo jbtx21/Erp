@@ -186,6 +186,7 @@ function PricingTools(): JSX.Element {
       <StickereiRouteCard />
       <LogoVerwaltung logos={logos} onChanged={reloadLogos} />
       <StickereiStaffeln config={config} logos={logos} />
+      <StickereiAusschreibungen logos={logos} onDecided={reloadLogos} />
       <Postcalc />
     </>
   );
@@ -266,6 +267,124 @@ function StickereiRouteCard(): JSX.Element {
         <Text size="xs" c="dimmed" mt={4}>
           Nächster Schritt: Direktauftrag — die Veredelung läuft als Fremdvergabe (T-04) an den hinterlegten Partner.
         </Text>
+      )}
+    </Card>
+  );
+}
+
+// ── Ausschreibung (RfQ) je Logo (Kap. 5.4) ───────────────────────────────────────
+// Mehrere Stickerei-Angebote (Stick-EK-Staffeln) erfassen, VK je Stufe vergleichen und
+// den Gewinner wählen — übernimmt Lieferant als Firmen-Partner und die Staffeln ans Logo.
+type AusschreibungDetail = Awaited<ReturnType<typeof trpc.stickerei.ausschreibung.get.query>>;
+function StickereiAusschreibungen({ logos, onDecided }: { logos: LogoOption[]; onDecided: () => Promise<void> | void }): JSX.Element {
+  const [logoVersionId, setLogoVersionId] = useState("");
+  const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([]);
+  const [list, setList] = useState<Awaited<ReturnType<typeof trpc.stickerei.ausschreibung.list.query>>>([]);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<AusschreibungDetail>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [supplierId, setSupplierId] = useState<string | null>(null);
+  const [notiz, setNotiz] = useState("");
+  const [staffeln, setStaffeln] = useState<{ minMenge: number | ""; euro: number | "" }[]>([{ minMenge: 1, euro: "" }]);
+
+  useEffect(() => { void (async () => { try { setSuppliers((await trpc.suppliers.listAll.query()).map((s) => ({ id: s.id, name: s.name }))); } catch { /* leer */ } })(); }, []);
+  const loadList = useCallback(async (id: string) => {
+    if (!id) { setList([]); return; }
+    try { setList(await trpc.stickerei.ausschreibung.list.query({ logoVersionId: id })); } catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void loadList(logoVersionId); }, [logoVersionId, loadList]);
+  const loadDetail = useCallback(async (id: string | null) => {
+    if (!id) { setDetail(null); return; }
+    try { setDetail(await trpc.stickerei.ausschreibung.get.query({ id })); } catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void loadDetail(openId); }, [openId, loadDetail]);
+
+  const create = async (): Promise<void> => {
+    setErr(null);
+    try { const { id } = await trpc.stickerei.ausschreibung.create.mutate({ logoVersionId }); await loadList(logoVersionId); setOpenId(id); }
+    catch (e) { setErr(errMsg(e)); }
+  };
+  const addAngebot = async (): Promise<void> => {
+    if (!openId || !supplierId) return;
+    setErr(null);
+    const rows = staffeln
+      .filter((s) => s.minMenge !== "" && s.euro !== "")
+      .map((s) => ({ minMenge: Number(s.minMenge), ekCents: Math.round(Number(s.euro) * 100) }));
+    if (rows.length === 0) { setErr("Mindestens eine Staffel mit Menge und EK erfassen."); return; }
+    try {
+      await trpc.stickerei.ausschreibung.addAngebot.mutate({ ausschreibungId: openId, supplierId, notiz: notiz.trim() || undefined, staffeln: rows });
+      setSupplierId(null); setNotiz(""); setStaffeln([{ minMenge: 1, euro: "" }]);
+      await loadDetail(openId);
+    } catch (e) { setErr(errMsg(e)); }
+  };
+  const decide = async (gewinnerAngebotId: string): Promise<void> => {
+    if (!openId || (typeof window !== "undefined" && !window.confirm("Dieses Angebot als Gewinner wählen? Partner + Staffeln werden ans Logo übernommen."))) return;
+    setErr(null);
+    try { await trpc.stickerei.ausschreibung.decide.mutate({ ausschreibungId: openId, gewinnerAngebotId }); await loadDetail(openId); await loadList(logoVersionId); await onDecided(); }
+    catch (e) { setErr(errMsg(e)); }
+  };
+
+  const entschieden = detail?.status !== "OFFEN";
+  return (
+    <Card withBorder mt="md" padding="md">
+      <Title order={4}>Ausschreibung je Logo (Kap. 5.4)</Title>
+      <Text size="sm" c="dimmed" mt={4}>Per Mail eingeholte Stickerei-Angebote erfassen, VK je Stufe vergleichen, Gewinner wählen — übernimmt Partner + Staffeln automatisch.</Text>
+      <Group mt="sm" align="end" gap="md" wrap="wrap">
+        <Select label="Logo" placeholder="Logo wählen…" searchable w={300} value={logoVersionId || null}
+          data={logos.map((l) => ({ value: l.id, label: l.label }))} onChange={(v) => { setLogoVersionId(v ?? ""); setOpenId(null); }} />
+        {logoVersionId && <Button variant="light" onClick={() => void create()}>Neue Ausschreibung</Button>}
+      </Group>
+      {list.length > 0 && (
+        <Group mt="sm" gap="xs" wrap="wrap">
+          {list.map((a) => (
+            <Button key={a.id} size="compact-sm" variant={openId === a.id ? "filled" : "default"} onClick={() => setOpenId(a.id)}>
+              {new Date(a.createdAt).toLocaleDateString("de-DE")} · {a.angebotCount} Angebote · {a.status === "OFFEN" ? "offen" : a.status === "ENTSCHIEDEN" ? "entschieden" : "abgebrochen"}
+            </Button>
+          ))}
+        </Group>
+      )}
+      {err && <Text size="sm" c="red" mt="xs">{err}</Text>}
+      {detail && (
+        <>
+          <Table mt="md" withTableBorder verticalSpacing="xs" fz="sm">
+            <Table.Thead><Table.Tr>
+              <Table.Th>Stickerei</Table.Th><Table.Th>Notiz</Table.Th><Table.Th>Staffeln (Menge → EK / VK)</Table.Th><Table.Th /></Table.Tr></Table.Thead>
+            <Table.Tbody>
+              {detail.angebote.map((ang) => {
+                const win = detail.gewinnerAngebotId === ang.id;
+                return (
+                  <Table.Tr key={ang.id} style={win ? { background: "var(--mantine-color-teal-0)" } : undefined}>
+                    <Table.Td>{ang.supplierName ?? ang.supplierId}{win && <Badge ml="xs" size="sm" color="teal" variant="light">Gewinner</Badge>}</Table.Td>
+                    <Table.Td>{ang.notiz ?? "—"}</Table.Td>
+                    <Table.Td>{ang.staffeln.map((s) => `${s.minMenge}: ${euro(s.ekCents)} / ${euro(s.vkCents)}`).join("  ·  ")}</Table.Td>
+                    <Table.Td>{!entschieden && <Button size="compact-xs" color="green" onClick={() => void decide(ang.id)}>Wählen</Button>}</Table.Td>
+                  </Table.Tr>
+                );
+              })}
+              {detail.angebote.length === 0 && <Table.Tr><Table.Td colSpan={4}><Text size="sm" c="dimmed">Noch keine Angebote erfasst.</Text></Table.Td></Table.Tr>}
+            </Table.Tbody>
+          </Table>
+          {!entschieden && (
+            <Card withBorder mt="sm" padding="sm" bg="gray.0">
+              <Text size="sm" fw={600}>Angebot erfassen</Text>
+              <Group mt="xs" align="end" gap="sm" wrap="wrap">
+                <Select label="Stickerei" placeholder="Lieferant" searchable w={220} value={supplierId} data={suppliers.map((s) => ({ value: s.id, label: s.name }))} onChange={setSupplierId} />
+                <TextInput label="Notiz (optional)" w={180} value={notiz} onChange={(e) => setNotiz(e.currentTarget.value)} />
+              </Group>
+              {staffeln.map((s, i) => (
+                <Group key={i} mt="xs" gap="sm" align="end">
+                  <NumberInput label={i === 0 ? "ab Menge" : undefined} w={120} min={1} value={s.minMenge} onChange={(v) => setStaffeln((rows) => rows.map((r, j) => j === i ? { ...r, minMenge: typeof v === "number" ? v : "" } : r))} />
+                  <NumberInput label={i === 0 ? "Stick-EK je Stück (€)" : undefined} w={180} min={0} decimalScale={2} value={s.euro} onChange={(v) => setStaffeln((rows) => rows.map((r, j) => j === i ? { ...r, euro: typeof v === "number" ? v : "" } : r))} />
+                  {staffeln.length > 1 && <Button size="compact-xs" variant="subtle" color="red" onClick={() => setStaffeln((rows) => rows.filter((_, j) => j !== i))}>entfernen</Button>}
+                </Group>
+              ))}
+              <Group mt="xs" gap="sm">
+                <Button size="compact-xs" variant="default" onClick={() => setStaffeln((rows) => [...rows, { minMenge: "", euro: "" }])}>+ Staffel</Button>
+                <Button size="compact-sm" disabled={!supplierId} onClick={() => void addAngebot()}>Angebot hinzufügen</Button>
+              </Group>
+            </Card>
+          )}
+        </>
       )}
     </Card>
   );

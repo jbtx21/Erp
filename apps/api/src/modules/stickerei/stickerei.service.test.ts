@@ -47,6 +47,59 @@ describe("StickereiService.routeForCompany (Kap. 5.4)", () => {
   });
 });
 
+describe("StickereiService Ausschreibung/RfQ (Kap. 5.4)", () => {
+  function rfqService() {
+    return new StickereiService(
+      new InMemoryStickereiRepository(
+        { "firma-1": { stickereiPartnerId: null, hatStickdatei: false } },
+        {},
+        {
+          logos: [{ id: "logo-1", label: "Firma · v1", companyId: "firma-1", version: 1, active: true }],
+          priceGroups: { "logo-1": "pg-standard" },
+          supplierNames: { "stick-a": "Stickerei A", "stick-b": "Stickerei B" },
+        }
+      )
+    );
+  }
+
+  it("erfasst Angebote, berechnet VK je Stufe und entscheidet → übernimmt Partner + Staffeln", async () => {
+    const svc = rfqService();
+    const { id: ausId } = await svc.createAusschreibung("logo-1");
+    await svc.addAngebot(ausId, "stick-a", [{ minMenge: 1, ekCents: 1_000 }, { minMenge: 50, ekCents: 700 }], "teurer");
+    const { id: angB } = await svc.addAngebot(ausId, "stick-b", [{ minMenge: 1, ekCents: 800 }, { minMenge: 50, ekCents: 600 }]);
+
+    const detail = await svc.getAusschreibung(ausId);
+    expect(detail?.angebote).toHaveLength(2);
+    // VK = EK × 1,88 (Standard) — Vergleich möglich.
+    expect(detail?.angebote[0]?.staffeln[0]).toMatchObject({ ekCents: 1_000, vkCents: 1_880 });
+    expect(detail?.angebote[1]?.supplierName).toBe("Stickerei B");
+
+    await svc.decideAusschreibung(ausId, angB);
+    // Partner = Gewinner-Lieferant; Staffeln des Logos = Gewinner-Staffeln.
+    const route = await svc.routeForCompany("firma-1");
+    expect(route.stickereiPartnerId).toBe("stick-b");
+    const staffeln = await svc.listStaffeln("logo-1");
+    expect(staffeln.staffeln.map((s) => s.ekCents)).toEqual([800, 600]);
+  });
+
+  it("verbietet doppeltes Entscheiden und fremde Gewinner-Angebote", async () => {
+    const svc = rfqService();
+    const { id: ausId } = await svc.createAusschreibung("logo-1");
+    const { id: ang } = await svc.addAngebot(ausId, "stick-a", [{ minMenge: 1, ekCents: 900 }]);
+    await svc.decideAusschreibung(ausId, ang);
+    await expect(svc.decideAusschreibung(ausId, ang)).rejects.toThrow(/nicht \(mehr\) offen/);
+    const other = await svc.createAusschreibung("logo-1");
+    await expect(svc.decideAusschreibung(other.id, ang)).rejects.toThrow(/gehört nicht/);
+  });
+
+  it("lehnt Angebote ohne Staffeln / mit ungültigen Staffeln ab", async () => {
+    const svc = rfqService();
+    const { id: ausId } = await svc.createAusschreibung("logo-1");
+    await expect(svc.addAngebot(ausId, "stick-a", [])).rejects.toThrow(/Staffel/);
+    await expect(svc.addAngebot(ausId, "stick-a", [{ minMenge: 1, ekCents: 1 }, { minMenge: 1, ekCents: 2 }])).rejects.toThrow(/Doppelte/);
+  });
+});
+
 describe("StickereiService Mengenstaffeln je Logo (Kap. 4.4 / T-15)", () => {
   it("listStaffeln: sortiert + VK = EK × 1,88 je Stufe", async () => {
     const res = await service().listStaffeln("logo-1");

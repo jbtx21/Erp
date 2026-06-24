@@ -659,6 +659,30 @@ export const appRouter = router({
       .input(z.object({ companyId: z.string().min(1), supplierId: z.string().min(1).nullable() }))
       .mutation(async ({ input, ctx }) => { await ctx.stickerei.setPartner(input.companyId, input.supplierId); return { ok: true as const }; }),
 
+    /** Ausschreibung (RfQ) je Logo: Angebote erfassen, vergleichen, Gewinner wählen. */
+    ausschreibung: router({
+      list: roleProcedure("ADMIN", "BUERO")
+        .input(z.object({ logoVersionId: z.string().min(1) }))
+        .query(({ input, ctx }) => ctx.stickerei.listAusschreibungen(input.logoVersionId)),
+      get: roleProcedure("ADMIN", "BUERO")
+        .input(z.object({ id: z.string().min(1) }))
+        .query(({ input, ctx }) => ctx.stickerei.getAusschreibung(input.id)),
+      create: roleProcedure("ADMIN", "BUERO")
+        .input(z.object({ logoVersionId: z.string().min(1) }))
+        .mutation(async ({ input, ctx }) => { try { return await ctx.stickerei.createAusschreibung(input.logoVersionId); } catch (e) { throw toTrpcError(e); } }),
+      addAngebot: roleProcedure("ADMIN", "BUERO")
+        .input(z.object({
+          ausschreibungId: z.string().min(1),
+          supplierId: z.string().min(1),
+          notiz: z.string().optional(),
+          staffeln: z.array(z.object({ minMenge: z.number().int().min(1), ekCents: z.number().int().min(0) })).min(1),
+        }))
+        .mutation(async ({ input, ctx }) => { try { return await ctx.stickerei.addAngebot(input.ausschreibungId, input.supplierId, input.staffeln, input.notiz ?? null); } catch (e) { throw toTrpcError(e); } }),
+      decide: roleProcedure("ADMIN", "BUERO")
+        .input(z.object({ ausschreibungId: z.string().min(1), gewinnerAngebotId: z.string().min(1) }))
+        .mutation(async ({ input, ctx }) => { try { return await ctx.stickerei.decideAusschreibung(input.ausschreibungId, input.gewinnerAngebotId); } catch (e) { throw toTrpcError(e); } }),
+    }),
+
     /** Mengenstaffeln je Logo (Stick-EK je Stück → unser VK = EK × 1,88, Kap. 4.4 / T-15). */
     staffeln: router({
       /** Staffeln eines Logos inkl. berechneter VKs/DB (preis-sensibel, kein PRODUKTION). */

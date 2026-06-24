@@ -2,6 +2,8 @@
 
 import { DEFAULT_MARKUP_CONFIG, type MarkupConfig, type StickereiContext, type StickereiStaffel } from "@texma/shared";
 import type {
+  AusschreibungRaw,
+  AusschreibungSummary,
   CompanyOption,
   LogoFile,
   LogoMarkupContext,
@@ -10,6 +12,21 @@ import type {
   StoredLogoFile,
   StoredLogoVersion,
 } from "../modules/stickerei/stickerei.service.js";
+
+interface MemAngebot {
+  id: string;
+  supplierId: string;
+  notiz: string | null;
+  staffeln: StickereiStaffel[];
+}
+interface MemAusschreibung {
+  id: string;
+  logoVersionId: string;
+  status: "OFFEN" | "ENTSCHIEDEN" | "ABGEBROCHEN";
+  gewinnerAngebotId: string | null;
+  createdAt: Date;
+  angebote: MemAngebot[];
+}
 
 /** Firma inkl. Kundengruppe (für die in-memory Faktor-Auflösung neuer Logos). */
 export interface InMemoryCompany extends CompanyOption {
@@ -26,6 +43,8 @@ export interface InMemoryStickereiSeed {
   logos?: LogoOption[];
   /** Firmen für die Logo-Zuordnung. */
   companies?: InMemoryCompany[];
+  /** Lieferantennamen für die Angebots-Anzeige (supplierId → Name). */
+  supplierNames?: Record<string, string>;
 }
 
 /** Einheitliches Logo-Label: „Firma · vN (aktiv)". */
@@ -40,6 +59,11 @@ export class InMemoryStickereiRepository implements StickereiRepository {
   private readonly logos: LogoOption[];
   private readonly companies: InMemoryCompany[];
   private readonly files = new Map<string, LogoFile>();
+  private readonly ausschreibungen = new Map<string, MemAusschreibung>();
+  private aSeq = 0;
+  private angSeq = 0;
+  /** Lieferantennamen für die Anzeige (optional über Seed gesetzt). */
+  private readonly supplierNames: Record<string, string>;
   private markupConfig: MarkupConfig;
 
   constructor(
@@ -50,6 +74,7 @@ export class InMemoryStickereiRepository implements StickereiRepository {
     this.staffeln = new Map(Object.entries(seedStaffeln).map(([k, v]) => [k, [...v]]));
     this.logoOverrides = new Map(Object.entries(seed.logoOverrides ?? {}));
     this.priceGroups = new Map(Object.entries(seed.priceGroups ?? {}));
+    this.supplierNames = seed.supplierNames ?? {};
     this.logos = seed.logos ? seed.logos.map((l) => ({ ...l })) : [];
     this.companies = seed.companies ? seed.companies.map((c) => ({ ...c })) : [];
     this.markupConfig = seed.markupConfig ?? DEFAULT_MARKUP_CONFIG;
@@ -171,5 +196,68 @@ export class InMemoryStickereiRepository implements StickereiRepository {
   async setLogoOverride(logoVersionId: string, factor: number | null): Promise<void> {
     if (factor == null) this.logoOverrides.delete(logoVersionId);
     else this.logoOverrides.set(logoVersionId, factor);
+  }
+
+  async createAusschreibung(logoVersionId: string): Promise<{ id: string }> {
+    const id = `aus_${++this.aSeq}`;
+    this.ausschreibungen.set(id, { id, logoVersionId, status: "OFFEN", gewinnerAngebotId: null, createdAt: new Date(), angebote: [] });
+    return { id };
+  }
+
+  async addAngebot(
+    ausschreibungId: string,
+    supplierId: string,
+    staffeln: ReadonlyArray<StickereiStaffel>,
+    notiz: string | null
+  ): Promise<{ id: string }> {
+    const a = this.ausschreibungen.get(ausschreibungId);
+    if (!a) throw new Error(`Ausschreibung ${ausschreibungId} nicht gefunden.`);
+    const id = `ang_${++this.angSeq}`;
+    a.angebote.push({ id, supplierId, notiz, staffeln: staffeln.map((s) => ({ minMenge: s.minMenge, ekCents: s.ekCents })) });
+    return { id };
+  }
+
+  async listAusschreibungen(logoVersionId: string): Promise<AusschreibungSummary[]> {
+    return [...this.ausschreibungen.values()]
+      .filter((a) => a.logoVersionId === logoVersionId)
+      .sort((x, y) => y.createdAt.getTime() - x.createdAt.getTime())
+      .map((a) => ({ id: a.id, logoVersionId: a.logoVersionId, status: a.status, gewinnerAngebotId: a.gewinnerAngebotId, angebotCount: a.angebote.length, createdAt: a.createdAt }));
+  }
+
+  async getAusschreibung(id: string): Promise<AusschreibungRaw | null> {
+    const a = this.ausschreibungen.get(id);
+    if (!a) return null;
+    return {
+      id: a.id,
+      logoVersionId: a.logoVersionId,
+      status: a.status,
+      gewinnerAngebotId: a.gewinnerAngebotId,
+      angebote: a.angebote.map((ang) => ({
+        id: ang.id,
+        supplierId: ang.supplierId,
+        supplierName: this.supplierNames[ang.supplierId] ?? null,
+        notiz: ang.notiz,
+        staffeln: ang.staffeln.map((s) => ({ ...s })),
+      })),
+    };
+  }
+
+  async decideAusschreibung(ausschreibungId: string, gewinnerAngebotId: string): Promise<{ logoVersionId: string }> {
+    const a = this.ausschreibungen.get(ausschreibungId);
+    if (!a) throw new Error(`Ausschreibung ${ausschreibungId} nicht gefunden.`);
+    if (a.status !== "OFFEN") throw new Error("Ausschreibung ist nicht (mehr) offen.");
+    const angebot = a.angebote.find((x) => x.id === gewinnerAngebotId);
+    if (!angebot) throw new Error("Gewinner-Angebot gehört nicht zu dieser Ausschreibung.");
+    a.status = "ENTSCHIEDEN";
+    a.gewinnerAngebotId = gewinnerAngebotId;
+    // Partner der Firma setzen (Logo → Firma) + Gewinner-Staffeln ans Logo übernehmen.
+    const logo = this.logos.find((l) => l.id === a.logoVersionId);
+    const companyId = logo?.companyId;
+    if (companyId) {
+      const ctx = this.byCompany[companyId] ?? { stickereiPartnerId: null, hatStickdatei: false };
+      this.byCompany[companyId] = { ...ctx, stickereiPartnerId: angebot.supplierId };
+    }
+    this.staffeln.set(a.logoVersionId, angebot.staffeln.map((s) => ({ ...s })));
+    return { logoVersionId: a.logoVersionId };
   }
 }

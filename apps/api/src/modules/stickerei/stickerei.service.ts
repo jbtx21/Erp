@@ -88,6 +88,19 @@ export interface StickereiRepository {
   contextForCompany(companyId: string): Promise<StickereiContext | null>;
   /** Setzt/entfernt den hinterlegten Stickerei-Partner (Lieferant) einer Firma. */
   setPartner(companyId: string, supplierId: string | null): Promise<void>;
+  /** Legt eine offene Ausschreibung für ein Logo an. */
+  createAusschreibung(logoVersionId: string): Promise<{ id: string }>;
+  /** Erfasst ein Angebot (Stick-EK-Staffeln) eines Lieferanten zu einer Ausschreibung. */
+  addAngebot(ausschreibungId: string, supplierId: string, staffeln: ReadonlyArray<StickereiStaffel>, notiz: string | null): Promise<{ id: string }>;
+  /** Ausschreibungen eines Logos (neueste zuerst, mit Angebotszahl). */
+  listAusschreibungen(logoVersionId: string): Promise<AusschreibungSummary[]>;
+  /** Eine Ausschreibung mit allen Angeboten (Roh-EK-Staffeln). */
+  getAusschreibung(id: string): Promise<AusschreibungRaw | null>;
+  /**
+   * Entscheidet die Ausschreibung: setzt Gewinner + Status, übernimmt den Lieferanten als
+   * Stickerei-Partner der Firma und die Gewinner-Staffeln ans Logo — atomar. Liefert das Logo.
+   */
+  decideAusschreibung(ausschreibungId: string, gewinnerAngebotId: string): Promise<{ logoVersionId: string }>;
   /** Auswahlliste aller Logos (für den Picker). */
   listLogos(): Promise<LogoOption[]>;
   /** Firmen für die Logo-Zuordnung. */
@@ -121,6 +134,55 @@ export interface StickereiStaffelResult {
   staffeln: StickereiStaffelVk[];
   logoOverride: number | null;
   priceGroupId?: string;
+}
+
+// ── Ausschreibung (RfQ) je Logo: mehrere Angebote (Stick-EK-Staffeln) erfassen,
+//    vergleichen, eines wählen → übernimmt Partner + Staffeln ans Logo/Firma. ──────
+export type AusschreibungStatus = "OFFEN" | "ENTSCHIEDEN" | "ABGEBROCHEN";
+
+/** Listeneintrag einer Ausschreibung (Übersicht je Logo). */
+export interface AusschreibungSummary {
+  id: string;
+  logoVersionId: string;
+  status: AusschreibungStatus;
+  gewinnerAngebotId: string | null;
+  angebotCount: number;
+  createdAt: Date;
+}
+
+/** Ein Angebot in der Ausschreibung inkl. berechneter VK je Stufe (zum Vergleich). */
+export interface AngebotView {
+  id: string;
+  supplierId: string;
+  supplierName: string | null;
+  notiz: string | null;
+  staffeln: StickereiStaffelVk[];
+}
+
+/** Vollbild einer Ausschreibung: alle Angebote mit berechneten VKs. */
+export interface AusschreibungDetail {
+  id: string;
+  logoVersionId: string;
+  status: AusschreibungStatus;
+  gewinnerAngebotId: string | null;
+  angebote: AngebotView[];
+}
+
+/** Roh-Angebot wie es das Repository liefert (EK-Staffeln, VK rechnet der Service). */
+export interface AngebotRaw {
+  id: string;
+  supplierId: string;
+  supplierName: string | null;
+  notiz: string | null;
+  staffeln: StickereiStaffel[];
+}
+
+export interface AusschreibungRaw {
+  id: string;
+  logoVersionId: string;
+  status: AusschreibungStatus;
+  gewinnerAngebotId: string | null;
+  angebote: AngebotRaw[];
 }
 
 const FINISHING_STICKEREI = "STICKEREI" as const;
@@ -200,6 +262,61 @@ export class StickereiService {
    */
   async setPartner(companyId: string, supplierId: string | null): Promise<void> {
     await this.repo.setPartner(companyId, supplierId);
+  }
+
+  /** Eröffnet eine Ausschreibung für ein Logo (Mail-Anfrage extern, Erfassung hier). */
+  async createAusschreibung(logoVersionId: string): Promise<{ id: string }> {
+    if (!logoVersionId) throw new Error("Logo-Version ist Pflicht.");
+    return this.repo.createAusschreibung(logoVersionId);
+  }
+
+  /** Erfasst das Angebot eines Lieferanten (Stick-EK je Mengenstaffel) zu einer Ausschreibung. */
+  async addAngebot(
+    ausschreibungId: string,
+    supplierId: string,
+    staffeln: ReadonlyArray<StickereiStaffel>,
+    notiz: string | null = null
+  ): Promise<{ id: string }> {
+    if (!supplierId) throw new Error("Lieferant ist Pflicht.");
+    if (staffeln.length === 0) throw new Error("Mindestens eine Staffel ist Pflicht.");
+    computeStickereiStaffelVks(staffeln); // validiert Staffeln (Dubletten/minMenge<1)
+    return this.repo.addAngebot(
+      ausschreibungId,
+      supplierId,
+      staffeln.map((s) => ({ minMenge: s.minMenge, ekCents: s.ekCents })),
+      notiz?.trim() || null
+    );
+  }
+
+  /** Ausschreibungen eines Logos (Übersicht). */
+  async listAusschreibungen(logoVersionId: string): Promise<AusschreibungSummary[]> {
+    return this.repo.listAusschreibungen(logoVersionId);
+  }
+
+  /** Eine Ausschreibung mit allen Angeboten inkl. berechneter VKs (zum Vergleich). */
+  async getAusschreibung(id: string): Promise<AusschreibungDetail | null> {
+    const a = await this.repo.getAusschreibung(id);
+    if (!a) return null;
+    const { markup } = await this.markupFor(a.logoVersionId);
+    return {
+      id: a.id,
+      logoVersionId: a.logoVersionId,
+      status: a.status,
+      gewinnerAngebotId: a.gewinnerAngebotId,
+      angebote: a.angebote.map((ang) => ({
+        id: ang.id,
+        supplierId: ang.supplierId,
+        supplierName: ang.supplierName,
+        notiz: ang.notiz,
+        staffeln: computeStickereiStaffelVks(ang.staffeln, markup),
+      })),
+    };
+  }
+
+  /** Wählt das Gewinner-Angebot: übernimmt Partner + Staffeln (atomar im Repository). */
+  async decideAusschreibung(ausschreibungId: string, gewinnerAngebotId: string): Promise<{ logoVersionId: string }> {
+    if (!gewinnerAngebotId) throw new Error("Gewinner-Angebot ist Pflicht.");
+    return this.repo.decideAusschreibung(ausschreibungId, gewinnerAngebotId);
   }
 
   /** Baut die Aufschlags-Auflösung eines Logos: globale Konfig + Kontext + Logo-Override. */
