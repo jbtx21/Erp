@@ -21,6 +21,9 @@ export class PrismaStockRepository implements StockRepository {
           deltaQty: move.deltaQty,
           grund: move.grund,
           lager,
+          // Multi-Lager Stufe 2a: warehouseId parallel mitschreiben (Seed-Mapping aus dem
+          // Enum, Migration 0075). Stufe 2b stellt die Buchung primär auf warehouseId um.
+          warehouseId: `wh_${lager.toLowerCase()}`,
           belegRef: move.belegRef ?? null,
         },
         select: { id: true },

@@ -14,7 +14,8 @@ const metaSelect = { id: true, sku: true, article: { select: { name: true } } } 
 
 export class PrismaReservationRepository implements ReservationRepository {
   async createReservation(input: { variantId: string; lager: StockLager; qty: number; orderId: string | null; belegRef: string | null; note: string | null }): Promise<{ id: string }> {
-    return prisma.stockReservation.create({ data: input, select: { id: true } });
+    // Multi-Lager Stufe 2a: warehouseId parallel mitschreiben (Seed-Mapping, Migration 0075).
+    return prisma.stockReservation.create({ data: { ...input, warehouseId: `wh_${input.lager.toLowerCase()}` }, select: { id: true } });
   }
 
   async releaseReservation(id: string, status: "ERLEDIGT" | "STORNIERT"): Promise<{ variantId: string; lager: StockLager } | null> {
