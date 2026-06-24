@@ -16,7 +16,8 @@ function Svg({ size = 18, children }: { size?: number; children: React.ReactNode
 // Je Sektion ein Icon. Schlüssel = NAV-Gruppenname.
 export type NavIconName =
   | "uebersicht" | "vertrieb" | "beschaffung" | "stammdaten" | "produktion"
-  | "logistik" | "finanzen" | "system" | "einstellungen";
+  | "logistik" | "finanzen" | "system" | "einstellungen"
+  | "crm" | "lager" | "hr";
 
 const PATHS: Record<NavIconName, JSX.Element> = {
   uebersicht: (<>
@@ -51,6 +52,16 @@ const PATHS: Record<NavIconName, JSX.Element> = {
   einstellungen: (<>
     <path d="M10.3 4.3c.4 -1.7 2.9 -1.7 3.3 0a1.7 1.7 0 0 0 2.6 1.1c1.5 -.9 3.3 .8 2.4 2.4a1.7 1.7 0 0 0 1 2.5c1.8 .4 1.8 2.9 0 3.4a1.7 1.7 0 0 0 -1 2.5c.9 1.5 -.9 3.3 -2.4 2.4a1.7 1.7 0 0 0 -2.6 1c-.4 1.8 -2.9 1.8 -3.3 0a1.7 1.7 0 0 0 -2.6 -1c-1.5 .9 -3.3 -.9 -2.4 -2.4a1.7 1.7 0 0 0 -1 -2.5c-1.8 -.5 -1.8 -3 0 -3.4a1.7 1.7 0 0 0 1 -2.5c-.9 -1.6 .9 -3.3 2.4 -2.4c1 .6 2.3 .1 2.6 -1z" />
     <path d="M9 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" />
+  </>),
+  crm: (<>
+    <path d="M9 7a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" /><path d="M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" /><path d="M21 21v-2a4 4 0 0 0 -3 -3.85" />
+  </>),
+  lager: (<>
+    <path d="M3 21v-13l9 -4l9 4v13" /><path d="M13 13h4v8h-10v-6h6" /><path d="M13 21v-9a1 1 0 0 0 -1 -1h-2a1 1 0 0 0 -1 1v3" />
+  </>),
+  hr: (<>
+    <path d="M8 7a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" /><path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2" />
   </>),
 };
 

@@ -16,29 +16,29 @@ import { trpc } from "./trpc.js";
 
 interface AuthUser { id: string; email: string; name: string; role: string; totpEnabled: boolean; }
 
-// Modul-Navigation: neun Sektionen mit Strich-Icon je Gruppe. Logistik und Finanzen
-// sind getrennt; Einstellungen ist eine eigene Sektion am Fuß. Jede Gruppe ist
-// einzeln aufklappbar, die ganze Leiste lässt sich zur Icon-Schiene einklappen.
+// Modul-Navigation nach ERPNext/Frappe-Taxonomie (Workspaces als Sektionen): Start,
+// CRM, Vertrieb, Einkauf, Lager, Fertigung, Buchhaltung, Personalwesen, Einstellungen.
+// Jede Sektion ist einzeln aufklappbar; die ganze Leiste klappt zur Icon-Schiene ein.
 const NAV: ReadonlyArray<{ group: string; icon: NavIconName; items: ReadonlyArray<{ key: string; label: string }> }> = [
-  { group: "Übersicht", icon: "uebersicht", items: [{ key: "home", label: "Start" }, { key: "dashboard", label: "Termin-Ampel" }, { key: "dashboards", label: "Dashboards (G-7)" }, { key: "calendar", label: "Kalender" }, { key: "tasks", label: "Meine Aufgaben" }, { key: "messages", label: "Nachrichten" }] },
-  { group: "Vertrieb", icon: "vertrieb", items: [{ key: "companies", label: "Firmen/Kunden" }, { key: "leads", label: "Leads" }, { key: "opportunities", label: "Verkaufschancen" }, { key: "calllogs", label: "Anrufliste" }, { key: "inquiries", label: "Anfragen" }, { key: "quotes", label: "Angebote" }, { key: "orders", label: "Aufträge" }, { key: "reklamation", label: "Reklamation" }] },
-  { group: "Beschaffung", icon: "beschaffung", items: [
+  { group: "Start", icon: "uebersicht", items: [{ key: "home", label: "Start" }, { key: "dashboard", label: "Termin-Ampel" }, { key: "dashboards", label: "Dashboards" }, { key: "calendar", label: "Kalender" }, { key: "tasks", label: "Meine Aufgaben" }, { key: "messages", label: "Nachrichten" }] },
+  { group: "CRM", icon: "crm", items: [{ key: "leads", label: "Leads" }, { key: "opportunities", label: "Verkaufschancen" }, { key: "calllogs", label: "Anrufliste" }, { key: "inquiries", label: "Anfragen" }, { key: "newsletter", label: "Newsletter" }] },
+  { group: "Vertrieb", icon: "vertrieb", items: [{ key: "companies", label: "Kunden" }, { key: "quotes", label: "Angebote" }, { key: "orders", label: "Aufträge" }, { key: "pricing", label: "Preise/Staffel" }, { key: "reklamation", label: "Reklamation" }] },
+  { group: "Einkauf", icon: "beschaffung", items: [
     { key: "suppliers", label: "Lieferanten" }, { key: "procurement", label: "Beschaffung" },
     { key: "reorder", label: "Nachbestellung" }, { key: "ausschreibungen", label: "Stickerei-Ausschreibungen" }, { key: "incoming", label: "Eingangsrechnungen" },
   ] },
-  { group: "Stammdaten", icon: "stammdaten", items: [{ key: "products", label: "Artikel/Varianten" }, { key: "logos", label: "Logos & Stickerei" }, { key: "pricing", label: "Preise/Staffel" }, { key: "eanimport", label: "EAN-Listen-Import" }] },
-  { group: "Produktion", icon: "produktion", items: [{ key: "subproduction", label: "Fremdvergabe" }, { key: "prodreport", label: "Produktions-Reporting" }] },
-  { group: "Logistik", icon: "logistik", items: [
-    { key: "wareneingang", label: "Wareneingang" }, { key: "lager", label: "Lager & Inventur" },
-    { key: "samples", label: "Muster-Leihgut" }, { key: "shipments", label: "Versand" },
+  { group: "Lager", icon: "lager", items: [
+    { key: "products", label: "Artikel/Varianten" }, { key: "logos", label: "Logos & Stickerei" }, { key: "lager", label: "Lager & Inventur" },
+    { key: "wareneingang", label: "Wareneingang" }, { key: "samples", label: "Muster-Leihgut" }, { key: "shipments", label: "Versand" }, { key: "eanimport", label: "EAN-Listen-Import" },
   ] },
-  { group: "Finanzen", icon: "finanzen", items: [
+  { group: "Fertigung", icon: "produktion", items: [{ key: "subproduction", label: "Fremdvergabe" }, { key: "prodreport", label: "Produktions-Reporting" }] },
+  { group: "Buchhaltung", icon: "finanzen", items: [
     { key: "zahlungen", label: "Zahlungseingänge" }, { key: "banking", label: "Banking" },
     { key: "finance", label: "Offene Posten (OP-Aging)" }, { key: "dunning", label: "Mahnwesen" },
     { key: "costcenters", label: "Kostenstellen" }, { key: "nachkalkfin", label: "Nachkalkulation" }, { key: "reporting", label: "Auswertungen" },
   ] },
-  { group: "System", icon: "system", items: [{ key: "mailaccounts", label: "E-Mail-Konten" }, { key: "emailtemplates", label: "E-Mail-Vorlagen" }, { key: "dataio", label: "Import/Export" }, { key: "newsletter", label: "Newsletter" }, { key: "archive", label: "GoBD-Archiv" }, { key: "auditlog", label: "Audit-Protokoll" }, { key: "integrations", label: "Schnittstellen" }] },
-  { group: "Einstellungen", icon: "einstellungen", items: [{ key: "admin", label: "Einstellungen" }, { key: "aufschlag", label: "Aufschlagsfaktoren" }, { key: "automation", label: "Automationen" }, { key: "hr", label: "Personalwesen" }, { key: "security", label: "Mein Konto (2FA)" }] },
+  { group: "Personalwesen", icon: "hr", items: [{ key: "hr", label: "Personalwesen" }] },
+  { group: "Einstellungen", icon: "einstellungen", items: [{ key: "admin", label: "Einstellungen" }, { key: "aufschlag", label: "Aufschlagsfaktoren" }, { key: "automation", label: "Automationen" }, { key: "mailaccounts", label: "E-Mail-Konten" }, { key: "emailtemplates", label: "E-Mail-Vorlagen" }, { key: "dataio", label: "Import/Export" }, { key: "archive", label: "GoBD-Archiv" }, { key: "auditlog", label: "Audit-Protokoll" }, { key: "integrations", label: "Schnittstellen" }, { key: "security", label: "Mein Konto (2FA)" }] },
 ];
 const ALL_KEYS = NAV.flatMap((g) => g.items.map((i) => i.key));
 const hashKey = (): string => {
