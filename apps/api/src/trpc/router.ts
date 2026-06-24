@@ -927,6 +927,7 @@ export const appRouter = router({
       .input(z.object({
         sku: z.string().min(1),
         name: z.string().min(1),
+        description: z.string().optional(),
         attributes: z.array(z.object({ name: z.string().min(1), value: z.string().min(1) })).optional(),
       }))
       .mutation(async ({ input, ctx }) => {

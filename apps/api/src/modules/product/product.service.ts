@@ -42,6 +42,8 @@ export interface CatalogEntry {
   articleName: string;
   /** Varianten-SKU. */
   sku: string;
+  /** Artikelbeschreibung (für Suche/Anzeige; leer wenn nicht gepflegt). */
+  description: string;
   /** Anzeigetext: Artikelname + Varianten-Merkmale. */
   label: string;
   /** Standardpreis (Preisgruppe STANDARD) in Cent, 0 wenn nicht hinterlegt. */
@@ -88,7 +90,7 @@ export interface CreateVeredelungInput {
 
 export interface ProductRepository {
   listArticles(): Promise<Omit<ArticleRow, "completeness">[]>;
-  createArticle(sku: string, name: string): Promise<{ id: string }>;
+  createArticle(sku: string, name: string, description?: string | null): Promise<{ id: string }>;
   listVariants(articleId: string): Promise<VariantRow[]>;
   /** Flacher Varianten-Katalog (Artikelname + Merkmale + Standardpreis) für Picker. */
   catalog(): Promise<CatalogEntry[]>;
@@ -148,10 +150,11 @@ export class ProductService {
     return { updated };
   }
 
-  async createArticle(sku: string, name: string): Promise<{ id: string }> {
+  async createArticle(sku: string, name: string, description?: string): Promise<{ id: string }> {
     if (!sku?.trim() || !name?.trim()) throw new ProductError("SKU und Name sind Pflicht.");
-    const res = await this.repo.createArticle(sku.trim(), name.trim());
-    await this.audit.append(buildEntry({ entity: "Article", entityId: res.id, action: "CREATE", after: { sku, name } }));
+    const desc = description?.trim() || null;
+    const res = await this.repo.createArticle(sku.trim(), name.trim(), desc);
+    await this.audit.append(buildEntry({ entity: "Article", entityId: res.id, action: "CREATE", after: { sku, name, description: desc } }));
     return res;
   }
 
@@ -179,16 +182,18 @@ export class ProductService {
   async quickCreateCatalogEntry(input: {
     sku: string;
     name: string;
+    description?: string;
     attributes?: Array<{ name: string; value: string }>;
   }): Promise<CatalogEntry> {
     const attributes = (input.attributes ?? []).filter((a) => a.name.trim() && a.value.trim());
-    const art = await this.createArticle(input.sku, input.name);
+    const description = input.description?.trim() ?? "";
+    const art = await this.createArticle(input.sku, input.name, description);
     const baseSku = input.sku.trim();
     const variantSku = attributes.length ? `${baseSku}-${attributes.map((a) => a.value.trim()).join("-")}` : baseSku;
     const v = await this.createVariant({ articleId: art.id, sku: variantSku, attributes });
     const attrText = attributes.map((a) => a.value.trim()).join(" / ");
     const label = `${input.name.trim()}${attrText ? ` — ${attrText}` : ""} (${variantSku})`;
-    return { variantId: v.id, articleId: art.id, articleName: input.name.trim(), sku: variantSku, label, unitNetCents: 0, isBundle: false };
+    return { variantId: v.id, articleId: art.id, articleName: input.name.trim(), sku: variantSku, description, label, unitNetCents: 0, isBundle: false };
   }
 
   /** Stückliste (Komponenten) einer Set-Variante (Kap. 5.1). */

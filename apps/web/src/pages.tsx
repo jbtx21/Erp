@@ -730,20 +730,48 @@ export function ArticlePicker({ onPick }: { onPick: (e: { label: string; unitNet
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
   const [sku, setSku] = useState("");
+  const [beschreibung, setBeschreibung] = useState("");
   const [farbe, setFarbe] = useState("");
   const [groesse, setGroesse] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const reload = useCallback(async () => { try { setCatalog(await trpc.products.catalog.query()); } catch { /* ignore */ } }, []);
   useEffect(() => { void reload(); }, [reload]);
   const q = search.trim().toLowerCase();
-  const hasMatch = catalog.some((c) => c.label.toLowerCase().includes(q));
-  const reset = (): void => { setCreating(false); setSku(""); setFarbe(""); setGroesse(""); setErr(null); };
+  // Artikelnummer, -name UND -beschreibung sind eigene Suchfelder — Treffer über alle drei.
+  const byId = new Map(catalog.map((c) => [c.variantId, c]));
+  const matches = (c: (typeof catalog)[number], needle: string): boolean =>
+    c.sku.toLowerCase().includes(needle) || c.articleName.toLowerCase().includes(needle) || c.description.toLowerCase().includes(needle) || c.label.toLowerCase().includes(needle);
+  const hasMatch = catalog.some((c) => matches(c, q));
+  const reset = (): void => { setCreating(false); setSku(""); setBeschreibung(""); setFarbe(""); setGroesse(""); setErr(null); };
   return (
     <Box>
-      <Select size="xs" searchable clearable placeholder="+ Artikel aus Stamm…" w={300} value={value}
+      <Select size="xs" searchable clearable placeholder="+ Artikel: Nr., Name oder Beschreibung…" w={340} value={value}
         searchValue={search} onSearchChange={setSearch}
         nothingFoundMessage="Kein Treffer — unten anlegen"
+        maxDropdownHeight={320}
         data={catalog.map((c) => ({ value: c.variantId, label: c.label }))}
+        filter={({ options, search: s }) => {
+          const needle = s.trim().toLowerCase();
+          if (!needle) return options;
+          return (options as { value: string; label: string }[]).filter((o) => {
+            const e = byId.get(o.value);
+            return e ? matches(e, needle) : o.label.toLowerCase().includes(needle);
+          });
+        }}
+        renderOption={({ option }) => {
+          const e = byId.get(option.value);
+          if (!e) return <Text size="xs">{option.label}</Text>;
+          return (
+            <Box>
+              <Group gap={6} wrap="nowrap">
+                <Badge size="xs" variant="light" color="gray" style={{ flexShrink: 0 }}>{e.sku}</Badge>
+                <Text size="xs" fw={600} truncate>{e.articleName}</Text>
+                {e.isBundle && <Badge size="xs" variant="light" color="blue" style={{ flexShrink: 0 }}>Set</Badge>}
+              </Group>
+              {e.description && <Text size="xs" c="dimmed" truncate>{e.description}</Text>}
+            </Box>
+          );
+        }}
         onChange={(v) => {
           const e = catalog.find((c) => c.variantId === v);
           if (e) onPick({ label: e.label, unitNetCents: e.unitNetCents, variantId: e.variantId, isBundle: e.isBundle });
@@ -762,6 +790,7 @@ export function ArticlePicker({ onPick }: { onPick: (e: { label: string; unitNet
             <TextInput size="xs" label="Farbe" placeholder="optional" w={80} value={farbe} onChange={(e) => setFarbe(e.currentTarget.value)} />
             <TextInput size="xs" label="Größe" placeholder="optional" w={70} value={groesse} onChange={(e) => setGroesse(e.currentTarget.value)} />
           </Group>
+          <TextInput size="xs" label="Beschreibung" placeholder="optional" mt={4} value={beschreibung} onChange={(e) => setBeschreibung(e.currentTarget.value)} />
           {err && <Text size="xs" c="red" mt={4}>{err}</Text>}
           <Group gap="xs" mt={6}>
             <Button size="compact-xs" onClick={async () => {
@@ -771,7 +800,7 @@ export function ArticlePicker({ onPick }: { onPick: (e: { label: string; unitNet
                 ...(groesse.trim() ? [{ name: "Größe", value: groesse.trim() }] : []),
               ];
               try {
-                const entry = await trpc.products.quickCreate.mutate({ sku: sku.trim(), name: search.trim(), attributes });
+                const entry = await trpc.products.quickCreate.mutate({ sku: sku.trim(), name: search.trim(), ...(beschreibung.trim() ? { description: beschreibung.trim() } : {}), attributes });
                 await reload();
                 onPick({ label: entry.label, unitNetCents: entry.unitNetCents, variantId: entry.variantId });
                 setValue(null); setSearch(""); reset();
@@ -792,12 +821,30 @@ export function HauptartikelPicker({ onPick }: { onPick: (e: { articleId: string
   const [catalog, setCatalog] = useState<Awaited<ReturnType<typeof trpc.products.catalog.query>>>([]);
   const [value, setValue] = useState<string | null>(null);
   useEffect(() => { void (async () => { try { setCatalog(await trpc.products.catalog.query()); } catch { /* ignore */ } })(); }, []);
-  // Auf Artikel-Ebene aggregieren (erste Variante liefert den Richtpreis).
-  const articles = new Map<string, { articleName: string; unitNetCents: number }>();
-  for (const c of catalog) if (!articles.has(c.articleId)) articles.set(c.articleId, { articleName: c.articleName, unitNetCents: c.unitNetCents });
+  // Auf Artikel-Ebene aggregieren (erste Variante liefert Richtpreis, SKU, Beschreibung).
+  const articles = new Map<string, { articleName: string; unitNetCents: number; sku: string; description: string }>();
+  for (const c of catalog) if (!articles.has(c.articleId)) articles.set(c.articleId, { articleName: c.articleName, unitNetCents: c.unitNetCents, sku: c.sku, description: c.description });
   return (
-    <Select size="xs" searchable clearable placeholder="+ Hauptartikel (Farbe/Größe offen)…" w={300} value={value}
+    <Select size="xs" searchable clearable placeholder="+ Hauptartikel: Nr., Name, Beschreibung…" w={320} value={value} maxDropdownHeight={320}
       data={[...articles.entries()].map(([id, a]) => ({ value: id, label: a.articleName }))}
+      filter={({ options, search }) => {
+        const needle = search.trim().toLowerCase();
+        if (!needle) return options;
+        return (options as { value: string; label: string }[]).filter((o) => {
+          const a = articles.get(o.value);
+          return a ? (a.articleName.toLowerCase().includes(needle) || a.sku.toLowerCase().includes(needle) || a.description.toLowerCase().includes(needle)) : o.label.toLowerCase().includes(needle);
+        });
+      }}
+      renderOption={({ option }) => {
+        const a = articles.get(option.value);
+        if (!a) return <Text size="xs">{option.label}</Text>;
+        return (
+          <Box>
+            <Group gap={6} wrap="nowrap"><Badge size="xs" variant="light" color="gray" style={{ flexShrink: 0 }}>{a.sku}</Badge><Text size="xs" fw={600} truncate>{a.articleName}</Text></Group>
+            {a.description && <Text size="xs" c="dimmed" truncate>{a.description}</Text>}
+          </Box>
+        );
+      }}
       onChange={(v) => {
         const a = v ? articles.get(v) : null;
         if (v && a) onPick({ articleId: v, articleName: a.articleName, unitNetCents: a.unitNetCents });

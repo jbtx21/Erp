@@ -27,9 +27,9 @@ export class InMemoryProductRepository implements ProductRepository {
       .sort((a, b) => a.sku.localeCompare(b.sku));
   }
 
-  async createArticle(sku: string, name: string): Promise<{ id: string }> {
+  async createArticle(sku: string, name: string, description?: string | null): Promise<{ id: string }> {
     const id = `art_${++this.seq}`;
-    this.articles.set(id, { id, sku, name, ...emptyPim });
+    this.articles.set(id, { id, sku, name, ...emptyPim, description: description ?? "" });
     return { id };
   }
 
@@ -65,7 +65,7 @@ export class InMemoryProductRepository implements ProductRepository {
       const a = this.articles.get(v.articleId);
       const attrs = v.attributes.map((x) => x.value).join(" / ");
       const label = `${a?.name ?? v.articleId}${attrs ? ` — ${attrs}` : ""} (${v.sku})`;
-      return { variantId: v.id, articleId: v.articleId, articleName: a?.name ?? v.articleId, sku: v.sku, label, unitNetCents: 0, isBundle: v.isBundle };
+      return { variantId: v.id, articleId: v.articleId, articleName: a?.name ?? v.articleId, sku: v.sku, description: a?.description ?? "", label, unitNetCents: 0, isBundle: v.isBundle };
     });
   }
 
@@ -101,6 +101,6 @@ export class InMemoryProductRepository implements ProductRepository {
     const variantId = `var_${++this.seq}`;
     this.variants.set(variantId, { id: variantId, articleId, sku: input.sku, attributes: [], isBundle: false });
     this.veredelungArticles.set(articleId, { veredlerId: input.veredlerId, ekCents: input.ekCents, tiers: input.tiers });
-    return { variantId, articleId, articleName: input.name, sku: input.sku, label: `${input.name} (${input.sku})`, unitNetCents: input.tiers[0]?.vkCents ?? 0, isBundle: false };
+    return { variantId, articleId, articleName: input.name, sku: input.sku, description: "", label: `${input.name} (${input.sku})`, unitNetCents: input.tiers[0]?.vkCents ?? 0, isBundle: false };
   }
 }

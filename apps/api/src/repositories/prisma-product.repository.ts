@@ -35,8 +35,8 @@ export class PrismaProductRepository implements ProductRepository {
     }));
   }
 
-  async createArticle(sku: string, name: string): Promise<{ id: string }> {
-    return prisma.article.create({ data: { sku, name }, select: { id: true } });
+  async createArticle(sku: string, name: string, description?: string | null): Promise<{ id: string }> {
+    return prisma.article.create({ data: { sku, name, description: description ?? null }, select: { id: true } });
   }
 
   async updateArticle(id: string, patch: ArticlePatch): Promise<boolean> {
@@ -63,7 +63,7 @@ export class PrismaProductRepository implements ProductRepository {
       orderBy: [{ article: { sku: "asc" } }, { sku: "asc" }],
       select: {
         id: true, sku: true, articleId: true, isBundle: true,
-        article: { select: { name: true } },
+        article: { select: { name: true, description: true } },
         attributes: { select: { name: true, value: true } },
         prices: { where: { priceGroup: { kind: "STANDARD" } }, select: { netCents: true }, take: 1 },
       },
@@ -71,7 +71,7 @@ export class PrismaProductRepository implements ProductRepository {
     return rows.map((v) => {
       const attrs = v.attributes.map((a) => a.value).join(" / ");
       const label = `${v.article.name}${attrs ? ` — ${attrs}` : ""} (${v.sku})`;
-      return { variantId: v.id, articleId: v.articleId, articleName: v.article.name, sku: v.sku, label, unitNetCents: v.prices[0]?.netCents ?? 0, isBundle: v.isBundle };
+      return { variantId: v.id, articleId: v.articleId, articleName: v.article.name, sku: v.sku, description: v.article.description ?? "", label, unitNetCents: v.prices[0]?.netCents ?? 0, isBundle: v.isBundle };
     });
   }
 
@@ -139,7 +139,7 @@ export class PrismaProductRepository implements ProductRepository {
         });
       }
       const baseVk = input.tiers[0]?.vkCents ?? 0;
-      return { variantId, articleId: article.id, articleName: article.name, sku: input.sku, label: `${article.name} (${input.sku})`, unitNetCents: baseVk, isBundle: false };
+      return { variantId, articleId: article.id, articleName: article.name, sku: input.sku, description: "", label: `${article.name} (${input.sku})`, unitNetCents: baseVk, isBundle: false };
     });
   }
 }
