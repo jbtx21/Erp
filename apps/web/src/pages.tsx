@@ -9,7 +9,7 @@ import { validateVatId } from "@texma/shared/vat";
 import { resolveMarkupFactor, DEFAULT_MARKUP_CONFIG, type MarkupConfig } from "@texma/shared/markup";
 import { trpc } from "./trpc.js";
 import { AufschlagsfaktorenSection, LogosStickereiSection, StickereiAusschreibungSection, StickereiStaffelnSection, Postcalc } from "./Differentiators.js";
-import { euro, numTd, statusMantineColor } from "./theme.js";
+import { euro, numTd, statusMantineColor, prettyStatus } from "./theme.js";
 import { MultiLineChart } from "./charts.js";
 import { DocFormShell, DocListHeader, StatusDot } from "./doc-layout.js";
 
@@ -69,6 +69,8 @@ const COL_LABELS: Record<string, string> = {
   gueltigBisAm: "Gültig bis", zugesagterLiefertermin: "Liefertermin", lieferstatus: "Lieferstatus", fakturastatus: "Fakturastatus", externalNumber: "Shop-Nr.", employeeNote: "Vermerk",
   trackingNumber: "Tracking", invoiceId: "Rechnung", kontaktName: "Kontakt", note: "Notiz",
   verworfenGrund: "Grund", finalized: "Final", lastSyncAt: "Letzter Sync", dunningLevel: "Mahnstufe",
+  quoteId: "Angebot", externalRef: "Externe Ref.", receivedAt: "Erhalten am", totalEkCents: "EK gesamt",
+  lines: "Positionen", weightGrams: "Gewicht (g)", shopConnectorId: "Shop", orderId: "Auftrag",
 };
 const colLabel = (key: string): string =>
   COL_LABELS[key] ?? key.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (c) => c.toUpperCase());
@@ -78,13 +80,15 @@ function fmtCell(key: string, v: unknown): ReactNode {
   if (/cents$/i.test(key) && typeof v === "number") return <span style={numTd}>{euro(v)}</span>;
   if (typeof v === "boolean") return v ? "ja" : "nein";
   if (/(status|ampel|level)$/i.test(key) && typeof v === "string")
-    return <StatusDot color={`var(--mantine-color-${statusMantineColor[v] ?? "gray"}-6)`} label={v} />;
+    return <StatusDot color={`var(--mantine-color-${statusMantineColor[v] ?? "gray"}-6)`} label={prettyStatus(v)} />;
   if (/kind$/i.test(key) && typeof v === "string")
-    return <Badge color={statusMantineColor[v] ?? "gray"} variant="light">{v}</Badge>;
+    return <Badge color={statusMantineColor[v] ?? "gray"} variant="light">{prettyStatus(v)}</Badge>;
   if (/(at|date|termin|am)$/i.test(key) && typeof v === "string" && !Number.isNaN(Date.parse(v)))
     return new Date(v).toLocaleDateString("de-DE");
   if (typeof v === "object") return <code style={{ fontSize: 11 }}>{JSON.stringify(v)}</code>;
   if (/cents$/i.test(key) && typeof v === "number") return euro(v);
+  // Negative Mengen (v. a. Lagerbestand) sind fast immer ein Fehlerzustand → rot markieren.
+  if (typeof v === "number" && v < 0) return <Text component="span" c="red" fw={600}>{v}</Text>;
   return String(v);
 }
 
@@ -407,7 +411,7 @@ export function ReorderPage(): JSX.Element {
       )}
 
       <Title order={4} mt="xl">Mindestbestand-Vorschläge je Lieferant</Title>
-      <AutoTable rows={proposals} />
+      <AutoTable rows={proposals} hide={["lines"]} />
     </>
   );
 }
@@ -1768,7 +1772,7 @@ export function QuotesPage(): JSX.Element {
           <Table.Tbody>
             {visible.map((r) => (
               <Table.Tr key={r.id}>
-                <Table.Td><Text size="sm" fw={600} c="blue">{r.number}</Text></Table.Td>
+                <Table.Td><Text size="sm" fw={600} c="blue" style={{ cursor: "pointer" }} onClick={() => void startEdit(r.id)} title="Angebot öffnen/bearbeiten">{r.number}</Text></Table.Td>
                 <Table.Td>{QUOTATION_TO_LABEL[r.quotationTo] ?? r.quotationTo}</Table.Td>
                 <Table.Td>{r.companyName}</Table.Td>
                 <Table.Td>{new Date(r.createdAt).toLocaleDateString("de-DE")}</Table.Td>

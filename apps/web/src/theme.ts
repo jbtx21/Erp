@@ -68,6 +68,20 @@ export const statusMantineColor: Record<string, string> = {
 /** Badge-Farbe für einen Status (Fallback grau). */
 export const statusColor = (s: string): string => statusMantineColor[s] ?? "gray";
 
+/** Lesbare Labels für Status-/Enum-Werte (kein „IN_PRODUKTION" mehr in der UI). */
+export const statusLabel: Record<string, string> = {
+  IN_BEARBEITUNG: "In Bearbeitung", IN_PRODUKTION: "In Produktion", VERSANDBEREIT: "Versandbereit",
+  VERSENDET: "Versendet", FAKTURIERT: "Fakturiert", ABGESCHLOSSEN: "Abgeschlossen", STORNIERT: "Storniert",
+  ANGELEGT: "Angelegt", ENTWURF: "Entwurf", NACHFASSEN: "Nachfassen", ANGENOMMEN: "Angenommen", ABGELEHNT: "Abgelehnt",
+  VERLIEHEN: "Verliehen", ZURUECK: "Zurück", KONTAKTIERT: "Kontaktiert", QUALIFIZIERT: "Qualifiziert", KONVERTIERT: "Konvertiert",
+  EXTERN_VEREDLER: "Externer Veredler", EXTERN_STICK_SIEBDRUCK: "Extern Stick & Siebdruck",
+  GRUEN: "Grün", NEU: "Neu", OFFEN: "Offen", ERFASST: "Erfasst", BERECHNET: "Berechnet", VERWORFEN: "Verworfen",
+  TEXTIL: "Textil", VEREDELUNG: "Veredelung", SONSTIGE: "Sonstiges",
+};
+/** Lesbare Anzeige eines Status/Enums: Map oder generischer Prettifier (Snake→Wörter). */
+export const prettyStatus = (s: string): string =>
+  statusLabel[s] ?? (/^[A-Z0-9_]+$/.test(s) ? s.split("_").map((w) => (w ? w.charAt(0) + w.slice(1).toLowerCase() : w)).join(" ") : s);
+
 // ── Mantine-Theme aus den Tokens (Navy primär, kompakte Defaults) ────────────────
 const navy: MantineColorsTuple = [
   "#eef1f6", "#d6dce8", "#aeb9d0", "#8294b8", "#5f76a4",
