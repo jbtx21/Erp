@@ -82,4 +82,17 @@ export class DeliveryService {
     await this.audit.append(buildEntry({ entity: "DeliveryNote", entityId: dn.id, action: "CREATE", after: { orderId, number, lines: clean, lieferstatus } }));
     return { id: dn.id, number: dn.number, lieferstatus };
   }
+
+  /**
+   * Liefert alle noch offenen Restmengen in EINEM Lieferschein (Voll-Lieferung). Wird beim
+   * Statuswechsel → VERSENDET ausgelöst, damit Versand real einen Lieferschein + Bestands-
+   * abgang + `lieferstatus` erzeugt (keine „versendet ohne Lieferung"-Inkonsistenz mehr).
+   * Gibt null zurück, wenn nichts mehr offen ist (alles bereits geliefert).
+   */
+  async deliverRemaining(orderId: string): Promise<{ id: string; number: string; lieferstatus: FulfillmentStatus } | null> {
+    const rem = await this.remaining(orderId);
+    const lines = rem.filter((l) => l.remainingQty > 0).map((l) => ({ orderLineId: l.orderLineId, qty: l.remainingQty }));
+    if (lines.length === 0) return null;
+    return this.createDeliveryNote(orderId, lines);
+  }
 }

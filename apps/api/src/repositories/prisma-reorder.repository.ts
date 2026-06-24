@@ -14,7 +14,7 @@ export class PrismaReorderRepository implements ReorderRepository {
   /** Offener Bedarf: variantenbezogene Positionen aus angelegten Aufträgen + aktiven Muster-Leihen. */
   async openDemand(): Promise<DemandItem[]> {
     const orderLines = await prisma.orderLine.findMany({
-      where: { variantId: { not: null }, order: { status: { in: ["ANGELEGT", "IN_PRODUKTION", "VERSANDBEREIT"] } } },
+      where: { variantId: { not: null }, order: { status: { in: ["ANGELEGT", "IN_BEARBEITUNG", "IN_PRODUKTION", "VERSANDBEREIT"] } } },
       select: { variantId: true, qty: true, order: { select: { number: true } } },
     });
     const loanLines = await prisma.sampleLoanLine.findMany({

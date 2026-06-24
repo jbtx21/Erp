@@ -68,12 +68,25 @@ export class PrismaReklamationRepository implements ReklamationRepository {
   }
 
   async createReproductionOrder(input: { companyId: string; number: string; sourceOrderId: string; express: boolean }): Promise<{ id: string }> {
+    // Nachproduktion reproduziert denselben Auftragsinhalt: Positionen des Ursprungs-
+    // auftrags werden 1:1 übernommen (sonst entsteht ein 0-€-Geisterauftrag ohne
+    // Positionen). Der Innendienst kann anschließend anpassen.
+    const src = await prisma.order.findUnique({
+      where: { id: input.sourceOrderId },
+      select: { lines: { orderBy: { position: "asc" }, select: { position: true, description: true, qty: true, unitNetCents: true, listNetCents: true, rabattPct: true, dbCents: true, kind: true, variantId: true } } },
+    });
+    const lines = src?.lines ?? [];
     return prisma.order.create({
       data: {
         number: input.number,
         companyId: input.companyId,
         nachproduktionVonId: input.sourceOrderId,
         employeeNote: input.express ? "Express-Nachproduktion (Reklamation)" : "Nachproduktion (Reklamation)",
+        lines: { create: lines.map((l, i) => ({
+          position: l.position ?? i + 1, description: l.description, qty: l.qty,
+          unitNetCents: l.unitNetCents, listNetCents: l.listNetCents, rabattPct: l.rabattPct,
+          dbCents: l.dbCents, kind: l.kind, variantId: l.variantId,
+        })) },
       },
       select: { id: true },
     });

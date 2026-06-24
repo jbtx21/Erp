@@ -196,7 +196,15 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         try {
           const res = await ctx.orderWorkflow.transition(input.orderId, input.to);
-          // G-5: In-App-Benachrichtigung über den Statuswechsel (Versand-Integrationspunkt separat).
+          // Versand-Verkettung: → VERSENDET erzeugt automatisch einen Lieferschein über alle
+          // offenen Restmengen (bucht Bestandsabgang + setzt lieferstatus). Kein „versendet
+          // ohne Lieferung" mehr. Best-effort: ein bereits voll gelieferter Auftrag → null.
+          if (input.to === "VERSENDET") {
+            // Best-effort: schlägt die Auto-Lieferung fehl, bleibt der bereits gebuchte
+            // Statuswechsel bestehen (lieferstatus dann unverändert, manuell nachholbar).
+            try { await ctx.deliveries.deliverRemaining(input.orderId); } catch { /* nicht blockierend */ }
+          }
+          // G-5: In-App-Benachrichtigung über den Statuswechsel.
           await ctx.notifications.notify(ctx.user.email, `Auftrag → ${input.to}`, `Auftrag ${input.orderId} ist jetzt ${input.to}.`, "orders");
           // Regel-Engine: konfigurierte Automationen zum Statuswechsel auslösen (Event → Aktion).
           await ctx.automation.handleEvent("order.status.changed", { orderId: input.orderId, status: input.to, userEmail: ctx.user.email });
