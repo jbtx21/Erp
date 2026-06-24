@@ -1,7 +1,7 @@
 // In-Memory-Quote-Repository für Unit-Tests/Dev.
 
 import { isQuoteExpired, type QuoteStatus } from "@texma/shared";
-import type { CreateQuoteInput, ExpiredQuote, QuoteRepository, QuoteRow } from "../modules/quote/quote.service.js";
+import type { CreateQuoteInput, ExpiredQuote, QuoteEditData, QuoteRepository, QuoteRow } from "../modules/quote/quote.service.js";
 
 interface Quote {
   id: string;
@@ -11,11 +11,13 @@ interface Quote {
   orderType: string;
   quotationTo: string;
   gueltigBisAm: Date | null;
+  terms: string | null;
   createdAt: Date;
   verlustgrund: string | null;
   totalNetCents: number;
   totalDbCents: number | null;
   hasDueItem: boolean;
+  lines: CreateQuoteInput["lines"];
 }
 
 export class InMemoryQuoteRepository implements QuoteRepository {
@@ -36,12 +38,40 @@ export class InMemoryQuoteRepository implements QuoteRepository {
     this.quotes.set(id, {
       id, number: input.number, companyId: input.companyId, status: "ENTWURF",
       orderType: input.orderType ?? "SALES", quotationTo: input.quotationTo ?? "CUSTOMER",
-      gueltigBisAm: input.gueltigBisAm ?? null, createdAt: new Date(), verlustgrund: null,
+      gueltigBisAm: input.gueltigBisAm ?? null, terms: input.terms ?? null, createdAt: new Date(), verlustgrund: null,
       totalNetCents: main.reduce((s, l) => s + l.qty * l.unitNetCents, 0),
       totalDbCents: dbLines.length ? dbLines.reduce((s, l) => s + l.qty * (l.dbCents ?? 0), 0) : null,
-      hasDueItem: false,
+      hasDueItem: false, lines: input.lines,
     });
     return { id };
+  }
+
+  async forEdit(quoteId: string): Promise<QuoteEditData | null> {
+    const q = this.quotes.get(quoteId);
+    if (!q) return null;
+    return {
+      id: q.id, companyId: q.companyId, status: q.status, gueltigBisAm: q.gueltigBisAm, terms: q.terms, orderType: q.orderType, quotationTo: q.quotationTo,
+      lines: q.lines.map((l) => ({
+        description: l.description, qty: l.qty, kind: l.kind ?? "TEXTIL", unitNetCents: l.unitNetCents,
+        listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, dbCents: l.dbCents ?? null,
+        articleId: l.articleId ?? null, variantId: l.variantId ?? null, isAlternative: l.isAlternative ?? false,
+      })),
+    };
+  }
+
+  async update(quoteId: string, input: CreateQuoteInput): Promise<void> {
+    const q = this.quotes.get(quoteId);
+    if (!q) return;
+    const main = input.lines.filter((l) => !l.isAlternative);
+    const dbLines = main.filter((l) => l.dbCents !== null && l.dbCents !== undefined);
+    q.companyId = input.companyId;
+    q.orderType = input.orderType ?? "SALES";
+    q.quotationTo = input.quotationTo ?? "CUSTOMER";
+    q.gueltigBisAm = input.gueltigBisAm ?? null;
+    q.terms = input.terms ?? null;
+    q.lines = input.lines;
+    q.totalNetCents = main.reduce((s, l) => s + l.qty * l.unitNetCents, 0);
+    q.totalDbCents = dbLines.length ? dbLines.reduce((s, l) => s + l.qty * (l.dbCents ?? 0), 0) : null;
   }
 
   async setStatus(quoteId: string, status: QuoteStatus): Promise<void> {
@@ -50,7 +80,7 @@ export class InMemoryQuoteRepository implements QuoteRepository {
   }
 
   seed(id: string, status: QuoteStatus, gueltigBisAm: Date | null = null): void {
-    this.quotes.set(id, { id, number: id, companyId: "co", status, orderType: "SALES", quotationTo: "CUSTOMER", gueltigBisAm, createdAt: new Date(), verlustgrund: null, totalNetCents: 0, totalDbCents: null, hasDueItem: false });
+    this.quotes.set(id, { id, number: id, companyId: "co", status, orderType: "SALES", quotationTo: "CUSTOMER", gueltigBisAm, terms: null, createdAt: new Date(), verlustgrund: null, totalNetCents: 0, totalDbCents: null, hasDueItem: false, lines: [] });
   }
 
   get(id: string): Quote | undefined {

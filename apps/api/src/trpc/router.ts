@@ -1018,6 +1018,29 @@ export const appRouter = router({
         try { return await ctx.quotes.create({ ...input, gueltigBisAm: input.gueltigBisAm ? new Date(input.gueltigBisAm) : null }); }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
+    // Angebot für die Bearbeitung laden (Kopf + Positionen).
+    forEdit: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ id: z.string().min(1) }))
+      .query(async ({ input, ctx }) => {
+        try { return await ctx.quotes.getForEdit(input.id); }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
+      }),
+    // Vollständige Bearbeitung (Kopf + Positionen), solange nicht in Auftrag gewandelt.
+    update: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({
+        id: z.string().min(1),
+        companyId: z.string().min(1),
+        gueltigBisAm: z.string().datetime().optional(),
+        orderType: z.enum(["SALES", "MAINTENANCE", "SHOPPING_CART"]).optional(),
+        quotationTo: z.enum(["CUSTOMER", "LEAD"]).optional(),
+        terms: z.string().optional(),
+        lines: z.array(z.object({ description: z.string().min(1), qty: z.number().int().positive(), unitNetCents: z.number().int().nonnegative(), listNetCents: z.number().int().nonnegative().optional(), rabattPct: z.number().int().min(0).max(100).optional(), kind: z.enum(["TEXTIL", "VEREDELUNG", "SONSTIGE"]).optional(), articleId: z.string().optional(), variantId: z.string().optional(), isAlternative: z.boolean().optional(), dbCents: z.number().int().optional() })).min(1),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { id, ...rest } = input;
+        try { await ctx.quotes.update(id, { ...rest, gueltigBisAm: input.gueltigBisAm ? new Date(input.gueltigBisAm) : null }); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
     transition: roleProcedure("ADMIN", "BUERO")
       .input(z.object({ id: z.string().min(1), to: z.enum(["VERSENDET", "NACHFASSEN", "ANGENOMMEN"]) }))
       .mutation(async ({ input, ctx }) => {

@@ -3,7 +3,7 @@
 
 import { prisma } from "@texma/db";
 import type { QuoteStatus } from "@texma/shared";
-import type { CreateQuoteInput, ExpiredQuote, QuoteRepository, QuoteRow } from "../modules/quote/quote.service.js";
+import type { CreateQuoteInput, ExpiredQuote, QuoteEditData, QuoteRepository, QuoteRow } from "../modules/quote/quote.service.js";
 
 export class PrismaQuoteRepository implements QuoteRepository {
   async getStatus(quoteId: string): Promise<QuoteStatus | null> {
@@ -45,6 +45,38 @@ export class PrismaQuoteRepository implements QuoteRepository {
 
   async setStatus(quoteId: string, status: QuoteStatus): Promise<void> {
     await prisma.quote.update({ where: { id: quoteId }, data: { status: status as never } });
+  }
+
+  async forEdit(quoteId: string): Promise<QuoteEditData | null> {
+    const q = await prisma.quote.findUnique({
+      where: { id: quoteId },
+      select: {
+        id: true, companyId: true, status: true, gueltigBisAm: true, terms: true, orderType: true, quotationTo: true,
+        lines: { orderBy: { position: "asc" }, select: { description: true, qty: true, kind: true, unitNetCents: true, listNetCents: true, rabattPct: true, dbCents: true, articleId: true, variantId: true, isAlternative: true } },
+      },
+    });
+    if (!q) return null;
+    return {
+      id: q.id, companyId: q.companyId, status: q.status as QuoteStatus, gueltigBisAm: q.gueltigBisAm, terms: q.terms, orderType: q.orderType, quotationTo: q.quotationTo,
+      lines: q.lines.map((l) => ({ description: l.description, qty: l.qty, kind: l.kind as never, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents, rabattPct: l.rabattPct, dbCents: l.dbCents, articleId: l.articleId, variantId: l.variantId, isAlternative: l.isAlternative })),
+    };
+  }
+
+  async update(quoteId: string, input: CreateQuoteInput): Promise<void> {
+    await prisma.$transaction([
+      prisma.quoteLine.deleteMany({ where: { quoteId } }),
+      prisma.quote.update({
+        where: { id: quoteId },
+        data: {
+          companyId: input.companyId,
+          gueltigBisAm: input.gueltigBisAm ?? null,
+          orderType: input.orderType ?? "SALES",
+          quotationTo: input.quotationTo ?? "CUSTOMER",
+          terms: input.terms ?? null,
+          lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, dbCents: l.dbCents ?? null, kind: (l.kind ?? "TEXTIL") as never, articleId: l.articleId ?? null, variantId: l.variantId ?? null, isAlternative: l.isAlternative ?? false })) },
+        },
+      }),
+    ]);
   }
 
   async reject(quoteId: string, verlustgrund: string): Promise<void> {

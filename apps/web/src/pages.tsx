@@ -1163,6 +1163,20 @@ export const toQuoteApiLines = (lines: EditorLine[]): { description: string; qty
     ...(l.articleId ? { articleId: l.articleId } : {}), ...(l.variantId ? { variantId: l.variantId } : {}), ...(l.isAlternative ? { isAlternative: true } : {}),
   }));
 
+// Rekonstruiert die Erfassungs-Positionen aus gespeicherten Angebots-/Auftragszeilen
+// (für die Bearbeitung): VK = Listenpreis, Rabatt, EK = effektiver Netto − DB.
+type StoredLine = { description: string; qty: number; kind: PositionKind; unitNetCents: number; listNetCents: number | null; rabattPct: number | null; dbCents: number | null; articleId?: string | null; variantId?: string | null; isAlternative?: boolean };
+export const fromStoredLines = (ls: StoredLine[]): EditorLine[] =>
+  ls.map((l) => ({
+    description: l.description, qty: l.qty, kind: l.kind,
+    euro: (l.listNetCents ?? l.unitNetCents) / 100,
+    ...(l.rabattPct ? { rabattPct: l.rabattPct } : {}),
+    ...(l.dbCents != null ? { ekEuro: (l.unitNetCents - l.dbCents) / 100 } : {}),
+    ...(l.variantId ? { variantId: l.variantId } : {}),
+    ...(l.articleId ? { articleId: l.articleId } : {}),
+    ...(l.isAlternative ? { isAlternative: true } : {}),
+  }));
+
 // Angebot → Auftrag: fragt für Hauptartikel ohne Variante (needsVariant) die genaue
 // Farbe×Größe ab und übergibt die Auflösung an convertQuote. Alternativen werden vom
 // Server weggelassen. Ohne offene Varianten wird direkt gewandelt (kein Dialog).
@@ -1228,6 +1242,7 @@ export function QuotesPage(): JSX.Element {
   type QuoteListRow = Awaited<ReturnType<typeof trpc.quotes.list.query>>[number];
   const [rows, setRows] = useState<QuoteListRow[]>([]);
   const [view, setView] = useState<"list" | "create">("list");
+  const [editId, setEditId] = useState<string | null>(null); // gesetzt = Bearbeitung statt Neuanlage
   const [convertId, setConvertId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   // Anlage-Formular
@@ -1273,6 +1288,7 @@ export function QuotesPage(): JSX.Element {
       <Group gap={4} justify="flex-end" wrap="nowrap" onClick={(e) => e.stopPropagation()}>
         <Button size="compact-xs" variant="subtle" onClick={() => void printPdf(id)}>PDF</Button>
         <Button size="compact-xs" variant="subtle" onClick={() => void mailPdf(id)}>Mail</Button>
+        {status !== "ANGENOMMEN" && status !== "ABGELEHNT" && <Button size="compact-xs" variant="subtle" onClick={() => void startEdit(id)}>Bearbeiten</Button>}
         {status === "ENTWURF" && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.quotes.transition.mutate({ id, to: "VERSENDET" }))}>→ Versendet</Button>}
         {(status === "VERSENDET" || status === "NACHFASSEN") && <Button size="compact-xs" color="green" onClick={() => void act(() => trpc.quotes.transition.mutate({ id, to: "ANGENOMMEN" }))}>Angenommen</Button>}
         {status === "ANGENOMMEN" && <Button size="compact-xs" color="blue" onClick={() => setConvertId(id)}>→ Auftrag</Button>}
@@ -1286,18 +1302,33 @@ export function QuotesPage(): JSX.Element {
     );
   };
 
+  const resetForm = (): void => {
+    setLines([{ description: "", qty: 10, euro: 12.9, kind: "TEXTIL" }]); setCompanyId(""); setTerms(""); setEditId(null);
+  };
+  const startEdit = async (id: string): Promise<void> => {
+    setErr(null);
+    try {
+      const q = await trpc.quotes.forEdit.query({ id });
+      setEditId(id); setCompanyId(q.companyId); setTerms(q.terms ?? "");
+      setOrderType(q.orderType); setQuotationTo(q.quotationTo);
+      if (q.gueltigBisAm) setGueltigBis(new Date(q.gueltigBisAm).toISOString().slice(0, 10));
+      setLines(fromStoredLines(q.lines));
+      setView("create");
+    } catch (e) { setErr(errMsg(e)); }
+  };
   const saveQuote = async (): Promise<void> => {
     setBusy(true); setErr(null);
     try {
-      await trpc.quotes.create.mutate({
+      const payload = {
         companyId, lines: toQuoteApiLines(lines),
         gueltigBisAm: gueltigBis ? `${gueltigBis}T00:00:00.000Z` : undefined,
         orderType: orderType as "SALES" | "MAINTENANCE" | "SHOPPING_CART",
         quotationTo: quotationTo as "CUSTOMER" | "LEAD",
         terms: terms.trim() || undefined,
-      });
-      setLines([{ description: "", qty: 10, euro: 12.9, kind: "TEXTIL" }]); setCompanyId(""); setTerms("");
-      setView("list"); await load();
+      };
+      if (editId) await trpc.quotes.update.mutate({ id: editId, ...payload });
+      else await trpc.quotes.create.mutate(payload);
+      resetForm(); setView("list"); await load();
     } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
   };
 
@@ -1306,9 +1337,9 @@ export function QuotesPage(): JSX.Element {
     return (
       <>
         <Group justify="space-between" align="center">
-          <Text size="sm" c="dimmed">Vertrieb / Angebot / <b>Neu Angebot</b> <Badge color="orange" variant="light" ml={6}>Nicht gespeichert</Badge></Text>
+          <Text size="sm" c="dimmed">Vertrieb / Angebot / <b>{editId ? "Angebot bearbeiten" : "Neu Angebot"}</b> {!editId && <Badge color="orange" variant="light" ml={6}>Nicht gespeichert</Badge>}</Text>
           <Group gap="xs">
-            <Button variant="default" onClick={() => setView("list")}>Abbrechen</Button>
+            <Button variant="default" onClick={() => { resetForm(); setView("list"); }}>Abbrechen</Button>
             <Button color="dark" loading={busy} disabled={!companyId.trim() || toApiLines(lines).length === 0} onClick={() => void saveQuote()}>Speichern</Button>
           </Group>
         </Group>

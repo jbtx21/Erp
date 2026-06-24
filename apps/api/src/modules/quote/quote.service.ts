@@ -36,6 +36,31 @@ export interface CreateQuoteInput {
 
 export type QuoteTransition = "VERSENDET" | "NACHFASSEN" | "ANGENOMMEN";
 
+/** Angebotsposition für die Bearbeitung (rekonstruiert die Erfassungsmaske). */
+export interface QuoteEditLine {
+  description: string;
+  qty: number;
+  kind: import("@texma/shared").PositionKind;
+  unitNetCents: number;
+  listNetCents: number | null;
+  rabattPct: number | null;
+  dbCents: number | null;
+  articleId: string | null;
+  variantId: string | null;
+  isAlternative: boolean;
+}
+
+export interface QuoteEditData {
+  id: string;
+  companyId: string;
+  status: QuoteStatus;
+  gueltigBisAm: Date | null;
+  terms: string | null;
+  orderType: string;
+  quotationTo: string;
+  lines: QuoteEditLine[];
+}
+
 export interface QuoteRepository {
   getStatus(quoteId: string): Promise<QuoteStatus | null>;
   reject(quoteId: string, verlustgrund: string): Promise<void>;
@@ -45,6 +70,10 @@ export interface QuoteRepository {
   list(): Promise<QuoteRow[]>;
   create(input: CreateQuoteInput & { number: string }): Promise<{ id: string }>;
   setStatus(quoteId: string, status: QuoteStatus): Promise<void>;
+  /** Angebot mit Positionen für die Bearbeitung laden. */
+  forEdit(quoteId: string): Promise<QuoteEditData | null>;
+  /** Kopf + Positionen ersetzen (vollständige Bearbeitung). */
+  update(quoteId: string, input: CreateQuoteInput): Promise<void>;
 }
 
 export class QuoteError extends Error {}
@@ -68,6 +97,27 @@ export class QuoteService {
     const { id } = await this.repo.create({ ...input, number });
     await this.audit.append(buildEntry({ entity: "Quote", entityId: id, action: "CREATE", after: { number, companyId: input.companyId } }));
     return { id, number };
+  }
+
+  /** Angebot für die Bearbeitung laden (Kopf + Positionen). */
+  async getForEdit(quoteId: string): Promise<QuoteEditData> {
+    const data = await this.repo.forEdit(quoteId);
+    if (!data) throw new QuoteError(`Angebot ${quoteId} nicht gefunden.`);
+    return data;
+  }
+
+  /**
+   * Vollständige Bearbeitung eines Angebots (Kopf + Positionen), solange es nicht in einen
+   * Auftrag gewandelt wurde (Status ANGENOMMEN). Ersetzt die Positionen.
+   */
+  async update(quoteId: string, input: CreateQuoteInput): Promise<void> {
+    const status = await this.repo.getStatus(quoteId);
+    if (!status) throw new QuoteError(`Angebot ${quoteId} nicht gefunden.`);
+    if (status === "ANGENOMMEN") throw new QuoteError("Angebot wurde bereits in einen Auftrag gewandelt — nicht mehr bearbeitbar.");
+    if (!input.companyId) throw new QuoteError("Firma ist Pflicht.");
+    if (!input.lines || input.lines.length === 0) throw new QuoteError("Mindestens eine Position.");
+    await this.repo.update(quoteId, input);
+    await this.audit.append(buildEntry({ entity: "Quote", entityId: quoteId, action: "UPDATE", after: { lineCount: input.lines.length, companyId: input.companyId } }));
   }
 
   /** Status weiterschalten (F2; ABGELEHNT läuft über reject mit Grund). */
