@@ -2303,6 +2303,7 @@ function ConnectionsPanel({ orderId, role, onChanged }: { orderId: string; role:
 export function OrdersPage({ role, focusId }: { role: string; focusId?: string }): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
   const globalTaxRate = useDefaultTaxRate();
   // Terminierungs-Panel (B9): Auftrag + zugesagter Liefertermin + Rückwärts-Vorschau.
   const [termOrder, setTermOrder] = useState<string | null>(null);
@@ -2361,7 +2362,8 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
         hint={role === "PRODUKTION" ? "Rolle PRODUKTION: Preise/Kundendaten ausgeblendet (Kap. 12)." : "Status weiterschalten — illegale Übergänge blockiert (F2, Kap. 35.2)."}
         action={canAct ? <Button size="xs" color="dark" onClick={() => { if (showCreate) resetOrderForm(); else setShowCreate(true); }}>{showCreate ? "Erfassung schließen" : "+ Auftrag manuell anlegen"}</Button> : undefined}
       />
-      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      {err && <Alert color="red" mt="sm" withCloseButton onClose={() => setErr(null)}>{err}</Alert>}
+      {msg && <Alert color="green" mt="sm" withCloseButton onClose={() => setMsg(null)}>{msg}</Alert>}
       {canAct && showCreate && (
         <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
           <DocFormShell
@@ -2401,10 +2403,21 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
             {next.map((to) => (
               <Button key={to} size="compact-xs" variant={to === "STORNIERT" ? "light" : "default"} color={to === "STORNIERT" ? "red" : undefined}
                 onClick={async () => {
-                  setErr(null);
-                  try { await trpc.shopOrders.transition.mutate({ orderId: String(r.id), to: to as Exclude<OrderStatus, "ANGELEGT"> }); await load(); }
+                  setErr(null); setMsg(null);
+                  try {
+                    if (to === "FAKTURIERT") {
+                      // Faktura ist KEIN reiner Status-Schalter: erzeugt echte Rechnung (RE-Nr.,
+                      // USt, offener Posten) und setzt status=FAKTURIERT in einer Transaktion.
+                      const inv = await trpc.invoices.createFromOrder.mutate({ orderId: String(r.id) });
+                      setMsg(`Rechnung ${inv.number} erzeugt (${euro(inv.grossCents)} brutto).`);
+                    } else {
+                      await trpc.shopOrders.transition.mutate({ orderId: String(r.id), to: to as Exclude<OrderStatus, "ANGELEGT"> });
+                      setMsg(`Auftrag ${String(r.number ?? r.id)} → ${prettyStatus(to)}.`);
+                    }
+                    await load();
+                  }
                   catch (e) { setErr(errMsg(e)); }
-                }}>→ {to}</Button>
+                }}>→ {prettyStatus(to)}</Button>
             ))}
           </Group>
         );

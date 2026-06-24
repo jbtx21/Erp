@@ -33,9 +33,32 @@ export class PrismaDeliveryRepository implements DeliveryRepository {
   }
 
   async createDeliveryNote(orderId: string, number: string, lines: DeliveryLineInput[]): Promise<{ id: string; number: string }> {
-    return prisma.deliveryNote.create({
-      data: { orderId, number, lines: { create: lines.map((l) => ({ orderLineId: l.orderLineId, qty: l.qty })) } },
-      select: { id: true, number: true },
+    return prisma.$transaction(async (tx) => {
+      const note = await tx.deliveryNote.create({
+        data: { orderId, number, lines: { create: lines.map((l) => ({ orderLineId: l.orderLineId, qty: l.qty })) } },
+        select: { id: true, number: true },
+      });
+      // Verkettung Lieferung → Lager: jede gelieferte, variantengebundene Position bucht
+      // einen Abgang (VERBRAUCH) aus dem Hauptlager — der Bestand bewegt sich jetzt real
+      // mit dem Versand (kein „blindes" Lager mehr). Freitext-Positionen ohne Variante
+      // lösen keine Bewegung aus.
+      const variantByLine = new Map(
+        (await tx.orderLine.findMany({ where: { id: { in: lines.map((l) => l.orderLineId) } }, select: { id: true, variantId: true } }))
+          .map((l) => [l.id, l.variantId])
+      );
+      for (const l of lines) {
+        const variantId = variantByLine.get(l.orderLineId);
+        if (!variantId || l.qty <= 0) continue;
+        await tx.stockMove.create({
+          data: { variantId, deltaQty: -l.qty, grund: "VERBRAUCH", lager: "HAUPT", warehouseId: "wh_haupt", belegRef: `DeliveryNote:${note.number}` },
+        });
+        await tx.stockLevel.upsert({
+          where: { variantId },
+          create: { variantId, qty: -l.qty },
+          update: { qty: { decrement: l.qty } },
+        });
+      }
+      return note;
     });
   }
 

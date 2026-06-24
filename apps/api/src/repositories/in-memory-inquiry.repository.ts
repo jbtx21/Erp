@@ -49,9 +49,9 @@ export class InMemoryInquiryRepository implements InquiryRepository {
     return { id };
   }
 
-  async load(id: string): Promise<{ status: InquiryStatus; companyId: string | null } | null> {
+  async load(id: string): Promise<{ status: InquiryStatus; companyId: string | null; text: string } | null> {
     const i = this.inquiries.get(id);
-    return i ? { status: i.status, companyId: i.companyId } : null;
+    return i ? { status: i.status, companyId: i.companyId, text: i.text } : null;
   }
 
   async setStatus(id: string, status: InquiryStatus): Promise<void> {

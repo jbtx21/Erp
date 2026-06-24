@@ -62,6 +62,20 @@ export class PrismaGoodsReceiptRepository implements GoodsReceiptRepository {
         select: { id: true },
       });
       await tx.purchaseOrder.update({ where: { id: purchaseOrderId }, data: { status: newStatus } });
+      // Verkettung Wareneingang → Lager: jede eingegangene Position bucht einen Zugang
+      // (WARENEINGANG) ins Hauptlager und schreibt den Bestands-Cache fort — der Bestand
+      // wird beim Empfang real sichtbar (kein „blindes" Lager mehr).
+      for (const l of lines) {
+        if (l.receivedQty <= 0) continue;
+        await tx.stockMove.create({
+          data: { variantId: l.variantId, deltaQty: l.receivedQty, grund: "WARENEINGANG", lager: "HAUPT", warehouseId: "wh_haupt", belegRef: `GoodsReceipt:${gr.id}` },
+        });
+        await tx.stockLevel.upsert({
+          where: { variantId: l.variantId },
+          create: { variantId: l.variantId, qty: l.receivedQty },
+          update: { qty: { increment: l.receivedQty } },
+        });
+      }
       return { goodsReceiptId: gr.id };
     });
   }

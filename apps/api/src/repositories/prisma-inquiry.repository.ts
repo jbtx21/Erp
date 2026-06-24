@@ -27,9 +27,9 @@ export class PrismaInquiryRepository implements InquiryRepository {
     });
   }
 
-  async load(id: string): Promise<{ status: InquiryStatus; companyId: string | null } | null> {
-    const i = await prisma.inquiry.findUnique({ where: { id }, select: { status: true, companyId: true } });
-    return i ? { status: i.status as InquiryStatus, companyId: i.companyId } : null;
+  async load(id: string): Promise<{ status: InquiryStatus; companyId: string | null; text: string } | null> {
+    const i = await prisma.inquiry.findUnique({ where: { id }, select: { status: true, companyId: true, text: true } });
+    return i ? { status: i.status as InquiryStatus, companyId: i.companyId, text: i.text } : null;
   }
 
   async setStatus(id: string, status: InquiryStatus): Promise<void> {
@@ -40,7 +40,7 @@ export class PrismaInquiryRepository implements InquiryRepository {
     await prisma.inquiry.update({ where: { id }, data: { status: "VERWORFEN", verworfenGrund: grund } });
   }
 
-  async convertToQuote(id: string, input: { quoteNumber: string; companyId: string }): Promise<{ quoteId: string }> {
+  async convertToQuote(id: string, input: { quoteNumber: string; companyId: string; text: string }): Promise<{ quoteId: string }> {
     return prisma.$transaction(async (tx) => {
       // Atomarer Gate: nur konvertieren, wenn noch offen. Ein paralleler Zweitlauf
       // (Doppelklick/Retry) trifft 0 Zeilen und bricht ab -> keine verwaiste Quote.
@@ -55,6 +55,14 @@ export class PrismaInquiryRepository implements InquiryRepository {
         data: { number: input.quoteNumber, companyId: input.companyId, status: "ENTWURF" },
         select: { id: true },
       });
+      // Inhaltlichen Faden wahren (Kap. 18.1): Anfragetext wird als Start-Position ins
+      // Angebot übernommen (Menge 1, Preis 0 — Innendienst beziffert). Kein leeres Angebot.
+      const text = input.text.trim();
+      if (text.length > 0) {
+        await tx.quoteLine.create({
+          data: { quoteId: quote.id, position: 1, description: text, qty: 1, unitNetCents: 0, taxRatePct: 19, kind: "TEXTIL" },
+        });
+      }
       await tx.inquiry.update({ where: { id }, data: { quoteId: quote.id } });
       return { quoteId: quote.id };
     });

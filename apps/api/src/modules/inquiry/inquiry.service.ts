@@ -35,11 +35,12 @@ export interface InquiryRow {
 export interface InquiryRepository {
   create(input: CreateInquiryInput & { number: string }): Promise<{ id: string }>;
   list(): Promise<InquiryRow[]>;
-  load(id: string): Promise<{ status: InquiryStatus; companyId: string | null } | null>;
+  load(id: string): Promise<{ status: InquiryStatus; companyId: string | null; text: string } | null>;
   setStatus(id: string, status: InquiryStatus): Promise<void>;
   discard(id: string, grund: string): Promise<void>;
-  /** Erzeugt das Angebot, verknüpft es und setzt die Anfrage auf ANGEBOT — atomar. */
-  convertToQuote(id: string, input: { quoteNumber: string; companyId: string }): Promise<{ quoteId: string }>;
+  /** Erzeugt das Angebot (inkl. Start-Position aus dem Anfragetext), verknüpft es und
+   *  setzt die Anfrage auf ANGEBOT — atomar. */
+  convertToQuote(id: string, input: { quoteNumber: string; companyId: string; text: string }): Promise<{ quoteId: string }>;
 }
 
 export class InquiryService {
@@ -89,7 +90,7 @@ export class InquiryService {
       throw new InquiryError("Konvertierung erfordert eine zugeordnete Firma.");
     }
     const quoteNumber = await this.numbering.next("QUOTE");
-    const { quoteId } = await this.repo.convertToQuote(id, { quoteNumber, companyId: inq.companyId });
+    const { quoteId } = await this.repo.convertToQuote(id, { quoteNumber, companyId: inq.companyId, text: inq.text });
     await this.audit.append(
       buildEntry({ entity: "Inquiry", entityId: id, action: "UPDATE", after: { status: "ANGEBOT", quoteId, quoteNumber } })
     );

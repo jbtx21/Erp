@@ -187,7 +187,7 @@ async function main(): Promise<void> {
 
   // Nummernkreise auf die geseedeten Belege heben, damit die echte Nummernvergabe
   // (NumberingService.next) kollisionsfrei dahinter weiterzählt (sonst AB-2026-0001-Kollision).
-  for (const [key, next] of [["ORDER", 4], ["QUOTE", 2], ["PRODUCTION_ORDER", 3], ["INVOICE", 2]] as const) {
+  for (const [key, next] of [["ORDER", 4], ["QUOTE", 2], ["PRODUCTION_ORDER", 3], ["INVOICE", 2], ["INQUIRY", 2]] as const) {
     await prisma.numberSequence.upsert({
       where: { key_year: { key, year: 2026 } },
       update: { next: { set: next } },
