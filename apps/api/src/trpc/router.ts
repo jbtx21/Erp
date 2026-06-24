@@ -1290,6 +1290,7 @@ export const appRouter = router({
   // Lager-Stammdaten (Multi-Lager Stufe 1): beliebige Läger statt festes Enum.
   warehouses: router({
     list: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.warehouses.list()),
+    balances: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.warehouses.balances()),
     create: roleProcedure("ADMIN", "BUERO")
       .input(z.object({
         code: z.string().min(1),
@@ -1310,6 +1311,7 @@ export const appRouter = router({
       .input(z.object({
         variantId: z.string().min(1), deltaQty: z.number().int(),
         lager: z.enum(["HAUPT", "MUSTER", "SHOWROOM", "TRANSFERDRUCK"]).default("HAUPT"),
+        warehouseId: z.string().optional(), // Multi-Lager 2b: beliebiges Lager (Vorrang vor lager)
         grund: z.enum(["EROEFFNUNG", "WARENEINGANG", "VERBRAUCH", "INVENTUR", "KORREKTUR", "MUSTER"]).default("KORREKTUR"),
       }))
       .mutation(async ({ input, ctx }) => {

@@ -15,6 +15,8 @@ export interface StockMoveInput {
   deltaQty: number;
   grund: StockMoveReason;
   lager?: StockLager;
+  /** Multi-Lager 2b: bevorzugt — bucht auf ein beliebiges Warehouse (lager wird abgeleitet). */
+  warehouseId?: string;
   belegRef?: string | null;
 }
 

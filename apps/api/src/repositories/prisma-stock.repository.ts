@@ -13,17 +13,28 @@ import type {
 
 export class PrismaStockRepository implements StockRepository {
   async postMove(move: StockMoveInput): Promise<PostedMove> {
-    const lager: StockLager = move.lager ?? "HAUPT";
     return prisma.$transaction(async (tx) => {
+      // Multi-Lager 2b: bevorzugt auf warehouseId buchen (beliebiges Lager). Das lager-Enum
+      // wird aus der Warehouse-Art abgeleitet (SONSTIGE → HAUPT als Platzhalter), bis das
+      // Enum in Stufe 2c entfällt. Ohne warehouseId: Seed-Mapping aus dem Enum (2a).
+      let lager: StockLager;
+      let warehouseId: string;
+      if (move.warehouseId) {
+        const wh = await tx.warehouse.findUnique({ where: { id: move.warehouseId }, select: { kind: true } });
+        if (!wh) throw new Error(`Lager ${move.warehouseId} nicht gefunden.`);
+        warehouseId = move.warehouseId;
+        lager = wh.kind === "SONSTIGE" ? "HAUPT" : (wh.kind as StockLager);
+      } else {
+        lager = move.lager ?? "HAUPT";
+        warehouseId = `wh_${lager.toLowerCase()}`;
+      }
       const created = await tx.stockMove.create({
         data: {
           variantId: move.variantId,
           deltaQty: move.deltaQty,
           grund: move.grund,
           lager,
-          // Multi-Lager Stufe 2a: warehouseId parallel mitschreiben (Seed-Mapping aus dem
-          // Enum, Migration 0075). Stufe 2b stellt die Buchung primär auf warehouseId um.
-          warehouseId: `wh_${lager.toLowerCase()}`,
+          warehouseId,
           belegRef: move.belegRef ?? null,
         },
         select: { id: true },

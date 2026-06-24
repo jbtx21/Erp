@@ -4448,8 +4448,10 @@ function WarehousesSection(): JSX.Element {
 
 export function LagerPage(): JSX.Element {
   const [rows, setRows] = useState<Awaited<ReturnType<typeof trpc.stock.list.query>>>([]);
+  const [whBalances, setWhBalances] = useState<Awaited<ReturnType<typeof trpc.warehouses.balances.query>>>([]);
+  const [warehouses, setWarehouses] = useState<Awaited<ReturnType<typeof trpc.warehouses.list.query>>>([]);
   const [variantId, setVariantId] = useState("");
-  const [lager, setLager] = useState<string>("TRANSFERDRUCK");
+  const [whId, setWhId] = useState<string>("");
   const [delta, setDelta] = useState(0);
   const [countVariant, setCountVariant] = useState("");
   const [countLager, setCountLager] = useState<string>("SHOWROOM");
@@ -4458,7 +4460,12 @@ export function LagerPage(): JSX.Element {
   const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    try { setRows(await trpc.stock.list.query()); setErr(null); } catch (e) { setErr(errMsg(e)); }
+    try {
+      const [r, b, w] = await Promise.all([trpc.stock.list.query(), trpc.warehouses.balances.query(), trpc.warehouses.list.query()]);
+      setRows(r); setWhBalances(b); setWarehouses(w);
+      setWhId((cur) => cur || w.find((x) => x.active)?.id || "");
+      setErr(null);
+    } catch (e) { setErr(errMsg(e)); }
   }, []);
   useEffect(() => { void load(); }, [load]);
 
@@ -4472,14 +4479,15 @@ export function LagerPage(): JSX.Element {
 
       <Group gap="md" mt="md" align="end" wrap="wrap">
         <Box p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
-          <Text size="sm" fw={600}>Zugang / Abgang (Transferdrucke etc.)</Text>
+          <Text size="sm" fw={600}>Zugang / Abgang (beliebiges Lager)</Text>
           <Group gap="xs" align="end" mt="xs">
             <TextInput label="Varianten-ID" value={variantId} onChange={(e) => setVariantId(e.currentTarget.value)} w={170} />
-            <Select label="Lager" value={lager} onChange={(v) => v && setLager(v)} data={LAGER.map((l) => ({ value: l.value, label: l.label }))} w={150} />
+            <Select label="Lager" value={whId} onChange={(v) => v && setWhId(v)} w={190} searchable
+              data={warehouses.filter((w) => w.active).map((w) => ({ value: w.id, label: `${w.code} · ${w.name}` }))} />
             <NumberInput label="Menge (+/−)" value={delta} onChange={(v) => setDelta(Number(v) || 0)} w={120} />
-            <Button disabled={!variantId.trim() || delta === 0} onClick={async () => {
+            <Button disabled={!variantId.trim() || delta === 0 || !whId} onClick={async () => {
               setErr(null); setMsg(null);
-              try { await trpc.stock.move.mutate({ variantId, deltaQty: delta, lager: lager as "HAUPT", grund: delta > 0 ? "WARENEINGANG" : "VERBRAUCH" }); setMsg("Bewegung gebucht."); setDelta(0); await load(); }
+              try { await trpc.stock.move.mutate({ variantId, deltaQty: delta, warehouseId: whId, grund: delta > 0 ? "WARENEINGANG" : "VERBRAUCH" }); setMsg("Bewegung gebucht."); setDelta(0); await load(); }
               catch (e) { setErr(errMsg(e)); }
             }}>Buchen</Button>
           </Group>
@@ -4517,6 +4525,10 @@ export function LagerPage(): JSX.Element {
           </Table.Tbody>
         </Table>
       )}
+
+      <Title order={4} mt="xl">Bestand je Lager (Multi-Lager)</Title>
+      <Text size="xs" c="dimmed" mb={4}>Bestand je Warehouse × Variante aus dem Bewegungs-Ledger — zeigt auch neu angelegte Läger.</Text>
+      <AutoTable rows={whBalances.map((b) => ({ Lager: `${b.warehouseCode} · ${b.warehouseName}`, SKU: b.sku, Artikel: b.name, Bestand: b.qty }))} />
 
       <LagerVerfuegbarkeit />
     </>
