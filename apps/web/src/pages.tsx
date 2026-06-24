@@ -3429,7 +3429,7 @@ export function PricingPage(): JSX.Element {
           </Table>
           <Group align="flex-end" gap="sm" mt="sm">
             <NumberInput label="ab Menge" w={110} min={1} value={newMin} onChange={(v) => setNewMin(typeof v === "number" ? v : 1)} />
-            <NumberInput label="Netto/Stück (Cent)" w={160} min={0} value={newNet} onChange={(v) => setNewNet(typeof v === "number" ? v : 0)} />
+            <NumberInput label="Netto/Stück (€)" w={160} min={0} decimalScale={2} step={0.1} value={newNet / 100} onChange={(v) => setNewNet(Math.round((typeof v === "number" ? v : 0) * 100))} />
             <Button variant="light" onClick={async () => {
               setErr(null);
               try { await trpc.pricing.addGroupTier.mutate({ companyId, variantId, minMenge: newMin, netCents: newNet }); await loadTiers(); }

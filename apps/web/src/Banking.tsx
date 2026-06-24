@@ -2,7 +2,7 @@
 // Matching-Pipeline) und SEPA-Überweisungen auslösen (PIS, pain.001). Eine Provider-
 // Abstraktion im Backend kapselt die Unterschiede; hier die Bedienoberfläche dazu.
 import { useCallback, useEffect, useState } from "react";
-import { Badge, Button, Card, Group, NumberInput, Select, Table, Text, TextInput, Title } from "@mantine/core";
+import { Badge, Button, Card, Group, NumberInput, Select, Table, Tabs, Text, TextInput, Title } from "@mantine/core";
 import { ibanIsValid } from "@texma/shared/pain001";
 import { trpc } from "./trpc.js";
 import { euro, numTd } from "./theme.js";
@@ -47,8 +47,14 @@ export function Banking({ role }: { role: string }): JSX.Element {
         90-Tage-Re-Auth) und <b>PSD2/XS2A</b> (Transaktions-API, 90-Tage-SCA). Beide speisen den
         Auszugs-Abgleich; Überweisungen gehen als pain.001 (PIS) hinaus.
       </Text>
-      <Connections />
-      <Payments />
+      <Tabs defaultValue="connections" mt="md" keepMounted={false}>
+        <Tabs.List>
+          <Tabs.Tab value="connections">Bank-Verbindungen &amp; Auszüge</Tabs.Tab>
+          <Tabs.Tab value="payments">Zahlungsverkehr</Tabs.Tab>
+        </Tabs.List>
+        <Tabs.Panel value="connections" pt="md"><Connections /></Tabs.Panel>
+        <Tabs.Panel value="payments" pt="md"><Payments /></Tabs.Panel>
+      </Tabs>
     </>
   );
 }
