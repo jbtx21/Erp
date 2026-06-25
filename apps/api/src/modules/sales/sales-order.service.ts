@@ -68,11 +68,19 @@ export interface OrderEditData {
   id: string;
   number: string;
   companyId: string;
+  status: string;
   /** Sperrgründe gegen die Bearbeitung (leer = voll bearbeitbar). */
   invoiced: boolean;
   inProduction: boolean;
   delivered: boolean;
   lines: OrderEditLine[];
+}
+
+// Ab Versand/Fakturierung ist der Auftrag eingefroren — nur noch Storno (TEXMA-Regel,
+// § 14 UStG / Belegkette). Bis dahin (auch in Produktion) voll bearbeitbar.
+const FROZEN_ORDER_STATUS = new Set(["VERSENDET", "FAKTURIERT", "ABGESCHLOSSEN", "STORNIERT"]);
+export function isOrderEditable(status: string): boolean {
+  return !FROZEN_ORDER_STATUS.has(status);
 }
 
 export interface SalesOrderRepository {
@@ -175,6 +183,7 @@ export class SalesOrderService {
   async updateOrder(orderId: string, companyId: string, lines: SalesLine[]): Promise<void> {
     const data = await this.repo.orderForEdit(orderId);
     if (!data) throw new SalesOrderError("Auftrag nicht gefunden.");
+    if (!isOrderEditable(data.status)) throw new SalesOrderError("Auftrag ist versendet/fakturiert — nur noch Storno möglich, keine Bearbeitung.");
     if (data.invoiced) throw new SalesOrderError("Auftrag ist bereits fakturiert — keine Bearbeitung mehr möglich.");
     if (!companyId.trim()) throw new SalesOrderError("Firma ist Pflicht.");
     validateLines(lines);

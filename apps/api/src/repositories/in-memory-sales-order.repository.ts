@@ -38,7 +38,7 @@ export class InMemorySalesOrderRepository implements SalesOrderRepository {
   }
 
   /** Sperrflags je Auftrag (für Edit-Gate-Tests setzbar). */
-  readonly orderLocks = new Map<string, { invoiced?: boolean; inProduction?: boolean; delivered?: boolean }>();
+  readonly orderLocks = new Map<string, { invoiced?: boolean; inProduction?: boolean; delivered?: boolean; status?: string }>();
   /** Bereits gelieferte Menge je Bestandsposition (Index), für Integritäts-Tests. */
   readonly deliveredByOrder = new Map<string, number[]>();
   setDelivered(orderId: string, deliveredByPosition: number[]): void { this.deliveredByOrder.set(orderId, deliveredByPosition); }
@@ -49,7 +49,7 @@ export class InMemorySalesOrderRepository implements SalesOrderRepository {
     const lock = this.orderLocks.get(orderId) ?? {};
     const delivered = (this.deliveredByOrder.get(orderId) ?? []).some((q) => q > 0);
     return {
-      id: o.id, number: o.number, companyId: o.companyId,
+      id: o.id, number: o.number, companyId: o.companyId, status: lock.status ?? "ANGELEGT",
       invoiced: !!lock.invoiced, inProduction: !!lock.inProduction, delivered: !!lock.delivered || delivered,
       lines: o.lines.map((l) => ({ description: l.description, qty: l.qty, kind: l.kind ?? "TEXTIL", unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, dbCents: l.dbCents ?? null, variantId: l.variantId ?? null })),
     };

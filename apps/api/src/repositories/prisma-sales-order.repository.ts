@@ -13,7 +13,7 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
     const o = await prisma.order.findUnique({
       where: { id: orderId },
       select: {
-        id: true, number: true, companyId: true,
+        id: true, number: true, companyId: true, status: true,
         invoice: { select: { id: true } },
         production: { select: { id: true } },
         _count: { select: { deliveryNotes: true } },
@@ -22,7 +22,7 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
     });
     if (!o) return null;
     return {
-      id: o.id, number: o.number, companyId: o.companyId,
+      id: o.id, number: o.number, companyId: o.companyId, status: String(o.status),
       invoiced: o.invoice !== null, inProduction: o.production !== null, delivered: o._count.deliveryNotes > 0,
       lines: o.lines.map((l) => ({ description: l.description, qty: l.qty, kind: l.kind as PositionKind, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents, rabattPct: l.rabattPct, dbCents: l.dbCents, variantId: l.variantId })),
     };

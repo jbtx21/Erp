@@ -98,12 +98,20 @@ describe("SalesOrderService.updateOrder (vollständige Bearbeitung)", () => {
     expect(o.lines[0]).toMatchObject({ qty: 8, unitNetCents: 1350, listNetCents: 1500, rabattPct: 10 });
   });
 
-  it("blockt die Bearbeitung NUR nach Fakturierung", async () => {
+  it("blockt die Bearbeitung nach Fakturierung", async () => {
     const { svc, repo } = setup();
     const { id } = await svc.createManual("co-1", [{ description: "Polo", qty: 5, unitNetCents: 1200 }]);
     repo.orderLocks.set(id, { invoiced: true });
     await expect(svc.updateOrder(id, "co-1", [{ description: "X", qty: 1, unitNetCents: 100 }]))
       .rejects.toBeInstanceOf(SalesOrderError);
+  });
+
+  it("friert den Auftrag ab Versand ein (nur noch Storno, TEXMA-Regel)", async () => {
+    const { svc, repo } = setup();
+    const { id } = await svc.createManual("co-1", [{ description: "Polo", qty: 5, unitNetCents: 1200 }]);
+    repo.orderLocks.set(id, { status: "VERSENDET" });
+    await expect(svc.updateOrder(id, "co-1", [{ description: "X", qty: 1, unitNetCents: 100 }]))
+      .rejects.toThrow(/Storno/);
   });
 
   it("erlaubt die Bearbeitung während der Produktion (Stückliste wird später neu aufgebaut)", async () => {
