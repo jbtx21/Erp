@@ -7,6 +7,7 @@ import { Alert, Badge, Box, Button, Card, Checkbox, Group, Loader, Modal, Number
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { validateVatId } from "@texma/shared/vat";
 import { resolveMarkupFactor, DEFAULT_MARKUP_CONFIG, type MarkupConfig } from "@texma/shared/markup";
+import { konto, kontenliste, KONTENRAHMEN_LABEL, type Kontenrahmen } from "@texma/shared/kontenrahmen";
 import { trpc } from "./trpc.js";
 import { AufschlagsfaktorenSection, LogosStickereiSection, StickereiAusschreibungSection, StickereiStaffelnSection, Postcalc } from "./Differentiators.js";
 import { euro, numTd, statusMantineColor, prettyStatus } from "./theme.js";
@@ -5989,6 +5990,7 @@ function guvBucketKey(at: Date, g: GuvGran): string {
 }
 export function GuVReportPage(): JSX.Element {
   const [gran, setGran] = useState<GuvGran>("MONTH");
+  const [kr, setKr] = useState<Kontenrahmen>("SKR03"); // Kontenrahmen für die SKR-Kontenzuordnung (#22)
   const [income, setIncome] = useState<Awaited<ReturnType<typeof trpc.reporting.revenueOverview.query>> | null>(null);
   const [invoices, setInvoices] = useState<Awaited<ReturnType<typeof trpc.incomingInvoices.list.query>>>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -6041,6 +6043,7 @@ export function GuVReportPage(): JSX.Element {
         </Box>
         <Group gap="xs">
           <Select w={150} value={gran} onChange={(v) => v && setGran(v as GuvGran)} data={(Object.keys(GUV_GRAN_LABEL) as GuvGran[]).map((g) => ({ value: g, label: GUV_GRAN_LABEL[g] }))} />
+          <Select w={210} value={kr} onChange={(v) => v && setKr(v as Kontenrahmen)} data={(["SKR03", "SKR04"] as Kontenrahmen[]).map((k) => ({ value: k, label: KONTENRAHMEN_LABEL[k] }))} />
           <Button variant="default" onClick={() => void reload()} loading={loading}>Aktualisieren</Button>
         </Group>
       </Group>
@@ -6105,6 +6108,47 @@ export function GuVReportPage(): JSX.Element {
           </Table>
         </Box>
       )}
+
+      {/* Kontenzuordnung nach SKR03/SKR04 (#22): die GuV-Salden auf Standard-Sachkonten —
+          Grundlage für DATEV-Export und die Doppik (Soll/Haben). */}
+      <Title order={5} mt="lg">Kontenzuordnung · {KONTENRAHMEN_LABEL[kr]}</Title>
+      <Text size="xs" c="dimmed" mt={2}>GuV-Salden des Zeitraums auf Standard-Sachkonten gebucht (Soll/Haben). Erlöse stehen im Haben, Aufwand im Soll. Basis für DATEV-Export und doppelte Buchführung.</Text>
+      <Table mt="xs" striped withTableBorder withColumnBorders w="auto">
+        <Table.Thead><Table.Tr>
+          <Table.Th>Konto</Table.Th><Table.Th>Bezeichnung</Table.Th>
+          <Table.Th ta="right">Soll</Table.Th><Table.Th ta="right">Haben</Table.Th>
+        </Table.Tr></Table.Thead>
+        <Table.Tbody>
+          <Table.Tr>
+            <Table.Td ff="monospace">{konto(kr, "erloese19")}</Table.Td><Table.Td>Erlöse</Table.Td>
+            <Table.Td style={numTd} c="dimmed">—</Table.Td><Table.Td style={numTd}>{euro(totalIncome)}</Table.Td>
+          </Table.Tr>
+          <Table.Tr>
+            <Table.Td ff="monospace">{konto(kr, "wareneingang")}</Table.Td><Table.Td>Wareneinsatz / Fremdleistungen</Table.Td>
+            <Table.Td style={numTd}>{euro(totalExpense)}</Table.Td><Table.Td style={numTd} c="dimmed">—</Table.Td>
+          </Table.Tr>
+          <Table.Tr>
+            <Table.Td ff="monospace" fw={700}>{konto(kr, totalNet >= 0 ? "erloese19" : "wareneingang")}</Table.Td>
+            <Table.Td fw={700}>{totalNet >= 0 ? "Jahresüberschuss" : "Jahresfehlbetrag"}</Table.Td>
+            <Table.Td style={numTd} fw={700} c={totalNet >= 0 ? "teal" : "red"}>{euro(totalNet)}</Table.Td>
+            <Table.Td style={numTd} c="dimmed">—</Table.Td>
+          </Table.Tr>
+        </Table.Tbody>
+      </Table>
+
+      <Title order={5} mt="lg">Kontenrahmen {kr} (Standardkonten)</Title>
+      <Text size="xs" c="dimmed" mt={2}>Die für TEXMA relevanten Sachkonten des gewählten Rahmens. Vollständige doppelte Buchführung (Buchungsjournal je Konto) folgt als eigene Slice.</Text>
+      <Table mt="xs" striped withTableBorder withColumnBorders w="auto" fz="sm">
+        <Table.Thead><Table.Tr><Table.Th>Konto</Table.Th><Table.Th>Bezeichnung</Table.Th><Table.Th>Art</Table.Th></Table.Tr></Table.Thead>
+        <Table.Tbody>
+          {kontenliste(kr).map((k) => (
+            <Table.Tr key={k.key}>
+              <Table.Td ff="monospace">{k.nummer}</Table.Td><Table.Td>{k.label}</Table.Td>
+              <Table.Td><Badge size="sm" variant="light" color={k.art === "ERTRAG" ? "teal" : k.art === "AUFWAND" ? "red" : "gray"}>{k.art}</Badge></Table.Td>
+            </Table.Tr>
+          ))}
+        </Table.Tbody>
+      </Table>
     </>
   );
 }

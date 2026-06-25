@@ -29,6 +29,10 @@
     "./vat": {
       "types": "./dist/vat.d.ts",
       "import": "./dist/vat.js"
+    },
+    "./kontenrahmen": {
+      "types": "./dist/kontenrahmen.d.ts",
+      "import": "./dist/kontenrahmen.js"
     }
   },
   "scripts": {

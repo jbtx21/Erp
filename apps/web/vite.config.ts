@@ -16,6 +16,7 @@ export default defineConfig({
       "@texma/shared/pain001": src("pain001.ts"),
       "@texma/shared/order": src("order.ts"),
       "@texma/shared/vat": src("vat.ts"),
+      "@texma/shared/kontenrahmen": src("kontenrahmen.ts"),
       "@texma/shared": src("index.ts"),
     },
   },
