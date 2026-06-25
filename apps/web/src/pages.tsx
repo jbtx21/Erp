@@ -14,6 +14,7 @@ import { MultiLineChart, BarChart } from "./charts.js";
 import { DocFormShell, DocListHeader, StatusDot, EmptyState } from "./doc-layout.js";
 import { OrderAmpelDetail, Auftragsampel } from "./StatusAmpel.js";
 import { useUnsavedGuard } from "./use-unsaved-guard.js";
+import { downloadCsv } from "./export.js";
 
 type Row = Record<string, unknown>;
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
@@ -102,11 +103,24 @@ function fmtCell(key: string, v: unknown): ReactNode {
   return String(v);
 }
 
-export function AutoTable({ rows, hide = [], action, onRowClick, highlightId }: { rows: Row[]; hide?: string[]; action?: (r: Row) => ReactNode; onRowClick?: (r: Row) => void; highlightId?: string }): JSX.Element {
+// Bulk-/Stapelaktion (Xentral „Stapelverarbeitung"): wirkt auf die markierten Zeilen.
+export interface BulkAction { label: string; color?: string; run: (selected: Row[]) => void | Promise<void> }
+
+export function AutoTable({ rows, hide = [], action, onRowClick, highlightId, bulkActions }: { rows: Row[]; hide?: string[]; action?: (r: Row) => ReactNode; onRowClick?: (r: Row) => void; highlightId?: string; bulkActions?: BulkAction[] }): JSX.Element {
   const hlRef = useRef<HTMLTableRowElement | null>(null);
+  // Mehrfachauswahl (nur wenn bulkActions gesetzt): markierte Zeilen-Keys.
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const rowKey = (r: Row, i: number): string => String(r.id ?? i);
   // Treffer aus der globalen Suche in den Sichtbereich rollen (Deep-Link).
   useEffect(() => { if (highlightId && hlRef.current) hlRef.current.scrollIntoView({ block: "center", behavior: "smooth" }); }, [highlightId, rows]);
+  // Auswahl zurücksetzen, wenn sich die Datenmenge ändert (Reload/Filter).
+  useEffect(() => { setSel(new Set()); }, [rows]);
   if (!rows || rows.length === 0) return <Text c="dimmed" mt="sm">Keine Daten.</Text>;
+  const selectable = !!bulkActions && bulkActions.length > 0;
+  const selectedRows = selectable ? rows.filter((r, i) => sel.has(rowKey(r, i))) : [];
+  const allSelected = selectable && rows.length > 0 && sel.size === rows.length;
+  const toggleAll = (): void => setSel(allSelected ? new Set() : new Set(rows.map((r, i) => rowKey(r, i))));
+  const toggleOne = (k: string): void => setSel((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
   // Rohe cuid-`id`-Spalte ausblenden, sobald eine sprechende `number` vorhanden ist
   // (QA: kryptische IDs neben Belegnummern). Klick/Highlight nutzen r.id intern weiter.
   const hasNumber = "number" in (rows[0] as object) && Boolean((rows[0] as Row).number);
@@ -114,28 +128,43 @@ export function AutoTable({ rows, hide = [], action, onRowClick, highlightId }: 
   // Breite Tabellen (v. a. Aufträge mit Status-Aktionen) horizontal scrollbar halten,
   // damit die Aktionsspalte rechts nie abgeschnitten wird (QA #13).
   return (
-    <Table.ScrollContainer minWidth={action ? 820 : 600} mt="sm">
-      <Table striped highlightOnHover withTableBorder verticalSpacing="xs" fz="sm">
-        <Table.Thead>
-          <Table.Tr>
-            {cols.map((c) => <Table.Th key={c}>{colLabel(c)}</Table.Th>)}
-            {action && <Table.Th />}
-          </Table.Tr>
-        </Table.Thead>
-        <Table.Tbody>
-          {rows.map((r, i) => {
-            const hit = highlightId !== undefined && String(r.id) === highlightId;
-            return (
-              <Table.Tr key={i} ref={hit ? hlRef : undefined}
-                style={{ ...(onRowClick ? { cursor: "pointer" } : {}), ...(hit ? { background: "var(--mantine-color-yellow-1)" } : {}) }}>
-                {cols.map((c) => <Table.Td key={c} onClick={onRowClick ? () => onRowClick(r) : undefined}>{fmtCell(c, r[c])}</Table.Td>)}
-                {action && <Table.Td style={{ whiteSpace: "nowrap" }}>{action(r)}</Table.Td>}
-              </Table.Tr>
-            );
-          })}
-        </Table.Tbody>
-      </Table>
-    </Table.ScrollContainer>
+    <>
+      {selectable && (
+        <Group gap="xs" mt="sm" mb={4} style={{ minHeight: 28 }}>
+          <Text size="sm" c={sel.size ? undefined : "dimmed"}>{sel.size} ausgewählt</Text>
+          {sel.size > 0 && bulkActions!.map((a) => (
+            <Button key={a.label} size="compact-xs" variant="light" color={a.color}
+              onClick={() => { void a.run(selectedRows); }}>{a.label}</Button>
+          ))}
+          {sel.size > 0 && <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setSel(new Set())}>Auswahl aufheben</Button>}
+        </Group>
+      )}
+      <Table.ScrollContainer minWidth={action ? 820 : 600} mt={selectable ? 0 : "sm"}>
+        <Table striped highlightOnHover withTableBorder verticalSpacing="xs" fz="sm">
+          <Table.Thead>
+            <Table.Tr>
+              {selectable && <Table.Th style={{ width: 32 }}><Checkbox aria-label="Alle auswählen" checked={allSelected} indeterminate={sel.size > 0 && !allSelected} onChange={toggleAll} /></Table.Th>}
+              {cols.map((c) => <Table.Th key={c}>{colLabel(c)}</Table.Th>)}
+              {action && <Table.Th />}
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {rows.map((r, i) => {
+              const hit = highlightId !== undefined && String(r.id) === highlightId;
+              const k = rowKey(r, i);
+              return (
+                <Table.Tr key={i} ref={hit ? hlRef : undefined}
+                  style={{ ...(onRowClick ? { cursor: "pointer" } : {}), ...(hit ? { background: "var(--mantine-color-yellow-1)" } : {}) }}>
+                  {selectable && <Table.Td><Checkbox aria-label="Zeile auswählen" checked={sel.has(k)} onChange={() => toggleOne(k)} /></Table.Td>}
+                  {cols.map((c) => <Table.Td key={c} onClick={onRowClick ? () => onRowClick(r) : undefined}>{fmtCell(c, r[c])}</Table.Td>)}
+                  {action && <Table.Td style={{ whiteSpace: "nowrap" }}>{action(r)}</Table.Td>}
+                </Table.Tr>
+              );
+            })}
+          </Table.Tbody>
+        </Table>
+      </Table.ScrollContainer>
+    </>
   );
 }
 
@@ -2533,7 +2562,16 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
           <Tabs.Tab value="ampel">Ampel</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="liste" pt="md">
-      <AutoTable rows={rows} hide={["rawPayload", "companyId"]} action={!canAct ? undefined : (r) => {
+      <AutoTable rows={rows} hide={["rawPayload", "companyId"]}
+        bulkActions={[{
+          label: "CSV-Export der Auswahl",
+          run: (selected) => {
+            const cols = Object.keys(selected[0] ?? {}).filter((c) => !["rawPayload", "companyId", "id"].includes(c));
+            const data = selected.map((r) => cols.map((c) => { const v = r[c]; return v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v); }));
+            downloadCsv(`auftraege-auswahl-${new Date().toISOString().slice(0, 10)}.csv`, cols, data);
+          },
+        }]}
+        action={!canAct ? undefined : (r) => {
         const next = orderStatusMachine.next(String(r.status) as OrderStatus);
         return (
           <Group gap={4} justify="flex-end" wrap="nowrap">
