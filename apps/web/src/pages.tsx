@@ -849,7 +849,7 @@ function ArticleForm({ a, onClose, onSaved }: { a: ArticleData; onClose: () => v
       statusColor={a.isVeredelung ? "grape" : "blue"}
       actions={<>
         <Button variant="default" onClick={onClose}>Schließen</Button>
-        <Button color="dark" loading={busy} onClick={() => void save()}>Speichern</Button>
+        <Button loading={busy} onClick={() => void save()}>Speichern</Button>
       </>}
     >
       {err && <Alert color="red" mt="sm">{err}</Alert>}
@@ -1005,18 +1005,21 @@ export function ProductsPage({ focusId }: { focusId?: string } = {}): JSX.Elemen
         </Group>
       </Box>
 
-      <Table mt="md" withTableBorder withColumnBorders highlightOnHover>
-        <Table.Thead><Table.Tr>
-          <Table.Th>SKU</Table.Th>
-          {PIM_COLS.map((c) => <Table.Th key={c.key}>{c.label}</Table.Th>)}
-          <Table.Th>Vollst.</Table.Th><Table.Th>Aktion</Table.Th>
-        </Table.Tr></Table.Thead>
-        <Table.Tbody>
-          {articles.map((a) => (
-            <ArticleRowEdit key={String(a.id)} a={a} onSaved={() => void loadArticles()} onVariants={() => void loadVariants(String(a.id))} onOpen={() => setEditId(String(a.id))} />
-          ))}
-        </Table.Tbody>
-      </Table>
+      {/* Breite PIM-Tabelle horizontal scrollbar kapseln (Skill UX-5: kein Seiten-Overflow). */}
+      <Table.ScrollContainer minWidth={1100} mt="md">
+        <Table withTableBorder withColumnBorders highlightOnHover>
+          <Table.Thead><Table.Tr>
+            <Table.Th>SKU</Table.Th>
+            {PIM_COLS.map((c) => <Table.Th key={c.key}>{c.label}</Table.Th>)}
+            <Table.Th>Vollst.</Table.Th><Table.Th>Aktion</Table.Th>
+          </Table.Tr></Table.Thead>
+          <Table.Tbody>
+            {articles.map((a) => (
+              <ArticleRowEdit key={String(a.id)} a={a} onSaved={() => void loadArticles()} onVariants={() => void loadVariants(String(a.id))} onOpen={() => setEditId(String(a.id))} />
+            ))}
+          </Table.Tbody>
+        </Table>
+      </Table.ScrollContainer>
 
       {sel && (
         <>
@@ -1304,7 +1307,7 @@ function BundleEditor({ variantId, label, positionQty, onClose, onSaved }: { var
           <Button size="compact-xs" variant="light" mt="sm" onClick={addRow}>+ Komponente</Button>
           <Group justify="flex-end" mt="md">
             <Button variant="default" onClick={onClose}>Abbrechen</Button>
-            <Button color="dark" loading={busy} onClick={() => void save()}>Stückliste speichern</Button>
+            <Button loading={busy} onClick={() => void save()}>Stückliste speichern</Button>
           </Group>
         </>
       )}
@@ -1381,7 +1384,7 @@ function LogoArticleDialog({ onClose, onCreated }: { onClose: () => void; onCrea
       <Button size="compact-xs" variant="light" mt="xs" onClick={() => setTiers((ts) => [...ts, { minMenge: (ts.at(-1)?.minMenge ?? 0) + 10, euro: 0 }])}>+ Staffelstufe</Button>
       <Group justify="flex-end" mt="lg">
         <Button variant="default" onClick={onClose}>Abbrechen</Button>
-        <Button color="dark" loading={busy} disabled={!name.trim() || !sku.trim() || !veredlerId} onClick={() => void create()}>Anlegen &amp; übernehmen</Button>
+        <Button loading={busy} disabled={!name.trim() || !sku.trim() || !veredlerId} onClick={() => void create()}>Anlegen &amp; übernehmen</Button>
       </Group>
     </Modal>
   );
@@ -1749,7 +1752,7 @@ export function QuotesPage(): JSX.Element {
           statusColor="orange"
           actions={<>
             <Button variant="default" onClick={() => { resetForm(); setView("list"); }}>Abbrechen</Button>
-            <Button color="dark" loading={busy} disabled={!companyId.trim() || toApiLines(lines).length === 0} onClick={() => void saveQuote()}>Speichern</Button>
+            <Button loading={busy} disabled={!companyId.trim() || toApiLines(lines).length === 0} onClick={() => void saveQuote()}>Speichern</Button>
           </>}
         >
         {err && <Alert color="red" mt="sm">{err}</Alert>}
@@ -1839,7 +1842,7 @@ export function QuotesPage(): JSX.Element {
           <Select size="xs" w={190} data={[{ value: "createdAt", label: "Erstellt am" }, { value: "companyName", label: "Kundenname" }, { value: "number", label: "ID" }, { value: "totalNetCents", label: "Gesamtbetrag" }]} value={sortBy} onChange={(v) => v && setSortBy(v)} />
           <Button size="xs" variant="default" onClick={() => setSortDesc((d) => !d)}>{sortDesc ? "↓" : "↑"}</Button>
           <Button size="xs" variant="default" onClick={() => void load()}>Aktualisieren</Button>
-          <Button size="xs" color="dark" onClick={() => setView("create")}>+ Angebot hinzufügen</Button>
+          <Button size="xs" onClick={() => setView("create")}>+ Angebot hinzufügen</Button>
         </>}
       />
       {err && <Alert color="red" mt="sm">{err}</Alert>}
@@ -2173,7 +2176,7 @@ function LaufzettelModal({ productionId, defaultKind = "INTERN", onClose }: { pr
       )}
       <Group justify="flex-end" mt="lg">
         <Button variant="default" onClick={onClose}>Abbrechen</Button>
-        <Button color="dark" loading={busy} onClick={() => void gen()}>PDF erzeugen</Button>
+        <Button loading={busy} onClick={() => void gen()}>PDF erzeugen</Button>
       </Group>
     </Modal>
   );
@@ -2587,7 +2590,7 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
         module="Vertrieb / Aufträge"
         title="Aufträge"
         hint={role === "PRODUKTION" ? "Rolle PRODUKTION: Preise/Kundendaten ausgeblendet (Kap. 12)." : "Status weiterschalten — illegale Übergänge blockiert (F2, Kap. 35.2)."}
-        action={canAct ? <Button size="xs" color="dark" onClick={() => { if (showCreate) resetOrderForm(); else setShowCreate(true); }}>{showCreate ? "Erfassung schließen" : "+ Auftrag manuell anlegen"}</Button> : undefined}
+        action={canAct ? <Button size="xs" onClick={() => { if (showCreate) resetOrderForm(); else setShowCreate(true); }}>{showCreate ? "Erfassung schließen" : "+ Auftrag manuell anlegen"}</Button> : undefined}
       />
       {err && <Alert color="red" mt="sm" withCloseButton onClose={() => setErr(null)}>{err}</Alert>}
       {msg && <Alert color="green" mt="sm" withCloseButton onClose={() => setMsg(null)}>{msg}</Alert>}
@@ -2601,7 +2604,7 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
             statusColor="orange"
             actions={<>
               <Button variant="default" onClick={resetOrderForm}>Abbrechen</Button>
-              <Button color="dark" disabled={!newCompany.trim() || toApiLines(newLines).length === 0} onClick={() => void saveOrder()}>
+              <Button disabled={!newCompany.trim() || toApiLines(newLines).length === 0} onClick={() => void saveOrder()}>
                 {editOrderId ? "Änderungen speichern" : "Auftrag anlegen"}
               </Button>
             </>}
@@ -6211,7 +6214,7 @@ export function LogosPage(): JSX.Element {
     <>
       <DocListHeader module="Lager / Veredelung" title="Logos & Stickerei"
         hint="Logo-Artikel mit EK + VK-Staffelpreisen anlegen (wie in Angebot/Auftrag), Logo-Versionen je Kunde verwalten und den Stickerei-Weg festlegen."
-        action={<Button size="xs" color="dark" onClick={() => { setMsg(null); setNewLogo(true); }}>+ Neues Logo (mit Preisen)</Button>} />
+        action={<Button size="xs" onClick={() => { setMsg(null); setNewLogo(true); }}>+ Neues Logo (mit Preisen)</Button>} />
       {msg && <Alert color="green" mt="sm">{msg}</Alert>}
       {newLogo && <LogoArticleDialog onClose={() => setNewLogo(false)} onCreated={(e) => { setNewLogo(false); setMsg(`Logo „${e.label}" angelegt — als Veredelungsartikel in Angebot/Auftrag wählbar.`); }} />}
       <Box mt="md"><LogosStickereiSection /></Box>
