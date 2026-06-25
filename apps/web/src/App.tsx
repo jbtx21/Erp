@@ -6,6 +6,7 @@ import { Chevron, NavIcon, SidebarToggleIcon, type NavIconName } from "./nav-ico
 import { Login } from "./Login.js";
 import { Dashboard } from "./Dashboard.js";
 import { StatusAmpelPage } from "./StatusAmpel.js";
+import { EmptyState } from "./doc-layout.js";
 import { SammelbestellungPage } from "./Sammelbestellung.js";
 import { Reporting } from "./Reporting.js";
 import { Banking } from "./Banking.js";
@@ -27,13 +28,19 @@ const NAV: ReadonlyArray<{ group: string; icon: NavIconName; items: ReadonlyArra
   { group: "Vertrieb", icon: "vertrieb", items: [{ key: "companies", label: "Kunden" }, { key: "quotes", label: "Angebote" }, { key: "orders", label: "Aufträge" }, { key: "sammelbestellungen", label: "Sammelbestellungen" }, { key: "pricing", label: "Preise/Staffel" }, { key: "reklamation", label: "Reklamation" }] },
   { group: "Einkauf", icon: "beschaffung", items: [
     { key: "suppliers", label: "Lieferanten" }, { key: "procurement", label: "Beschaffung" },
-    { key: "reorder", label: "Nachbestellung" }, { key: "ausschreibungen", label: "Stickerei-Ausschreibungen" }, { key: "incoming", label: "Eingangsrechnungen" },
+    { key: "reorder", label: "Nachbestellung" }, { key: "incoming", label: "Eingangsrechnungen" },
   ] },
   { group: "Lager", icon: "lager", items: [
-    { key: "products", label: "Artikel/Varianten" }, { key: "logos", label: "Logos & Stickerei" }, { key: "lager", label: "Lager & Inventur" },
+    { key: "products", label: "Artikel/Varianten" }, { key: "lager", label: "Lager & Inventur" },
     { key: "wareneingang", label: "Wareneingang" }, { key: "samples", label: "Muster-Leihgut" }, { key: "shipments", label: "Versand" }, { key: "eanimport", label: "EAN-Listen-Import" },
   ] },
-  { group: "Fertigung", icon: "produktion", items: [{ key: "subproduction", label: "Fremdvergabe" }, { key: "prodreport", label: "Produktions-Reporting" }] },
+  // Veredelungs-Strang gebündelt (IA): Logo-Stammdaten → Ausschreibung an Veredler →
+  // Fremdvergabe-Ausführung → Reporting → Aufschlagsfaktoren je Veredelungsart.
+  { group: "Veredelung", icon: "produktion", items: [
+    { key: "logos", label: "Logos & Stickerei" }, { key: "ausschreibungen", label: "Stickerei-Ausschreibungen" },
+    { key: "subproduction", label: "Fremdvergabe" }, { key: "prodreport", label: "Produktions-Reporting" },
+    { key: "aufschlag", label: "Aufschlagsfaktoren" },
+  ] },
   { group: "Buchhaltung", icon: "finanzen", items: [
     { key: "guv", label: "Gewinn- und Verlustrechnung" },
     { key: "zahlungen", label: "Zahlungseingänge" }, { key: "banking", label: "Banking" },
@@ -41,12 +48,14 @@ const NAV: ReadonlyArray<{ group: string; icon: NavIconName; items: ReadonlyArra
     { key: "costcenters", label: "Kostenstellen" }, { key: "nachkalkfin", label: "Nachkalkulation" }, { key: "gutscheine", label: "Gutscheine" }, { key: "reporting", label: "Auswertungen" },
   ] },
   { group: "Personalwesen", icon: "hr", items: [{ key: "hr", label: "Personalwesen" }] },
-  { group: "Einstellungen", icon: "einstellungen", items: [{ key: "admin", label: "Einstellungen" }, { key: "aufschlag", label: "Aufschlagsfaktoren" }, { key: "automation", label: "Automationen" }, { key: "mailaccounts", label: "E-Mail-Konten" }, { key: "emailtemplates", label: "E-Mail-Vorlagen" }, { key: "dataio", label: "Import/Export" }, { key: "archive", label: "GoBD-Archiv" }, { key: "auditlog", label: "Audit-Protokoll" }, { key: "integrations", label: "Schnittstellen" }, { key: "security", label: "Mein Konto (2FA)" }] },
+  { group: "Einstellungen", icon: "einstellungen", items: [{ key: "admin", label: "Einstellungen" }, { key: "automation", label: "Automationen" }, { key: "mailaccounts", label: "E-Mail-Konten" }, { key: "emailtemplates", label: "E-Mail-Vorlagen" }, { key: "dataio", label: "Import/Export" }, { key: "archive", label: "GoBD-Archiv" }, { key: "auditlog", label: "Audit-Protokoll" }, { key: "integrations", label: "Schnittstellen" }, { key: "security", label: "Mein Konto (2FA)" }] },
 ];
 const ALL_KEYS = NAV.flatMap((g) => g.items.map((i) => i.key));
 const hashKey = (): string => {
   const h = typeof location !== "undefined" ? location.hash.replace("#", "") : "";
-  return ALL_KEYS.includes(h) ? h : "home";
+  if (h === "") return "home";
+  // Unbekannter Hash bleibt erhalten (statt still auf „home" zu fallen) → echte 404-Seite.
+  return ALL_KEYS.includes(h) ? h : h;
 };
 /** Sektion, die den aktiven Bereich enthält (für Highlight im eingeklappten Modus). */
 const groupOfKey = (k: string): string | undefined => NAV.find((g) => g.items.some((i) => i.key === k))?.group;
@@ -412,6 +421,10 @@ function Page({ k, role, userName, onNavigate, onOpen, focusId }: { k: string; r
     case "costcenters": return <CostCentersPage />;
     case "reporting": return <Reporting role={role} />;
     case "finance": return <FinanceReportingPage />;
-    default: return <Text>Unbekannter Bereich.</Text>;
+    default: return (
+      <EmptyState icon="🧭" title="Seite nicht gefunden"
+        hint={`Die Route „#${k}" existiert nicht (Tippfehler oder veralteter Link). Über die Navigation links geht es weiter.`}
+        actionLabel="Zur Startseite" onAction={() => onNavigate("home")} />
+    );
   }
 }
