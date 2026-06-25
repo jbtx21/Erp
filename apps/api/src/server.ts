@@ -147,6 +147,7 @@ import { PrismaTaskRepository } from "./repositories/prisma-task.repository.js";
 import { PreferencesService } from "./modules/preferences/preferences.service.js";
 import { PrismaUserPreferenceRepository } from "./repositories/prisma-user-preference.repository.js";
 import { AuditQueryService } from "./modules/audit-log/audit-query.service.js";
+import { PrismaEntityNumberResolver } from "./repositories/prisma-entity-number.resolver.js";
 import { PrismaAuditLogRepository } from "./repositories/prisma-audit-log.repository.js";
 import { EanImportService } from "./modules/ean-import/ean-import.service.js";
 import { PrismaEanImportRepository } from "./repositories/prisma-ean-import.repository.js";
@@ -319,7 +320,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   // Persönliche UI-Einstellungen je Nutzer (z. B. Home-Workspace-Layout, geräteübergreifend).
   const preferences = new PreferencesService(new PrismaUserPreferenceRepository());
   // Audit-Log-Viewer (GoBD): read-only Abfrage des append-only AuditLog.
-  const auditLog = new AuditQueryService(new PrismaAuditLogRepository());
+  const auditLog = new AuditQueryService(new PrismaAuditLogRepository(), new PrismaEntityNumberResolver());
   // EAN-Listen-Import (B18): Massenimport Artikelstammdaten mit automatischem EAN-Abgleich.
   const eanImport = new EanImportService(new PrismaEanImportRepository(), new PrismaAuditSink());
   // Finanz-Reporting (B19): OP-Aging + DSO über die offenen Posten (Auswertung, keine Buchung).

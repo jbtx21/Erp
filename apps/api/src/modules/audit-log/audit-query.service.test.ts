@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { AuditQueryService, type AuditEntryRow } from "./audit-query.service.js";
+import { AuditQueryService, type RawAuditEntry } from "./audit-query.service.js";
 import { InMemoryAuditLogRepository } from "../../repositories/in-memory-audit-log.repository.js";
 
-function row(p: Partial<AuditEntryRow> & { id: string; createdAt: Date }): AuditEntryRow {
+function row(p: Partial<RawAuditEntry> & { id: string; createdAt: Date }): RawAuditEntry {
   return {
     userEmail: "a@texma.de", userName: "Anna", entity: "Order", entityId: "o1",
     action: "CREATE", before: null, after: { status: "NEU" }, ...p,
@@ -10,7 +10,7 @@ function row(p: Partial<AuditEntryRow> & { id: string; createdAt: Date }): Audit
 }
 
 function setup(): AuditQueryService {
-  const rows: AuditEntryRow[] = [
+  const rows: RawAuditEntry[] = [
     row({ id: "1", createdAt: new Date("2026-06-01"), entity: "Order", action: "CREATE", userEmail: "anna@texma.de" }),
     row({ id: "2", createdAt: new Date("2026-06-02"), entity: "Order", action: "UPDATE", userEmail: "ben@texma.de", entityId: "o2" }),
     row({ id: "3", createdAt: new Date("2026-06-03"), entity: "Invoice", action: "FINALIZE", userEmail: "anna@texma.de", entityId: "r1" }),

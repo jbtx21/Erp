@@ -1,15 +1,15 @@
 // In-Memory-AuditLog-Repository für Unit-Tests/Dev.
 
 import type {
-  AuditEntryRow,
+  RawAuditEntry,
   AuditFilter,
   AuditLogRepository,
 } from "../modules/audit-log/audit-query.service.js";
 
 export class InMemoryAuditLogRepository implements AuditLogRepository {
-  constructor(private readonly rows: AuditEntryRow[] = []) {}
+  constructor(private readonly rows: RawAuditEntry[] = []) {}
 
-  async list(filter: AuditFilter): Promise<AuditEntryRow[]> {
+  async list(filter: AuditFilter): Promise<RawAuditEntry[]> {
     const ql = filter.userEmail?.toLowerCase();
     return this.rows
       .filter((r) => (filter.entity ? r.entity === filter.entity : true))

@@ -2,13 +2,13 @@
 
 import { prisma } from "@texma/db";
 import type {
-  AuditEntryRow,
+  RawAuditEntry,
   AuditFilter,
   AuditLogRepository,
 } from "../modules/audit-log/audit-query.service.js";
 
 export class PrismaAuditLogRepository implements AuditLogRepository {
-  async list(filter: AuditFilter): Promise<AuditEntryRow[]> {
+  async list(filter: AuditFilter): Promise<RawAuditEntry[]> {
     const rows = await prisma.auditLog.findMany({
       where: {
         ...(filter.entity ? { entity: filter.entity } : {}),

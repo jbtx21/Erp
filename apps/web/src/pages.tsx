@@ -5372,7 +5372,7 @@ export function AuditLogPage(): JSX.Element {
                 <Table.Td>{fmt(r.createdAt)}</Table.Td>
                 <Table.Td>{r.userEmail ?? <Text size="xs" c="dimmed">System</Text>}</Table.Td>
                 <Table.Td>{r.entity}</Table.Td>
-                <Table.Td><Text size="xs" ff="monospace">{r.entityId}</Text></Table.Td>
+                <Table.Td><Text size="xs" ff="monospace" title={r.displayId !== r.entityId ? `interne ID: ${r.entityId}` : undefined}>{r.displayId}</Text></Table.Td>
                 <Table.Td><Badge variant="light" color={AUDIT_ACTION_COLOR[r.action] ?? "gray"}>{r.action}</Badge></Table.Td>
               </Table.Tr>
               {expanded === r.id && (
