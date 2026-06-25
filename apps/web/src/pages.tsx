@@ -6062,8 +6062,49 @@ export function AutomationPage(): JSX.Element {
 
 // Meine Aufgaben (Arbeitsliste, ERPNext „Assigned To/ToDo"): offene Aufgaben der
 // angemeldeten Person, Erledigen/Neuzuweisen, Sprung zum verknüpften Beleg.
+type TaskMineRow = Awaited<ReturnType<typeof trpc.tasks.mine.query>>[number];
+function TaskEditModal({ task, onClose, onSaved }: { task: TaskMineRow | null; onClose: () => void; onSaved: () => void }): JSX.Element {
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [due, setDue] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!task) return;
+    setTitle(task.title ?? ""); setDescription(task.description ?? "");
+    setDue(task.dueDate ? String(task.dueDate).slice(0, 10) : ""); setErr(null);
+  }, [task]);
+  const save = async () => {
+    if (!task) return;
+    setBusy(true); setErr(null);
+    try {
+      await trpc.tasks.update.mutate({
+        id: task.id, title: title.trim(),
+        description: description.trim() || null,
+        dueDate: due ? new Date(due).toISOString() : null,
+      });
+      onSaved(); onClose();
+    } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+  return (
+    <Modal opened={!!task} onClose={onClose} title="Aufgabe bearbeiten" size="lg">
+      {err && <Alert color="red" mb="sm">{err}</Alert>}
+      <Stack gap="sm">
+        <TextInput label="Titel" value={title} onChange={(e) => setTitle(e.currentTarget.value)} required />
+        <Textarea label="Beschreibung" value={description} onChange={(e) => setDescription(e.currentTarget.value)} autosize minRows={2} />
+        <TextInput label="Fällig" type="date" value={due} onChange={(e) => setDue(e.currentTarget.value)} w={180} />
+        <Group justify="flex-end" mt="xs">
+          <Button variant="default" onClick={onClose}>Abbrechen</Button>
+          <Button loading={busy} disabled={!title.trim()} onClick={() => void save()}>Speichern</Button>
+        </Group>
+      </Stack>
+    </Modal>
+  );
+}
+
 export function TasksPage({ onNavigate }: { onNavigate?: (k: string) => void } = {}): JSX.Element {
   const [tasks, setTasks] = useState<Awaited<ReturnType<typeof trpc.tasks.mine.query>>>([]);
+  const [editTask, setEditTask] = useState<TaskMineRow | null>(null);
   const [showDone, setShowDone] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -6120,15 +6161,19 @@ export function TasksPage({ onNavigate }: { onNavigate?: (k: string) => void } =
               <Table.Td>{t.entity ? <Button size="compact-xs" variant="subtle" disabled={!t.navKey || !onNavigate} onClick={() => t.navKey && onNavigate?.(t.navKey)}>{t.entity} {t.entityId?.slice(0, 8)}</Button> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
               <Table.Td><Text size="xs" c="dimmed">{t.dueDate ? new Date(t.dueDate).toLocaleDateString("de-DE") : "—"}</Text></Table.Td>
               <Table.Td>
-                {t.status === "OFFEN"
-                  ? <Button size="compact-xs" aria-label={`Aufgabe „${t.title}" als erledigt markieren`} onClick={async () => { setErr(null); try { await trpc.tasks.complete.mutate({ id: t.id }); await load(); } catch (e) { setErr(errMsg(e)); } }}>Erledigt</Button>
-                  : <Button size="compact-xs" variant="subtle" aria-label={`Aufgabe „${t.title}" wieder öffnen`} onClick={async () => { setErr(null); try { await trpc.tasks.reopen.mutate({ id: t.id }); await load(); } catch (e) { setErr(errMsg(e)); } }}>Wieder öffnen</Button>}
+                <Group gap={4} justify="flex-end" wrap="nowrap">
+                  <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setEditTask(t)}>Bearbeiten</Button>
+                  {t.status === "OFFEN"
+                    ? <Button size="compact-xs" aria-label={`Aufgabe „${t.title}" als erledigt markieren`} onClick={async () => { setErr(null); try { await trpc.tasks.complete.mutate({ id: t.id }); await load(); } catch (e) { setErr(errMsg(e)); } }}>Erledigt</Button>
+                    : <Button size="compact-xs" variant="subtle" aria-label={`Aufgabe „${t.title}" wieder öffnen`} onClick={async () => { setErr(null); try { await trpc.tasks.reopen.mutate({ id: t.id }); await load(); } catch (e) { setErr(errMsg(e)); } }}>Wieder öffnen</Button>}
+                </Group>
               </Table.Td>
             </Table.Tr>
           ))}
         </Table.Tbody>
       </Table>
       )}
+      <TaskEditModal task={editTask} onClose={() => setEditTask(null)} onSaved={() => void load()} />
     </>
   );
 }

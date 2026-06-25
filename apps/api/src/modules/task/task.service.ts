@@ -31,11 +31,20 @@ export interface CreateTaskInput {
   createdBy?: string | null;
 }
 
+/** Bearbeitbare Felder einer Aufgabe (Status/Zuweisung laufen über complete/reopen/reassign). */
+export interface UpdateTaskInput {
+  title?: string;
+  description?: string | null;
+  dueDate?: Date | null;
+  navKey?: string | null;
+}
+
 export interface TaskRepository {
   create(input: CreateTaskInput): Promise<{ id: string }>;
   listForUser(email: string, includeDone: boolean): Promise<TaskRow[]>;
   listForEntity(entity: string, entityId: string): Promise<TaskRow[]>;
   openCount(email: string): Promise<number>;
+  update(id: string, patch: UpdateTaskInput): Promise<void>;
   setStatus(id: string, status: "OFFEN" | "ERLEDIGT", completedAt: Date | null): Promise<void>;
   reassign(id: string, email: string): Promise<void>;
 }
@@ -63,6 +72,15 @@ export class TaskService {
   async reopen(id: string, userId?: string): Promise<void> {
     await this.repo.setStatus(id, "OFFEN", null);
     await this.audit.append(buildEntry({ userId, entity: "Task", entityId: id, action: "UPDATE", after: { status: "OFFEN" } }));
+  }
+
+  /** Bearbeitet Titel/Beschreibung/Fälligkeit einer Aufgabe (GoBD-auditiert). */
+  async update(id: string, patch: UpdateTaskInput, userId?: string): Promise<void> {
+    if (patch.title !== undefined && !patch.title.trim()) throw new TaskError("Titel ist Pflicht.");
+    const clean: UpdateTaskInput = { ...patch };
+    if (clean.title !== undefined) clean.title = clean.title.trim();
+    await this.repo.update(id, clean);
+    await this.audit.append(buildEntry({ userId, entity: "Task", entityId: id, action: "UPDATE", after: { ...clean } }));
   }
 
   async reassign(id: string, email: string, userId?: string): Promise<void> {

@@ -1,5 +1,5 @@
 // In-Memory-Task-Repo für Tests.
-import type { CreateTaskInput, TaskRepository, TaskRow } from "../modules/task/task.service.js";
+import type { CreateTaskInput, TaskRepository, TaskRow, UpdateTaskInput } from "../modules/task/task.service.js";
 
 export class InMemoryTaskRepository implements TaskRepository {
   private seq = 0;
@@ -24,6 +24,14 @@ export class InMemoryTaskRepository implements TaskRepository {
   }
   async openCount(email: string): Promise<number> {
     return this.tasks.filter((t) => t.assigneeEmail === email && t.status === "OFFEN").length;
+  }
+  async update(id: string, patch: UpdateTaskInput): Promise<void> {
+    const t = this.tasks.find((x) => x.id === id);
+    if (!t) return;
+    if (patch.title !== undefined) t.title = patch.title;
+    if (patch.description !== undefined) t.description = patch.description;
+    if (patch.dueDate !== undefined) t.dueDate = patch.dueDate;
+    if (patch.navKey !== undefined) t.navKey = patch.navKey;
   }
   async setStatus(id: string, status: "OFFEN" | "ERLEDIGT", completedAt: Date | null): Promise<void> {
     const t = this.tasks.find((x) => x.id === id);

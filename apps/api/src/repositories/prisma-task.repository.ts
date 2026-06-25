@@ -1,6 +1,6 @@
 // Prisma-Task-Repo (Produktionspfad).
 import { prisma } from "@texma/db";
-import type { CreateTaskInput, TaskRepository, TaskRow } from "../modules/task/task.service.js";
+import type { CreateTaskInput, TaskRepository, TaskRow, UpdateTaskInput } from "../modules/task/task.service.js";
 
 function map(t: {
   id: string; title: string; description: string | null; entity: string | null; entityId: string | null;
@@ -33,6 +33,17 @@ export class PrismaTaskRepository implements TaskRepository {
   }
   async openCount(email: string): Promise<number> {
     return prisma.task.count({ where: { assigneeEmail: email, status: "OFFEN" } });
+  }
+  async update(id: string, patch: UpdateTaskInput): Promise<void> {
+    await prisma.task.update({
+      where: { id },
+      data: {
+        ...(patch.title !== undefined ? { title: patch.title } : {}),
+        ...(patch.description !== undefined ? { description: patch.description } : {}),
+        ...(patch.dueDate !== undefined ? { dueDate: patch.dueDate } : {}),
+        ...(patch.navKey !== undefined ? { navKey: patch.navKey } : {}),
+      },
+    });
   }
   async setStatus(id: string, status: "OFFEN" | "ERLEDIGT", completedAt: Date | null): Promise<void> {
     await prisma.task.update({ where: { id }, data: { status, completedAt } });

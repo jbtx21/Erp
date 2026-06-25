@@ -2223,6 +2223,21 @@ export const appRouter = router({
         try { await ctx.tasks.reassign(input.id, input.assigneeEmail, ctx.user.id); return { ok: true as const }; }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
+
+    update: roleProcedure(...allRoles)
+      .input(z.object({
+        id: z.string().min(1),
+        title: z.string().min(1).optional(),
+        description: z.string().nullable().optional(),
+        dueDate: z.string().datetime().nullable().optional(),
+        navKey: z.string().nullable().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { id, dueDate, ...rest } = input;
+        const patch = { ...rest, ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}) };
+        try { await ctx.tasks.update(id, patch, ctx.user.id); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
   }),
 
   // Persönliche UI-Einstellungen je Nutzer (z. B. Home-Workspace-Layout, geräteübergreifend).
