@@ -5229,6 +5229,62 @@ export function HrPage(): JSX.Element {
 
 // Connector-Plattform (Integrations-Registry, nur ADMIN): Katalog aller Fremdsystem-
 // Anbindungen mit Status; portal-pflegbare konfigurieren + Slack testen.
+// API-Tokens (Xentral PAT): read-only API-/MCP-Zugriff für externe Agenten. Nur ADMIN;
+// der Klartext ist einmalig nach der Ausstellung sichtbar.
+function ApiTokensSection(): JSX.Element {
+  const [list, setList] = useState<Awaited<ReturnType<typeof trpc.apiTokens.list.query>>>([]);
+  const [name, setName] = useState(""); const [role, setRole] = useState("BUERO");
+  const [fresh, setFresh] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [allowed, setAllowed] = useState(true);
+  const load = useCallback(async () => {
+    try { setList(await trpc.apiTokens.list.query()); setErr(null); }
+    catch { setAllowed(false); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+  if (!allowed) return <></>; // nur ADMIN
+
+  const create = async (): Promise<void> => {
+    setErr(null); setFresh(null);
+    try { const r = await trpc.apiTokens.create.mutate({ name, role: role as "ADMIN" | "BUERO" | "PRODUKTION" | "BUCHHALTUNG" }); setFresh(r.token); setName(""); await load(); }
+    catch (e) { setErr(errMsg(e)); }
+  };
+
+  return (
+    <Box mt="xl">
+      <Title order={4}>API-Tokens (Personal Access Token)</Title>
+      <Text size="sm" c="dimmed" mt={2}>Read-only API-/MCP-Zugriff (`/api/v1`) für externe Agenten. RBAC über die Token-Rolle (PRODUKTION ohne Preise/Finanzbelege). Der Klartext ist <b>nur einmalig</b> sichtbar.</Text>
+      {err && <Alert color="red" mt="sm" withCloseButton onClose={() => setErr(null)}>{err}</Alert>}
+      {fresh && (
+        <Alert color="green" mt="sm" title="Token erstellt — jetzt kopieren (wird nicht erneut angezeigt)">
+          <Text ff="monospace" size="sm" style={{ wordBreak: "break-all" }}>{fresh}</Text>
+        </Alert>
+      )}
+      <Group gap="xs" align="end" mt="sm" wrap="wrap">
+        <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="MCP-Agent" w={200} />
+        <Select label="Rolle" value={role} onChange={(v) => v && setRole(v)} w={160}
+          data={[{ value: "ADMIN", label: "Admin" }, { value: "BUERO", label: "Büro" }, { value: "BUCHHALTUNG", label: "Buchhaltung" }, { value: "PRODUKTION", label: "Produktion" }]} />
+        <Button disabled={!name.trim()} onClick={() => void create()}>Token ausstellen</Button>
+      </Group>
+      {list.length > 0 && (
+        <Table mt="md" striped withTableBorder verticalSpacing="xs" fz="sm" w="auto">
+          <Table.Thead><Table.Tr><Table.Th>Name</Table.Th><Table.Th>Rolle</Table.Th><Table.Th>Zuletzt genutzt</Table.Th><Table.Th>Status</Table.Th><Table.Th /></Table.Tr></Table.Thead>
+          <Table.Tbody>
+            {list.map((t) => (
+              <Table.Tr key={t.id}>
+                <Table.Td>{t.name}</Table.Td><Table.Td>{t.role}</Table.Td>
+                <Table.Td>{t.lastUsedAt ? new Date(t.lastUsedAt).toLocaleString("de-DE") : "—"}</Table.Td>
+                <Table.Td><Badge variant="light" color={t.revokedAt ? "red" : "green"}>{t.revokedAt ? "widerrufen" : "aktiv"}</Badge></Table.Td>
+                <Table.Td>{!t.revokedAt && <Button size="compact-xs" variant="subtle" color="red" onClick={async () => { try { await trpc.apiTokens.revoke.mutate({ id: t.id }); await load(); } catch (e) { setErr(errMsg(e)); } }}>Widerrufen</Button>}</Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      )}
+    </Box>
+  );
+}
+
 export function IntegrationsPage(): JSX.Element {
   const [list, setList] = useState<Awaited<ReturnType<typeof trpc.integrations.list.query>>>([]);
   const [drafts, setDrafts] = useState<Record<string, Record<string, string>>>({});
@@ -5295,6 +5351,7 @@ export function IntegrationsPage(): JSX.Element {
           </Box>
         ))}
       </Group>
+      <ApiTokensSection />
     </>
   );
 }

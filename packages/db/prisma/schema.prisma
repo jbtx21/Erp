@@ -1531,6 +1531,19 @@ model CreditNote {
   @@index([invoiceId])
 }
 
+// Personal Access Token (Xentral-Vorbild PAT): API-Zugriff für externe Agenten/MCP.
+// Read-only über die REST-Fassade (/api/v1); RBAC über die hinterlegte Rolle. Nur der
+// SHA-256-Hash wird gespeichert (Klartext nur einmalig bei der Ausstellung sichtbar).
+model ApiToken {
+  id         String    @id @default(cuid())
+  name       String
+  tokenHash  String    @unique
+  role       Role      // bestimmt die Sichtbarkeit (z. B. PRODUKTION → ohne Preise)
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+}
+
 // Abschlagsrechnung (Xentral „Abschlagsrechnung"): Teil-/Anzahlungsrechnung zu einem Auftrag.
 // Eigener Nummernkreis (AR-…); mehrere je Auftrag möglich. Die Schlussrechnung (Invoice)
 // verrechnet die Summe der Abschläge (Restbetrag). Eigenständige Receivable-Verfolgung.

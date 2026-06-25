@@ -204,6 +204,15 @@ importers:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@22.19.21)
 
+  services/mcp:
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.19.21)
+
   services/workers/connectors/dpd:
     dependencies:
       '@texma/api':

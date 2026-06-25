@@ -697,6 +697,21 @@ export const appRouter = router({
       }),
   }),
 
+  // Personal Access Tokens (Xentral PAT): read-only API-Zugriff für externe Agenten/MCP.
+  // Nur ADMIN; der Klartext ist einmalig bei der Ausstellung sichtbar.
+  apiTokens: router({
+    list: roleProcedure("ADMIN").query(({ ctx }) => ctx.apiTokens.list()),
+    create: roleProcedure("ADMIN")
+      .input(z.object({ name: z.string().min(1), role: z.enum(["ADMIN", "BUERO", "PRODUKTION", "BUCHHALTUNG"]) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.apiTokens.create(input.name, input.role); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    revoke: roleProcedure("ADMIN")
+      .input(z.object({ id: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => { await ctx.apiTokens.revoke(input.id); return { ok: true as const }; }),
+  }),
+
   // Gutscheine (Xentral „Gutscheine"): Wertgutscheine mit Restguthaben + Gültigkeit.
   // Finanzdaten → kein PRODUKTION-Zugriff.
   gutscheine: router({

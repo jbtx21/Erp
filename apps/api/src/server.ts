@@ -36,6 +36,9 @@ import { PrismaStatusAmpelRepository } from "./repositories/prisma-status-ampel.
 import { SammelbestellungService } from "./modules/sammelbestellung/sammelbestellung.service.js";
 import { PrismaSammelbestellungRepository } from "./repositories/prisma-sammelbestellung.repository.js";
 import { GutscheinService } from "./modules/gutschein/gutschein.service.js";
+import { ApiTokenService } from "./modules/api-token/api-token.service.js";
+import { PrismaApiTokenRepository } from "./repositories/prisma-api-token.repository.js";
+import { registerApiV1 } from "./api/rest-v1.js";
 import { AbschlagService } from "./modules/abschlag/abschlag.service.js";
 import { PrismaAbschlagRepository } from "./repositories/prisma-abschlag.repository.js";
 import { PrismaGutscheinRepository } from "./repositories/prisma-gutschein.repository.js";
@@ -229,6 +232,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const statusAmpel = new StatusAmpelService(new PrismaStatusAmpelRepository());
   const sammelbestellung = new SammelbestellungService(new PrismaSammelbestellungRepository(), new PrismaAuditSink());
   const gutscheine = new GutscheinService(new PrismaGutscheinRepository(), new PrismaAuditSink());
+  const apiTokens = new ApiTokenService(new PrismaApiTokenRepository(), new PrismaAuditSink());
   const abschlag = new AbschlagService(new PrismaAbschlagRepository(), new NumberingService(new PrismaNumberingRepository()), new PrismaAuditSink());
   const stickerei = new StickereiService(new PrismaStickereiRepository());
   const reorder = new ReorderService(new PrismaReorderRepository(), new PrismaAuditSink());
@@ -317,6 +321,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   // Order → Invoice „Make-Target" (Kap. 9.1): erzeugt die Rechnung + offenen Posten und
   // meldet fakturastatus/status an den Auftrag zurück.
   const invoices = new InvoiceService(new PrismaInvoiceRepository(), new NumberingService(new PrismaNumberingRepository()), new PrismaAuditSink());
+  registerApiV1(server, { apiTokens, orders: repo, reservations, invoices });
   // Belegkette/Connections (ERPNext-Muster): bidirektionaler Belegbaum eines Auftrags.
   const connections = new ConnectionsService(new PrismaConnectionsRepository());
   // Contact-Dynamic-Link (CRM): Person ↔ mehrere Parteien (Company/Lead/Supplier).
@@ -478,6 +483,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           statusAmpel,
           sammelbestellung,
           gutscheine,
+          apiTokens,
           abschlag,
           stickerei,
           reorder,
