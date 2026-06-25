@@ -20,6 +20,7 @@ import type { ReklamationService } from "../modules/reklamation/reklamation.serv
 import type { AmpelService } from "../modules/ampel/ampel.service.js";
 import type { StatusAmpelService } from "../modules/status-ampel/status-ampel.service.js";
 import type { SammelbestellungService } from "../modules/sammelbestellung/sammelbestellung.service.js";
+import type { GutscheinService } from "../modules/gutschein/gutschein.service.js";
 import type { StickereiService } from "../modules/stickerei/stickerei.service.js";
 import type { ReorderService } from "../modules/reorder/reorder.service.js";
 import type { ProductionSheetService } from "../modules/production-sheet/production-sheet.service.js";
@@ -102,6 +103,7 @@ export interface Context {
   ampel: AmpelService;
   statusAmpel: StatusAmpelService;
   sammelbestellung: SammelbestellungService;
+  gutscheine: GutscheinService;
   stickerei: StickereiService;
   reorder: ReorderService;
   productionSheet: ProductionSheetService;

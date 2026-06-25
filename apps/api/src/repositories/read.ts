@@ -13,6 +13,7 @@ export interface OrderListItem {
   externalNumber: string | null;
   employeeNote: string | null; // Kundendaten — für PRODUKTION redigiert (RBAC)
   totalNetCents: number | null; // Auftragswert — für PRODUKTION redigiert (RBAC)
+  fastLane: boolean; // Eilauftrag-Priorisierung (Xentral „Fast-Lane")
   createdAt: Date;
 }
 

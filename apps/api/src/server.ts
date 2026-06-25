@@ -35,6 +35,8 @@ import { StatusAmpelService } from "./modules/status-ampel/status-ampel.service.
 import { PrismaStatusAmpelRepository } from "./repositories/prisma-status-ampel.repository.js";
 import { SammelbestellungService } from "./modules/sammelbestellung/sammelbestellung.service.js";
 import { PrismaSammelbestellungRepository } from "./repositories/prisma-sammelbestellung.repository.js";
+import { GutscheinService } from "./modules/gutschein/gutschein.service.js";
+import { PrismaGutscheinRepository } from "./repositories/prisma-gutschein.repository.js";
 import { StickereiService } from "./modules/stickerei/stickerei.service.js";
 import { ReorderService } from "./modules/reorder/reorder.service.js";
 import { ProductionSheetService } from "./modules/production-sheet/production-sheet.service.js";
@@ -224,6 +226,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const ampel = new AmpelService(new PrismaAmpelRepository());
   const statusAmpel = new StatusAmpelService(new PrismaStatusAmpelRepository());
   const sammelbestellung = new SammelbestellungService(new PrismaSammelbestellungRepository(), new PrismaAuditSink());
+  const gutscheine = new GutscheinService(new PrismaGutscheinRepository(), new PrismaAuditSink());
   const stickerei = new StickereiService(new PrismaStickereiRepository());
   const reorder = new ReorderService(new PrismaReorderRepository(), new PrismaAuditSink());
   const productionSheet = new ProductionSheetService(new PrismaProductionSheetRepository());
@@ -471,6 +474,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           ampel,
           statusAmpel,
           sammelbestellung,
+          gutscheine,
           stickerei,
           reorder,
           productionSheet,

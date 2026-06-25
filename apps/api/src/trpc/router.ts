@@ -217,6 +217,14 @@ export const appRouter = router({
       .input(z.object({ orderId: z.string().min(1) }))
       .query(({ input, ctx }) => ctx.orders.orderLines(input.orderId)),
 
+    /** Eilauftrag-Priorisierung (Xentral „Fast-Lane") setzen/entfernen. */
+    setFastLane: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ orderId: z.string().min(1), on: z.boolean() }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.orderWorkflow.setFastLane(input.orderId, input.on); }
+        catch (e) { throw toTrpcError(e); }
+      }),
+
     /** Belegkette/Connections (ERPNext-Muster): Vorgänger + Nachfolger, nach Phase gruppiert. */
     connections: protectedProcedure
       .input(z.object({ orderId: z.string().min(1) }))
@@ -685,6 +693,24 @@ export const appRouter = router({
       .input(z.object({ shopId: z.string().min(1), bestellmodus: z.enum(["SOFORT", "SAMMEL"]), sammelInterval: z.enum(["WOECHENTLICH", "MONATLICH", "QUARTALSWEISE", "HALBJAEHRLICH"]).nullable() }))
       .mutation(async ({ input, ctx }) => {
         try { await ctx.sammelbestellung.setShopMode(input.shopId, input.bestellmodus, input.sammelInterval); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+  }),
+
+  // Gutscheine (Xentral „Gutscheine"): Wertgutscheine mit Restguthaben + Gültigkeit.
+  // Finanzdaten → kein PRODUKTION-Zugriff.
+  gutscheine: router({
+    list: roleProcedure("ADMIN", "BUERO", "BUCHHALTUNG").query(({ ctx }) => ctx.gutscheine.list()),
+    create: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ code: z.string().min(1), initialCents: z.number().int().positive(), validUntil: z.string().datetime().nullable().optional(), note: z.string().optional() }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.gutscheine.create({ code: input.code, initialCents: input.initialCents, validUntil: input.validUntil ? new Date(input.validUntil) : null, note: input.note ?? null }); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    redeem: roleProcedure("ADMIN", "BUERO", "BUCHHALTUNG")
+      .input(z.object({ code: z.string().min(1), amountCents: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.gutscheine.redeem(input.code, input.amountCents); }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
   }),

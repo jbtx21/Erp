@@ -2463,7 +2463,9 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
 
   const load = useCallback(async () => {
     try {
-      const list = (await trpc.shopOrders.list.query({ limit: 100 })) as Row[];
+      const raw = (await trpc.shopOrders.list.query({ limit: 100 })) as Row[];
+      // Fast-Lane (Eilaufträge) zuerst — stabile Sortierung, Reihenfolge sonst unverändert.
+      const list = [...raw].sort((a, b) => (b.fastLane === true ? 1 : 0) - (a.fastLane === true ? 1 : 0));
       // Mini-Ampel-Spalte (Xentral-„Monitor"): Gesamtlampe je Auftrag aus der Auftragsampel.
       if (canSeeAmpel) {
         try {
@@ -2563,7 +2565,7 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
           <Tabs.Tab value="ampel">Ampel</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="liste" pt="md">
-      <AutoTable rows={rows} hide={["rawPayload", "companyId"]}
+      <AutoTable rows={rows} hide={["rawPayload", "companyId", "fastLane"]}
         bulkActions={[{
           label: "CSV-Export der Auswahl",
           run: (selected) => {
@@ -2576,6 +2578,13 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
         const next = orderStatusMachine.next(String(r.status) as OrderStatus);
         return (
           <Group gap={4} justify="flex-end" wrap="nowrap">
+            <Button size="compact-xs" variant={r.fastLane === true ? "filled" : "subtle"} color="orange"
+              title={r.fastLane === true ? "Eilauftrag — Klick entfernt die Priorisierung" : "Als Eilauftrag (Fast-Lane) priorisieren"}
+              onClick={async () => {
+                setErr(null);
+                try { await trpc.shopOrders.setFastLane.mutate({ orderId: String(r.id), on: !(r.fastLane === true) }); await load(); }
+                catch (e) { setErr(errMsg(e)); }
+              }}>{r.fastLane === true ? "★ Eil" : "Eil"}</Button>
             <Button size="compact-xs" variant="subtle" onClick={() => void startEditOrder(String(r.id))}>Bearbeiten</Button>
             {next.length === 0 && <Text size="xs" c="dimmed">—</Text>}
             {next.map((to) => (
@@ -6186,6 +6195,95 @@ export function GuVReportPage(): JSX.Element {
           ))}
         </Table.Tbody>
       </Table>
+    </>
+  );
+}
+
+// Gutscheine (Xentral „Gutscheine"): Wertgutscheine mit Restguthaben + Gültigkeit anlegen,
+// Liste einsehen und Beträge einlösen (Teil-Einlösung; GoBD-auditiert).
+export function GutscheinePage(): JSX.Element {
+  const [list, setList] = useState<Awaited<ReturnType<typeof trpc.gutscheine.list.query>>>([]);
+  const [code, setCode] = useState(""); const [wert, setWert] = useState(0); const [validUntil, setValidUntil] = useState("");
+  const [redeemCode, setRedeemCode] = useState(""); const [redeemEuro, setRedeemEuro] = useState(0);
+  const [msg, setMsg] = useState<string | null>(null); const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try { setList(await trpc.gutscheine.list.query()); setErr(null); } catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  const create = async (): Promise<void> => {
+    setErr(null); setMsg(null);
+    try {
+      await trpc.gutscheine.create.mutate({ code, initialCents: Math.round(wert * 100), validUntil: validUntil ? new Date(validUntil).toISOString() : null });
+      setMsg(`Gutschein ${code.toUpperCase()} angelegt.`); setCode(""); setWert(0); setValidUntil(""); await load();
+    } catch (e) { setErr(errMsg(e)); }
+  };
+  const redeem = async (): Promise<void> => {
+    setErr(null); setMsg(null);
+    try {
+      const r = await trpc.gutscheine.redeem.mutate({ code: redeemCode, amountCents: Math.round(redeemEuro * 100) });
+      setMsg(`Eingelöst: ${euro(r.appliedCents)} · Restguthaben ${euro(r.remainingCents)}.`); setRedeemEuro(0); await load();
+    } catch (e) { setErr(errMsg(e)); }
+  };
+
+  return (
+    <>
+      <DocListHeader module="Finanzen" title="Gutscheine"
+        hint="Wertgutscheine mit Code, Restguthaben und Gültigkeit. Einlösung reduziert das Restguthaben (Teil-Einlösung möglich, GoBD-auditiert)." />
+      {err && <Alert color="red" mt="sm" withCloseButton onClose={() => setErr(null)}>{err}</Alert>}
+      {msg && <Alert color="green" mt="sm" withCloseButton onClose={() => setMsg(null)}>{msg}</Alert>}
+
+      <Group mt="md" gap="xl" align="flex-end" wrap="wrap">
+        <Box p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+          <Text size="sm" fw={600} mb="xs">Gutschein anlegen</Text>
+          <Group gap="xs" align="end" wrap="wrap">
+            <TextInput label="Code" value={code} onChange={(e) => setCode(e.currentTarget.value)} placeholder="SOMMER25" w={150} />
+            <NumberInput label="Wert (€)" value={wert} onChange={(v) => setWert(Number(v) || 0)} min={0} decimalScale={2} w={120} />
+            <TextInput label="Gültig bis (optional)" type="date" value={validUntil} onChange={(e) => setValidUntil(e.currentTarget.value)} w={170} />
+            <Button disabled={!code.trim() || wert <= 0} onClick={() => void create()}>Anlegen</Button>
+          </Group>
+        </Box>
+        <Box p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+          <Text size="sm" fw={600} mb="xs">Einlösen</Text>
+          <Group gap="xs" align="end" wrap="wrap">
+            <TextInput label="Code" value={redeemCode} onChange={(e) => setRedeemCode(e.currentTarget.value)} w={150} />
+            <NumberInput label="Betrag (€)" value={redeemEuro} onChange={(v) => setRedeemEuro(Number(v) || 0)} min={0} decimalScale={2} w={120} />
+            <Button color="teal" disabled={!redeemCode.trim() || redeemEuro <= 0} onClick={() => void redeem()}>Einlösen</Button>
+          </Group>
+        </Box>
+      </Group>
+
+      <Title order={5} mt="xl">Gutscheine ({list.length})</Title>
+      {list.length === 0 ? (
+        <EmptyState icon="🎟️" title="Noch keine Gutscheine" hint="Lege oben einen Wertgutschein mit Code und Betrag an." />
+      ) : (
+        <Table mt="xs" striped withTableBorder verticalSpacing="xs" fz="sm">
+          <Table.Thead><Table.Tr>
+            <Table.Th>Code</Table.Th><Table.Th ta="right">Wert</Table.Th><Table.Th ta="right">Restguthaben</Table.Th>
+            <Table.Th>Gültig bis</Table.Th><Table.Th>Status</Table.Th>
+          </Table.Tr></Table.Thead>
+          <Table.Tbody>
+            {list.map((g) => {
+              const abgelaufen = g.validUntil != null && new Date(g.validUntil) < new Date();
+              const leer = g.remainingCents <= 0;
+              return (
+                <Table.Tr key={g.id}>
+                  <Table.Td ff="monospace" fw={600}>{g.code}</Table.Td>
+                  <Table.Td ta="right">{euro(g.initialCents)}</Table.Td>
+                  <Table.Td ta="right"><Text fw={600} c={leer ? "dimmed" : "teal"}>{euro(g.remainingCents)}</Text></Table.Td>
+                  <Table.Td>{g.validUntil ? new Date(g.validUntil).toLocaleDateString("de-DE") : "unbegrenzt"}</Table.Td>
+                  <Table.Td>
+                    <Badge variant="light" color={leer ? "gray" : abgelaufen ? "red" : !g.active ? "gray" : "green"}>
+                      {leer ? "eingelöst" : abgelaufen ? "abgelaufen" : !g.active ? "inaktiv" : "gültig"}
+                    </Badge>
+                  </Table.Td>
+                </Table.Tr>
+              );
+            })}
+          </Table.Tbody>
+        </Table>
+      )}
     </>
   );
 }

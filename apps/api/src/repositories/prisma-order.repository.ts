@@ -94,6 +94,7 @@ export class PrismaOrderRepository
         zugesagterLiefertermin: true,
         externalNumber: true,
         employeeNote: true,
+        fastLane: true,
         createdAt: true,
         lines: { select: { qty: true, unitNetCents: true } },
       },
@@ -110,8 +111,13 @@ export class PrismaOrderRepository
       externalNumber: r.externalNumber,
       employeeNote: r.employeeNote,
       totalNetCents: r.lines.reduce((sum, l) => sum + l.qty * l.unitNetCents, 0),
+      fastLane: r.fastLane,
       createdAt: r.createdAt,
     }));
+  }
+
+  async setFastLane(orderId: string, on: boolean): Promise<void> {
+    await prisma.order.update({ where: { id: orderId }, data: { fastLane: on } });
   }
 
   async getStatus(orderId: string): Promise<string | null> {

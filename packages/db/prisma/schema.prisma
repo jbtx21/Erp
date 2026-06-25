@@ -887,6 +887,7 @@ model Order {
   cashSales   CashSale[] // Barverkäufe (B6)
   fileLink    String? // Druckdaten-Verweis, Pflicht vor Produktion (Kap. 7.1)
   freigegeben Boolean     @default(false) // kein Produktionsstart ohne Freigabe (Kap. 5.2/7.2)
+  fastLane    Boolean     @default(false) // Eilauftrag-Priorisierung (Xentral „Fast-Lane")
   // T-01: Mitarbeiter-Info des Shop-Kontos wird hier vermerkt, erzeugt KEINEN Kunden
   employeeNote String?
   externalNumber String? // Shop-Bestellnummer (Idempotenz beim Import, T-01)
@@ -1526,6 +1527,19 @@ model CreditNote {
   createdAt DateTime @default(now())
 
   @@index([invoiceId])
+}
+
+// Gutschein/Wertgutschein (Xentral „Gutscheine"): Code mit Restguthaben + Gültigkeit.
+// Eigenständige Registry; Einlösung reduziert das Restguthaben (GoBD-auditiert).
+model Gutschein {
+  id            String    @id @default(cuid())
+  code          String    @unique // eindeutiger Einlöse-Code
+  initialCents  Int       // ausgestellter Wert
+  remainingCents Int      // aktuelles Restguthaben (≥ 0)
+  validUntil    DateTime? // Gültigkeit; null = unbegrenzt
+  note          String?
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

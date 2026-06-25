@@ -22,6 +22,10 @@ class FakeOrderRepo implements OrderWorkflowRepository {
   async getNumber(id: string): Promise<string | null> {
     return this.status.has(id) ? `AB-${id}` : null;
   }
+  fastLane = new Map<string, boolean>();
+  async setFastLane(id: string, on: boolean): Promise<void> {
+    this.fastLane.set(id, on);
+  }
   async setStatus(id: string, status: string): Promise<void> {
     this.status.set(id, status);
   }

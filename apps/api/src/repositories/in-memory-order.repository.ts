@@ -21,6 +21,7 @@ interface StoredOrder {
   externalNumber: string;
   employeeNote: string;
   totalNetCents: number;
+  fastLane?: boolean;
   createdAt: Date;
 }
 
@@ -123,7 +124,13 @@ export class InMemoryOrderRepository
         externalNumber: o.externalNumber,
         employeeNote: o.employeeNote,
         totalNetCents: o.totalNetCents,
+        fastLane: o.fastLane ?? false,
         createdAt: o.createdAt,
       }));
+  }
+
+  async setFastLane(orderId: string, on: boolean): Promise<void> {
+    const o = this.orders.find((x) => x.id === orderId);
+    if (o) o.fastLane = on;
   }
 }

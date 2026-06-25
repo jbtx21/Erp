@@ -12,7 +12,7 @@ import { Banking } from "./Banking.js";
 import {
   CompaniesPage, CallLogsPage, CostCentersPage, DunningPage, InquiriesPage, IncomingInvoicesPage, LeadsPage, MailAccountsPage, OrdersPage, ProcurementPage, ProductionReportingPage,
   ProductsPage, PricingPage, EmailTemplatesPage, DashboardsPage, DataIoPage, EanImportPage, FinanceReportingPage, WareneingangPage, ZahlungenPage, NewsletterPage, OpportunitiesPage, CalendarPage, MessagesPage, AdminPage, ArchivePage, AuditLogPage, AutomationPage, TasksPage, HomePage, LagerPage, HrPage, IntegrationsPage, SecurityPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
-  LogosPage, AufschlagPage, AusschreibungenPage, NachkalkulationPage, GuVReportPage,
+  LogosPage, AufschlagPage, AusschreibungenPage, NachkalkulationPage, GuVReportPage, GutscheinePage,
 } from "./pages.js";
 import { trpc } from "./trpc.js";
 
@@ -38,7 +38,7 @@ const NAV: ReadonlyArray<{ group: string; icon: NavIconName; items: ReadonlyArra
     { key: "guv", label: "Gewinn- und Verlustrechnung" },
     { key: "zahlungen", label: "Zahlungseingänge" }, { key: "banking", label: "Banking" },
     { key: "finance", label: "Offene Posten (OP-Aging)" }, { key: "dunning", label: "Mahnwesen" },
-    { key: "costcenters", label: "Kostenstellen" }, { key: "nachkalkfin", label: "Nachkalkulation" }, { key: "reporting", label: "Auswertungen" },
+    { key: "costcenters", label: "Kostenstellen" }, { key: "nachkalkfin", label: "Nachkalkulation" }, { key: "gutscheine", label: "Gutscheine" }, { key: "reporting", label: "Auswertungen" },
   ] },
   { group: "Personalwesen", icon: "hr", items: [{ key: "hr", label: "Personalwesen" }] },
   { group: "Einstellungen", icon: "einstellungen", items: [{ key: "admin", label: "Einstellungen" }, { key: "aufschlag", label: "Aufschlagsfaktoren" }, { key: "automation", label: "Automationen" }, { key: "mailaccounts", label: "E-Mail-Konten" }, { key: "emailtemplates", label: "E-Mail-Vorlagen" }, { key: "dataio", label: "Import/Export" }, { key: "archive", label: "GoBD-Archiv" }, { key: "auditlog", label: "Audit-Protokoll" }, { key: "integrations", label: "Schnittstellen" }, { key: "security", label: "Mein Konto (2FA)" }] },
@@ -400,6 +400,7 @@ function Page({ k, role, userName, onNavigate, onOpen, focusId }: { k: string; r
     case "aufschlag": return <AufschlagPage />;
     case "ausschreibungen": return <AusschreibungenPage />;
     case "guv": return <GuVReportPage />;
+    case "gutscheine": return <GutscheinePage />;
     case "nachkalkfin": return <NachkalkulationPage />;
     case "subproduction": return <SubproductionPage />;
     case "prodreport": return <ProductionReportingPage />;
