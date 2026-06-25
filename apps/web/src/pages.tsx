@@ -10,7 +10,7 @@ import { resolveMarkupFactor, DEFAULT_MARKUP_CONFIG, type MarkupConfig } from "@
 import { trpc } from "./trpc.js";
 import { AufschlagsfaktorenSection, LogosStickereiSection, StickereiAusschreibungSection, StickereiStaffelnSection, Postcalc } from "./Differentiators.js";
 import { euro, numTd, statusMantineColor, prettyStatus } from "./theme.js";
-import { MultiLineChart } from "./charts.js";
+import { MultiLineChart, BarChart } from "./charts.js";
 import { DocFormShell, DocListHeader, StatusDot } from "./doc-layout.js";
 import { OrderAmpelDetail, Auftragsampel } from "./StatusAmpel.js";
 import { useUnsavedGuard } from "./use-unsaved-guard.js";
@@ -1767,7 +1767,7 @@ export function QuotesPage(): JSX.Element {
             <Group gap="md" align="end" mt="xs">
               <NumberInput label="Zahlungsziel (Tage)" value={zahlungszielTage} onChange={(v) => setZahlungszielTage(v === "" ? "" : Number(v))} min={0} max={365} w={180} placeholder="aus Kundenstamm" />
             </Group>
-            <Text size="xs" c="dimmed" mt={4}>Leer = Zahlungsziel des Kunden (Kundenstamm). Ratenpläne folgen als nächste Slice.</Text>
+            <Text size="xs" c="dimmed" mt={4}>Leer = Zahlungsziel des Kunden (Kundenstamm).</Text>
             <Title order={5} mt="lg">Allgemeine Geschäftsbedingungen</Title>
             <Textarea label="Details der Geschäftsbedingungen" autosize minRows={4} maxRows={12} mt="xs" value={terms} onChange={(e) => setTerms(e.currentTarget.value)} placeholder="AGB-/Bedingungstext für dieses Angebot…" />
           </Tabs.Panel>
@@ -5976,14 +5976,23 @@ export function GuVReportPage(): JSX.Element {
       </Group>
 
       <Box mt="lg">
-        <MultiLineChart
-          format={euro}
-          series={[
-            { name: "Ertrag", color: "#e64980", data: rows.map((r) => ({ label: r.key, value: r.income })) },
-            { name: "Aufwand", color: "#228be6", data: rows.map((r) => ({ label: r.key, value: r.expense })) },
-            { name: "Ergebnis", color: "#40c057", data: rows.map((r) => ({ label: r.key, value: r.net })) },
-          ]}
-        />
+        {/* Eine Linie braucht ≥2 Stützpunkte — bei nur einer Periode Balken (Ertrag/Aufwand)
+            + Hinweis statt irreführender Einzelpunkte (P2.13). */}
+        {rows.length >= 2 ? (
+          <MultiLineChart
+            format={euro}
+            series={[
+              { name: "Ertrag", color: "#e64980", data: rows.map((r) => ({ label: r.key, value: r.income })) },
+              { name: "Aufwand", color: "#228be6", data: rows.map((r) => ({ label: r.key, value: r.expense })) },
+              { name: "Ergebnis", color: "#40c057", data: rows.map((r) => ({ label: r.key, value: r.net })) },
+            ]}
+          />
+        ) : rows.length === 1 ? (
+          <>
+            <BarChart format={euro} data={[{ label: "Ertrag", value: totalIncome }, { label: "Aufwand", value: totalExpense }]} />
+            <Text size="xs" c="dimmed" mt={4}>Nur eine Periode ({rows[0]!.key}) — ein Verlauf wird ab der zweiten Periode angezeigt. Ergebnis: {euro(totalNet)}.</Text>
+          </>
+        ) : null}
       </Box>
 
       <Title order={5} mt="lg">Konten</Title>
