@@ -527,6 +527,15 @@ export const appRouter = router({
       }),
   }),
 
+  // Vereinheitlichter Zahlungsabgleich (IA-Objekt-Merge, Kap. 9.4): EIN Lese-/Datenmodell
+  // über alle Quellen (CAMT/Provider/manuell) — Zahlungen mit Herkunft + Abgleich-Status
+  // und OP-Aging in einem Aufruf. Finanzdaten → kein PRODUKTION-Zugriff.
+  reconciliation: router({
+    overview: roleProcedure(...supplierRoles)
+      .input(z.object({ limit: z.number().int().positive().max(500) }).optional())
+      .query(({ input, ctx }) => ctx.reconciliation.overview(input?.limit ?? 100)),
+  }),
+
   // Manuelle Zahlungserfassung (Kap. 9.4): offene Posten + Zahlungseingang buchen.
   // Finanzdaten → kein PRODUKTION-Zugriff.
   payments: router({
@@ -1969,6 +1978,41 @@ export const appRouter = router({
       .input(z.object({ id: z.string().min(1), grund: z.string().min(1) }))
       .mutation(async ({ input, ctx }) => {
         try { return await ctx.inquiries.discard(input.id, input.grund); } catch (e) { throw toTrpcError(e); }
+      }),
+  }),
+
+  // Vereinheitlichter CRM-Funnel (IA-Objekt-Merge): EINE Entität (CrmLead) + EINE Statusmaschine
+  // löst Lead/Anfrage/Chance ab. NEU->KONTAKTIERT->QUALIFIZIERT->ANGEBOT->GEWONNEN (+VERLOREN).
+  crm: router({
+    list: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.crm.list()),
+    create: roleProcedure(...supplierRoles)
+      .input(z.object({
+        name: z.string().min(1),
+        companyId: z.string().optional(),
+        contactName: z.string().optional(),
+        email: z.string().optional(),
+        phone: z.string().optional(),
+        source: z.enum(["WEB", "EMAIL", "SHOP", "TELEFON"]).optional(),
+        valueCents: z.number().int().nonnegative().optional(),
+        text: z.string().optional(),
+        note: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.crm.create(input); } catch (e) { throw toTrpcError(e); }
+      }),
+    advance: roleProcedure(...supplierRoles)
+      .input(z.object({
+        id: z.string().min(1),
+        to: z.enum(["KONTAKTIERT", "QUALIFIZIERT", "ANGEBOT", "GEWONNEN", "VERLOREN"]),
+        lostReason: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.crm.advance(input.id, input.to, input.lostReason); return { ok: true as const }; } catch (e) { throw toTrpcError(e); }
+      }),
+    convertToQuote: roleProcedure(...supplierRoles)
+      .input(z.object({ id: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.crm.convertToQuote(input.id); } catch (e) { throw toTrpcError(e); }
       }),
   }),
 

@@ -131,6 +131,7 @@ model Company {
   collectiveOrders CollectiveOrder[]
   invoices        Invoice[]
   abschlaege      Abschlagsrechnung[]
+  crmLeads        CrmLead[] // vereinheitlichter CRM-Funnel (IA-Merge)
   inquiries       Inquiry[] // Anfrage-Funnel (B20)
   lead            Lead? // aus Lead konvertiert (B15)
   portalUsers     PortalUser[] // Kundenportal-Logins (B13)
@@ -1177,14 +1178,26 @@ model DunningNotice {
   @@index([openItemId])
 }
 
+// Herkunft eines Zahlungseingangs (IA-Objekt-Merge Zahlungsabgleich): ein gemeinsames
+// Abgleich-Datenmodell für alle Quellen — automatischer CAMT-Import, Provider-Sync
+// (EBICS/PSD2) und manuelle Erfassung. Trennt im vereinheitlichten Abgleich die Herkunft.
+enum PaymentSource {
+  CAMT // CAMT.053-Datei-Upload (T-13)
+  PROVIDER // Bank-Provider-Sync (EBICS/PSD2)
+  MANUAL // manuell auf einen OP gebucht (Bar/Überweisungszuordnung)
+}
+
 model Payment {
   id           String   @id @default(cuid())
   externalRef  String?  @unique // Bank-Transaktionsreferenz (CAMT AcctSvcrRef) — idempotenter Import (T-13)
+  source       PaymentSource @default(MANUAL) // Herkunft (vereinheitlichter Abgleich)
   amountCents  Int
   bookedAt     DateTime @default(now())
   reference    String? // Verwendungszweck (Banking-Abgleich Kap. 9.4/T-13)
   matched      Boolean  @default(false)
   allocations  PaymentAllocation[]
+
+  @@index([source])
 }
 
 model PaymentAllocation {
@@ -1870,6 +1883,44 @@ enum NewsletterStatus {
 }
 
 // Verkaufschance/Opportunity (komplexes CRM): gewichtete Pipeline. stage = Phase,
+// Vereinheitlichter CRM-Funnel (IA-Objekt-Merge): EINE Entität + EINE Statusmaschine
+// löst die drei früheren Backends Lead/Anfrage(Inquiry)/Chance(Opportunity) ab.
+// Strangler: die alten Tabellen bleiben (grün), CrmLead ist die kanonische Entität.
+enum CrmStage {
+  NEU
+  KONTAKTIERT
+  QUALIFIZIERT
+  ANGEBOT
+  GEWONNEN
+  VERLOREN
+}
+
+model CrmLead {
+  id              String         @id @default(cuid())
+  name            String
+  companyId       String?
+  company         Company?       @relation(fields: [companyId], references: [id])
+  contactName     String?
+  email           String?
+  phone           String?
+  source          InquirySource?
+  stage           CrmStage       @default(NEU)
+  valueCents      Int?
+  probability     Int?
+  expectedCloseAt DateTime?
+  text            String?
+  note            String?
+  lostReason      String?
+  quoteId         String? // gesetzt nach Angebotsüberführung
+  legacyKind      String? // Backfill-Herkunft: LEAD | INQUIRY | OPPORTUNITY
+  legacyId        String? // ID im alten Backend (Nachvollziehbarkeit)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([stage])
+  @@index([companyId])
+}
+
 // probability = Abschlusswahrscheinlichkeit (%), value = erwarteter Auftragswert.
 // Gewichteter Forecast = Summe(value × probability) der offenen Chancen.
 model Opportunity {

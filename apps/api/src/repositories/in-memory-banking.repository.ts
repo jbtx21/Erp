@@ -17,6 +17,7 @@ interface StoredOpenItem {
 interface StoredPayment {
   id: string;
   externalRef: string;
+  source: PersistablePayment["source"];
   amountCents: number;
   reference: string;
   matched: boolean;
@@ -46,6 +47,7 @@ export class InMemoryBankingRepository implements BankingRepository, BankingQuer
       this.payments.push({
         id: `pay_${++this.seq}`,
         externalRef: p.externalRef,
+        source: p.source,
         amountCents: p.amountCents,
         reference: p.reference,
         matched: p.matched,

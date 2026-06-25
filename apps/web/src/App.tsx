@@ -14,13 +14,15 @@ function ZahlungsabgleichPage({ role }: { role: string }): ReactNode {
   return (
     <>
       <DocListHeader module="Buchhaltung" title="Zahlungsabgleich"
-        hint="Ein Workflow: Kontoumsatz (Banking) → offenem Posten zuordnen (OP-Aging) → ggf. manuell erfassen." />
-      <Tabs defaultValue="banking" mt="md" keepMounted={false}>
+        hint="Ein gemeinsames Abgleich-Datenmodell über alle Quellen: Übersicht (Herkunft + Status + OP-Aging) → Kontoumsatz importieren → ggf. manuell zuordnen." />
+      <Tabs defaultValue="overview" mt="md" keepMounted={false}>
         <Tabs.List>
+          <Tabs.Tab value="overview">Übersicht</Tabs.Tab>
           <Tabs.Tab value="banking">Kontoumsätze</Tabs.Tab>
           <Tabs.Tab value="op">Offene Posten (OP-Aging)</Tabs.Tab>
           <Tabs.Tab value="erfassen">Zahlung erfassen</Tabs.Tab>
         </Tabs.List>
+        <Tabs.Panel value="overview" pt="md"><ZahlungsabgleichOverview /></Tabs.Panel>
         <Tabs.Panel value="banking" pt="md"><Banking role={role} /></Tabs.Panel>
         <Tabs.Panel value="op" pt="md"><FinanceReportingPage /></Tabs.Panel>
         <Tabs.Panel value="erfassen" pt="md"><ZahlungenPage /></Tabs.Panel>
@@ -33,7 +35,7 @@ import { Reporting } from "./Reporting.js";
 import { Banking } from "./Banking.js";
 import {
   CompaniesPage, CallLogsPage, CostCentersPage, DunningPage, InquiriesPage, IncomingInvoicesPage, LeadsPage, CrmPipelinePage, MailAccountsPage, OrdersPage, ProcurementPage, ProductionReportingPage,
-  ProductsPage, PricingPage, EmailTemplatesPage, DashboardsPage, DataIoPage, EanImportPage, FinanceReportingPage, WareneingangPage, ZahlungenPage, NewsletterPage, OpportunitiesPage, CalendarPage, MessagesPage, AdminPage, ArchivePage, AuditLogPage, AutomationPage, TasksPage, HomePage, LagerPage, HrPage, IntegrationsPage, SecurityPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
+  ProductsPage, PricingPage, EmailTemplatesPage, DashboardsPage, DataIoPage, EanImportPage, FinanceReportingPage, WareneingangPage, ZahlungenPage, ZahlungsabgleichOverview, NewsletterPage, OpportunitiesPage, CalendarPage, MessagesPage, AdminPage, ArchivePage, AuditLogPage, AutomationPage, TasksPage, HomePage, LagerPage, HrPage, IntegrationsPage, SecurityPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
   LogosPage, AufschlagPage, AusschreibungenPage, NachkalkulationPage, GuVReportPage, GutscheinePage,
 } from "./pages.js";
 import { trpc } from "./trpc.js";

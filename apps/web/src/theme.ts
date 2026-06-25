@@ -58,11 +58,15 @@ export const statusMantineColor: Record<string, string> = {
   VERSANDBEREIT: "blue", VERLIEHEN: "blue",
   // Versendet / qualifiziert (indigo)
   VERSENDET: "indigo", QUALIFIZIERT: "indigo",
+  // Angebot abgegeben (violet) — CRM-Funnel-Stufe ANGEBOT
+  ANGEBOT: "violet",
   // Positiv abgeschlossen (teal)
   ANGENOMMEN: "teal", KONVERTIERT: "teal", ABGESCHLOSSEN: "teal", FAKTURIERT: "teal",
-  ZURUECK: "teal", BERECHNET: "teal",
+  ZURUECK: "teal", BERECHNET: "teal", GEWONNEN: "teal",
+  // Zahlungsabgleich-Status (vereinheitlichter Abgleich)
+  ZUGEORDNET: "teal", TEILZUGEORDNET: "amber", KLAERUNG: "red",
   // Negativ abgeschlossen (rot)
-  ABGELEHNT: "red", VERWORFEN: "red", STORNIERT: "red",
+  ABGELEHNT: "red", VERWORFEN: "red", STORNIERT: "red", VERLOREN: "red",
 };
 
 /** Badge-Farbe für einen Status (Fallback grau). */
@@ -76,6 +80,7 @@ export const statusLabel: Record<string, string> = {
   VERLIEHEN: "Verliehen", ZURUECK: "Zurück", KONTAKTIERT: "Kontaktiert", QUALIFIZIERT: "Qualifiziert", KONVERTIERT: "Konvertiert",
   EXTERN_VEREDLER: "Externer Veredler", EXTERN_STICK_SIEBDRUCK: "Extern Stick & Siebdruck",
   GRUEN: "Grün", NEU: "Neu", OFFEN: "Offen", ERFASST: "Erfasst", BERECHNET: "Berechnet", VERWORFEN: "Verworfen",
+  ZUGEORDNET: "Zugeordnet", TEILZUGEORDNET: "Teilzugeordnet", KLAERUNG: "Klärung",
   TEXTIL: "Textil", VEREDELUNG: "Veredelung", SONSTIGE: "Sonstiges",
 };
 /** Lesbare Anzeige eines Status/Enums: Map oder generischer Prettifier (Snake→Wörter). */

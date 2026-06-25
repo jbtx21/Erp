@@ -33,6 +33,7 @@ import type { CostCenterService } from "../modules/cost-center/cost-center.servi
 import type { LeadService } from "../modules/lead/lead.service.js";
 import type { CallLogService } from "../modules/call-log/call-log.service.js";
 import type { InquiryService } from "../modules/inquiry/inquiry.service.js";
+import type { CrmService } from "../modules/crm/crm.service.js";
 import type { SampleLoanService } from "../modules/sample/sample.service.js";
 import type { CompanyService } from "../modules/company/company.service.js";
 import type { ProductService } from "../modules/product/product.service.js";
@@ -73,6 +74,7 @@ import type { EanImportService } from "../modules/ean-import/ean-import.service.
 import type { FinanceReportService } from "../modules/finance-report/finance-report.service.js";
 import type { GoodsReceiptService } from "../modules/goods-receipt/goods-receipt.service.js";
 import type { PaymentService } from "../modules/payment/payment.service.js";
+import type { ReconciliationService } from "../modules/reconciliation/reconciliation.service.js";
 import type {
   BankingQueryRepository,
   DunningQueryRepository,
@@ -118,6 +120,7 @@ export interface Context {
   leads: LeadService;
   callLogs: CallLogService;
   inquiries: InquiryService;
+  crm: CrmService;
   sampleLoans: SampleLoanService;
   companies: CompanyService;
   products: ProductService;
@@ -160,6 +163,7 @@ export interface Context {
   financeReport: FinanceReportService;
   goodsReceipts: GoodsReceiptService;
   payments: PaymentService;
+  reconciliation: ReconciliationService;
   auth: AuthService;
   user: AuthUser | null;
   /** Roh-Token aus dem Cookie (für den 2FA-Zwischenschritt/Logout, wenn user noch null ist). */

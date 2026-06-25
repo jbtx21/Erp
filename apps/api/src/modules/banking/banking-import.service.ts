@@ -11,6 +11,7 @@ import {
   parseCamt053,
   type IncomingPayment,
   type OpenItemRef,
+  type PaymentSource,
 } from "@texma/shared";
 import { buildEntry, type AuditSink } from "@texma/audit";
 
@@ -23,6 +24,8 @@ export interface PersistablePayment {
   externalRef: string;
   reference: string;
   amountCents: number;
+  /** Herkunft (vereinheitlichter Abgleich): CAMT-Datei oder Provider-Sync. */
+  source: PaymentSource;
   /** Vollständig einem OP zugeordnet (keine Klärung). */
   matched: boolean;
   allocations: PersistableAllocation[];
@@ -62,7 +65,8 @@ export class BankingImportService {
     const credits = creditTransactions(parseCamt053(xml));
     return this.importCredits(
       credits.map((c) => ({ externalRef: c.externalRef, reference: c.reference, amountCents: c.amountCents })),
-      "camt053"
+      "camt053",
+      "CAMT"
     );
   }
 
@@ -72,7 +76,8 @@ export class BankingImportService {
    */
   async importCredits(
     credits: ReadonlyArray<NormalizedCreditInput>,
-    source = "sync"
+    source = "sync",
+    paymentSource: PaymentSource = "PROVIDER"
   ): Promise<BankingImportResult> {
     const existing = await this.repo.existingExternalRefs(credits.map((c) => c.externalRef));
     const fresh = credits.filter((c) => !existing.has(c.externalRef));
@@ -100,7 +105,7 @@ export class BankingImportService {
     const persistables: PersistablePayment[] = fresh.map((c) => {
       const allocations = allocByPayment.get(c.externalRef) ?? [];
       const matched = allocations.length > 0 && !clarifiedIds.has(c.externalRef);
-      return { externalRef: c.externalRef, reference: c.reference, amountCents: c.amountCents, matched, allocations };
+      return { externalRef: c.externalRef, reference: c.reference, amountCents: c.amountCents, source: paymentSource, matched, allocations };
     });
 
     await this.repo.persist(persistables);

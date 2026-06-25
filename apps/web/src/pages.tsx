@@ -83,7 +83,7 @@ function fmtCell(key: string, v: unknown): ReactNode {
   if (v === null || v === undefined) return "—";
   if (/cents$/i.test(key) && typeof v === "number") return <span style={numTd}>{euro(v)}</span>;
   if (typeof v === "boolean") return v ? "ja" : "nein";
-  if (/(status|ampel|level)$/i.test(key) && typeof v === "string") {
+  if (/(status|stage|ampel|level)$/i.test(key) && typeof v === "string") {
     // Ampel-Gesamtlampe (Auftragsampel-„Monitor"-Spalte): Problem/Achtung/OK statt Status-Enum.
     const LAMP: Record<string, [string, string]> = { ROT: ["red", "Problem"], GELB: ["yellow", "Achtung"], GRUEN: ["green", "OK"], GRAU: ["gray", "—"] };
     const lamp = LAMP[v];
@@ -3045,59 +3045,98 @@ export function CompaniesPage({ focusId }: { focusId?: string } = {}): JSX.Eleme
 // Vertriebs-Pipeline (Funnel-Konsolidierung): EIN Einstieg, der die drei getrennt
 // modellierten CRM-Stufen — Leads → Anfragen → Verkaufschancen — als durchgängigen
 // Funnel zeigt (Live-Zähler + gewichteter Forecast) und in die Detailseiten springt.
-export function CrmPipelinePage({ onNavigate }: { onNavigate?: (k: string) => void } = {}): JSX.Element {
-  const [leads, setLeads] = useState<Awaited<ReturnType<typeof trpc.leads.list.query>>>([]);
-  const [inquiries, setInquiries] = useState<Awaited<ReturnType<typeof trpc.inquiries.list.query>>>([]);
-  const [pipeline, setPipeline] = useState<Awaited<ReturnType<typeof trpc.opportunities.pipeline.query>> | null>(null);
+// Vereinheitlichter CRM-Funnel (IA-Objekt-Merge): EINE Entität (CrmLead) + EINE Statusmaschine
+// ersetzt die drei früheren Backends (Lead/Anfrage/Chance). Ein Funnel-Board, Detailpflege inline.
+type CrmRow = Awaited<ReturnType<typeof trpc.crm.list.query>>[number];
+const CRM_STAGE_ORDER = ["NEU", "KONTAKTIERT", "QUALIFIZIERT", "ANGEBOT", "GEWONNEN", "VERLOREN"] as const;
+const CRM_STAGE_COLOR: Record<string, string> = { NEU: "gray", KONTAKTIERT: "blue", QUALIFIZIERT: "indigo", ANGEBOT: "violet", GEWONNEN: "teal", VERLOREN: "red" };
+const CRM_OPEN_STAGES = new Set(["NEU", "KONTAKTIERT", "QUALIFIZIERT", "ANGEBOT"]);
+const CRM_CONVERTIBLE = new Set(["NEU", "KONTAKTIERT", "QUALIFIZIERT"]);
+
+export function CrmPipelinePage(_props: { onNavigate?: (k: string) => void } = {}): JSX.Element {
+  const [rows, setRows] = useState<CrmRow[]>([]);
+  const [name, setName] = useState("");
+  const [companyId, setCompanyId] = useState("");
+  const [source, setSource] = useState("WEB");
+  const [valueEur, setValueEur] = useState("");
+  const [text, setText] = useState("");
   const [err, setErr] = useState<string | null>(null);
-  useEffect(() => {
-    void (async () => {
-      try {
-        const [l, i, p] = await Promise.all([trpc.leads.list.query(), trpc.inquiries.list.query(), trpc.opportunities.pipeline.query()]);
-        setLeads(l); setInquiries(i); setPipeline(p); setErr(null);
-      } catch (e) { setErr(errMsg(e)); }
-    })();
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try { setRows(await trpc.crm.list.query()); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
   }, []);
+  useEffect(() => { void load(); }, [load]);
 
-  const countBy = <T extends { status: string }>(rows: T[]): Record<string, number> =>
-    rows.reduce((acc, r) => { acc[r.status] = (acc[r.status] ?? 0) + 1; return acc; }, {} as Record<string, number>);
-  const leadByStatus = countBy(leads);
-  const inqByStatus = countBy(inquiries);
+  const act = async (fn: () => Promise<unknown>) => {
+    setErr(null);
+    try { await fn(); await load(); } catch (e) { setErr(errMsg(e)); }
+  };
 
-  const arrow = <Box style={{ display: "flex", alignItems: "center" }}><Text c="dimmed" fz={24}>→</Text></Box>;
-  const stage = (title: string, count: number, navKey: string, sub: ReactNode, color: string): JSX.Element => (
-    <Box p="md" style={{ flex: 1, minWidth: 200, border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, borderTop: `3px solid var(--mantine-color-${color}-6)` }}>
-      <Group justify="space-between" align="flex-start">
-        <Box>
-          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>{title}</Text>
-          <Text fz={34} fw={700} lh={1.1}>{count}</Text>
-        </Box>
-        <Button size="compact-xs" variant="light" onClick={() => onNavigate?.(navKey)}>öffnen →</Button>
+  const counts = CRM_STAGE_ORDER.map((s) => ({ stage: s, n: rows.filter((r) => r.stage === s).length }));
+  const forecastCents = rows.filter((r) => CRM_OPEN_STAGES.has(r.stage))
+    .reduce((sum, r) => sum + Math.round(((r.valueCents ?? 0) * (r.probability ?? 100)) / 100), 0);
+
+  const actionsFor = (r: Row): ReactNode => {
+    const id = String(r.id); const stage = String(r.stage); const hasCompany = Boolean(r.companyId);
+    const lost = () => {
+      const lostReason = typeof window !== "undefined" ? window.prompt("Verloren — Grund?") : null;
+      if (lostReason) void act(() => trpc.crm.advance.mutate({ id, to: "VERLOREN", lostReason }));
+    };
+    return (
+      <Group gap={4} justify="flex-end" wrap="nowrap">
+        {stage === "NEU" && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.crm.advance.mutate({ id, to: "KONTAKTIERT" }))}>→ Kontaktiert</Button>}
+        {stage === "KONTAKTIERT" && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.crm.advance.mutate({ id, to: "QUALIFIZIERT" }))}>→ Qualifiziert</Button>}
+        {CRM_CONVERTIBLE.has(stage) && (
+          <Button size="compact-xs" color="green" disabled={!hasCompany} title={hasCompany ? undefined : "Firma zuordnen, um ein Angebot zu erzeugen"}
+            onClick={() => void act(() => trpc.crm.convertToQuote.mutate({ id }))}>→ Angebot</Button>
+        )}
+        {stage === "ANGEBOT" && <Button size="compact-xs" color="teal" onClick={() => void act(() => trpc.crm.advance.mutate({ id, to: "GEWONNEN" }))}>Gewonnen</Button>}
+        {CRM_OPEN_STAGES.has(stage) && <Button size="compact-xs" color="red" variant="light" onClick={lost}>Verloren</Button>}
       </Group>
-      <Box mt="sm">{sub}</Box>
-    </Box>
-  );
-  const chips = (m: Record<string, number>): ReactNode => (
-    <Group gap={4}>{Object.entries(m).length === 0 ? <Text size="xs" c="dimmed">—</Text> : Object.entries(m).map(([s, n]) => <Badge key={s} size="sm" variant="light">{prettyStatus(s)}: {n}</Badge>)}</Group>
-  );
+    );
+  };
 
   return (
     <>
       <DocListHeader module="CRM" title="Vertriebs-Pipeline"
-        hint="Durchgängiger Funnel über die drei CRM-Stufen: Leads (Roh-Interesse) → Anfragen (RFQ) → Verkaufschancen (gewichteter Forecast). Ein Einstieg, Detailpflege weiterhin je Stufe." />
+        hint="Ein durchgängiger Funnel auf EINER Entität (CrmLead): NEU → Kontaktiert → Qualifiziert → Angebot → Gewonnen (oder Verloren). Eine Statusmaschine statt drei getrennter Belegarten." />
       {err && <Alert color="red" mt="sm">{err}</Alert>}
-      <Group align="stretch" mt="md" gap="md" wrap="wrap">
-        {stage("1 · Leads", leads.length, "leads", chips(leadByStatus), "gray")}
-        {arrow}
-        {stage("2 · Anfragen", inquiries.length, "inquiries", chips(inqByStatus), "blue")}
-        {arrow}
-        {stage("3 · Verkaufschancen", pipeline?.openCount ?? 0, "opportunities",
-          <Box>
-            <Text size="xs" c="dimmed">Gewichteter Forecast</Text>
-            <Text fw={700} c="teal">{euro(pipeline?.forecastCents ?? 0)}</Text>
-          </Box>, "teal")}
+
+      <Group align="stretch" mt="md" gap="xs" wrap="wrap">
+        {counts.map(({ stage, n }) => (
+          <Box key={stage} p="sm" style={{ flex: 1, minWidth: 130, border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, borderTop: `3px solid var(--mantine-color-${CRM_STAGE_COLOR[stage]}-6)` }}>
+            <Text size="xs" c="dimmed" tt="uppercase" fw={600}>{prettyStatus(stage)}</Text>
+            <Text fz={30} fw={700} lh={1.1}>{n}</Text>
+          </Box>
+        ))}
       </Group>
-      <Text size="xs" c="dimmed" mt="md">Hinweis: Die Stufen sind bewusst eigene Belegarten (Lead/Anfrage/Chance) mit eigener Statusmaschine — diese Seite bündelt nur den Überblick und die Navigation, ohne die Datenmodelle zu vermischen.</Text>
+      <Group mt="sm" gap="xs">
+        <Text size="xs" c="dimmed">Gewichteter Forecast (offene Stufen):</Text>
+        <Text size="sm" fw={700} c="teal">{euro(forecastCents)}</Text>
+      </Group>
+
+      <Group mt="md" gap="xs" align="end">
+        <TextInput label="Bezeichnung" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Müller GmbH — 200 Polos Stick" w={260} />
+        <CompanyPicker value={companyId} onChange={setCompanyId} label="Firma (optional)" w={200} allowEmpty />
+        <Select label="Quelle" value={source} onChange={(v) => v && setSource(v)} data={["WEB", "EMAIL", "SHOP", "TELEFON"]} w={110} />
+        <TextInput label="Wert (€, optional)" value={valueEur} onChange={(e) => setValueEur(e.currentTarget.value)} w={130} />
+        <TextInput label="Notiz (optional)" value={text} onChange={(e) => setText(e.currentTarget.value)} placeholder="Anfragetext / Bedarf" w={220} />
+        <Button loading={busy} disabled={!name.trim()} onClick={async () => {
+          setBusy(true); setErr(null);
+          try {
+            const valueCents = valueEur.trim() ? Math.round(Number(valueEur.replace(",", ".")) * 100) : undefined;
+            await trpc.crm.create.mutate({
+              name: name.trim(), companyId: companyId || undefined, source: source as "WEB" | "EMAIL" | "SHOP" | "TELEFON",
+              valueCents: Number.isFinite(valueCents) ? valueCents : undefined, text: text.trim() || undefined,
+            });
+            setName(""); setValueEur(""); setText(""); await load();
+          } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+        }}>Anlegen</Button>
+      </Group>
+
+      <AutoTable rows={rows as Row[]} hide={["note", "expectedCloseAt", "legacyKind", "legacyId", "probability"]} action={actionsFor} />
     </>
   );
 }
@@ -4419,6 +4458,95 @@ function ZahlungZeile({ oi, onBooked, onErr }: {
         </Group>
       </Table.Td>
     </Table.Tr>
+  );
+}
+
+// Vereinheitlichter Zahlungsabgleich (IA-Objekt-Merge, Kap. 9.4): EINE Sicht über alle
+// Quellen (CAMT/Provider/manuell) — Zahlungseingänge mit Herkunft + Abgleich-Status und
+// OP-Aging aus einem gemeinsamen Datenmodell, statt drei getrennter Backends.
+const SOURCE_LABEL: Record<string, string> = { CAMT: "Bank (CAMT)", PROVIDER: "Bank (Sync)", MANUAL: "Manuell" };
+const SOURCE_COLOR: Record<string, string> = { CAMT: "blue", PROVIDER: "indigo", MANUAL: "gray" };
+const BUCKET_LABEL: Record<string, string> = {
+  NICHT_FAELLIG: "Nicht fällig", FAELLIG_0_30: "0–30 Tage", FAELLIG_31_60: "31–60 Tage",
+  FAELLIG_61_90: "61–90 Tage", FAELLIG_90_PLUS: "> 90 Tage",
+};
+
+export function ZahlungsabgleichOverview(): JSX.Element {
+  const [data, setData] = useState<Awaited<ReturnType<typeof trpc.reconciliation.overview.query>> | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    try { setData(await trpc.reconciliation.overview.query()); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  if (err) return <Alert color="red" mt="sm">{err}</Alert>;
+  if (!data) return <Group mt="sm" gap="xs"><Loader size="sm" /><Text size="sm">lädt…</Text></Group>;
+  const { matches, openItems, summary } = data;
+
+  const kpi = (label: string, value: ReactNode, color?: string): JSX.Element => (
+    <Box p="sm" style={{ flex: 1, minWidth: 150, border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+      <Text size="xs" c="dimmed" tt="uppercase" fw={600}>{label}</Text>
+      <Text fz={24} fw={700} lh={1.2} c={color}>{value}</Text>
+    </Box>
+  );
+
+  return (
+    <>
+      <Text size="sm" c="dimmed" mt={4}>
+        Ein gemeinsames Abgleich-Datenmodell über alle Zahlungsquellen (automatischer Bankimport,
+        Provider-Sync und manuelle Erfassung) — Herkunft, Abgleich-Status und OP-Aging in einer Sicht.
+      </Text>
+      <Group align="stretch" mt="md" gap="xs" wrap="wrap">
+        {kpi("Zahlungseingänge", summary.paymentsTotal)}
+        {kpi("Davon Klärung", summary.byStatus.KLAERUNG, summary.byStatus.KLAERUNG > 0 ? "red" : undefined)}
+        {kpi("Offene Posten", `${summary.openItemsCount} · ${euro(summary.openTotalCents)}`)}
+        {kpi("Überfällig", euro(summary.overdueTotalCents), summary.overdueTotalCents > 0 ? "red" : undefined)}
+      </Group>
+
+      <Text fw={600} mt="lg" mb="xs">Zahlungseingänge (alle Quellen)</Text>
+      <Table striped withTableBorder verticalSpacing="xs" fz="sm">
+        <Table.Thead><Table.Tr>
+          <Table.Th>Herkunft</Table.Th><Table.Th>Verwendungszweck</Table.Th>
+          <Table.Th ta="right">Betrag</Table.Th><Table.Th ta="right">Zugeordnet</Table.Th>
+          <Table.Th>Status</Table.Th><Table.Th>Zuordnung</Table.Th>
+        </Table.Tr></Table.Thead>
+        <Table.Tbody>
+          {matches.map((m) => (
+            <Table.Tr key={m.id}>
+              <Table.Td><Badge size="sm" variant="light" color={SOURCE_COLOR[m.source]}>{SOURCE_LABEL[m.source] ?? m.source}</Badge></Table.Td>
+              <Table.Td>{m.reference ?? "—"}</Table.Td>
+              <Table.Td ta="right" style={numTd}>{euro(m.amountCents)}</Table.Td>
+              <Table.Td ta="right" style={numTd}>{euro(m.allocatedCents)}</Table.Td>
+              <Table.Td><StatusDot color={`var(--mantine-color-${statusMantineColor[m.status] ?? "gray"}-6)`} label={prettyStatus(m.status)} /></Table.Td>
+              <Table.Td>{m.allocations.length === 0 ? <Text size="xs" c="dimmed">—</Text> : m.allocations.map((a) => `${a.invoiceNumber} (${euro(a.amountCents)})`).join(", ")}</Table.Td>
+            </Table.Tr>
+          ))}
+          {matches.length === 0 && <Table.Tr><Table.Td colSpan={6}><Text size="sm" c="dimmed">Keine Zahlungseingänge.</Text></Table.Td></Table.Tr>}
+        </Table.Tbody>
+      </Table>
+
+      <Text fw={600} mt="lg" mb="xs">Offene Posten (OP-Aging)</Text>
+      <Table striped withTableBorder verticalSpacing="xs" fz="sm">
+        <Table.Thead><Table.Tr>
+          <Table.Th>Rechnung</Table.Th><Table.Th>Kunde</Table.Th><Table.Th ta="right">Offen</Table.Th>
+          <Table.Th ta="right">Fällig in/seit</Table.Th><Table.Th>Aging</Table.Th><Table.Th ta="right">Mahnstufe</Table.Th>
+        </Table.Tr></Table.Thead>
+        <Table.Tbody>
+          {openItems.map((oi) => (
+            <Table.Tr key={oi.id}>
+              <Table.Td>{oi.invoiceNumber}</Table.Td>
+              <Table.Td>{oi.companyName}</Table.Td>
+              <Table.Td ta="right" style={numTd}>{euro(oi.openCents)}</Table.Td>
+              <Table.Td ta="right">{oi.overdueDays > 0 ? <Text component="span" c="red">+{oi.overdueDays} T</Text> : `${-oi.overdueDays} T`}</Table.Td>
+              <Table.Td>{BUCKET_LABEL[oi.bucket] ?? oi.bucket}</Table.Td>
+              <Table.Td ta="right">{oi.dunningLevel > 0 ? <Badge size="sm" color="orange" variant="light">M{oi.dunningLevel}</Badge> : "—"}</Table.Td>
+            </Table.Tr>
+          ))}
+          {openItems.length === 0 && <Table.Tr><Table.Td colSpan={6}><Text size="sm" c="dimmed">Keine offenen Posten.</Text></Table.Td></Table.Tr>}
+        </Table.Tbody>
+      </Table>
+    </>
   );
 }
 

@@ -33,7 +33,7 @@ export class PrismaPaymentRepository implements PaymentRepository {
   async recordPayment(input: { openItemId: string; amountCents: number; bookedAt: Date; reference: string | null }): Promise<{ newOpenCents: number }> {
     return prisma.$transaction(async (tx) => {
       const payment = await tx.payment.create({
-        data: { amountCents: input.amountCents, bookedAt: input.bookedAt, reference: input.reference, matched: true },
+        data: { amountCents: input.amountCents, bookedAt: input.bookedAt, reference: input.reference, matched: true, source: "MANUAL" },
         select: { id: true },
       });
       await tx.paymentAllocation.create({

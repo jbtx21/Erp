@@ -31,6 +31,8 @@ import { ReservationService } from "../modules/stock/reservation.service.js";
 import { InMemoryReservationRepository } from "../repositories/in-memory-reservation.repository.js";
 import { InquiryService } from "../modules/inquiry/inquiry.service.js";
 import { InMemoryInquiryRepository } from "../repositories/in-memory-inquiry.repository.js";
+import { CrmService } from "../modules/crm/crm.service.js";
+import { InMemoryCrmRepository } from "../repositories/in-memory-crm.repository.js";
 import { SampleLoanService } from "../modules/sample/sample.service.js";
 import { InMemorySampleLoanRepository } from "../repositories/in-memory-sample.repository.js";
 import { CompanyService } from "../modules/company/company.service.js";
@@ -104,6 +106,7 @@ import { GoodsReceiptService } from "../modules/goods-receipt/goods-receipt.serv
 import { InMemoryGoodsReceiptRepository } from "../repositories/in-memory-goods-receipt.repository.js";
 import { PaymentService } from "../modules/payment/payment.service.js";
 import { InMemoryPaymentRepository } from "../repositories/in-memory-payment.repository.js";
+import { ReconciliationService } from "../modules/reconciliation/reconciliation.service.js";
 import { DeliveryService } from "../modules/delivery/delivery.service.js";
 import { InMemoryDeliveryRepository } from "../repositories/in-memory-delivery.repository.js";
 import { NumberingService } from "../modules/numbering/numbering.service.js";
@@ -326,6 +329,7 @@ function setup(user: AuthUser | null = BUERO) {
     mailAccounts: new MailAccountService(new InMemoryMailAccountRepository(), null),
     reservations: new ReservationService(new InMemoryReservationRepository(), { balance: async () => ({ HAUPT: 0, MUSTER: 0, SHOWROOM: 0, TRANSFERDRUCK: 0 }), listBalances: async () => [] }),
     inquiries: new InquiryService(new InMemoryInquiryRepository(), new NumberingService(new InMemoryNumberingRepository()), new MemoryAuditSink()),
+    crm: new CrmService(new InMemoryCrmRepository(), new NumberingService(new InMemoryNumberingRepository()), new MemoryAuditSink()),
     sampleLoans: new SampleLoanService(new InMemorySampleLoanRepository(), new NumberingService(new InMemoryNumberingRepository()), new MemoryAuditSink()),
     companies: new CompanyService(new InMemoryCompanyRepository(), new MemoryAuditSink()),
     products: new ProductService(new InMemoryProductRepository(), new MemoryAuditSink()),
@@ -366,6 +370,7 @@ function setup(user: AuthUser | null = BUERO) {
     financeReport: new FinanceReportService(new InMemoryFinanceReportRepository()),
     goodsReceipts: new GoodsReceiptService(new InMemoryGoodsReceiptRepository(), new MemoryAuditSink()),
     payments: new PaymentService(new InMemoryPaymentRepository(), new MemoryAuditSink()),
+    reconciliation: new ReconciliationService({ listPayments: async () => [], listOpenItems: async () => [] }),
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -462,6 +467,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       mailAccounts: {} as Context["mailAccounts"],
       reservations: {} as Context["reservations"],
       inquiries: {} as Context["inquiries"],
+      crm: {} as Context["crm"],
       sampleLoans: {} as Context["sampleLoans"],
       companies: {} as Context["companies"],
       products: {} as Context["products"],
@@ -502,6 +508,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       financeReport: {} as Context["financeReport"],
       goodsReceipts: {} as Context["goodsReceipts"],
       payments: {} as Context["payments"],
+      reconciliation: {} as Context["reconciliation"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",

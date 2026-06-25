@@ -78,6 +78,8 @@ import { PrismaLeadRepository } from "./repositories/prisma-lead.repository.js";
 import { CallLogService } from "./modules/call-log/call-log.service.js";
 import { PrismaCallLogRepository } from "./repositories/prisma-call-log.repository.js";
 import { InquiryService } from "./modules/inquiry/inquiry.service.js";
+import { CrmService } from "./modules/crm/crm.service.js";
+import { PrismaCrmRepository } from "./repositories/prisma-crm.repository.js";
 import { PrismaInquiryRepository } from "./repositories/prisma-inquiry.repository.js";
 import { SampleLoanService } from "./modules/sample/sample.service.js";
 import { PrismaSampleLoanRepository } from "./repositories/prisma-sample.repository.js";
@@ -164,6 +166,8 @@ import { GoodsReceiptService } from "./modules/goods-receipt/goods-receipt.servi
 import { PrismaGoodsReceiptRepository } from "./repositories/prisma-goods-receipt.repository.js";
 import { PaymentService } from "./modules/payment/payment.service.js";
 import { PrismaPaymentRepository } from "./repositories/prisma-payment.repository.js";
+import { ReconciliationService } from "./modules/reconciliation/reconciliation.service.js";
+import { PrismaReconciliationRepository } from "./repositories/prisma-reconciliation.repository.js";
 import { PrismaIntegrationsRepository } from "./repositories/prisma-integrations.repository.js";
 import { HttpSlackSender } from "./modules/integrations/slack-provider.js";
 import { appRouter } from "./trpc/router.js";
@@ -246,6 +250,11 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const callLogs = new CallLogService(new PrismaCallLogRepository(), new PrismaAuditSink());
   const inquiries = new InquiryService(
     new PrismaInquiryRepository(),
+    new NumberingService(new PrismaNumberingRepository()),
+    new PrismaAuditSink()
+  );
+  const crm = new CrmService(
+    new PrismaCrmRepository(),
     new NumberingService(new PrismaNumberingRepository()),
     new PrismaAuditSink()
   );
@@ -340,6 +349,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const goodsReceipts = new GoodsReceiptService(new PrismaGoodsReceiptRepository(), new PrismaAuditSink());
   // Manuelle Zahlungserfassung (Kap. 9.4): Zahlungseingang auf offenen Posten buchen.
   const payments = new PaymentService(new PrismaPaymentRepository(), new PrismaAuditSink());
+  const reconciliation = new ReconciliationService(new PrismaReconciliationRepository());
   // Regel-Engine: Aktions-Handler bündeln vorhandene Seiteneffekte (In-App, Mail, Aufgabe).
   // Weitere Handler (Slack o. Ä.) lassen sich hier ohne Engine-Änderung ergänzen.
   const automationHandlers: Record<string, ActionHandler> = {
@@ -495,6 +505,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           leads,
           callLogs,
           inquiries,
+          crm,
           sampleLoans,
           companies,
           products,
@@ -537,6 +548,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           financeReport,
           goodsReceipts,
           payments,
+          reconciliation,
           auth,
           user,
           sessionToken,

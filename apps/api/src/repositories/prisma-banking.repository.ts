@@ -34,6 +34,7 @@ export class PrismaBankingRepository implements BankingRepository, BankingQueryR
         const payment = await tx.payment.create({
           data: {
             externalRef: p.externalRef,
+            source: p.source,
             amountCents: p.amountCents,
             reference: p.reference,
             matched: p.matched,
