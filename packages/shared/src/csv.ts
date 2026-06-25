@@ -2,8 +2,27 @@
 // Zeilenumbruch werden in "" gesetzt, innere " verdoppelt — verlustfrei. Eine
 // gemeinsame Regel für alle CSV-Exporte (DSFinV-K, Offline-Bundle).
 
+/**
+ * CSV-Formula-Injection-Schutz (Kap. 28): Tabellenkalkulationen (Excel/LibreOffice)
+ * interpretieren Zellen, die mit `= + - @`, Tab oder CR beginnen, als Formel
+ * (`=WEBSERVICE(...)`, `=HYPERLINK(...)` → Datenexfiltration/RCE). Da Exportfelder
+ * (Artikel-/Firmennamen u. Ä.) über Importe/Connectoren von außen befüllbar sind,
+ * wird ein führender Trigger mit `'` neutralisiert. AUSNAHME: echte Zahlen
+ * (auch negative Beträge wie `-12,50`) bleiben unangetastet — sonst bräche das
+ * maschinell gelesene DATEV-/DSFinV-K-Format.
+ */
+function neutralizeFormula(s: string): string {
+  if (s.length === 0) return s;
+  const c = s[0];
+  if (c === "=" || c === "@" || c === "\t" || c === "\r") return `'${s}`;
+  // Führendes +/- nur neutralisieren, wenn der Wert keine reine Zahl ist.
+  if ((c === "-" || c === "+") && !/^[-+]?\d+(?:[.,]\d+)?$/.test(s)) return `'${s}`;
+  return s;
+}
+
 export function csvField(s: string): string {
-  return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  const safe = neutralizeFormula(s);
+  return /[;"\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
 /**

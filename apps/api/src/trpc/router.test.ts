@@ -417,7 +417,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
     expect(list[0]?.employeeNote).toContain("max");
   });
 
-  it("PRODUKTION erhält redigierte Preis-/Kundenfelder (null)", async () => {
+  it("PRODUKTION erhält redigierten Preis (null), Kundenvermerk bleibt sichtbar", async () => {
     // Auftrag von BUERO anlegen, dann als PRODUKTION lesen.
     const buero = setup(BUERO);
     await buero.caller.shopOrders.ingest({ raw: woo("WC-1", "max"), ...cfg });
@@ -504,8 +504,8 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
     });
     const list = await prod.shopOrders.list();
     expect(list[0]?.number).toBe("WC-WC-1"); // nicht-sensibles Feld bleibt
-    expect(list[0]?.totalNetCents).toBeNull();
-    expect(list[0]?.employeeNote).toBeNull();
+    expect(list[0]?.totalNetCents).toBeNull(); // Preis verborgen
+    expect(list[0]?.employeeNote).toContain("max"); // Kundenvermerk sichtbar (Policy)
   });
 });
 

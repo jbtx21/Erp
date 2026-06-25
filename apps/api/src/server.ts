@@ -364,6 +364,8 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
 
   // Brute-Force-Schutz am Login: max. 10 Versuche je E-Mail in 5 Minuten (Kap. 27/28).
   const loginRateLimiter = new FixedWindowRateLimiter(10, 5 * 60_000);
+  // Brute-Force-Schutz für die 2FA-Code-Prüfung: max. 5 Versuche je Sitzung in 5 Minuten.
+  const totpRateLimiter = new FixedWindowRateLimiter(5, 5 * 60_000);
 
   // Liveness (Prozess läuft) vs. Readiness (DB erreichbar) — für Monitoring/Orchestrierung.
   server.get("/health", async () => ({ ok: true }));
@@ -533,6 +535,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
             }),
           clearSessionCookie: () => void res.clearCookie(COOKIE_NAME, { path: "/" }),
           loginRateLimiter,
+          totpRateLimiter,
           // Demo/Durchstich: ausgewählte Services überschreiben (In-Memory statt Prisma).
           ...(opts.contextOverrides ?? {}),
         };

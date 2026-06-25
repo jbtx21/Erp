@@ -28,6 +28,21 @@ export class IntegrationsError extends Error {}
 
 const MASK = "••••••";
 
+/**
+ * SSRF-Schutz (Kap. 28): die Slack-Webhook-URL ist admin-pflegbar und wird serverseitig
+ * angefragt. Ohne Allowlist könnte ein böswilliger/kompromittierter ADMIN den Server gegen
+ * interne Ziele (Cloud-Metadata 169.254.169.254, localhost, interne Ports) feuern lassen.
+ * Daher: nur https und exakt der offizielle Slack-Webhook-Host.
+ */
+export function isAllowedSlackWebhook(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    return u.protocol === "https:" && u.hostname === "hooks.slack.com";
+  } catch {
+    return false;
+  }
+}
+
 export class IntegrationsService {
   constructor(
     private readonly repo: IntegrationsRepository,
@@ -67,6 +82,10 @@ export class IntegrationsService {
       if (f.secret && v === MASK) continue; // unverändertes Geheimnis behalten
       merged[f.key] = v;
     }
+    // SSRF-Schutz: Slack-Webhook-Ziel gegen Allowlist prüfen (nur https://hooks.slack.com).
+    if (kind === "SLACK" && merged.webhookUrl && !isAllowedSlackWebhook(merged.webhookUrl)) {
+      throw new IntegrationsError("Ungültige Slack-Webhook-URL (erwartet https://hooks.slack.com/…).");
+    }
     await this.repo.set(kind, enabled, JSON.stringify(merged));
     await this.audit.append(buildEntry({ entity: "IntegrationSetting", entityId: kind, action: "UPDATE", after: { enabled, fields: Object.keys(merged) } }));
   }
@@ -79,6 +98,8 @@ export class IntegrationsService {
     const cfg = row?.configJson ? (JSON.parse(row.configJson) as Record<string, string>) : {};
     const url = cfg.webhookUrl;
     if (!url) throw new IntegrationsError("Keine Webhook-URL hinterlegt.");
+    // SSRF-Schutz auch hier defensiv (falls Altbestand vor der Validierung gespeichert wurde).
+    if (!isAllowedSlackWebhook(url)) throw new IntegrationsError("Ungültige Slack-Webhook-URL (erwartet https://hooks.slack.com/…).");
     await this.slack.send(url, "✅ TEXMA ERP: Slack-Anbindung erfolgreich getestet.");
     return { ok: true, message: "Testnachricht an Slack gesendet." };
   }

@@ -5,7 +5,14 @@ import { Argon2Hasher } from "../modules/auth/password.js";
 
 async function main(): Promise<void> {
   const email = (process.env.ADMIN_EMAIL ?? "admin@texma-gmbh.de").toLowerCase();
-  const password = process.env.ADMIN_PASSWORD ?? "ChangeMe!2026";
+  // Kein hartkodiertes Default-Passwort: bei fehlendem ADMIN_PASSWORD hart abbrechen,
+  // damit kein Konto mit bekanntem Passwort entsteht (auch nicht versehentlich gg. Prod).
+  const password = process.env.ADMIN_PASSWORD;
+  if (!password || password.length < 8) {
+    console.error("ADMIN_PASSWORD fehlt oder ist zu kurz (min. 8 Zeichen). Abbruch.");
+    process.exit(1);
+    return;
+  }
   const passwordHash = await new Argon2Hasher().hash(password);
 
   const user = await prisma.user.upsert({

@@ -1,9 +1,23 @@
 // Client-Export der Auswertungen: CSV (im Browser erzeugt) und PDF-Download aus
 // base64 (vom Server gerendert). Keine externen Abhängigkeiten.
 
+/**
+ * Neutralisiert CSV-Formula-Injection (Kap. 28): führende `= + - @`/Tab/CR werden mit
+ * `'` entschärft, damit Excel die Zelle nicht als Formel ausführt. Echte Zahlen
+ * (auch negative Beträge) bleiben unangetastet.
+ */
+function neutralizeFormula(value: string): string {
+  if (value.length === 0) return value;
+  const c = value[0];
+  if (c === "=" || c === "@" || c === "\t" || c === "\r") return `'${value}`;
+  if ((c === "-" || c === "+") && !/^[-+]?\d+(?:[.,]\d+)?$/.test(value)) return `'${value}`;
+  return value;
+}
+
 /** Maskiert ein CSV-Feld nach RFC 4180 (Trennzeichen Semikolon für Excel/DE). */
 function csvField(value: string): string {
-  return /[";\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+  const safe = neutralizeFormula(value);
+  return /[";\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
 /** Baut CSV-Text (Semikolon-getrennt, UTF-8) aus Spalten + Zeilen. */

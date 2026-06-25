@@ -1,5 +1,6 @@
-// Reine RBAC-Regeln (Kap. 12). Rolle PRODUKTION darf KEINE Preise/Kundendaten sehen
-// — durchgesetzt als serverseitige Feld-Redaktion vor der Auslieferung („Datenebene").
+// Reine RBAC-Regeln (Kap. 12). Policy: PRODUKTION darf ALLES LESEN, nur Preise/Margen/
+// Beträge bleiben verborgen — durchgesetzt als serverseitige Feld-Redaktion vor der
+// Auslieferung („Datenebene"). Kundenstammdaten/-vermerke sind für alle Rollen sichtbar.
 
 export type Role = "ADMIN" | "BUERO" | "PRODUKTION" | "BUCHHALTUNG";
 
@@ -8,9 +9,13 @@ export function canViewFinancials(role: Role): boolean {
   return role !== "PRODUKTION";
 }
 
-/** Kundenstammdaten/Kontaktdaten sichtbar? Für PRODUKTION nein. */
-export function canViewCustomerData(role: Role): boolean {
-  return role !== "PRODUKTION";
+/**
+ * Kundenstammdaten/Kontaktdaten sichtbar? Für ALLE Rollen ja — PRODUKTION soll alles
+ * lesen können, nur ohne Preise (Policy-Entscheidung). Bleibt als Prädikat erhalten,
+ * falls künftig wieder feiner unterschieden werden soll.
+ */
+export function canViewCustomerData(_role: Role): boolean {
+  return true;
 }
 
 /** Setzt die genannten Felder auf null (immutable-Kopie). */
@@ -32,7 +37,7 @@ export interface RedactableOrder {
   companyName?: string | null;
 }
 
-/** Redigiert Preis-/Kundenfelder eines Auftrags-Eintrags für die Rolle. */
+/** Redigiert die Preisfelder eines Auftrags-Eintrags für die Rolle (Kundenfelder bleiben). */
 export function redactOrderForRole<T extends RedactableOrder>(item: T, role: Role): T {
   const fields: (keyof RedactableOrder)[] = [];
   if (!canViewFinancials(role)) fields.push("totalNetCents");

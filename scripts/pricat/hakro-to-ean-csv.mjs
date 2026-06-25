@@ -5,7 +5,7 @@
 //
 // Nutzung:  node scripts/pricat/hakro-to-ean-csv.mjs <pricat.xlsx> [out.csv]
 import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -14,7 +14,8 @@ const out = process.argv[3] ?? "hakro-ean-import.csv";
 if (!src) { console.error("Pfad zur Pricat-.xlsx fehlt."); process.exit(1); }
 
 const dir = mkdtempSync(join(tmpdir(), "pricat-"));
-execSync(`unzip -o -q "${src}" -d "${dir}"`);
+// execFileSync (Argument-Array, keine Shell) — kein Shell-Injection-Risiko über den Pfad.
+execFileSync("unzip", ["-o", "-q", src, "-d", dir]);
 
 const ss = readFileSync(join(dir, "xl/sharedStrings.xml"), "utf8");
 const unesc = (s) => s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#10;/g, " ");

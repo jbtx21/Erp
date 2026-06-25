@@ -162,6 +162,8 @@ export interface Context {
   clearSessionCookie: () => void;
   /** Brute-Force-Schutz am Login/Passwort-Reset (optional; in Tests weggelassen). */
   loginRateLimiter?: FixedWindowRateLimiter;
+  /** Brute-Force-Schutz für die 2FA-Code-Prüfung (verifyTotp); je Sitzung (optional). */
+  totpRateLimiter?: FixedWindowRateLimiter;
 }
 
 /**

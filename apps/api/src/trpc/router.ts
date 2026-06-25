@@ -66,8 +66,15 @@ export const appRouter = router({
       .input(z.object({ code: z.string().min(6).max(8) }))
       .mutation(async ({ input, ctx }) => {
         if (!ctx.sessionToken) throw new TRPCError({ code: "UNAUTHORIZED", message: "Keine Sitzung." });
+        // Brute-Force-Schutz: der 6-stellige 2FA-Code ist sonst (nach erlangtem Passwort)
+        // ratebar erratbar. Max. Versuche je Sitzungstoken in einem Zeitfenster.
+        const rl = ctx.totpRateLimiter?.check(ctx.sessionToken);
+        if (rl && !rl.allowed) {
+          throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: `Zu viele 2FA-Versuche. Bitte in ${rl.retryAfterSec}s erneut versuchen.` });
+        }
         try {
           await ctx.auth.verifyTotp(ctx.sessionToken, input.code);
+          ctx.totpRateLimiter?.reset(ctx.sessionToken);
           return { ok: true };
         } catch (err) {
           toTrpcError(err);
@@ -117,6 +124,10 @@ export const appRouter = router({
     requestPasswordReset: publicProcedure
       .input(z.object({ email: z.string().email() }))
       .mutation(async ({ input, ctx }) => {
+        // Rate-Limit gegen E-Mail-Bombing/Token-Spam je Adresse. Bei Überschreitung
+        // wird NICHT gesendet, aber dennoch ok gemeldet (Enumeration-Schutz bleibt).
+        const rl = ctx.loginRateLimiter?.check(`pwreset:${input.email.toLowerCase()}`);
+        if (rl && !rl.allowed) return { ok: true as const };
         try { await ctx.auth.requestPasswordReset(input.email); } catch { /* still ok */ }
         return { ok: true as const };
       }),
@@ -152,7 +163,7 @@ export const appRouter = router({
 
   shopOrders: router({
     /** Importiert eine rohe WooCommerce-Bestellung (T-01: Bindung an die Firma). */
-    ingest: protectedProcedure
+    ingest: roleProcedure("ADMIN", "BUERO")
       .input(
         z.object({
           raw: z.unknown(),
