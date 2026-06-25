@@ -81,6 +81,15 @@ describe("resolveBasePrice — eine Pipeline mit Präzedenz (B4)", () => {
     expect(resolveBasePrice({ groupPrices }, "STANDARD", 100)).toBe(1200);
   });
 
+  it("fällt unter der Staffelschwelle auf den Standardpreis zurück (Listenpreis, ein Pfad)", () => {
+    // WIEDERVERKAEUFER hat nur eine Staffel ab 25 Stk und KEINEN eigenen Einzelpreis,
+    // aber es gibt einen Standardpreis (1290). Unter 25 Stk → Standardpreis statt Fehler.
+    const wvTiers: PriceTier[] = [{ minMenge: 25, netCents: 1100 }];
+    const prices = [{ priceGroup: "STANDARD" as const, netCents: 1290 }];
+    expect(resolveBasePrice({ groupTiers: wvTiers, groupPrices: prices }, "WIEDERVERKAEUFER", 10)).toBe(1290);
+    expect(resolveBasePrice({ groupTiers: wvTiers, groupPrices: prices }, "WIEDERVERKAEUFER", 25)).toBe(1100);
+  });
+
   it("wirft sichtbar, wenn gar kein Preis hinterlegt ist (T-08)", () => {
     expect(() => resolveBasePrice({}, "STANDARD", 5)).toThrow(PriceResolutionError);
   });

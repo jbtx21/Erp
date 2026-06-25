@@ -125,5 +125,18 @@ export function resolveBasePrice(
   const groupTier = selectTier(sources.groupTiers ?? [], menge);
   if (groupTier) return groupTier.netCents;
 
-  return resolvePrice(sources.groupPrices ?? [], group);
+  // (3) Einzelpreis der Kundengruppe → (4) Standardpreis (Listenpreis) als letzter
+  // Fallback. So liefert die EINE Pipeline auch unter der kleinsten Staffelschwelle einen
+  // Preis (z. B. < Mindestmenge WIEDERVERKAEUFER) — der Standardpreis ist der Listenpreis,
+  // den auch der Angebots-Editor verwendet (kein zweiter Preispfad). Fehlt selbst der
+  // Standardpreis, ist das ein echter Pflegefehler und wird sichtbar geworfen (T-08).
+  const prices = sources.groupPrices ?? [];
+  const direct = prices.find((p) => p.priceGroup === group);
+  if (direct) return direct.netCents;
+  const standard = prices.find((p) => p.priceGroup === "STANDARD");
+  if (standard) return standard.netCents;
+
+  throw new PriceResolutionError(
+    `Kein VK für Preisgruppe ${group} und kein Standardpreis hinterlegt (Kap. 8.2 / T-08).`
+  );
 }
