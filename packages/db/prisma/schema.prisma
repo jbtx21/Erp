@@ -130,6 +130,7 @@ model Company {
   orders          Order[]
   collectiveOrders CollectiveOrder[]
   invoices        Invoice[]
+  abschlaege      Abschlagsrechnung[]
   inquiries       Inquiry[] // Anfrage-Funnel (B20)
   lead            Lead? // aus Lead konvertiert (B15)
   portalUsers     PortalUser[] // Kundenportal-Logins (B13)
@@ -896,6 +897,7 @@ model Order {
   lines       OrderLine[]
   production  ProductionOrder?
   invoice     Invoice?
+  abschlaege  Abschlagsrechnung[] // Abschlags-/Teilrechnungen (Xentral)
   deliveryNotes DeliveryNote[]
   complaints  Complaint[]
   createdAt   DateTime    @default(now())
@@ -1527,6 +1529,29 @@ model CreditNote {
   createdAt DateTime @default(now())
 
   @@index([invoiceId])
+}
+
+// Abschlagsrechnung (Xentral „Abschlagsrechnung"): Teil-/Anzahlungsrechnung zu einem Auftrag.
+// Eigener Nummernkreis (AR-…); mehrere je Auftrag möglich. Die Schlussrechnung (Invoice)
+// verrechnet die Summe der Abschläge (Restbetrag). Eigenständige Receivable-Verfolgung.
+model Abschlagsrechnung {
+  id         String   @id @default(cuid())
+  number     String   @unique
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id])
+  companyId  String
+  company    Company  @relation(fields: [companyId], references: [id])
+  percent    Int?     // falls prozentual erstellt (0..100), sonst null = Festbetrag
+  netCents   Int
+  taxCents   Int
+  grossCents Int
+  dueDate    DateTime
+  bezahlt    Boolean  @default(false) // einfache OP-Verfolgung (Zahlungseingang)
+  note       String?
+  issuedAt   DateTime @default(now())
+
+  @@index([orderId])
+  @@index([companyId])
 }
 
 // Gutschein/Wertgutschein (Xentral „Gutscheine"): Code mit Restguthaben + Gültigkeit.

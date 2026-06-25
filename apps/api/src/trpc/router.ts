@@ -715,6 +715,26 @@ export const appRouter = router({
       }),
   }),
 
+  // Abschlags-/Teilrechnungen (Xentral): zu einem Auftrag Anzahlungen + Restsumme.
+  // Finanzdaten → kein PRODUKTION-Zugriff.
+  abschlag: router({
+    forOrder: roleProcedure("ADMIN", "BUERO", "BUCHHALTUNG")
+      .input(z.object({ orderId: z.string().min(1) }))
+      .query(async ({ input, ctx }) => {
+        try { return await ctx.abschlag.forOrder(input.orderId); }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
+      }),
+    create: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ orderId: z.string().min(1), percent: z.number().int().min(1).max(100).optional(), netCents: z.number().int().positive().optional(), note: z.string().optional() }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.abschlag.create(input.orderId, { percent: input.percent, netCents: input.netCents, note: input.note }); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    setBezahlt: roleProcedure("ADMIN", "BUERO", "BUCHHALTUNG")
+      .input(z.object({ id: z.string().min(1), bezahlt: z.boolean() }))
+      .mutation(async ({ input, ctx }) => { await ctx.abschlag.setBezahlt(input.id, input.bezahlt); return { ok: true as const }; }),
+  }),
+
   ampel: router({
     /** Auftragsampel (Xentral-Vorbild): je aktivem Auftrag Prüf-Lampen (Bestand, USt-IdNr.,
      *  Liefertermin, Lieferung, Faktura, Zahlung, Produktion, Freigabe, Liefersperre) + Gesamt. */

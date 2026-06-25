@@ -2440,6 +2440,75 @@ function ManualShopFetch({ onDone }: { onDone: () => void }): JSX.Element {
   );
 }
 
+// Abschlags-/Teilrechnungen eines Auftrags (Xentral „Abschlagsrechnung"): Anzahlungen
+// anlegen (prozentual/Festbetrag), Restsumme zur Schlussrechnung, Zahlungseingang markieren.
+function OrderAbschlaege({ orderId }: { orderId: string }): JSX.Element {
+  const [data, setData] = useState<Awaited<ReturnType<typeof trpc.abschlag.forOrder.query>> | null>(null);
+  const [pct, setPct] = useState<number | "">(30);
+  const [fix, setFix] = useState<number | "">("");
+  const [err, setErr] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    try { setData(await trpc.abschlag.forOrder.query({ orderId })); setErr(null); } catch (e) { setErr(errMsg(e)); }
+  }, [orderId]);
+  useEffect(() => { void load(); }, [load]);
+
+  const create = async (spec: { percent?: number; netCents?: number }): Promise<void> => {
+    setErr(null); setMsg(null);
+    try { const a = await trpc.abschlag.create.mutate({ orderId, ...spec }); setMsg(`Abschlag ${a.number} angelegt (${euro(a.grossCents)} brutto).`); await load(); }
+    catch (e) { setErr(errMsg(e)); }
+  };
+
+  if (err && !data) return <Alert color="red" mt="md">{err}</Alert>;
+  if (!data) return <Loader mt="md" />;
+  const s = data.summary;
+  return (
+    <Box mt="xs">
+      {err && <Alert color="red" mb="xs" withCloseButton onClose={() => setErr(null)}>{err}</Alert>}
+      {msg && <Alert color="green" mb="xs" withCloseButton onClose={() => setMsg(null)}>{msg}</Alert>}
+      <Group gap="xl" mb="md" wrap="wrap">
+        <Box><Text size="xs" c="dimmed">Auftragswert (netto)</Text><Text fw={700}>{euro(s.orderNetCents)}</Text></Box>
+        <Box><Text size="xs" c="dimmed">Summe Abschläge (netto)</Text><Text fw={700} c="blue">{euro(s.sumNetCents)}</Text></Box>
+        <Box><Text size="xs" c="dimmed">Restbetrag Schlussrechnung (netto)</Text><Text fw={700} c={s.restNetCents > 0 ? "teal" : "dimmed"}>{euro(s.restNetCents)}</Text></Box>
+      </Group>
+
+      <Group gap="xs" align="end" mb="md" wrap="wrap">
+        <NumberInput label="Abschlag %" value={pct} onChange={(v) => setPct(v === "" ? "" : Number(v))} min={1} max={100} w={110} />
+        <Button variant="light" disabled={pct === "" || s.restNetCents <= 0} onClick={() => void create({ percent: Number(pct) })}>% anlegen</Button>
+        <Text c="dimmed">oder</Text>
+        <NumberInput label="Festbetrag (€ netto)" value={fix} onChange={(v) => setFix(v === "" ? "" : Number(v))} min={0} decimalScale={2} w={150} />
+        <Button variant="light" disabled={fix === "" || Number(fix) <= 0 || s.restNetCents <= 0} onClick={() => void create({ netCents: Math.round(Number(fix) * 100) })}>Festbetrag anlegen</Button>
+      </Group>
+
+      {data.abschlaege.length === 0 ? <Text size="sm" c="dimmed">Noch keine Abschlagsrechnungen. Die Schlussrechnung entspricht dem vollen Auftragswert.</Text> : (
+        <Table withTableBorder withColumnBorders verticalSpacing="xs" fz="sm">
+          <Table.Thead><Table.Tr>
+            <Table.Th>Nr.</Table.Th><Table.Th>Anteil</Table.Th><Table.Th ta="right">Netto</Table.Th>
+            <Table.Th ta="right">Brutto</Table.Th><Table.Th>Fällig</Table.Th><Table.Th>Zahlung</Table.Th>
+          </Table.Tr></Table.Thead>
+          <Table.Tbody>
+            {data.abschlaege.map((a) => (
+              <Table.Tr key={a.id}>
+                <Table.Td ff="monospace" fw={600}>{a.number}</Table.Td>
+                <Table.Td>{a.percent != null ? `${a.percent} %` : "Festbetrag"}</Table.Td>
+                <Table.Td ta="right">{euro(a.netCents)}</Table.Td>
+                <Table.Td ta="right">{euro(a.grossCents)}</Table.Td>
+                <Table.Td>{new Date(a.dueDate).toLocaleDateString("de-DE")}</Table.Td>
+                <Table.Td>
+                  <Button size="compact-xs" variant={a.bezahlt ? "filled" : "light"} color={a.bezahlt ? "teal" : "gray"}
+                    onClick={async () => { setErr(null); try { await trpc.abschlag.setBezahlt.mutate({ id: a.id, bezahlt: !a.bezahlt }); await load(); } catch (e) { setErr(errMsg(e)); } }}>
+                    {a.bezahlt ? "✓ bezahlt" : "offen"}
+                  </Button>
+                </Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      )}
+    </Box>
+  );
+}
+
 export function OrdersPage({ role, focusId }: { role: string; focusId?: string }): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -2542,6 +2611,7 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
                 <Tabs.Tab value="details">Details</Tabs.Tab>
                 <Tabs.Tab value="stickerei">Stickerei-Referenz</Tabs.Tab>
                 {editOrderId && <Tabs.Tab value="ampel">Auftragsampel</Tabs.Tab>}
+                {editOrderId && <Tabs.Tab value="abschlag">Abschläge</Tabs.Tab>}
               </Tabs.List>
               <Tabs.Panel value="details" pt="md">
                 <CompanyPicker value={newCompany} onChange={(v) => { setNewCompany(v); setDirty(true); }} w={240} />
@@ -2553,6 +2623,11 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
               {editOrderId && (
                 <Tabs.Panel value="ampel" pt="md">
                   <OrderAmpelDetail orderId={editOrderId} />
+                </Tabs.Panel>
+              )}
+              {editOrderId && (
+                <Tabs.Panel value="abschlag" pt="md">
+                  <OrderAbschlaege orderId={editOrderId} />
                 </Tabs.Panel>
               )}
             </Tabs>

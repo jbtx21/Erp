@@ -14,7 +14,8 @@ export type SequenceKey =
   | "PURCHASE_ORDER"
   | "DELIVERY_NOTE"
   | "PRODUCTION_ORDER"
-  | "CASH_RECEIPT";
+  | "CASH_RECEIPT"
+  | "ABSCHLAG";
 
 /** Standard-Präfix je Belegart (DE-üblich). */
 export const SEQUENCE_PREFIX: Record<SequenceKey, string> = {
@@ -27,6 +28,7 @@ export const SEQUENCE_PREFIX: Record<SequenceKey, string> = {
   DELIVERY_NOTE: "LS",
   PRODUCTION_ORDER: "PA",
   CASH_RECEIPT: "BON",
+  ABSCHLAG: "AR", // Abschlagsrechnung
 };
 
 export interface FormatOptions {
