@@ -7,6 +7,7 @@ import {
   costBearer,
   followUpAction,
   validateFollowUp,
+  type ComplaintCause,
   type ComplaintInput,
   type CostBearer,
   type FollowUpType,
@@ -44,8 +45,16 @@ export type FollowUpResult =
   | { type: "CREDIT_NOTE"; creditNoteId: string; number: string; amountCents: number }
   | { type: "REPRODUCTION"; orderId: string; number: string; express: boolean };
 
+/** Bearbeitbare Felder einer Reklamation (Ursache bestimmt den Kostenträger neu). */
+export interface UpdateComplaintInput {
+  cause: ComplaintCause;
+  followUp: FollowUpType;
+  costCents: number;
+}
+
 export interface ReklamationRepository {
   create(input: ComplaintInput & { costBearer: CostBearer }): Promise<{ id: string }>;
+  update(id: string, input: UpdateComplaintInput & { costBearer: CostBearer }): Promise<void>;
   listByOrder(orderId: string, limit: number): Promise<ComplaintListItem[]>;
   /** Folgevorgang-relevante Daten der Reklamation (inkl. Rechnung des Auftrags). */
   loadFollowUp(complaintId: string): Promise<ComplaintFollowUpData | null>;
@@ -127,5 +136,17 @@ export class ReklamationService {
 
   listByOrder(orderId: string, limit: number): Promise<ComplaintListItem[]> {
     return this.repo.listByOrder(orderId, limit);
+  }
+
+  /** Bearbeitet Ursache/Folgevorgang/Kosten einer Reklamation; Kostenträger wird neu abgeleitet. GoBD-auditiert. */
+  async update(id: string, input: UpdateComplaintInput): Promise<{ costBearer: CostBearer }> {
+    const problems = validateFollowUp({ orderId: "", orderLineId: "", cause: input.cause, followUp: input.followUp, costCents: input.costCents });
+    if (problems.length > 0) throw new ReklamationValidationError(problems.join(" "));
+    const bearer = costBearer(input.cause);
+    await this.repo.update(id, { ...input, costBearer: bearer });
+    await this.audit.append(
+      buildEntry({ entity: "Complaint", entityId: id, action: "UPDATE", after: { cause: input.cause, followUp: input.followUp, costCents: input.costCents, costBearer: bearer } })
+    );
+    return { costBearer: bearer };
   }
 }

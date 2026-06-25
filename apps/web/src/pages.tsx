@@ -4004,8 +4004,52 @@ export const ReklamationPage = (): JSX.Element => {
 
 // Reklamationsliste mit Folgevorgang-Auslösung (B11): je Reklamation „→ Gutschrift" bzw.
 // „→ Nachproduktion" (aus dem hinterlegten followUp), ruft reklamation.executeFollowUp.
+type ComplaintRow = Awaited<ReturnType<typeof trpc.reklamation.listByOrder.query>>[number];
+function ComplaintEditModal({ row, onClose, onSaved }: { row: ComplaintRow | null; onClose: () => void; onSaved: () => void }): JSX.Element {
+  const [cause, setCause] = useState("INTERN");
+  const [followUp, setFollowUp] = useState("GUTSCHRIFT");
+  const [costEuro, setCostEuro] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!row) return;
+    setCause(row.cause ?? "INTERN"); setFollowUp(row.followUp ?? "GUTSCHRIFT");
+    setCostEuro(String((row.costCents ?? 0) / 100)); setErr(null);
+  }, [row]);
+  const save = async () => {
+    if (!row) return;
+    setBusy(true); setErr(null);
+    try {
+      await trpc.reklamation.update.mutate({
+        id: String(row.id),
+        cause: cause as "LIEFERANT" | "INTERN" | "EXTERN_VEREDLER",
+        followUp: followUp as "NACHPRODUKTION" | "EXPRESS_NACHPRODUKTION" | "GUTSCHRIFT" | "KEINE",
+        costCents: Math.round(Number(costEuro.replace(",", ".")) * 100) || 0,
+      });
+      onSaved(); onClose();
+    } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+  return (
+    <Modal opened={!!row} onClose={onClose} title="Reklamation bearbeiten" size="md">
+      {err && <Alert color="red" mb="sm">{err}</Alert>}
+      <Stack gap="sm">
+        <Select label="Ursache" value={cause} onChange={(v) => v && setCause(v)}
+          data={[{ value: "LIEFERANT", label: "Lieferant" }, { value: "INTERN", label: "Intern" }, { value: "EXTERN_VEREDLER", label: "Externer Veredler" }]} />
+        <Select label="Folgevorgang" value={followUp} onChange={(v) => v && setFollowUp(v)}
+          data={[{ value: "NACHPRODUKTION", label: "Nachproduktion" }, { value: "EXPRESS_NACHPRODUKTION", label: "Express-Nachproduktion" }, { value: "GUTSCHRIFT", label: "Gutschrift" }, { value: "KEINE", label: "Keine" }]} />
+        <TextInput label="Kosten €" value={costEuro} onChange={(e) => setCostEuro(e.currentTarget.value)} />
+        <Group justify="flex-end" mt="xs">
+          <Button variant="default" onClick={onClose}>Abbrechen</Button>
+          <Button loading={busy} onClick={() => void save()}>Speichern</Button>
+        </Group>
+      </Stack>
+    </Modal>
+  );
+}
+
 function ComplaintsPanel({ orderId, reloadKey }: { orderId: string; reloadKey: number }): JSX.Element {
   const [items, setItems] = useState<Awaited<ReturnType<typeof trpc.reklamation.listByOrder.query>>>([]);
+  const [editRow, setEditRow] = useState<ComplaintRow | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -4049,13 +4093,19 @@ function ComplaintsPanel({ orderId, reloadKey }: { orderId: string; reloadKey: n
                 <Table.Td><Badge variant="light">{c.costBearer}</Badge></Table.Td>
                 <Table.Td>{c.followUp}</Table.Td>
                 <Table.Td ta="right">{euro(c.costCents)}</Table.Td>
-                <Table.Td>{label && <Button size="compact-xs" loading={busy === c.id} onClick={() => void run(c.id)}>{label}</Button>}</Table.Td>
+                <Table.Td>
+                  <Group gap={4} justify="flex-end" wrap="nowrap">
+                    <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setEditRow(c)}>Bearbeiten</Button>
+                    {label && <Button size="compact-xs" loading={busy === c.id} onClick={() => void run(c.id)}>{label}</Button>}
+                  </Group>
+                </Table.Td>
               </Table.Tr>
             );
           })}
           {items.length === 0 && <Table.Tr><Table.Td colSpan={6}><Text size="sm" c="dimmed">Keine Reklamationen.</Text></Table.Td></Table.Tr>}
         </Table.Tbody>
       </Table>
+      <ComplaintEditModal row={editRow} onClose={() => setEditRow(null)} onSaved={() => void load()} />
     </Box>
   );
 }

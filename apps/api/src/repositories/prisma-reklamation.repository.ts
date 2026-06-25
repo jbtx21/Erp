@@ -5,6 +5,7 @@ import type { ComplaintCause, ComplaintInput, CostBearer, FollowUpType } from "@
 import type {
   ComplaintListItem,
   ReklamationRepository,
+  UpdateComplaintInput,
 } from "../modules/reklamation/reklamation.service.js";
 
 export class PrismaReklamationRepository implements ReklamationRepository {
@@ -21,6 +22,18 @@ export class PrismaReklamationRepository implements ReklamationRepository {
       select: { id: true },
     });
     return c;
+  }
+
+  async update(id: string, input: UpdateComplaintInput & { costBearer: CostBearer }): Promise<void> {
+    await prisma.complaint.update({
+      where: { id },
+      data: {
+        cause: input.cause as ComplaintCause,
+        followUp: input.followUp as FollowUpType,
+        costCents: input.costCents,
+        costBearer: input.costBearer,
+      },
+    });
   }
 
   async listByOrder(orderId: string, limit: number): Promise<ComplaintListItem[]> {

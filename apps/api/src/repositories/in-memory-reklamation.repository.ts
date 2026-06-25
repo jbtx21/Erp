@@ -5,6 +5,7 @@ import type {
   ComplaintFollowUpData,
   ComplaintListItem,
   ReklamationRepository,
+  UpdateComplaintInput,
 } from "../modules/reklamation/reklamation.service.js";
 
 interface OrderContext {
@@ -38,6 +39,12 @@ export class InMemoryReklamationRepository implements ReklamationRepository {
     });
     this.orderByComplaint.set(id, input.orderId);
     return { id };
+  }
+
+  async update(id: string, input: UpdateComplaintInput & { costBearer: CostBearer }): Promise<void> {
+    const c = this.complaints.find((x) => x.id === id);
+    if (!c) return;
+    c.cause = input.cause; c.followUp = input.followUp; c.costCents = input.costCents; c.costBearer = input.costBearer;
   }
 
   async listByOrder(orderId: string, limit: number): Promise<ComplaintListItem[]> {

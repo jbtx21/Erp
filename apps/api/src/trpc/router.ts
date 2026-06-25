@@ -680,6 +680,23 @@ export const appRouter = router({
           throw err;
         }
       }),
+
+    /** Reklamation bearbeiten (Ursache/Folgevorgang/Kosten); Kostenträger wird neu abgeleitet. */
+    update: roleProcedure(...supplierRoles)
+      .input(z.object({
+        id: z.string().min(1),
+        cause: z.enum(["LIEFERANT", "INTERN", "EXTERN_VEREDLER"]),
+        followUp: z.enum(["NACHPRODUKTION", "EXPRESS_NACHPRODUKTION", "GUTSCHRIFT", "KEINE"]),
+        costCents: z.number().int().nonnegative(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { id, ...rest } = input;
+        try { return await ctx.reklamation.update(id, rest); }
+        catch (err) {
+          if (err instanceof ReklamationValidationError) throw new TRPCError({ code: "BAD_REQUEST", message: err.message });
+          throw err;
+        }
+      }),
   }),
 
   // Sammelbestellung (Kap. 18.2): gebündelte Mitarbeiter-Shopbestellungen je Periode.
