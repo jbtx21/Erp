@@ -14,7 +14,7 @@
     "typecheck": "turbo run typecheck",
     "db:generate": "pnpm --filter @texma/db generate",
     "db:migrate": "pnpm --filter @texma/db migrate",
-    "db:seed": "pnpm --filter @texma/db generate && pnpm --filter @texma/api build && node apps/api/dist/scripts/seed.js",
+    "db:seed": "pnpm --filter @texma/db generate && turbo run build --filter=@texma/api && node apps/api/dist/scripts/seed.js",
     "db:setup": "pnpm --filter @texma/db generate && pnpm --filter @texma/db migrate:deploy && pnpm db:seed",
     "dev:api": "node apps/api/dist/scripts/dev-server.js",
     "dev:web": "pnpm --filter @texma/web dev",
