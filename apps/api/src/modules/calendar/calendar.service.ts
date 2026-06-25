@@ -58,6 +58,11 @@ export class CalendarService {
   /** Bearbeitet einen Termin (nur eigene/geteilte); validiert den Zeitraum. GoBD-auditiert. */
   async update(id: string, ownerEmail: string, patch: UpdateCalendarInput): Promise<void> {
     if (patch.title !== undefined && !patch.title.trim()) throw new CalendarError("Titel ist Pflicht.");
+    // Zeitraum nur gemeinsam ändern — sonst ließe sich der Gegenwert nicht prüfen und end<start
+    // über die API durchschmuggeln (ohne den anderen Wert nachzuladen).
+    if ((patch.start === undefined) !== (patch.end === undefined)) {
+      throw new CalendarError("Beginn und Ende müssen gemeinsam geändert werden.");
+    }
     if (patch.start && patch.end) {
       try { assertEventRange(patch.start, patch.end); }
       catch (e) { throw new CalendarError((e as Error).message); }

@@ -89,11 +89,14 @@ export class CrmService {
     const clean: UpdateCrmLeadInput = { ...patch };
     if (clean.name !== undefined) clean.name = clean.name.trim();
     const after = await this.repo.update(id, clean);
-    await this.audit.append(buildEntry({
-      entity: "CrmLead", entityId: id, action: "UPDATE",
-      before: { name: before.name, companyId: before.companyId, contactName: before.contactName, valueCents: before.valueCents },
-      after: { name: after.name, companyId: after.companyId, contactName: after.contactName, valueCents: after.valueCents },
-    }));
+    // Nur die tatsächlich geänderten Felder mit Vorher/Nachher protokollieren (GoBD).
+    const keys = Object.keys(clean) as (keyof typeof clean)[];
+    const before2: Record<string, unknown> = {};
+    const after2: Record<string, unknown> = {};
+    const beforeRec = before as unknown as Record<string, unknown>;
+    const afterRec = after as unknown as Record<string, unknown>;
+    for (const k of keys) { before2[k] = beforeRec[k]; after2[k] = afterRec[k]; }
+    await this.audit.append(buildEntry({ entity: "CrmLead", entityId: id, action: "UPDATE", before: before2, after: after2 }));
     return after;
   }
 

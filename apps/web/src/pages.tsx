@@ -4928,6 +4928,18 @@ const CAL_KINDS = [
   { value: "SONSTIGES", label: "Sonstiges", color: "gray" },
 ] as const;
 
+// Gespeicherter (UTC-)ISO-Wert → Wert für ein <input type=date|datetime-local>. Ganztags
+// liegt absichtlich auf 12:00 UTC (stabiles Datum); getaktete Termine in lokale Wandzeit
+// umrechnen, damit das spätere `new Date(value)` (= Lokalzeit) wieder denselben Instant ergibt.
+function toLocalInput(iso: unknown, allDay: boolean): string {
+  const s = String(iso ?? "");
+  if (!s) return "";
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return "";
+  if (allDay) return d.toISOString().slice(0, 10);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
 function CalendarEditModal({ ev, onClose, onSaved }: { ev: Row | null; onClose: () => void; onSaved: () => void }): JSX.Element {
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState("TERMIN");
@@ -4941,7 +4953,9 @@ function CalendarEditModal({ ev, onClose, onSaved }: { ev: Row | null; onClose: 
     if (!ev) return;
     const ad = Boolean(ev.allDay);
     setTitle(String(ev.title ?? "")); setKind(String(ev.kind ?? "TERMIN")); setAllDay(ad);
-    setStart(String(ev.start ?? "").slice(0, ad ? 10 : 16)); setEnd(String(ev.end ?? "").slice(0, ad ? 10 : 16));
+    // Gespeicherte UTC-Instant → lokales datetime-local (sonst verschiebt das Speichern die
+    // Uhrzeit um den UTC-Offset, weil das Feld als Lokalzeit re-interpretiert wird).
+    setStart(toLocalInput(ev.start, ad)); setEnd(toLocalInput(ev.end, ad));
     setNote(ev.note ? String(ev.note) : ""); setErr(null);
   }, [ev]);
   const toIso = (v: string): string => (allDay ? new Date(`${v}T12:00:00.000Z`).toISOString() : new Date(v).toISOString());

@@ -20,6 +20,25 @@ describe("CalendarService (Büro-Kalender)", () => {
     await expect(s.create({ title: "X", ownerEmail: "a@b.de", shared: false, kind: "TERMIN", start: new Date("2026-06-15"), end: new Date("2026-06-14"), allDay: false })).rejects.toBeInstanceOf(CalendarError);
   });
 
+  it("bearbeitet einen Termin; verlangt Beginn+Ende gemeinsam und prüft den Zeitraum", async () => {
+    const { svc: s } = svc();
+    const { id } = await s.create({ title: "T", ownerEmail: "anna@texma.de", shared: false, kind: "TERMIN", start: new Date("2026-06-15T09:00Z"), end: new Date("2026-06-15T10:00Z"), allDay: false });
+    // Nur Beginn ohne Ende → abgelehnt (kein Durchschmuggeln von end<start).
+    await expect(s.update(id, "anna@texma.de", { start: new Date("2026-06-15T11:00Z") })).rejects.toBeInstanceOf(CalendarError);
+    // Ende vor Beginn (beide gesetzt) → abgelehnt.
+    await expect(s.update(id, "anna@texma.de", { start: new Date("2026-06-15T12:00Z"), end: new Date("2026-06-15T11:00Z") })).rejects.toBeInstanceOf(CalendarError);
+    // Gültige Änderung von Titel + Zeitraum.
+    await s.update(id, "anna@texma.de", { title: "T2", start: new Date("2026-06-15T13:00Z"), end: new Date("2026-06-15T14:00Z") });
+    const list = await s.listForUser("anna@texma.de", new Date("2026-06-01"), new Date("2026-06-30"));
+    expect(list[0]?.title).toBe("T2");
+  });
+
+  it("lässt fremde private Termine nicht bearbeiten", async () => {
+    const { svc: s } = svc();
+    const { id } = await s.create({ title: "Privat", ownerEmail: "anna@texma.de", shared: false, kind: "TERMIN", start: new Date("2026-06-15T09:00Z"), end: new Date("2026-06-15T10:00Z"), allDay: false });
+    await expect(s.update(id, "bert@texma.de", { title: "Hijack" })).rejects.toBeInstanceOf(CalendarError);
+  });
+
   it("entfernt nur eigene/geteilte Einträge", async () => {
     const { svc: s, repo } = svc();
     const { id } = await s.create({ title: "X", ownerEmail: "anna@texma.de", shared: false, kind: "TERMIN", start: new Date("2026-06-15"), end: new Date("2026-06-15"), allDay: true });
