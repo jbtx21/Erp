@@ -20,4 +20,12 @@ export class PrismaFinanceReportRepository implements FinanceReportRepository {
     });
     return agg._sum.netCents ?? 0;
   }
+
+  async revenueGrossCents(from: Date, to: Date): Promise<number> {
+    const agg = await prisma.invoice.aggregate({
+      where: { finalized: true, issuedAt: { gte: from, lt: to } },
+      _sum: { grossCents: true },
+    });
+    return agg._sum.grossCents ?? 0;
+  }
 }

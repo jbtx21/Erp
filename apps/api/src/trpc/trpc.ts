@@ -186,11 +186,18 @@ function friendlyDbError(msg: string): string | null {
   return null;
 }
 
+// Stacktraces nur, wenn ausdrücklich per ENV erlaubt (lokales Debugging). Standard:
+// KEIN Stack/Pfad in der Fehlerantwort (Information Disclosure vermeiden, Kap. 14).
+const EXPOSE_STACK = process.env.TEXMA_DEBUG_ERRORS === "1";
+
 const t = initTRPC.context<Context>().create({
   errorFormatter({ shape, error }) {
     const causeMsg = error.cause instanceof Error ? error.cause.message : "";
     const friendly = friendlyDbError(causeMsg) ?? friendlyDbError(shape.message);
-    return friendly ? { ...shape, message: friendly } : shape;
+    const message = friendly ?? shape.message;
+    // data.stack enthält Serverpfade — niemals an den Client geben (außer Debug-Flag).
+    const data = EXPOSE_STACK ? shape.data : { ...shape.data, stack: undefined };
+    return { ...shape, message, data };
   },
 });
 

@@ -6,7 +6,8 @@ import type { FinanceReportRepository } from "../modules/finance-report/finance-
 export class InMemoryFinanceReportRepository implements FinanceReportRepository {
   constructor(
     private readonly openItems: AgingItem[] = [],
-    private readonly revenue: number = 0
+    private readonly revenue: number = 0,
+    private readonly revenueGross: number = 0
   ) {}
 
   async listOpenItems(): Promise<AgingItem[]> {
@@ -15,5 +16,9 @@ export class InMemoryFinanceReportRepository implements FinanceReportRepository 
 
   async revenueNetCents(): Promise<number> {
     return this.revenue;
+  }
+
+  async revenueGrossCents(): Promise<number> {
+    return this.revenueGross || this.revenue;
   }
 }

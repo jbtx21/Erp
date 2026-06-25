@@ -6337,11 +6337,13 @@ export function GuVReportPage(): JSX.Element {
             <Table.Td ff="monospace">{konto(kr, "wareneingang")}</Table.Td><Table.Td>Wareneinsatz / Fremdleistungen</Table.Td>
             <Table.Td style={numTd}>{euro(totalExpense)}</Table.Td><Table.Td style={numTd} c="dimmed">—</Table.Td>
           </Table.Tr>
+          {/* GuV-Saldo wird auf das Eigenkapital (Jahresergebnis) vorgetragen, NICHT auf ein
+              Erlöskonto. Gewinn = Haben auf EK, Verlust = Soll. */}
           <Table.Tr>
-            <Table.Td ff="monospace" fw={700}>{konto(kr, totalNet >= 0 ? "erloese19" : "wareneingang")}</Table.Td>
-            <Table.Td fw={700}>{totalNet >= 0 ? "Jahresüberschuss" : "Jahresfehlbetrag"}</Table.Td>
-            <Table.Td style={numTd} fw={700} c={totalNet >= 0 ? "teal" : "red"}>{euro(totalNet)}</Table.Td>
-            <Table.Td style={numTd} c="dimmed">—</Table.Td>
+            <Table.Td ff="monospace" fw={700}>{konto(kr, "jahresergebnis")}</Table.Td>
+            <Table.Td fw={700}>{totalNet >= 0 ? "Jahresüberschuss → EK" : "Jahresfehlbetrag → EK"}</Table.Td>
+            <Table.Td style={numTd} fw={700} c={totalNet >= 0 ? undefined : "red"}>{totalNet >= 0 ? "—" : euro(-totalNet)}</Table.Td>
+            <Table.Td style={numTd} fw={700} c={totalNet >= 0 ? "teal" : undefined}>{totalNet >= 0 ? euro(totalNet) : "—"}</Table.Td>
           </Table.Tr>
         </Table.Tbody>
       </Table>

@@ -18,7 +18,8 @@ export type KontoKey =
   | "umsatzsteuer7"
   | "vorsteuer"
   | "bank"
-  | "kasse";
+  | "kasse"
+  | "jahresergebnis";
 
 interface KontoDef {
   key: KontoKey;
@@ -43,6 +44,9 @@ export const KONTEN: ReadonlyArray<KontoDef> = [
   { key: "vorsteuer", label: "Abziehbare Vorsteuer", art: "BILANZ", skr03: "1576", skr04: "1406" },
   { key: "bank", label: "Bank", art: "BILANZ", skr03: "1200", skr04: "1800" },
   { key: "kasse", label: "Kasse", art: "BILANZ", skr03: "1000", skr04: "1600" },
+  // Eigenkapital: das GuV-Ergebnis wird auf das Jahresüberschuss-/EK-Konto vorgetragen,
+  // NICHT auf ein Erlöskonto. SKR04 2000 = Jahresüberschuss/Jahresfehlbetrag (kanonisch).
+  { key: "jahresergebnis", label: "Jahresüberschuss/-fehlbetrag (EK)", art: "BILANZ", skr03: "0868", skr04: "2000" },
 ];
 
 const BY_KEY = new Map<KontoKey, KontoDef>(KONTEN.map((k) => [k.key, k]));
