@@ -1,8 +1,37 @@
 // Wiederverwendbare ERPNext/Frappe-Layout-Primitive für das einheitliche
 // „List → Form"-Muster: Listenkopf (Titel + Aktion + Filterzeile), Formular-Hülle
 // (Breadcrumb + Titel + Statusabzeichen + Aktionsleiste) und Status-Indikator-Punkt.
-import { Badge, Box, Group, Text, Title } from "@mantine/core";
+import { Badge, Box, Button, Group, Text, Title } from "@mantine/core";
 import { type ReactNode } from "react";
+
+/**
+ * Geführter Leerzustand (Onboarding): Symbol + Titel + erklärender Hinweis + optionale
+ * Handlungsaufforderung. Ersetzt das nackte „Keine Daten" in Modulen ohne Datensätze
+ * (P2.11), damit klar ist, was als Nächstes zu tun ist.
+ */
+export function EmptyState({
+  icon = "📭",
+  title,
+  hint,
+  actionLabel,
+  onAction,
+}: {
+  icon?: ReactNode;
+  title: string;
+  hint?: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}): JSX.Element {
+  return (
+    <Box ta="center" py="xl" px="md" mt="sm"
+      style={{ border: "1px dashed var(--mantine-color-gray-3)", borderRadius: 8, background: "var(--mantine-color-gray-0)" }}>
+      <Text fz={32} aria-hidden>{icon}</Text>
+      <Text fw={600} mt={4}>{title}</Text>
+      {hint && <Text size="sm" c="dimmed" mt={4} maw={440} mx="auto">{hint}</Text>}
+      {actionLabel && onAction && <Button mt="md" size="sm" onClick={onAction}>{actionLabel}</Button>}
+    </Box>
+  );
+}
 
 /** Kopf einer Listenansicht: Modul-Breadcrumb, Titel, optionaler Hinweis, Primär-Aktion, Filterzeile. */
 export function DocListHeader({

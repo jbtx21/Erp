@@ -11,7 +11,7 @@ import { trpc } from "./trpc.js";
 import { AufschlagsfaktorenSection, LogosStickereiSection, StickereiAusschreibungSection, StickereiStaffelnSection, Postcalc } from "./Differentiators.js";
 import { euro, numTd, statusMantineColor, prettyStatus } from "./theme.js";
 import { MultiLineChart, BarChart } from "./charts.js";
-import { DocFormShell, DocListHeader, StatusDot } from "./doc-layout.js";
+import { DocFormShell, DocListHeader, StatusDot, EmptyState } from "./doc-layout.js";
 import { OrderAmpelDetail, Auftragsampel } from "./StatusAmpel.js";
 import { useUnsavedGuard } from "./use-unsaved-guard.js";
 
@@ -4765,6 +4765,7 @@ export function LagerPage(): JSX.Element {
   const [counted, setCounted] = useState(0);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [tab, setTab] = useState<string | null>("bestand"); // kontrolliert, damit der Empty-State-CTA auf „Buchen" springt
 
   const load = useCallback(async () => {
     try {
@@ -4783,7 +4784,7 @@ export function LagerPage(): JSX.Element {
       {err && <Alert color="red" mt="sm">{err}</Alert>}
       {msg && <Alert color="green" mt="sm">{msg}</Alert>}
 
-      <Tabs defaultValue="bestand" mt="md" keepMounted={false}>
+      <Tabs value={tab} onChange={setTab} mt="md" keepMounted={false}>
         <Tabs.List>
           <Tabs.Tab value="bestand">Bestand</Tabs.Tab>
           <Tabs.Tab value="buchen">Buchen</Tabs.Tab>
@@ -4834,7 +4835,11 @@ export function LagerPage(): JSX.Element {
 
         <Tabs.Panel value="bestand" pt="md">
       <Title order={4}>Bestandsübersicht</Title>
-      {rows.length === 0 ? <Text size="sm" c="dimmed" mt="xs">Noch keine Lagerbewegungen.</Text> : (
+      {rows.length === 0 ? (
+        <EmptyState icon="📦" title="Noch kein Lagerbestand gebucht"
+          hint="Der Bestand ergibt sich aus Bewegungen (F4). Buche einen Anfangsbestand (Zugang) je Variante, damit Verfügbarkeit, Reservierung und Mindestbestand greifen."
+          actionLabel="Anfangsbestand buchen" onAction={() => setTab("buchen")} />
+      ) : (
         <Table mt="xs" withTableBorder withColumnBorders>
           <Table.Thead><Table.Tr>
             <Table.Th>SKU</Table.Th><Table.Th>Artikel</Table.Th>
@@ -5601,6 +5606,8 @@ export function HomePage({ userName, onNavigate }: { userName?: string; onNaviga
   const [overdue, setOverdue] = useState<HomeAmpelRow[]>([]);
   const [myTasks, setMyTasks] = useState<HomeTask[]>([]);
   const [events, setEvents] = useState<HomeEvent[]>([]);
+  // Monatskennzahlen mit Vormonatsvergleich (Xentral-Home-Parität).
+  const [trend, setTrend] = useState<{ curNet: number; prevNet: number; curCount: number; prevCount: number } | null>(null);
   const [layout, setLayout] = useState<HomeLayout>(() => (typeof localStorage !== "undefined" ? loadHomeLayout() : defaultHomeLayout()));
   const [edit, setEdit] = useState(false);
   const [showLinks, setShowLinks] = useState(false); // „Berichte & Stammdaten" eingeklappt
@@ -5631,7 +5638,7 @@ export function HomePage({ userName, onNavigate }: { userName?: string; onNaviga
       const safe = async <T,>(p: Promise<T>, f: T): Promise<T> => { try { return await p; } catch { return f; } };
       const now = new Date();
       const in30 = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-      const [companies, orders, quotes, leads, invoices, suppliers, articles, taskCount, ampelRows, ampelSum, ampelOv, mine, cal] = await Promise.all([
+      const [companies, orders, quotes, leads, invoices, suppliers, articles, taskCount, ampelRows, ampelSum, ampelOv, mine, cal, revOv] = await Promise.all([
         safe(trpc.companies.list.query(), [] as unknown[]),
         safe(trpc.shopOrders.list.query({ limit: 200 }), [] as { status?: string }[]),
         safe(trpc.quotes.list.query(), [] as { status?: string }[]),
@@ -5647,11 +5654,20 @@ export function HomePage({ userName, onNavigate }: { userName?: string; onNaviga
         safe(trpc.ampel.overview.query(), [] as HomeAmpelRow[]),
         safe(trpc.tasks.mine.query(), [] as HomeTask[]),
         safe(trpc.calendar.list.query({ from: now.toISOString(), to: in30.toISOString() }), [] as HomeEvent[]),
+        // Umsatz/Auftragszahl je Monat (Vormonatsvergleich); PRODUKTION → null (rollen-gated).
+        safe(trpc.reporting.revenueOverview.query({ granularity: "MONTH" }), null as null | { buckets: Array<{ key: string; count: number; netCents: number }> }),
       ]);
       setN({ companies: companies.length, orders: orders.length, quotes: quotes.length, leads: leads.length, invoices: invoices.length, suppliers: suppliers.length, articles: articles.length });
       setOpenOrders(orders.filter((o) => !["ABGESCHLOSSEN", "STORNIERT"].includes(String(o.status))).length);
       setOpenQuotes(quotes.filter((q) => !["ANGENOMMEN", "ABGELEHNT", "VERWORFEN"].includes(String(q.status))).length);
       setTasks(taskCount);
+      // Monatskennzahlen: letzte zwei Monats-Buckets (aktuell vs. Vormonat) für die Trend-Deltas.
+      if (revOv && revOv.buckets.length > 0) {
+        const b = [...revOv.buckets].sort((a, z) => a.key.localeCompare(z.key));
+        const cur = b[b.length - 1]!;
+        const prev = b.length >= 2 ? b[b.length - 2]! : null;
+        setTrend({ curNet: cur.netCents, prevNet: prev?.netCents ?? 0, curCount: cur.count, prevCount: prev?.count ?? 0 });
+      }
       // Auftragsampel-Zählung (PROBLEM/ACHTUNG/OK).
       const c = { rot: 0, gelb: 0, gruen: 0, total: ampelRows.length };
       for (const r of ampelRows) { if (r.overall === "ROT") c.rot += 1; else if (r.overall === "GELB") c.gelb += 1; else if (r.overall === "GRUEN") c.gruen += 1; }
@@ -5680,6 +5696,22 @@ export function HomePage({ userName, onNavigate }: { userName?: string; onNaviga
       <Text fz={28} fw={700} c={color} mt={4}>{value}</Text>
     </Box>
   );
+  // Monatskennzahl mit Vormonats-Delta (↑/↓ + Betrag), klickbar/tastaturbedienbar.
+  const trendKpi = (label: string, value: string, delta: number, fmt: (v: number) => string, navKey: string): JSX.Element => {
+    const up = delta > 0, flat = delta === 0;
+    const arrow = flat ? "→" : up ? "↑" : "↓";
+    const col = flat ? "dimmed" : up ? "teal.7" : "red.7";
+    return (
+      <Box role="button" tabIndex={0} aria-label={`${label}: ${value}, ${flat ? "unverändert" : `${up ? "plus" : "minus"} ${fmt(Math.abs(delta))} zum Vormonat`}`}
+        onClick={() => onNavigate(navKey)}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onNavigate(navKey); } }}
+        style={{ flex: "1 1 180px", minWidth: 160, cursor: "pointer", border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, padding: 16 }}>
+        <Text size="xs" fw={700} tt="uppercase" c="dimmed">{label}</Text>
+        <Text fz={24} fw={700} mt={4}>{value}</Text>
+        <Text size="xs" c={col} mt={2}>{arrow} {flat ? "ggü. Vormonat" : `${fmt(Math.abs(delta))} ggü. Vormonat`}</Text>
+      </Box>
+    );
+  };
   // Quick-View-Panel (Kalender/Aufgaben/Überfällig): kompakte Top-5-Liste + „Alle"-Sprung.
   const quickPanel = (title: string, moreNav: string, emptyText: string,
     items: Array<{ key: string; primary: string; secondary?: string; color?: string; onClick?: () => void }>): JSX.Element => (
@@ -5740,6 +5772,16 @@ export function HomePage({ userName, onNavigate }: { userName?: string; onNaviga
         {kpi("Offene Angebote", openQuotes, "teal", "quotes")}
         {kpi("Kunden", n.companies ?? 0, "blue", "companies")}
       </Group>
+
+      {/* Monatskennzahlen mit Vormonatsvergleich (Xentral-Home-Parität: Umsatz/Aufträge/Ø-Wert + Δ). */}
+      {trend && (
+        <Group mt="md" gap="sm" align="stretch" wrap="wrap">
+          {trendKpi("Umsatz (Monat, netto)", euro(trend.curNet), trend.curNet - trend.prevNet, euro, "reporting")}
+          {trendKpi("Aufträge (Monat)", String(trend.curCount), trend.curCount - trend.prevCount, (v) => String(v), "orders")}
+          {trendKpi("Ø-Auftragswert", euro(trend.curCount > 0 ? Math.round(trend.curNet / trend.curCount) : 0),
+            (trend.curCount > 0 ? Math.round(trend.curNet / trend.curCount) : 0) - (trend.prevCount > 0 ? Math.round(trend.prevNet / trend.prevCount) : 0), euro, "reporting")}
+        </Group>
+      )}
 
       {/* Statuslage: Auftragsampel (Prüfungen) + Termin-Ampel (Fristen), je Karte ein Sprung in die Detailsicht. */}
       <Title order={5} mt="xl">Statuslage</Title>
