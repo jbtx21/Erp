@@ -12,7 +12,7 @@ import { AufschlagsfaktorenSection, LogosStickereiSection, StickereiAusschreibun
 import { euro, numTd, statusMantineColor, prettyStatus } from "./theme.js";
 import { MultiLineChart } from "./charts.js";
 import { DocFormShell, DocListHeader, StatusDot } from "./doc-layout.js";
-import { OrderAmpelDetail } from "./StatusAmpel.js";
+import { OrderAmpelDetail, Auftragsampel } from "./StatusAmpel.js";
 import { useUnsavedGuard } from "./use-unsaved-guard.js";
 
 type Row = Record<string, unknown>;
@@ -2508,6 +2508,12 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
           </DocFormShell>
         </Box>
       )}
+      <Tabs defaultValue="liste" mt="md" keepMounted={false}>
+        <Tabs.List>
+          <Tabs.Tab value="liste">Liste</Tabs.Tab>
+          <Tabs.Tab value="ampel">Ampel</Tabs.Tab>
+        </Tabs.List>
+        <Tabs.Panel value="liste" pt="md">
       <AutoTable rows={rows} hide={["rawPayload", "companyId"]} action={!canAct ? undefined : (r) => {
         const next = orderStatusMachine.next(String(r.status) as OrderStatus);
         return (
@@ -2536,6 +2542,12 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
           </Group>
         );
       }} />
+        </Tabs.Panel>
+        <Tabs.Panel value="ampel" pt="md">
+          {/* Prüfungsbasierte Auftragsampel (gleiche Komponente wie #statusampel), Zeilenklick öffnet den Auftrag. */}
+          <Auftragsampel onOpenOrder={(id) => void startEditOrder(id)} />
+        </Tabs.Panel>
+      </Tabs>
 
       {canAct && (
         <>

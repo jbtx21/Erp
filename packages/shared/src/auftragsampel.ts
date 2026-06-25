@@ -110,10 +110,18 @@ function produktion(state: ProduktionState): AmpelCheck {
   }
 }
 
+const ORDER_RANK: Record<OrderStatus, number> = {
+  ANGELEGT: 0, IN_BEARBEITUNG: 1, IN_PRODUKTION: 2, VERSANDBEREIT: 3,
+  VERSENDET: 4, FAKTURIERT: 5, ABGESCHLOSSEN: 6, STORNIERT: -1,
+};
+const atLeast = (s: OrderStatus, t: OrderStatus): boolean => s !== "STORNIERT" && ORDER_RANK[s] >= ORDER_RANK[t];
+
 function freigabe(input: AuftragsampelInput): AmpelCheck {
-  return input.freigegeben
-    ? { key: "freigabe", label: "Freigabe", lamp: "GRUEN", hint: "Zur Produktion/Versand freigegeben" }
-    : { key: "freigabe", label: "Freigabe", lamp: "GELB", hint: "Freigabe ausstehend" };
+  // Ab IN_PRODUKTION war der Auftrag implizit freigegeben → nicht mehr als „ausstehend"
+  // werten (sonst bleibt jeder versandbereite/versendete Auftrag dauerhaft GELB).
+  if (input.freigegeben || atLeast(input.status, "IN_PRODUKTION"))
+    return { key: "freigabe", label: "Freigabe", lamp: "GRUEN", hint: "Zur Produktion/Versand freigegeben" };
+  return { key: "freigabe", label: "Freigabe", lamp: "GELB", hint: "Freigabe ausstehend" };
 }
 
 function liefersperre(input: AuftragsampelInput): AmpelCheck {

@@ -69,7 +69,8 @@ export interface StatusAmpelRepository {
 
 function produktionState(f: AuftragFacts): AuftragsampelInput["produktion"] {
   if (!f.hasProduction) return "KEINE";
-  if (f.status === "VERSENDET" || f.status === "FAKTURIERT" || f.status === "ABGESCHLOSSEN") return "ABGESCHLOSSEN";
+  // Ab VERSANDBEREIT ist die Produktion abgeschlossen (Ware ist fertig).
+  if (f.status === "VERSANDBEREIT" || f.status === "VERSENDET" || f.status === "FAKTURIERT" || f.status === "ABGESCHLOSSEN") return "ABGESCHLOSSEN";
   return f.freigegeben ? "FREIGEGEBEN" : "ANGELEGT";
 }
 

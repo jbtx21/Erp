@@ -361,7 +361,7 @@ function Page({ k, role, userName, onNavigate, onOpen, focusId }: { k: string; r
   switch (k) {
     case "home": return <HomePage userName={userName} onNavigate={onNavigate} />;
     case "dashboard": return <Dashboard />;
-    case "statusampel": return <StatusAmpelPage />;
+    case "statusampel": return <StatusAmpelPage onOpen={onOpen} />;
     case "sammelbestellungen": return <SammelbestellungPage />;
     case "dashboards": return <DashboardsPage />;
     case "orders": return <OrdersPage role={role} focusId={focusId} />;
