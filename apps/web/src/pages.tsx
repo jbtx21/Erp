@@ -3375,6 +3375,7 @@ export function DashboardsPage(): JSX.Element {
   const [cardName, setCardName] = useState(""); const [cardMetric, setCardMetric] = useState<string | null>(null);
   const [dashName, setDashName] = useState(""); const [dashShared, setDashShared] = useState(false);
   const [addKind, setAddKind] = useState<string>("CARD"); const [addRef, setAddRef] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
 
   const reloadResolved = useCallback(async (id: string) => {
     setResolved(await trpc.dashboards.resolved.query({ id }));
@@ -3406,8 +3407,9 @@ export function DashboardsPage(): JSX.Element {
   return (
     <>
       <Title order={3}>Meine Dashboards</Title>
-      <Text size="sm" c="dimmed" mt={4}>Personalisierbare Dashboards je Mitarbeiter — frei aus Charts + KPI-Kacheln (fester Metrik-Katalog, G-7) zusammenstellbar. „Geteilt" = für alle sichtbar, „Als mein Standard" wird beim Öffnen vorausgewählt. (Die feste Operations-Übersicht ist „Start".)</Text>
-      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      <Text size="sm" c="dimmed" mt={4}>Personalisierbare Dashboards je Mitarbeiter — frei aus Charts + KPI-Kacheln (fester Metrik-Katalog) zusammenstellbar. „Geteilt" = für alle sichtbar, „Als mein Standard" wird beim Öffnen vorausgewählt. (Die feste Operations-Übersicht ist „Start".)</Text>
+      {err && <Alert color="red" mt="sm" withCloseButton onClose={() => setErr(null)}>{err}</Alert>}
+      {msg && <Alert color="green" mt="sm" withCloseButton onClose={() => setMsg(null)}>{msg}</Alert>}
 
       <Group align="flex-end" gap="sm" mt="sm">
         <Select label="Dashboard" placeholder="wählen" w={300}
@@ -3423,13 +3425,13 @@ export function DashboardsPage(): JSX.Element {
               <Group justify="space-between" align="flex-start" gap={4}>
                 <Text size="sm" fw={600}>{w.title}</Text>
                 <Group gap={2}>
-                  <Button size="compact-xs" variant="subtle" onClick={async () => { setErr(null); try { await trpc.dashboards.moveItem.mutate({ itemId: w.id, direction: "UP" }); if (sel) await reloadResolved(sel); } catch (e) { setErr(errMsg(e)); } }}>↑</Button>
-                  <Button size="compact-xs" variant="subtle" onClick={async () => { setErr(null); try { await trpc.dashboards.moveItem.mutate({ itemId: w.id, direction: "DOWN" }); if (sel) await reloadResolved(sel); } catch (e) { setErr(errMsg(e)); } }}>↓</Button>
-                  <Button size="compact-xs" variant="subtle" color="red" onClick={async () => { setErr(null); try { await trpc.dashboards.removeItem.mutate({ itemId: w.id }); if (sel) await reloadResolved(sel); } catch (e) { setErr(errMsg(e)); } }}>✕</Button>
+                  <Button size="compact-xs" variant="subtle" aria-label={`„${w.title}" nach oben verschieben`} onClick={async () => { setErr(null); try { await trpc.dashboards.moveItem.mutate({ itemId: w.id, direction: "UP" }); if (sel) await reloadResolved(sel); } catch (e) { setErr(errMsg(e)); } }}>↑</Button>
+                  <Button size="compact-xs" variant="subtle" aria-label={`„${w.title}" nach unten verschieben`} onClick={async () => { setErr(null); try { await trpc.dashboards.moveItem.mutate({ itemId: w.id, direction: "DOWN" }); if (sel) await reloadResolved(sel); } catch (e) { setErr(errMsg(e)); } }}>↓</Button>
+                  <Button size="compact-xs" variant="subtle" color="red" aria-label={`„${w.title}" vom Dashboard entfernen`} onClick={async () => { setErr(null); try { await trpc.dashboards.removeItem.mutate({ itemId: w.id }); if (sel) await reloadResolved(sel); } catch (e) { setErr(errMsg(e)); } }}>✕</Button>
                 </Group>
               </Group>
               {w.kind === "CARD"
-                ? <Text fz={32} fw={700} mt={4}>{w.value ?? "—"}</Text>
+                ? <Text fz={32} fw={700} mt={4}>{w.value == null ? "—" : w.financial ? euro(w.value) : w.value.toLocaleString("de-DE")}</Text>
                 : w.series && w.series.length > 0 ? <MiniBars series={w.series} /> : <Text size="sm" c="dimmed" mt={4}>Keine Daten.</Text>}
             </Box>
           ))}
@@ -3441,12 +3443,12 @@ export function DashboardsPage(): JSX.Element {
       <Group align="flex-end" gap="sm" mt="xs" wrap="wrap">
         <TextInput label="KPI-Kachel: Name" value={cardName} onChange={(e) => setCardName(e.currentTarget.value)} w={180} />
         <Select label="Metrik" w={240} data={metricOpts.filter((m) => m.label.endsWith("NUMBER"))} value={cardMetric} onChange={setCardMetric} />
-        <Button variant="light" disabled={!cardName.trim() || !cardMetric} onClick={async () => { setErr(null); try { await trpc.dashboards.createCard.mutate({ name: cardName, metricKey: cardMetric! }); setCardName(""); await loadAll(); } catch (e) { setErr(errMsg(e)); } }}>+ Kachel</Button>
+        <Button variant="light" disabled={!cardName.trim() || !cardMetric} onClick={async () => { setErr(null); setMsg(null); try { const n = cardName; await trpc.dashboards.createCard.mutate({ name: n, metricKey: cardMetric! }); setMsg(`Kachel „${n}" angelegt.`); setCardName(""); await loadAll(); } catch (e) { setErr(errMsg(e)); } }}>+ Kachel</Button>
       </Group>
       <Group align="flex-end" gap="sm" mt="xs" wrap="wrap">
         <TextInput label="Chart: Name" value={chartName} onChange={(e) => setChartName(e.currentTarget.value)} w={180} />
         <Select label="Metrik" w={240} data={metricOpts.filter((m) => m.label.endsWith("SERIES"))} value={chartMetric} onChange={setChartMetric} />
-        <Button variant="light" disabled={!chartName.trim() || !chartMetric} onClick={async () => { setErr(null); try { await trpc.dashboards.createChart.mutate({ name: chartName, chartType: "BAR", metricKey: chartMetric! }); setChartName(""); await loadAll(); } catch (e) { setErr(errMsg(e)); } }}>+ Chart</Button>
+        <Button variant="light" disabled={!chartName.trim() || !chartMetric} onClick={async () => { setErr(null); setMsg(null); try { const n = chartName; await trpc.dashboards.createChart.mutate({ name: n, chartType: "BAR", metricKey: chartMetric! }); setMsg(`Chart „${n}" angelegt.`); setChartName(""); await loadAll(); } catch (e) { setErr(errMsg(e)); } }}>+ Chart</Button>
       </Group>
 
       <Title order={4} mt="xl">Dashboard zusammenstellen</Title>
@@ -5725,18 +5727,48 @@ export function TasksPage({ onNavigate }: { onNavigate?: (k: string) => void } =
   const [tasks, setTasks] = useState<Awaited<ReturnType<typeof trpc.tasks.mine.query>>>([]);
   const [showDone, setShowDone] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [myEmail, setMyEmail] = useState<string | null>(null);
+  // Anlege-Formular: eigene To-do (assigneeEmail = eingeloggter Nutzer).
+  const [title, setTitle] = useState("");
+  const [due, setDue] = useState("");
+  const [busy, setBusy] = useState(false);
   const load = useCallback(async () => {
     try { setTasks(await trpc.tasks.mine.query({ includeDone: showDone })); setErr(null); }
     catch (e) { setErr(errMsg(e)); }
   }, [showDone]);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { void trpc.auth.me.query().then((u) => setMyEmail(u.email)).catch(() => {}); }, []);
+
+  const create = async (): Promise<void> => {
+    if (!title.trim() || !myEmail) return;
+    setBusy(true); setErr(null); setMsg(null);
+    try {
+      await trpc.tasks.create.mutate({ title: title.trim(), assigneeEmail: myEmail, dueDate: due ? new Date(due).toISOString() : undefined });
+      setMsg("Aufgabe angelegt."); setTitle(""); setDue(""); await load();
+    } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
 
   return (
     <>
       <Title order={3}>Meine Aufgaben</Title>
       <Text size="sm" c="dimmed" mt={4}>Persönliche Arbeitsliste — zugewiesene Vorgänge, optional an einen Beleg gekoppelt.</Text>
-      {err && <Alert color="red" mt="sm">{err}</Alert>}
-      <Switch mt="sm" label="Erledigte anzeigen" checked={showDone} onChange={(e) => setShowDone(e.currentTarget.checked)} />
+      {err && <Alert color="red" mt="sm" withCloseButton onClose={() => setErr(null)}>{err}</Alert>}
+      {msg && <Alert color="green" mt="sm" withCloseButton onClose={() => setMsg(null)}>{msg}</Alert>}
+
+      {/* Aufgabe anlegen (tasks.create) — self-assigned. */}
+      <Group gap="xs" align="end" mt="sm" wrap="wrap">
+        <TextInput label="Neue Aufgabe" placeholder="z. B. Angebot AN-2026-0003 nachfassen" w={320} value={title}
+          onChange={(e) => setTitle(e.currentTarget.value)} onKeyDown={(e) => { if (e.key === "Enter") void create(); }} />
+        <TextInput label="Fällig (optional)" type="date" w={170} value={due} onChange={(e) => setDue(e.currentTarget.value)} />
+        <Button loading={busy} disabled={!title.trim() || !myEmail} onClick={() => void create()}>+ Aufgabe</Button>
+      </Group>
+
+      <Switch mt="md" label="Erledigte anzeigen" checked={showDone} onChange={(e) => setShowDone(e.currentTarget.checked)} />
+      {tasks.length === 0 ? (
+        <EmptyState icon="✅" title="Keine Aufgaben"
+          hint="Lege oben deine erste Aufgabe an — optional mit Fälligkeitsdatum. Aufgaben aus Belegen (Auftrag, Reklamation …) erscheinen hier ebenfalls." />
+      ) : (
       <Table mt="xs" striped withTableBorder>
         <Table.Thead><Table.Tr>
           <Table.Th>Status</Table.Th><Table.Th>Titel</Table.Th><Table.Th>Beleg</Table.Th><Table.Th>Fällig</Table.Th><Table.Th></Table.Th>
@@ -5750,14 +5782,14 @@ export function TasksPage({ onNavigate }: { onNavigate?: (k: string) => void } =
               <Table.Td><Text size="xs" c="dimmed">{t.dueDate ? new Date(t.dueDate).toLocaleDateString("de-DE") : "—"}</Text></Table.Td>
               <Table.Td>
                 {t.status === "OFFEN"
-                  ? <Button size="compact-xs" onClick={async () => { await trpc.tasks.complete.mutate({ id: t.id }); await load(); }}>Erledigt</Button>
-                  : <Button size="compact-xs" variant="subtle" onClick={async () => { await trpc.tasks.reopen.mutate({ id: t.id }); await load(); }}>Wieder öffnen</Button>}
+                  ? <Button size="compact-xs" aria-label={`Aufgabe „${t.title}" als erledigt markieren`} onClick={async () => { setErr(null); try { await trpc.tasks.complete.mutate({ id: t.id }); await load(); } catch (e) { setErr(errMsg(e)); } }}>Erledigt</Button>
+                  : <Button size="compact-xs" variant="subtle" aria-label={`Aufgabe „${t.title}" wieder öffnen`} onClick={async () => { setErr(null); try { await trpc.tasks.reopen.mutate({ id: t.id }); await load(); } catch (e) { setErr(errMsg(e)); } }}>Wieder öffnen</Button>}
               </Table.Td>
             </Table.Tr>
           ))}
-          {tasks.length === 0 && <Table.Tr><Table.Td colSpan={5}><Text size="sm" c="dimmed">Keine Aufgaben.</Text></Table.Td></Table.Tr>}
         </Table.Tbody>
       </Table>
+      )}
     </>
   );
 }

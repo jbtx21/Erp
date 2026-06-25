@@ -20,7 +20,7 @@ export const METRIC_CATALOG: ReadonlyArray<MetricDef> = [
   { key: "orders.count.total", label: "Aufträge gesamt", kind: "NUMBER" },
   { key: "companies.count.total", label: "Firmen gesamt", kind: "NUMBER" },
   { key: "suppliers.count.total", label: "Lieferanten gesamt", kind: "NUMBER" },
-  { key: "invoices.sum.net", label: "Umsatz netto (Cent)", kind: "NUMBER", financial: true },
+  { key: "invoices.sum.net", label: "Umsatz netto", kind: "NUMBER", financial: true },
   { key: "orders.count.byStatus", label: "Aufträge nach Status", kind: "SERIES" },
   { key: "orders.count.byLieferstatus", label: "Aufträge nach Lieferstatus", kind: "SERIES" },
 ];
@@ -66,6 +66,8 @@ export interface ResolvedWidget {
   title: string;
   chartType: ChartType | null;
   metricKind: MetricKind;
+  /** Finanzkennzahl (Wert in Cent) → Frontend formatiert als Währung (euro()). */
+  financial: boolean;
   value: number | null;
   series: { label: string; value: number }[] | null;
 }
@@ -147,13 +149,13 @@ export class DashboardService {
         if (!c) continue;
         const redact = (METRIC_BY_KEY.get(c.metricKey)?.financial ?? false) && !includeFinancials;
         const m = redact ? { value: null, series: null } : await this.metrics.compute(c.metricKey);
-        widgets.push({ id: it.id, kind: "CHART", width: it.width, title: redact ? "🔒 gesperrt" : c.name, chartType: c.chartType, metricKind: METRIC_BY_KEY.get(c.metricKey)?.kind ?? "SERIES", value: m.value, series: m.series });
+        widgets.push({ id: it.id, kind: "CHART", width: it.width, title: redact ? "🔒 gesperrt" : c.name, chartType: c.chartType, metricKind: METRIC_BY_KEY.get(c.metricKey)?.kind ?? "SERIES", financial: METRIC_BY_KEY.get(c.metricKey)?.financial ?? false, value: m.value, series: m.series });
       } else {
         const c = await this.repo.getCard(it.refId);
         if (!c) continue;
         const redact = (METRIC_BY_KEY.get(c.metricKey)?.financial ?? false) && !includeFinancials;
         const m = redact ? { value: null, series: null } : await this.metrics.compute(c.metricKey);
-        widgets.push({ id: it.id, kind: "CARD", width: it.width, title: redact ? "🔒 gesperrt" : c.name, chartType: null, metricKind: METRIC_BY_KEY.get(c.metricKey)?.kind ?? "NUMBER", value: m.value, series: m.series });
+        widgets.push({ id: it.id, kind: "CARD", width: it.width, title: redact ? "🔒 gesperrt" : c.name, chartType: null, metricKind: METRIC_BY_KEY.get(c.metricKey)?.kind ?? "NUMBER", financial: METRIC_BY_KEY.get(c.metricKey)?.financial ?? false, value: m.value, series: m.series });
       }
     }
     return { id: d.id, name: d.name, widgets };
