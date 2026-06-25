@@ -12,7 +12,7 @@ import { trpc } from "./trpc.js";
 import { AufschlagsfaktorenSection, LogosStickereiSection, StickereiAusschreibungSection, StickereiStaffelnSection, Postcalc } from "./Differentiators.js";
 import { euro, numTd, statusMantineColor, prettyStatus } from "./theme.js";
 import { MultiLineChart, BarChart } from "./charts.js";
-import { DocFormShell, DocListHeader, StatusDot, EmptyState } from "./doc-layout.js";
+import { DocFormShell, DocListHeader, StatusDot, StatusBadge, EmptyState } from "./doc-layout.js";
 import { OrderAmpelDetail, Auftragsampel } from "./StatusAmpel.js";
 import { useUnsavedGuard } from "./use-unsaved-guard.js";
 import { downloadCsv } from "./export.js";
@@ -91,7 +91,7 @@ function fmtCell(key: string, v: unknown): ReactNode {
     return <StatusDot color={`var(--mantine-color-${statusMantineColor[v] ?? "gray"}-6)`} label={prettyStatus(v)} />;
   }
   if (/kind$/i.test(key) && typeof v === "string")
-    return <Badge color={statusMantineColor[v] ?? "gray"} variant="light">{prettyStatus(v)}</Badge>;
+    return <StatusBadge status={v} />;
   if (/(at|date|termin|am)$/i.test(key) && typeof v === "string" && !Number.isNaN(Date.parse(v)))
     return new Date(v).toLocaleDateString("de-DE");
   // Varianten-Attribute [{name,value}] lesbar rendern: „Navy / L" statt Roh-JSON (P1).
@@ -3962,7 +3962,7 @@ export function SubproductionPage(): JSX.Element {
                 <Table.Tr key={s.id}>
                   <Table.Td>#{s.sequence}</Table.Td>
                   <Table.Td>{s.supplierId}</Table.Td>
-                  <Table.Td><Badge color={statusMantineColor[s.status] ?? "gray"} variant="light">{s.status}</Badge></Table.Td>
+                  <Table.Td><StatusBadge status={s.status} /></Table.Td>
                   <Table.Td style={numTd}>{s.beistellMenge ?? "—"}</Table.Td>
                   <Table.Td style={numTd}>{s.ruecklaufMenge ?? "—"}</Table.Td>
                   <Table.Td style={numTd}>{euro(s.lohnCents)}</Table.Td>

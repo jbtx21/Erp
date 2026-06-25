@@ -3,6 +3,19 @@
 // (Breadcrumb + Titel + Statusabzeichen + Aktionsleiste) und Status-Indikator-Punkt.
 import { Badge, Box, Button, Group, Text, Title } from "@mantine/core";
 import { type ReactNode } from "react";
+import { statusMantineColor, prettyStatus } from "./theme.js";
+
+/**
+ * Einheitliches Statusabzeichen (Skill SB-1): EINE Quelle für Status→Farbe + lesbares Label.
+ * Überall, wo ein Enum-Status als Badge erscheint (Detailköpfe, Panels), statt Ad-hoc-`<Badge>`.
+ */
+export function StatusBadge({ status, size }: { status: string; size?: string }): JSX.Element {
+  return (
+    <Badge color={statusMantineColor[status] ?? "gray"} variant="light" size={size}>
+      {prettyStatus(status)}
+    </Badge>
+  );
+}
 
 /**
  * Geführter Leerzustand (Onboarding): Symbol + Titel + erklärender Hinweis + optionale
@@ -85,7 +98,7 @@ export function DocFormShell({
           <Text size="xs" c="dimmed">{breadcrumb}</Text>
           <Group gap="sm" align="center">
             <Title order={3}>{title}</Title>
-            {status && <Badge color={statusColor} variant="light">{status}</Badge>}
+            {status && <Badge color={statusColor} variant="light">{prettyStatus(status)}</Badge>}
           </Group>
         </Box>
         {actions && <Group gap="xs">{actions}</Group>}
