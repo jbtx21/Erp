@@ -6,6 +6,7 @@ import { Chevron, NavIcon, SidebarToggleIcon, type NavIconName } from "./nav-ico
 import { Login } from "./Login.js";
 import { Dashboard } from "./Dashboard.js";
 import { StatusAmpelPage } from "./StatusAmpel.js";
+import { SammelbestellungPage } from "./Sammelbestellung.js";
 import { Reporting } from "./Reporting.js";
 import { Banking } from "./Banking.js";
 import {
@@ -23,7 +24,7 @@ interface AuthUser { id: string; email: string; name: string; role: string; totp
 const NAV: ReadonlyArray<{ group: string; icon: NavIconName; items: ReadonlyArray<{ key: string; label: string }> }> = [
   { group: "Start", icon: "uebersicht", items: [{ key: "home", label: "Start" }, { key: "dashboard", label: "Termin-Ampel" }, { key: "statusampel", label: "Status-Ampel" }, { key: "dashboards", label: "Dashboards" }, { key: "calendar", label: "Kalender" }, { key: "tasks", label: "Meine Aufgaben" }, { key: "messages", label: "Nachrichten" }] },
   { group: "CRM", icon: "crm", items: [{ key: "leads", label: "Leads" }, { key: "opportunities", label: "Verkaufschancen" }, { key: "calllogs", label: "Anrufliste" }, { key: "inquiries", label: "Anfragen" }, { key: "newsletter", label: "Newsletter" }] },
-  { group: "Vertrieb", icon: "vertrieb", items: [{ key: "companies", label: "Kunden" }, { key: "quotes", label: "Angebote" }, { key: "orders", label: "Aufträge" }, { key: "pricing", label: "Preise/Staffel" }, { key: "reklamation", label: "Reklamation" }] },
+  { group: "Vertrieb", icon: "vertrieb", items: [{ key: "companies", label: "Kunden" }, { key: "quotes", label: "Angebote" }, { key: "orders", label: "Aufträge" }, { key: "sammelbestellungen", label: "Sammelbestellungen" }, { key: "pricing", label: "Preise/Staffel" }, { key: "reklamation", label: "Reklamation" }] },
   { group: "Einkauf", icon: "beschaffung", items: [
     { key: "suppliers", label: "Lieferanten" }, { key: "procurement", label: "Beschaffung" },
     { key: "reorder", label: "Nachbestellung" }, { key: "ausschreibungen", label: "Stickerei-Ausschreibungen" }, { key: "incoming", label: "Eingangsrechnungen" },
@@ -352,6 +353,7 @@ function Page({ k, role, userName, onNavigate, onOpen, focusId }: { k: string; r
     case "home": return <HomePage userName={userName} onNavigate={onNavigate} />;
     case "dashboard": return <Dashboard />;
     case "statusampel": return <StatusAmpelPage />;
+    case "sammelbestellungen": return <SammelbestellungPage />;
     case "dashboards": return <DashboardsPage />;
     case "orders": return <OrdersPage role={role} focusId={focusId} />;
     case "companies": return <CompaniesPage focusId={focusId} />;

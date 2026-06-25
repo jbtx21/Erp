@@ -34,6 +34,7 @@ export * from "./stickerei.js";
 export * from "./ampel.js";
 export * from "./auftragsampel.js";
 export * from "./auftrag-prozess.js";
+export * from "./sammelbestellung.js";
 export * from "./reklamation.js";
 export * from "./shipping.js";
 export * from "./finishing.js";

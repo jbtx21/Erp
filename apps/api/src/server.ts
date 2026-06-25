@@ -33,6 +33,8 @@ import { PrismaNumberingRepository } from "./repositories/prisma-numbering.repos
 import { AmpelService } from "./modules/ampel/ampel.service.js";
 import { StatusAmpelService } from "./modules/status-ampel/status-ampel.service.js";
 import { PrismaStatusAmpelRepository } from "./repositories/prisma-status-ampel.repository.js";
+import { SammelbestellungService } from "./modules/sammelbestellung/sammelbestellung.service.js";
+import { PrismaSammelbestellungRepository } from "./repositories/prisma-sammelbestellung.repository.js";
 import { StickereiService } from "./modules/stickerei/stickerei.service.js";
 import { ReorderService } from "./modules/reorder/reorder.service.js";
 import { ProductionSheetService } from "./modules/production-sheet/production-sheet.service.js";
@@ -220,6 +222,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   );
   const ampel = new AmpelService(new PrismaAmpelRepository());
   const statusAmpel = new StatusAmpelService(new PrismaStatusAmpelRepository());
+  const sammelbestellung = new SammelbestellungService(new PrismaSammelbestellungRepository(), new PrismaAuditSink());
   const stickerei = new StickereiService(new PrismaStickereiRepository());
   const reorder = new ReorderService(new PrismaReorderRepository(), new PrismaAuditSink());
   const productionSheet = new ProductionSheetService(new PrismaProductionSheetRepository());
@@ -442,6 +445,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           reklamation,
           ampel,
           statusAmpel,
+          sammelbestellung,
           stickerei,
           reorder,
           productionSheet,

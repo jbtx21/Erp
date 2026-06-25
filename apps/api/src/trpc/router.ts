@@ -161,13 +161,20 @@ export const appRouter = router({
           deliveryAddressPolicy: z.enum(["FEST", "FREIE_EINGABE", "AUSWAHL"]).optional(),
         })
       )
-      .mutation(async ({ input, ctx }) =>
-        ctx.orderImport.importWooOrder(input.raw, {
+      .mutation(async ({ input, ctx }) => {
+        const res = await ctx.orderImport.importWooOrder(input.raw, {
           shopConnectorId: input.shopConnectorId,
           companyId: input.companyId,
           deliveryAddressPolicy: input.deliveryAddressPolicy,
-        })
-      ),
+        });
+        // Sammelbestell-Routing (Kap. 18.2): SAMMEL-Shops bündeln neue Aufträge in die
+        // laufende Periode; SOFORT-Shops bleiben unberührt (Service entscheidet anhand
+        // des Shop-Modus). Nur für neu angelegte Aufträge, nicht-blockierend.
+        if (res.created) {
+          try { await ctx.sammelbestellung.attachOrder(res.order.id); } catch { /* nicht kritisch */ }
+        }
+        return res;
+      }),
 
     /** Auftragsliste — Preis-/Kundenfelder werden für PRODUKTION redigiert (RBAC, Kap. 12). */
     list: protectedProcedure
@@ -625,6 +632,28 @@ export const appRouter = router({
           }
           throw err;
         }
+      }),
+  }),
+
+  // Sammelbestellung (Kap. 18.2): gebündelte Mitarbeiter-Shopbestellungen je Periode.
+  sammelbestellung: router({
+    list: roleProcedure("ADMIN", "BUERO", "PRODUKTION", "BUCHHALTUNG").query(({ ctx }) => ctx.sammelbestellung.list()),
+    detail: roleProcedure("ADMIN", "BUERO", "PRODUKTION", "BUCHHALTUNG")
+      .input(z.object({ id: z.string().min(1) }))
+      .query(async ({ input, ctx }) => {
+        try { return await ctx.sammelbestellung.detail(input.id); }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
+      }),
+    setStatus: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ id: z.string().min(1), status: z.enum(["OFFEN", "GEBUENDELT", "UMGESETZT"]) }))
+      .mutation(async ({ input, ctx }) => { await ctx.sammelbestellung.setStatus(input.id, input.status); return { ok: true as const }; }),
+    /** Shops + ihr Bestellmodus (SOFORT/SAMMEL) für die Konfiguration. */
+    shops: roleProcedure("ADMIN", "BUERO").query(({ ctx }) => ctx.sammelbestellung.listShops()),
+    setShopMode: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ shopId: z.string().min(1), bestellmodus: z.enum(["SOFORT", "SAMMEL"]), sammelInterval: z.enum(["WOECHENTLICH", "MONATLICH", "QUARTALSWEISE", "HALBJAEHRLICH"]).nullable() }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.sammelbestellung.setShopMode(input.shopId, input.bestellmodus, input.sammelInterval); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
   }),
 

@@ -128,6 +128,7 @@ model Company {
   logoVersions    LogoVersion[]
   quotes          Quote[]
   orders          Order[]
+  collectiveOrders CollectiveOrder[]
   invoices        Invoice[]
   inquiries       Inquiry[] // Anfrage-Funnel (B20)
   lead            Lead? // aus Lead konvertiert (B15)
@@ -653,10 +654,38 @@ model ShopConnector {
   // notifyCustomer steuert, ob der Shop die Kunden-Mail auslösen soll (Mail an/aus).
   pushStatuses   OrderStatus[] @default([VERSENDET, STORNIERT])
   notifyCustomer Boolean       @default(true)
+  // Bestellmodus je Shop (Kap. 18): SOFORT = Auftrag direkt; SAMMEL = Mitarbeiter-
+  // bestellungen werden je Periode (sammelInterval) zu einer Sammelbestellung gebündelt.
+  bestellmodus   String        @default("SOFORT") // SOFORT | SAMMEL
+  sammelInterval String? // WOECHENTLICH | MONATLICH | QUARTALSWEISE | HALBJAEHRLICH (nur SAMMEL)
   orders    Order[]
+  collectiveOrders CollectiveOrder[]
   createdAt DateTime @default(now())
 
   @@index([companyId])
+}
+
+/// Sammelbestellung (Kap. 18.2): bündelt Mitarbeiter-Shopbestellungen einer Periode zu
+/// einem Vorgang. Die einzelnen Aufträge bleiben erhalten (collectiveOrderId), die
+/// Detailansicht fasst Artikel und Veredelung über alle Mitglieder zusammen.
+model CollectiveOrder {
+  id              String        @id @default(cuid())
+  number          String        @unique // SB-JAHR-NNNN
+  shopConnectorId String
+  shopConnector   ShopConnector @relation(fields: [shopConnectorId], references: [id])
+  companyId       String
+  company         Company       @relation(fields: [companyId], references: [id])
+  interval        String // WOECHENTLICH | MONATLICH | QUARTALSWEISE | HALBJAEHRLICH
+  periodStart     DateTime
+  periodEnd       DateTime
+  status          String        @default("OFFEN") // OFFEN | GEBUENDELT | UMGESETZT
+  closedAt        DateTime?
+  createdAt       DateTime      @default(now())
+  orders          Order[]
+
+  @@unique([shopConnectorId, periodStart])
+  @@index([companyId])
+  @@index([status])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -837,6 +866,9 @@ model Order {
   deliveryAddress   DeliveryAddress? @relation(fields: [deliveryAddressId], references: [id])
   shopConnectorId String? // Herkunft Shop (null = manuell)
   shopConnector   ShopConnector? @relation(fields: [shopConnectorId], references: [id])
+  // Zugehörige Sammelbestellung (Kap. 18.2); null = Einzel-/Sofortauftrag.
+  collectiveOrderId String?
+  collectiveOrder   CollectiveOrder? @relation(fields: [collectiveOrderId], references: [id])
   status      OrderStatus @default(ANGELEGT)
   lieferstatus FulfillmentStatus @default(NICHT) // Teil-Status (G-4) aus Lieferungen/Status
   fakturastatus FulfillmentStatus @default(NICHT) // Teil-Status (G-4) aus Rechnungsbetrag vs. Auftragssumme
