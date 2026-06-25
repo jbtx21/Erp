@@ -5,11 +5,33 @@
 //   pnpm --filter @texma/api build && node apps/api/dist/scripts/seed.js
 import "./load-env.js"; // MUSS zuerst stehen: lädt DATABASE_URL aus packages/db/.env
 import { prisma } from "@texma/db";
+import { Argon2Hasher } from "../modules/auth/password.js";
 
 const day = 24 * 60 * 60 * 1000;
 const at = (offsetDays: number): Date => new Date(Date.now() + offsetDays * day);
 
 async function main(): Promise<void> {
+  // ── Demo-Nutzer ───────────────────────────────────────────────────────────
+  // Pflicht für den GoBD-Audit-Trail: jede Mutation schreibt AuditLog.userId (FK auf
+  // User). Der Dev-Server handelt fest als "demo-admin" — dieser Datensatz MUSS also
+  // existieren, sonst bricht JEDE Mutation an der FK ab. Zusätzlich je Rolle ein User
+  // zum Durchklicken der RBAC. Login-Passwort einheitlich "demo" (nur Dev), kein TOTP.
+  const hasher = new Argon2Hasher();
+  const demoPasswordHash = await hasher.hash("demo");
+  const demoUsers: Array<{ id: string; email: string; name: string; role: "ADMIN" | "BUERO" | "PRODUKTION" | "BUCHHALTUNG" }> = [
+    { id: "demo-admin", email: "admin@texma.de", name: "Demo Admin", role: "ADMIN" },
+    { id: "demo-buero", email: "buero@texma.de", name: "Demo Büro", role: "BUERO" },
+    { id: "demo-produktion", email: "produktion@texma.de", name: "Demo Produktion", role: "PRODUKTION" },
+    { id: "demo-buchhaltung", email: "buchhaltung@texma.de", name: "Demo Buchhaltung", role: "BUCHHALTUNG" },
+  ];
+  for (const u of demoUsers) {
+    await prisma.user.upsert({
+      where: { id: u.id },
+      update: { email: u.email, name: u.name, role: u.role, active: true },
+      create: { ...u, passwordHash: demoPasswordHash, totpEnabled: false, active: true },
+    });
+  }
+
   // ── Preisgruppen ──────────────────────────────────────────────────────────
   const pgStandard = await prisma.priceGroup.upsert({
     where: { kind: "STANDARD" }, update: {}, create: { kind: "STANDARD", name: "Standard" },
