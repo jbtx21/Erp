@@ -1,12 +1,33 @@
 // Navigations-Gerüst: Auth-Gate + AppShell mit gruppierter Sidebar über ALLE Module
 // (alles durchklickbar). Jede Sektion ist eine Seite gegen die echten tRPC-Endpunkte.
 import { useCallback, useEffect, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
-import { ActionIcon, AppShell, Badge, Box, Button, Collapse, Group, HoverCard, Kbd, Loader, Modal, NavLink, Paper, ScrollArea, Stack, Text, TextInput, Title, Tooltip, UnstyledButton } from "@mantine/core";
+import { ActionIcon, AppShell, Badge, Box, Button, Collapse, Group, HoverCard, Kbd, Loader, Modal, NavLink, Paper, ScrollArea, Stack, Tabs, Text, TextInput, Title, Tooltip, UnstyledButton } from "@mantine/core";
 import { Chevron, NavIcon, SidebarToggleIcon, type NavIconName } from "./nav-icons.js";
 import { Login } from "./Login.js";
 import { Dashboard } from "./Dashboard.js";
 import { StatusAmpelPage } from "./StatusAmpel.js";
-import { EmptyState } from "./doc-layout.js";
+import { EmptyState, DocListHeader } from "./doc-layout.js";
+
+/** Konsolidierter Zahlungsabgleich (IA): Kontoumsatz → OP-Zuordnung → manuelle Zahlung
+ *  als EIN Tab-Workflow statt drei getrennter Top-Level-Module (#banking/#finance/#zahlungen). */
+function ZahlungsabgleichPage({ role }: { role: string }): ReactNode {
+  return (
+    <>
+      <DocListHeader module="Buchhaltung" title="Zahlungsabgleich"
+        hint="Ein Workflow: Kontoumsatz (Banking) → offenem Posten zuordnen (OP-Aging) → ggf. manuell erfassen." />
+      <Tabs defaultValue="banking" mt="md" keepMounted={false}>
+        <Tabs.List>
+          <Tabs.Tab value="banking">Kontoumsätze</Tabs.Tab>
+          <Tabs.Tab value="op">Offene Posten (OP-Aging)</Tabs.Tab>
+          <Tabs.Tab value="erfassen">Zahlung erfassen</Tabs.Tab>
+        </Tabs.List>
+        <Tabs.Panel value="banking" pt="md"><Banking role={role} /></Tabs.Panel>
+        <Tabs.Panel value="op" pt="md"><FinanceReportingPage /></Tabs.Panel>
+        <Tabs.Panel value="erfassen" pt="md"><ZahlungenPage /></Tabs.Panel>
+      </Tabs>
+    </>
+  );
+}
 import { SammelbestellungPage } from "./Sammelbestellung.js";
 import { Reporting } from "./Reporting.js";
 import { Banking } from "./Banking.js";
@@ -43,8 +64,7 @@ const NAV: ReadonlyArray<{ group: string; icon: NavIconName; items: ReadonlyArra
   ] },
   { group: "Buchhaltung", icon: "finanzen", items: [
     { key: "guv", label: "Gewinn- und Verlustrechnung" },
-    { key: "zahlungen", label: "Zahlungseingänge" }, { key: "banking", label: "Banking" },
-    { key: "finance", label: "Offene Posten (OP-Aging)" }, { key: "dunning", label: "Mahnwesen" },
+    { key: "zahlungsabgleich", label: "Zahlungsabgleich" }, { key: "dunning", label: "Mahnwesen" },
     { key: "costcenters", label: "Kostenstellen" }, { key: "nachkalkfin", label: "Nachkalkulation" }, { key: "gutscheine", label: "Gutscheine" }, { key: "reporting", label: "Auswertungen" },
   ] },
   { group: "Personalwesen", icon: "hr", items: [{ key: "hr", label: "Personalwesen" }] },
@@ -416,6 +436,7 @@ function Page({ k, role, userName, onNavigate, onOpen, focusId }: { k: string; r
     case "prodreport": return <ProductionReportingPage />;
     case "shipments": return <ShipmentsPage onOpen={onOpen} />;
     case "dunning": return <DunningPage />;
+    case "zahlungsabgleich": return <ZahlungsabgleichPage role={role} />;
     case "banking": return <Banking role={role} />;
     case "zahlungen": return <ZahlungenPage />;
     case "costcenters": return <CostCentersPage />;
