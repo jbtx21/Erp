@@ -5153,16 +5153,23 @@ export function IntegrationsPage(): JSX.Element {
                     try { await trpc.integrations.configure.mutate({ kind: c.kind, enabled: enabled[c.kind] ?? false, config: drafts[c.kind] ?? {} }); setMsg(`${c.name} gespeichert.`); await load(); }
                     catch (e) { setErr(errMsg(e)); }
                   }}>Speichern</Button>
-                  {c.kind === "SLACK" && (
-                    <Button size="compact-xs" variant="light" onClick={async () => {
-                      setErr(null); setMsg(null);
-                      try { const r = await trpc.integrations.test.mutate({ kind: "SLACK" }); setMsg(r.message); }
-                      catch (e) { setErr(errMsg(e)); }
-                    }}>Testen</Button>
-                  )}
+                  <Button size="compact-xs" variant="light" onClick={async () => {
+                    setErr(null); setMsg(null);
+                    try { const r = await trpc.integrations.test.mutate({ kind: c.kind }); if (r.ok) setMsg(r.message); else setErr(r.message); }
+                    catch (e) { setErr(errMsg(e)); }
+                  }}>Verbindung testen</Button>
                 </Group>
               </>
-            ) : <Text size="xs" c="dimmed" mt="sm">Konfiguration über Worker/ENV.</Text>}
+            ) : (
+              <Group mt="sm" gap="xs">
+                <Text size="xs" c="dimmed">Konfiguration über Worker/ENV.</Text>
+                <Button size="compact-xs" variant="light" onClick={async () => {
+                  setErr(null); setMsg(null);
+                  try { const r = await trpc.integrations.test.mutate({ kind: c.kind }); if (r.ok) setMsg(r.message); else setErr(r.message); }
+                  catch (e) { setErr(errMsg(e)); }
+                }}>Verbindung testen</Button>
+              </Group>
+            )}
           </Box>
         ))}
       </Group>

@@ -90,18 +90,43 @@ export class IntegrationsService {
     await this.audit.append(buildEntry({ entity: "IntegrationSetting", entityId: kind, action: "UPDATE", after: { enabled, fields: Object.keys(merged) } }));
   }
 
-  /** Verbindungstest: derzeit Slack (sendet eine Testnachricht). */
+  /**
+   * Verbindungstest. Slack sendet eine echte Testnachricht (portal-pflegbar). Die im
+   * Worker-Tier laufenden Connectoren (WooCommerce/DPD/Lieferanten) macht apps/api
+   * bewusst NICHT selbst nach außen (kein ausgehender HTTP-Call im Request, Kap. 13/32) —
+   * hier prüfen wir die Konfigurations-Bereitschaft (ENV/DB + aktiv) und melden sie zurück.
+   * Der reale End-to-End-Poll bleibt dem Worker vorbehalten.
+   */
   async test(kind: ConnectorKind): Promise<{ ok: boolean; message: string }> {
-    if (kind !== "SLACK") throw new IntegrationsError("Test für diesen Connector nicht verfügbar.");
-    if (!this.slack) throw new IntegrationsError("Slack-Sender nicht verfügbar.");
-    const row = await this.repo.get("SLACK");
+    const def = connectorDef(kind);
+    if (!def) throw new IntegrationsError("Unbekannter Connector.");
+
+    if (kind === "SLACK") {
+      if (!this.slack) throw new IntegrationsError("Slack-Sender nicht verfügbar.");
+      const row = await this.repo.get("SLACK");
+      const cfg = row?.configJson ? (JSON.parse(row.configJson) as Record<string, string>) : {};
+      const url = cfg.webhookUrl;
+      if (!url) throw new IntegrationsError("Keine Webhook-URL hinterlegt.");
+      // SSRF-Schutz auch hier defensiv (falls Altbestand vor der Validierung gespeichert wurde).
+      if (!isAllowedSlackWebhook(url)) throw new IntegrationsError("Ungültige Slack-Webhook-URL (erwartet https://hooks.slack.com/…).");
+      await this.slack.send(url, "✅ TEXMA ERP: Slack-Anbindung erfolgreich getestet.");
+      return { ok: true, message: "Testnachricht an Slack gesendet." };
+    }
+
+    // Bereitschaftscheck für die Worker-/portal-pflegbaren Connectoren.
+    const row = await this.repo.get(kind);
     const cfg = row?.configJson ? (JSON.parse(row.configJson) as Record<string, string>) : {};
-    const url = cfg.webhookUrl;
-    if (!url) throw new IntegrationsError("Keine Webhook-URL hinterlegt.");
-    // SSRF-Schutz auch hier defensiv (falls Altbestand vor der Validierung gespeichert wurde).
-    if (!isAllowedSlackWebhook(url)) throw new IntegrationsError("Ungültige Slack-Webhook-URL (erwartet https://hooks.slack.com/…).");
-    await this.slack.send(url, "✅ TEXMA ERP: Slack-Anbindung erfolgreich getestet.");
-    return { ok: true, message: "Testnachricht an Slack gesendet." };
+    const dbConfigured = def.fields.some((f) => (cfg[f.key] ?? "") !== "");
+    const envConfigured = this.repo.envConfigured(kind);
+    if (!dbConfigured && !envConfigured) {
+      return { ok: false, message: `${def.name} ist nicht konfiguriert (weder Portal noch Worker/ENV).` };
+    }
+    const quelle = dbConfigured ? "Portal" : "Worker/ENV";
+    const aktiv = def.portalConfigurable ? (row?.enabled ?? false) : true;
+    return {
+      ok: true,
+      message: `${def.name} ist konfiguriert (${quelle})${aktiv ? " und aktiv" : ", aber nicht aktiviert"}. Der reale Verbindungsabruf läuft im Worker-Tier.`,
+    };
   }
 }
 

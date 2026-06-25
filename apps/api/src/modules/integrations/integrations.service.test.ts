@@ -46,4 +46,12 @@ describe("IntegrationsService (Connector-Plattform)", () => {
     expect(r.ok).toBe(true);
     expect(slack.sent).toHaveLength(1);
   });
+
+  it("Worker-Connector-Test meldet Bereitschaft statt Sendetest", async () => {
+    const { svc } = setup();
+    // Ohne ENV-/Portal-Konfiguration: nicht bereit (kein Throw, klare Meldung).
+    const r = await svc.test("WOOCOMMERCE");
+    expect(r.ok).toBe(false);
+    expect(r.message).toMatch(/nicht konfiguriert/);
+  });
 });
