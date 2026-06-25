@@ -376,11 +376,22 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
     }
   });
 
-  // Basis-Sicherheits-Header (Kap. 27/28): konservativ, da reine JSON-API hinter der SPA.
+  // Basis-Sicherheits-Header (Kap. 27/28): reine JSON-/Bytes-API (serviert NICHT die SPA).
+  // Die CSP ist daher restriktiv — sie dient v. a. als zweite Verteidigungslinie für die
+  // einzige HTML-fähige Route (/logos/:id/file): Scripte werden hart unterbunden, nur
+  // (Raster-)Bilder dürfen geladen werden. HSTS nur in Prod (sonst stört es lokal über http).
   server.addHook("onSend", async (_req, reply, payload) => {
     void reply.header("X-Content-Type-Options", "nosniff");
     void reply.header("X-Frame-Options", "DENY");
     void reply.header("Referrer-Policy", "no-referrer");
+    void reply.header(
+      "Content-Security-Policy",
+      "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+    );
+    void reply.header("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+    if (secure) {
+      void reply.header("Strict-Transport-Security", "max-age=63072000; includeSubDomains");
+    }
     return payload;
   });
 
@@ -395,9 +406,20 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
     if (!user) return reply.code(401).send({ error: "unauthenticated" });
     const file = await stickereiSvc.getLogoFile(req.params.id);
     if (!file) return reply.code(404).send({ error: "not found" });
+    // Stored-XSS-Schutz: der mimeType kommt ungeprüft vom Uploader. Nur bekannte
+    // Rasterbild-Typen werden mit eigenem Content-Type inline gezeigt (Logo-Vorschau);
+    // alles andere — insb. text/html und image/svg+xml (führen aktives Script aus) —
+    // wird als neutraler Download (octet-stream + attachment) ausgeliefert. Zusammen mit
+    // X-Content-Type-Options: nosniff und der CSP kann so kein Script im App-Origin laufen.
+    const INLINE_SAFE = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+    const mime = (file.mimeType || "").toLowerCase();
+    const inline = INLINE_SAFE.has(mime);
     return reply
-      .header("content-type", file.mimeType || "application/octet-stream")
-      .header("content-disposition", `inline; filename="${encodeURIComponent(file.fileName)}"`)
+      .header("content-type", inline ? mime : "application/octet-stream")
+      .header(
+        "content-disposition",
+        `${inline ? "inline" : "attachment"}; filename="${encodeURIComponent(file.fileName)}"`
+      )
       .send(file.data);
   });
 

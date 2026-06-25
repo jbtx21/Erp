@@ -12,3 +12,5 @@ packages/db/generated/
 # HAKRO-Pricat (volle Preisliste — nicht versionieren)
 data/pricats/**/PRICAT_ITEM_EU_*.xlsx
 *-PRICAT_ITEM_EU_*.xlsx
+# Redis-Runtime-Dump (BullMQ-Queue-State) — gehört nicht ins Repo
+dump.rdb
