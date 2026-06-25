@@ -15,10 +15,21 @@ export interface CalendarEventRow {
   note: string | null;
 }
 
+/** Bearbeitbare Felder eines Kalendereintrags. */
+export interface UpdateCalendarInput {
+  title?: string;
+  kind?: CalendarEventKind;
+  start?: Date;
+  end?: Date;
+  allDay?: boolean;
+  note?: string | null;
+}
+
 export interface CalendarRepository {
   /** Einträge im Fenster [from,to], sichtbar für ownerEmail (eigene + geteilte). */
   listForUser(ownerEmail: string, from: Date, to: Date): Promise<CalendarEventRow[]>;
   create(input: Omit<CalendarEventRow, "id">): Promise<{ id: string }>;
+  update(id: string, ownerEmail: string, patch: UpdateCalendarInput): Promise<boolean>;
   remove(id: string, ownerEmail: string): Promise<boolean>;
 }
 
@@ -42,6 +53,20 @@ export class CalendarService {
     });
     await this.audit.append(buildEntry({ entity: "CalendarEvent", entityId: res.id, action: "CREATE", after: { title: input.title, kind: input.kind } }));
     return res;
+  }
+
+  /** Bearbeitet einen Termin (nur eigene/geteilte); validiert den Zeitraum. GoBD-auditiert. */
+  async update(id: string, ownerEmail: string, patch: UpdateCalendarInput): Promise<void> {
+    if (patch.title !== undefined && !patch.title.trim()) throw new CalendarError("Titel ist Pflicht.");
+    if (patch.start && patch.end) {
+      try { assertEventRange(patch.start, patch.end); }
+      catch (e) { throw new CalendarError((e as Error).message); }
+    }
+    const clean: UpdateCalendarInput = { ...patch };
+    if (clean.title !== undefined) clean.title = clean.title.trim();
+    const ok = await this.repo.update(id, ownerEmail, clean);
+    if (!ok) throw new CalendarError("Eintrag nicht gefunden oder keine Berechtigung.");
+    await this.audit.append(buildEntry({ entity: "CalendarEvent", entityId: id, action: "UPDATE", after: { ...clean } }));
   }
 
   async remove(id: string, ownerEmail: string): Promise<void> {

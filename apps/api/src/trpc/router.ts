@@ -1620,6 +1620,22 @@ export const appRouter = router({
         try { return await ctx.calendar.create({ ...input, ownerEmail: ctx.user.email, start: new Date(input.start), end: new Date(input.end) }); }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
+    update: protectedProcedure
+      .input(z.object({
+        id: z.string().min(1),
+        title: z.string().min(1).optional(),
+        kind: z.enum(["TERMIN", "URLAUB", "ABWESENHEIT", "SONSTIGES"]).optional(),
+        start: z.string().datetime().optional(),
+        end: z.string().datetime().optional(),
+        allDay: z.boolean().optional(),
+        note: z.string().nullable().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { id, start, end, ...rest } = input;
+        const patch = { ...rest, ...(start !== undefined ? { start: new Date(start) } : {}), ...(end !== undefined ? { end: new Date(end) } : {}) };
+        try { await ctx.calendar.update(id, ctx.user.email, patch); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
     remove: protectedProcedure
       .input(z.object({ id: z.string().min(1) }))
       .mutation(async ({ input, ctx }) => {

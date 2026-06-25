@@ -4904,8 +4904,59 @@ const CAL_KINDS = [
   { value: "SONSTIGES", label: "Sonstiges", color: "gray" },
 ] as const;
 
+function CalendarEditModal({ ev, onClose, onSaved }: { ev: Row | null; onClose: () => void; onSaved: () => void }): JSX.Element {
+  const [title, setTitle] = useState("");
+  const [kind, setKind] = useState("TERMIN");
+  const [allDay, setAllDay] = useState(false);
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
+  const [note, setNote] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!ev) return;
+    const ad = Boolean(ev.allDay);
+    setTitle(String(ev.title ?? "")); setKind(String(ev.kind ?? "TERMIN")); setAllDay(ad);
+    setStart(String(ev.start ?? "").slice(0, ad ? 10 : 16)); setEnd(String(ev.end ?? "").slice(0, ad ? 10 : 16));
+    setNote(ev.note ? String(ev.note) : ""); setErr(null);
+  }, [ev]);
+  const toIso = (v: string): string => (allDay ? new Date(`${v}T12:00:00.000Z`).toISOString() : new Date(v).toISOString());
+  const save = async () => {
+    if (!ev) return;
+    setBusy(true); setErr(null);
+    try {
+      await trpc.calendar.update.mutate({
+        id: String(ev.id), title: title.trim(), kind: kind as "TERMIN" | "URLAUB" | "ABWESENHEIT" | "SONSTIGES",
+        allDay, start: start ? toIso(start) : undefined, end: (end || start) ? toIso(end || start) : undefined,
+        note: note.trim() || null,
+      });
+      onSaved(); onClose();
+    } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+  return (
+    <Modal opened={!!ev} onClose={onClose} title="Termin bearbeiten" size="md">
+      {err && <Alert color="red" mb="sm">{err}</Alert>}
+      <Stack gap="sm">
+        <TextInput label="Titel" value={title} onChange={(e) => setTitle(e.currentTarget.value)} required />
+        <Select label="Art" value={kind} onChange={(v) => v && setKind(v)} data={CAL_KINDS.map((k) => ({ value: k.value, label: k.label }))} />
+        <Switch label="Ganztägig" checked={allDay} onChange={(e) => setAllDay(e.currentTarget.checked)} />
+        <Group grow>
+          <TextInput label="Beginn" type={allDay ? "date" : "datetime-local"} value={start} onChange={(e) => setStart(e.currentTarget.value)} />
+          <TextInput label="Ende" type={allDay ? "date" : "datetime-local"} value={end} onChange={(e) => setEnd(e.currentTarget.value)} />
+        </Group>
+        <Textarea label="Notiz" value={note} onChange={(e) => setNote(e.currentTarget.value)} autosize minRows={2} />
+        <Group justify="flex-end" mt="xs">
+          <Button variant="default" onClick={onClose}>Abbrechen</Button>
+          <Button loading={busy} disabled={!title.trim() || !start} onClick={() => void save()}>Speichern</Button>
+        </Group>
+      </Stack>
+    </Modal>
+  );
+}
+
 export function CalendarPage(): JSX.Element {
   const [items, setItems] = useState<Row[]>([]);
+  const [editEv, setEditEv] = useState<Row | null>(null);
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState<string>("TERMIN");
   const [allDay, setAllDay] = useState(false);
@@ -5027,12 +5078,14 @@ export function CalendarPage(): JSX.Element {
                 <Badge color={k?.color ?? "gray"} variant="light" w={120}>{k?.label}</Badge>
                 <Text size="sm" fw={600} style={{ flex: 1 }}>{String(e.title)}{e.ownerEmail ? "" : " · geteilt"}</Text>
                 <Text size="sm" c="dimmed">{fmtEvent(e)}</Text>
+                <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setEditEv(e)}>Bearbeiten</Button>
                 <Button size="compact-xs" variant="subtle" color="red" onClick={async () => { try { await trpc.calendar.remove.mutate({ id: String(e.id) }); await load(); } catch (er) { setErr(errMsg(er)); } }}>✕</Button>
               </Group>
             );
           })}
         </Box>
       )}
+      <CalendarEditModal ev={editEv} onClose={() => setEditEv(null)} onSaved={() => void load()} />
     </>
   );
 }

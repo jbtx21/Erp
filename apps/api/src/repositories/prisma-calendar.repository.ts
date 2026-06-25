@@ -2,7 +2,7 @@
 
 import { prisma } from "@texma/db";
 import type { CalendarEventKind } from "@texma/shared";
-import type { CalendarEventRow, CalendarRepository } from "../modules/calendar/calendar.service.js";
+import type { CalendarEventRow, CalendarRepository, UpdateCalendarInput } from "../modules/calendar/calendar.service.js";
 
 export class PrismaCalendarRepository implements CalendarRepository {
   async listForUser(ownerEmail: string, from: Date, to: Date): Promise<CalendarEventRow[]> {
@@ -17,6 +17,20 @@ export class PrismaCalendarRepository implements CalendarRepository {
       data: { title: input.title, ownerEmail: input.ownerEmail, kind: input.kind as never, start: input.start, end: input.end, allDay: input.allDay, note: input.note },
       select: { id: true },
     });
+  }
+  async update(id: string, ownerEmail: string, patch: UpdateCalendarInput): Promise<boolean> {
+    const res = await prisma.calendarEvent.updateMany({
+      where: { id, OR: [{ ownerEmail }, { ownerEmail: null }] },
+      data: {
+        ...(patch.title !== undefined ? { title: patch.title } : {}),
+        ...(patch.kind !== undefined ? { kind: patch.kind as never } : {}),
+        ...(patch.start !== undefined ? { start: patch.start } : {}),
+        ...(patch.end !== undefined ? { end: patch.end } : {}),
+        ...(patch.allDay !== undefined ? { allDay: patch.allDay } : {}),
+        ...(patch.note !== undefined ? { note: patch.note } : {}),
+      },
+    });
+    return res.count > 0;
   }
   async remove(id: string, ownerEmail: string): Promise<boolean> {
     const res = await prisma.calendarEvent.deleteMany({ where: { id, OR: [{ ownerEmail }, { ownerEmail: null }] } });
