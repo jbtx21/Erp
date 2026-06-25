@@ -20,6 +20,8 @@ export interface OrderRepository {
   createFromShop(mapped: MappedOrder): Promise<CreatedOrder>;
   /** Invariante (T-01): zählt Firmenkunden — darf durch Import NICHT wachsen. */
   countCompanies(): Promise<number>;
+  /** Reiht einen manuellen Einzel-Abruf in die Outbox ein (Worker holt die Bestellung). */
+  enqueueManualFetch(shopConnectorId: string, externalNumber: string): Promise<void>;
 }
 
 export interface ImportResult {
@@ -63,5 +65,19 @@ export class OrderImportService {
     );
 
     return { order, created: true };
+  }
+
+  /**
+   * Manueller Sofort-Abruf (dringende Bestellung): reiht ein Outbox-Event `shop.order.fetch`
+   * ein. Der Worker holt die Bestellung über die Shop-Nummer, importiert sie und markiert
+   * sie als „in Bearbeitung" (markInBearbeitung). Externe Syncs laufen über die Outbox.
+   */
+  async requestManualFetch(shopConnectorId: string, externalNumber: string): Promise<{ ok: true }> {
+    if (!externalNumber.trim()) throw new Error("Bestellnummer ist Pflicht.");
+    await this.repo.enqueueManualFetch(shopConnectorId, externalNumber.trim());
+    await this.audit.append(
+      buildEntry({ entity: "ShopConnector", entityId: shopConnectorId, action: "UPDATE", after: { manualFetch: externalNumber.trim() } })
+    );
+    return { ok: true };
   }
 }

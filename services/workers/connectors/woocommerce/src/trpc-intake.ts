@@ -16,12 +16,13 @@ export class TrpcOrderIntake implements OrderIntake {
     });
   }
 
-  async importWooOrder(raw: unknown, config: ShopConnectorConfig): Promise<unknown> {
+  async importWooOrder(raw: unknown, config: ShopConnectorConfig, markInBearbeitung = false): Promise<unknown> {
     return this.client.shopOrders.ingest.mutate({
       raw,
       shopConnectorId: config.shopConnectorId,
       companyId: config.companyId,
       deliveryAddressPolicy: config.deliveryAddressPolicy,
+      markInBearbeitung,
     });
   }
 }

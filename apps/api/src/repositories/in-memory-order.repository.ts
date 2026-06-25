@@ -67,6 +67,11 @@ export class InMemoryOrderRepository
     return this.companyIds.size;
   }
 
+  readonly manualFetches: Array<{ shopConnectorId: string; externalNumber: string }> = [];
+  async enqueueManualFetch(shopConnectorId: string, externalNumber: string): Promise<void> {
+    this.manualFetches.push({ shopConnectorId, externalNumber });
+  }
+
   // In-Memory speichert keine Einzelpositionen (nur Test/Demo) → leere Liste.
   async orderLines(_orderId: string): Promise<OrderLineItem[]> {
     return [];

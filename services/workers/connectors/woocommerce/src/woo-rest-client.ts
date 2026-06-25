@@ -85,6 +85,29 @@ export class WooRestClient implements WooClient {
   }
 
   /**
+   * Manueller Sofort-Abruf EINER Bestellung über ihre Shop-Bestellnummer (dringende
+   * Aufträge, die nicht auf den nächsten Poll warten sollen). Sucht per `search`; liefert
+   * die exakt passende Order (number/id) bzw. die erste Treffer-Order oder null.
+   */
+  async fetchOrderByNumber(externalNumber: string): Promise<unknown | null> {
+    const url = new URL(`${this.base}/wp-json/wc/v3/orders`);
+    url.searchParams.set("search", externalNumber);
+    url.searchParams.set("per_page", "20");
+    const res = await this.fetchImpl(url.toString(), {
+      headers: { Authorization: this.authHeader, Accept: "application/json" },
+      signal: AbortSignal.timeout(this.timeoutMs),
+    });
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(`WooCommerce-Authentifizierung fehlgeschlagen (HTTP ${res.status}) für ${this.base}.`);
+    }
+    if (!res.ok) throw new Error(`WooCommerce-Abruf fehlgeschlagen (HTTP ${res.status}) für ${url.pathname}.`);
+    const batch = (await res.json()) as Array<Record<string, unknown>>;
+    if (!Array.isArray(batch) || batch.length === 0) return null;
+    const exact = batch.find((o) => String(o.number ?? o.id) === externalNumber || String(o.id) === externalNumber);
+    return exact ?? batch[0] ?? null;
+  }
+
+  /**
    * Schreibt Status (+ optional Trackingnummer) an eine Shop-Bestellung zurück
    * (T-06/T-09). PUT /wp-json/wc/v3/orders/{id}; die Trackingnummer wird als
    * Order-Meta (`_dpd_tracking`) gesetzt. `externalNumber` = Shop-Bestell-Id.

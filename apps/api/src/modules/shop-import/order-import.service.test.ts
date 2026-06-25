@@ -30,6 +30,9 @@ function makeRepo(): { repo: OrderRepository; companyCount: { n: number } } {
     async countCompanies() {
       return companyCount.n;
     },
+    async enqueueManualFetch() {
+      // Im Unit-Test ohne Outbox — no-op.
+    },
   };
   return { repo, companyCount };
 }

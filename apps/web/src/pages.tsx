@@ -2362,6 +2362,43 @@ function ConnectionsPanel({ orderId, role, onChanged }: { orderId: string; role:
   );
 }
 
+// Dringende Einzelbestellung sofort aus dem Shop abrufen (Kap. 4.1): Shop wählen +
+// Bestellnummer eingeben → Worker holt die Bestellung, importiert + IN_BEARBEITUNG.
+function ManualShopFetch({ onDone }: { onDone: () => void }): JSX.Element {
+  const [shops, setShops] = useState<Awaited<ReturnType<typeof trpc.shopOrders.shops.query>>>([]);
+  const [shopId, setShopId] = useState<string | null>(null);
+  const [number, setNumber] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [info, setInfo] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => { void trpc.shopOrders.shops.query().then((s) => { setShops(s); if (s[0]) setShopId(s[0].id); }).catch(() => { /* keine Shops */ }); }, []);
+
+  const fetchNow = async (): Promise<void> => {
+    if (!shopId || !number.trim()) return;
+    setBusy(true); setErr(null); setInfo(null);
+    try {
+      await trpc.shopOrders.requestManualFetch.mutate({ shopConnectorId: shopId, externalNumber: number.trim() });
+      setInfo(`Abruf für Bestellung „${number.trim()}" angestoßen — erscheint in Kürze als „In Bearbeitung" in der Liste.`);
+      setNumber(""); setTimeout(onDone, 1500);
+    } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+
+  return (
+    <Box mt="sm" p="sm" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+      <Text size="sm" fw={600}>Dringende Shop-Bestellung sofort abrufen</Text>
+      <Text size="xs" c="dimmed" mb={6}>Shop wählen, Bestellnummer eingeben → die Bestellung wird einzeln aus dem Shop geholt, importiert und auf „In Bearbeitung" gesetzt (ohne auf den nächsten Sync zu warten).</Text>
+      {err && <Alert color="red" mb="xs" withCloseButton onClose={() => setErr(null)}>{err}</Alert>}
+      {info && <Alert color="green" mb="xs" withCloseButton onClose={() => setInfo(null)}>{info}</Alert>}
+      <Group gap="xs" align="end" wrap="wrap">
+        <Select label="Shop" placeholder={shops.length === 0 ? "Kein Shop angebunden" : "Shop wählen"} w={240} searchable
+          data={shops.map((s) => ({ value: s.id, label: `${s.name} · ${s.companyName}` }))} value={shopId} onChange={setShopId} disabled={shops.length === 0} />
+        <TextInput label="Bestellnummer" placeholder="z. B. 200154" w={180} value={number} onChange={(e) => setNumber(e.currentTarget.value)} />
+        <Button loading={busy} disabled={!shopId || !number.trim()} onClick={() => void fetchNow()}>Abrufen</Button>
+      </Group>
+    </Box>
+  );
+}
+
 export function OrdersPage({ role, focusId }: { role: string; focusId?: string }): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -2426,6 +2463,7 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
       />
       {err && <Alert color="red" mt="sm" withCloseButton onClose={() => setErr(null)}>{err}</Alert>}
       {msg && <Alert color="green" mt="sm" withCloseButton onClose={() => setMsg(null)}>{msg}</Alert>}
+      {canAct && <ManualShopFetch onDone={() => void load()} />}
       {canAct && showCreate && (
         <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
           <DocFormShell

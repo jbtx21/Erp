@@ -16,7 +16,8 @@ import {
   scheduleOutboxTicks,
 } from "@texma/worker-orchestration";
 import { prisma } from "@texma/db";
-import { WooRestClient, runWooSync } from "@texma/connector-woocommerce";
+import { WooRestClient, TrpcOrderIntake, runWooSync } from "@texma/connector-woocommerce";
+import type { OutboxHandler } from "@texma/orchestration";
 import { runSupplierSync } from "@texma/connector-supplier";
 import { dpdAuthFromEnv, runDpdShipments } from "@texma/connector-dpd";
 import { createOrderStatusUpdateHandler, type ShopWriter } from "./order-status-handler.js";
@@ -74,6 +75,31 @@ function prismaShopWriterResolver(secrets: SecretsProvider) {
   };
 }
 
+/**
+ * Outbox-Handler `shop.order.fetch` (manueller Sofort-Abruf, Kap. 4.1): holt EINE
+ * Bestellung über ihre Shop-Nummer, importiert sie per tRPC und markiert sie als
+ * „in Bearbeitung". Reine Routing-/HTTP-Logik mit injizierter Shop-Anbindung.
+ */
+function createShopOrderFetchHandler(deps: { apiUrl: string; secrets: SecretsProvider }): OutboxHandler {
+  const intake = new TrpcOrderIntake(deps.apiUrl);
+  return async (record) => {
+    const p = record.payload as { shopConnectorId: string; externalNumber: string };
+    const sc = await prisma.shopConnector.findUnique({ where: { id: p.shopConnectorId } });
+    if (!sc) throw new Error(`ShopConnector ${p.shopConnectorId} nicht gefunden.`);
+    if (sc.kind !== "WOOCOMMERCE" || !sc.consumerKey || !sc.consumerSecretEnc) {
+      throw new Error(`Manueller Abruf für ${p.shopConnectorId} nicht möglich (kein WooCommerce-Zugang).`);
+    }
+    const client = new WooRestClient({
+      baseUrl: sc.baseUrl,
+      consumerKey: sc.consumerKey,
+      consumerSecret: await deps.secrets.resolve(sc.consumerSecretEnc),
+    });
+    const raw = await client.fetchOrderByNumber(p.externalNumber);
+    if (!raw) throw new Error(`Bestellung ${p.externalNumber} im Shop ${sc.name} nicht gefunden.`);
+    await intake.importWooOrder(raw, { shopConnectorId: sc.id, companyId: sc.companyId, deliveryAddressPolicy: sc.deliveryAddressPolicy }, true);
+  };
+}
+
 export interface RuntimeConfig {
   redisHost: string;
   redisPort: number;
@@ -94,6 +120,8 @@ export async function startWorkerRuntime(config: RuntimeConfig): Promise<void> {
     "order.status.update": createOrderStatusUpdateHandler({
       resolveShopWriter: prismaShopWriterResolver(config.secrets),
     }),
+    // Manueller Sofort-Abruf einer Einzelbestellung (dringende Aufträge).
+    "shop.order.fetch": createShopOrderFetchHandler({ apiUrl: config.apiUrl, secrets: config.secrets }),
   });
   const relay = new OutboxRelay(new PrismaOutboxStore(), dispatcher, new PrismaIntegrationLogStore(), createRetryPolicy(5));
   const outboxQueue = createOutboxQueue(connection);

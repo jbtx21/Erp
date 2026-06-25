@@ -71,6 +71,14 @@ export class PrismaOrderRepository
     return prisma.company.count();
   }
 
+  async enqueueManualFetch(shopConnectorId: string, externalNumber: string): Promise<void> {
+    const shop = await prisma.shopConnector.findUnique({ where: { id: shopConnectorId }, select: { id: true } });
+    if (!shop) throw new Error("Shop nicht gefunden.");
+    await prisma.outboxEvent.create({
+      data: { type: "shop.order.fetch", aggregateType: "ShopConnector", aggregateId: shopConnectorId, payload: { shopConnectorId, externalNumber } },
+    });
+  }
+
   async listRecent(limit: number): Promise<OrderListItem[]> {
     const rows = await prisma.order.findMany({
       orderBy: { createdAt: "desc" },

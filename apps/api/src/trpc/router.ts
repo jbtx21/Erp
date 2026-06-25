@@ -159,6 +159,8 @@ export const appRouter = router({
           shopConnectorId: z.string().min(1),
           companyId: z.string().min(1),
           deliveryAddressPolicy: z.enum(["FEST", "FREIE_EINGABE", "AUSWAHL"]).optional(),
+          // Manueller Sofort-Abruf: importierten Auftrag direkt auf IN_BEARBEITUNG setzen.
+          markInBearbeitung: z.boolean().optional(),
         })
       )
       .mutation(async ({ input, ctx }) => {
@@ -167,6 +169,9 @@ export const appRouter = router({
           companyId: input.companyId,
           deliveryAddressPolicy: input.deliveryAddressPolicy,
         });
+        if (input.markInBearbeitung && res.created) {
+          try { await ctx.orderWorkflow.transition(res.order.id, "IN_BEARBEITUNG"); } catch { /* Status ggf. schon weiter */ }
+        }
         // Sammelbestell-Routing (Kap. 18.2): SAMMEL-Shops bündeln neue Aufträge in die
         // laufende Periode; SOFORT-Shops bleiben unberührt (Service entscheidet anhand
         // des Shop-Modus). Nur für neu angelegte Aufträge, nicht-blockierend.
@@ -174,6 +179,18 @@ export const appRouter = router({
           try { await ctx.sammelbestellung.attachOrder(res.order.id); } catch { /* nicht kritisch */ }
         }
         return res;
+      }),
+
+    /** Shops für die Auswahl (manueller Abruf / Zuordnung). */
+    shops: roleProcedure("ADMIN", "BUERO").query(({ ctx }) => ctx.sammelbestellung.listShops()),
+
+    /** Manueller Sofort-Abruf EINER Bestellung über Shop + Bestellnummer (dringende Aufträge).
+     *  Reiht den Abruf in die Outbox ein; der Worker holt + importiert + markiert IN_BEARBEITUNG. */
+    requestManualFetch: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ shopConnectorId: z.string().min(1), externalNumber: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.orderImport.requestManualFetch(input.shopConnectorId, input.externalNumber); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
 
     /** Auftragsliste — Preis-/Kundenfelder werden für PRODUKTION redigiert (RBAC, Kap. 12). */

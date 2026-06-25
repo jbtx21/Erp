@@ -91,3 +91,27 @@ describe("WooRestClient.updateOrderStatus (T-06/T-09)", () => {
     expect(body.meta_data).toBeUndefined();
   });
 });
+
+describe("WooRestClient.fetchOrderByNumber", () => {
+  it("holt EINE Bestellung über die Shop-Nummer (exakter Treffer per search)", async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(jsonResponse([{ id: 9, number: "200154", status: "processing" }], 1));
+    const client = new WooRestClient(opts(fetchImpl as unknown as typeof fetch));
+    const order = await client.fetchOrderByNumber("200154") as { number: string };
+
+    const url = (fetchImpl.mock.calls[0]![0]) as string;
+    expect(url).toContain("search=200154");
+    expect(order.number).toBe("200154");
+  });
+
+  it("liefert null, wenn die Bestellung nicht gefunden wird", async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(jsonResponse([], 1));
+    const client = new WooRestClient(opts(fetchImpl as unknown as typeof fetch));
+    expect(await client.fetchOrderByNumber("999")).toBeNull();
+  });
+
+  it("wirft bei Auth-Fehler (401)", async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(new Response("nope", { status: 401 }));
+    const client = new WooRestClient(opts(fetchImpl as unknown as typeof fetch));
+    await expect(client.fetchOrderByNumber("1")).rejects.toThrow(/Authentifizierung/);
+  });
+});
