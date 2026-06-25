@@ -146,6 +146,17 @@ export function computeAuftragsampel(input: AuftragsampelInput): AuftragsampelRo
   ];
   // Storno → Gesamt ROT (Auftrag gegenstandslos).
   if (input.status === "STORNIERT") return { checks, overall: "ROT" };
-  const overall: AmpelLamp = checks.some((c) => c.lamp === "ROT") ? "ROT" : checks.some((c) => c.lamp === "GELB") ? "GELB" : "GRUEN";
-  return { checks, overall };
+
+  // Nach dem Versand (≥ VERSENDET, inkl. FAKTURIERT/ABGESCHLOSSEN) sind die
+  // Fulfillment-Prüfungen erledigt: Bestand, Liefertermin, Lieferung und Freigabe
+  // dürfen einen versandten/fakturierten Auftrag nicht mehr blockieren (kein „Versand
+  // blockiert" am Endstatus). Zahlung (offener Posten) und Liefersperre bleiben wertend.
+  const FULFILLMENT_DONE: ReadonlySet<string> = new Set(["bestand", "liefertermin", "lieferung", "freigabe"]);
+  const shipped = atLeast(input.status, "VERSENDET");
+  const effective = shipped
+    ? checks.map((c) => (FULFILLMENT_DONE.has(c.key) && c.lamp !== "GRUEN" ? { ...c, lamp: "GRUEN" as const, hint: "Nach Versand erledigt" } : c))
+    : checks;
+
+  const overall: AmpelLamp = effective.some((c) => c.lamp === "ROT") ? "ROT" : effective.some((c) => c.lamp === "GELB") ? "GELB" : "GRUEN";
+  return { checks: effective, overall };
 }

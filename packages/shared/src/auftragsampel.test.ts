@@ -40,6 +40,19 @@ describe("computeAuftragsampel", () => {
     expect(r.overall).toBe("ROT");
   });
 
+  it("nach Versand sind Fulfillment-Prüfungen erledigt (kein Versand-Block am Endstatus)", () => {
+    // Fakturiert + bezahlt, aber Bestand/Liefertermin wären sonst ROT → nach Versand neutralisiert.
+    const r = computeAuftragsampel({
+      ...base, status: "FAKTURIERT", lieferstatus: "VOLL", fakturastatus: "VOLL",
+      openCents: 0, grossCents: 10000,
+      lines: [{ hasVariant: true, sufficient: false }],
+      liefertermin: new Date("2026-06-20T00:00:00Z"),
+    });
+    expect(lamp(r, "bestand")).toBe("GRUEN");
+    expect(lamp(r, "liefertermin")).toBe("GRUEN");
+    expect(r.overall).toBe("GRUEN");
+  });
+
   it("EU-Ausland-B2B ohne gültige USt-IdNr. → ROT", () => {
     const r = computeAuftragsampel({ ...base, isEuForeignB2B: true, vatIdValid: false });
     expect(lamp(r, "ustid")).toBe("ROT");
