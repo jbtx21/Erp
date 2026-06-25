@@ -23,6 +23,29 @@ import { createOrderStatusUpdateHandler, type ShopWriter } from "./order-status-
 import { ShopifyWriter } from "./shopify-writer.js";
 
 /**
+ * Auto-Bündelung am Periodenende (Cron, Kap. 18.2): schließt alle offenen Sammel-
+ * bestellungen, deren Periode abgelaufen ist (Status → GEBUENDELT, closedAt gesetzt),
+ * und schreibt je Vorgang einen GoBD-Audit-Eintrag. Selbstständig über Prisma — neue
+ * Bestellungen der Folgeperiode landen automatisch in einer frischen Sammelbestellung.
+ */
+export async function runSammelAutoBundle(now: Date = new Date()): Promise<{ bundled: number }> {
+  const due = await prisma.collectiveOrder.findMany({
+    where: { status: "OFFEN", periodEnd: { lte: now } },
+    select: { id: true },
+  });
+  if (due.length === 0) return { bundled: 0 };
+  await prisma.$transaction(async (tx) => {
+    for (const d of due) {
+      await tx.collectiveOrder.update({ where: { id: d.id }, data: { status: "GEBUENDELT", closedAt: now } });
+      // GoBD-Audit (append-only) für den automatischen Statuswechsel.
+      await tx.auditLog.create({ data: { entity: "CollectiveOrder", entityId: d.id, action: "UPDATE", after: { status: "GEBUENDELT", auto: true } } });
+    }
+  });
+  console.log(`Sammelbestellung-Auto-Bündelung: ${due.length} Periode(n) geschlossen.`);
+  return { bundled: due.length };
+}
+
+/**
  * Baut den Shop-Schreibclient je Connector-Art aus den DB-Daten (Secret via Port) —
  * shop-übergreifend (WooCommerce/Shopify). So läuft die Status-/Tracking-Rückmeldung
  * für jeden angebundenen Shop über denselben Outbox-Handler.
@@ -84,6 +107,8 @@ export async function startWorkerRuntime(config: RuntimeConfig): Promise<void> {
     "woocommerce.sync": () => runWooSync({ apiUrl: config.apiUrl, secrets: config.secrets }),
     "dpd.ship": () =>
       runDpdShipments({ apiUrl: config.apiUrl, baseUrl: config.dpdBaseUrl, auth: dpdAuthFromEnv() }),
+    // Sammelbestellung am Periodenende automatisch bündeln (Kap. 18.2).
+    "sammel.autoBundle": () => runSammelAutoBundle(),
   });
   await scheduleConnectorPolls(connectorQueue, config.schedule);
 
@@ -102,6 +127,8 @@ export async function main(): Promise<void> {
       "supplier.sync": Number(process.env.SUPPLIER_POLL_MS ?? 3_600_000),
       "woocommerce.sync": Number(process.env.WOO_POLL_MS ?? 300_000),
       "dpd.ship": Number(process.env.DPD_POLL_MS ?? 300_000),
+      // Periodenende-Prüfung 1×/Stunde (idempotent: schließt nur abgelaufene Perioden).
+      "sammel.autoBundle": Number(process.env.SAMMEL_BUNDLE_MS ?? 3_600_000),
     },
   });
 }

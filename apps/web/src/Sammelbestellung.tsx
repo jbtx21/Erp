@@ -23,13 +23,25 @@ function Liste(): JSX.Element {
   }, []);
   useEffect(() => { void load(); }, [load]);
 
+  const [bundleMsg, setBundleMsg] = useState<string | null>(null);
+  const autoBundle = async (): Promise<void> => {
+    setBundleMsg(null);
+    try { const r = await trpc.sammelbestellung.autoBundleDue.mutate(); setBundleMsg(r.bundled === 0 ? "Keine abgelaufenen Perioden offen." : `${r.bundled} abgelaufene Sammelbestellung(en) gebündelt: ${r.numbers.join(", ")}.`); await load(); }
+    catch (e) { setErr(errMsg(e)); }
+  };
+
   if (loading) return <Loader mt="md" />;
   if (err) return <Alert color="red" mt="md">{err}</Alert>;
-  if (rows.length === 0) return <Text size="sm" c="dimmed" mt="md">Noch keine Sammelbestellungen. Sobald ein SAMMEL-Shop Bestellungen liefert, erscheinen sie hier gebündelt.</Text>;
 
   return (
     <>
-      <Table striped withTableBorder verticalSpacing="xs" fz="sm" mt="md">
+      <Group mt="md" mb="xs" justify="space-between">
+        <Text size="xs" c="dimmed">Automatik: ein stündlicher Cron-Job bündelt abgelaufene Perioden selbst. Manuell auslösen:</Text>
+        <Button size="compact-sm" variant="light" onClick={() => void autoBundle()}>Abgelaufene jetzt bündeln</Button>
+      </Group>
+      {bundleMsg && <Alert color="green" mb="xs" withCloseButton onClose={() => setBundleMsg(null)}>{bundleMsg}</Alert>}
+      {rows.length === 0 ? <Text size="sm" c="dimmed">Noch keine Sammelbestellungen. Sobald ein SAMMEL-Shop Bestellungen liefert, erscheinen sie hier gebündelt.</Text> : (
+      <Table striped withTableBorder verticalSpacing="xs" fz="sm">
         <Table.Thead><Table.Tr>
           <Table.Th>Nummer</Table.Th><Table.Th>Shop</Table.Th><Table.Th>Kunde</Table.Th>
           <Table.Th>Intervall</Table.Th><Table.Th>Periode</Table.Th><Table.Th ta="right">Aufträge</Table.Th><Table.Th>Status</Table.Th><Table.Th></Table.Th>
@@ -49,6 +61,7 @@ function Liste(): JSX.Element {
           ))}
         </Table.Tbody>
       </Table>
+      )}
       {openId && <Detail id={openId} onChanged={load} />}
     </>
   );

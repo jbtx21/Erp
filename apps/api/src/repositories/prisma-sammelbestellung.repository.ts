@@ -117,4 +117,8 @@ export class PrismaSammelbestellungRepository implements SammelbestellungReposit
   async setShopMode(shopId: string, bestellmodus: string, sammelInterval: string | null): Promise<void> {
     await prisma.shopConnector.update({ where: { id: shopId }, data: { bestellmodus, sammelInterval } });
   }
+
+  async listDuePeriods(now: Date): Promise<Array<{ id: string; number: string }>> {
+    return prisma.collectiveOrder.findMany({ where: { status: "OFFEN", periodEnd: { lte: now } }, select: { id: true, number: true } });
+  }
 }

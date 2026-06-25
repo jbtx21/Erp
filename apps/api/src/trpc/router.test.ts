@@ -310,7 +310,7 @@ function setup(user: AuthUser | null = BUERO) {
     reklamation,
     ampel,
     statusAmpel: { auftragsampel: async () => [], auftragDetail: async () => null, triggerFacts: async () => null } as unknown as Context["statusAmpel"],
-    sammelbestellung: { attachOrder: async () => null, list: async () => [], detail: async () => null, setStatus: async () => undefined, listShops: async () => [], setShopMode: async () => undefined } as unknown as Context["sammelbestellung"],
+    sammelbestellung: { attachOrder: async () => null, list: async () => [], detail: async () => null, setStatus: async () => undefined, listShops: async () => [], setShopMode: async () => undefined, autoBundleDuePeriods: async () => ({ bundled: 0, numbers: [] }) } as unknown as Context["sammelbestellung"],
     stickerei,
     reorder,
     productionSheet,

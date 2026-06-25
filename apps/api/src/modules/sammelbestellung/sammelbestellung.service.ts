@@ -41,6 +41,8 @@ export interface SammelbestellungRepository {
   setStatus(id: string, status: "OFFEN" | "GEBUENDELT" | "UMGESETZT", closedAt: Date | null): Promise<void>;
   listShops(): Promise<ShopModeRow[]>;
   setShopMode(shopId: string, bestellmodus: string, sammelInterval: string | null): Promise<void>;
+  /** Offene Sammelbestellungen, deren Periode bis `now` abgelaufen ist (Auto-Bündelung). */
+  listDuePeriods(now: Date): Promise<Array<{ id: string; number: string }>>;
 }
 
 export interface ShopModeRow {
@@ -90,6 +92,17 @@ export class SammelbestellungService {
   async setStatus(id: string, status: "OFFEN" | "GEBUENDELT" | "UMGESETZT"): Promise<void> {
     await this.repo.setStatus(id, status, status === "OFFEN" ? null : this.now());
     await this.audit.append(buildEntry({ entity: "CollectiveOrder", entityId: id, action: "UPDATE", after: { status } }));
+  }
+
+  /**
+   * Auto-Bündelung am Periodenende (Cron, Kap. 13/18.2): alle offenen Sammelbestellungen,
+   * deren Periode abgelaufen ist, werden auf GEBUENDELT gesetzt (abgeschlossen + auditiert).
+   * Neue Bestellungen der Folgeperiode landen automatisch in einer frischen Sammelbestellung.
+   */
+  async autoBundleDuePeriods(): Promise<{ bundled: number; numbers: string[] }> {
+    const due = await this.repo.listDuePeriods(this.now());
+    for (const d of due) await this.setStatus(d.id, "GEBUENDELT");
+    return { bundled: due.length, numbers: due.map((d) => d.number) };
   }
 
   listShops(): Promise<ShopModeRow[]> { return this.repo.listShops(); }

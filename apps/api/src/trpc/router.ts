@@ -647,6 +647,8 @@ export const appRouter = router({
     setStatus: roleProcedure("ADMIN", "BUERO")
       .input(z.object({ id: z.string().min(1), status: z.enum(["OFFEN", "GEBUENDELT", "UMGESETZT"]) }))
       .mutation(async ({ input, ctx }) => { await ctx.sammelbestellung.setStatus(input.id, input.status); return { ok: true as const }; }),
+    /** Auto-Bündelung am Periodenende (manuell oder per Cron auslösbar). */
+    autoBundleDue: roleProcedure("ADMIN", "BUERO").mutation(({ ctx }) => ctx.sammelbestellung.autoBundleDuePeriods()),
     /** Shops + ihr Bestellmodus (SOFORT/SAMMEL) für die Konfiguration. */
     shops: roleProcedure("ADMIN", "BUERO").query(({ ctx }) => ctx.sammelbestellung.listShops()),
     setShopMode: roleProcedure("ADMIN", "BUERO")
