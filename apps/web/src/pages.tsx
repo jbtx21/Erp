@@ -5566,13 +5566,26 @@ function loadHomeLayout(): HomeLayout {
   return defaultHomeLayout();
 }
 
+// Operations-Dashboard-Datentypen (Quick-Views). tRPC liefert Datumswerte als ISO-Strings.
+interface HomeAmpelRow { id: string; level: string; label: string; dueDate: string; overdueDays: number; daysRemaining: number; done: boolean }
+interface HomeTask { id: string; title: string; dueDate: string | null; navKey: string | null }
+interface HomeEvent { id: string; title: string; start: string; allDay: boolean; kind: string }
+const HOME_LEVEL_LABEL: Record<string, string> = { ANGEBOT: "Angebot", AUFTRAG: "Auftrag", PRODUKTION: "Produktion", VEREDLER: "Veredler" };
+
 export function HomePage({ userName, onNavigate }: { userName?: string; onNavigate: (k: string) => void }): JSX.Element {
   const [n, setN] = useState<Record<string, number>>({});
   const [openOrders, setOpenOrders] = useState(0);
   const [openQuotes, setOpenQuotes] = useState(0);
   const [tasks, setTasks] = useState(0);
+  // Operations-Dashboard (START = Arbeitslage, nicht nur Sprungbrett).
+  const [auftrag, setAuftrag] = useState<{ rot: number; gelb: number; gruen: number; total: number } | null>(null);
+  const [termin, setTermin] = useState<{ rot: number; overdue: number; kritisch: number; total: number } | null>(null);
+  const [overdue, setOverdue] = useState<HomeAmpelRow[]>([]);
+  const [myTasks, setMyTasks] = useState<HomeTask[]>([]);
+  const [events, setEvents] = useState<HomeEvent[]>([]);
   const [layout, setLayout] = useState<HomeLayout>(() => (typeof localStorage !== "undefined" ? loadHomeLayout() : defaultHomeLayout()));
   const [edit, setEdit] = useState(false);
+  const [showLinks, setShowLinks] = useState(false); // „Berichte & Stammdaten" eingeklappt
   // Layout speichern: lokaler Cache (sofort) + serverseitig je Nutzer (geräteübergreifend).
   const saveLayout = (l: HomeLayout): void => {
     setLayout(l);
@@ -5598,7 +5611,9 @@ export function HomePage({ userName, onNavigate }: { userName?: string; onNaviga
   useEffect(() => {
     void (async () => {
       const safe = async <T,>(p: Promise<T>, f: T): Promise<T> => { try { return await p; } catch { return f; } };
-      const [companies, orders, quotes, leads, invoices, suppliers, articles, taskCount] = await Promise.all([
+      const now = new Date();
+      const in30 = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      const [companies, orders, quotes, leads, invoices, suppliers, articles, taskCount, ampelRows, ampelSum, ampelOv, mine, cal] = await Promise.all([
         safe(trpc.companies.list.query(), [] as unknown[]),
         safe(trpc.shopOrders.list.query({ limit: 200 }), [] as { status?: string }[]),
         safe(trpc.quotes.list.query(), [] as { status?: string }[]),
@@ -5607,20 +5622,73 @@ export function HomePage({ userName, onNavigate }: { userName?: string; onNaviga
         safe(trpc.suppliers.listAll.query(), [] as unknown[]),
         safe(trpc.products.listArticles.query(), [] as unknown[]),
         safe(trpc.tasks.openCount.query(), 0),
+        // Status-Ampel (Auftragsampel) — Prüf-Lampen je aktivem Auftrag. PRODUKTION → leer (rollen-gated).
+        safe(trpc.ampel.auftragsampel.query(), [] as Array<{ overall: string }>),
+        // Termin-Ampel-Verdichtung (Fristen je Ebene).
+        safe(trpc.ampel.summary.query(), null as null | { rot: number; overdue: number; kritisch: number; total: number }),
+        safe(trpc.ampel.overview.query(), [] as HomeAmpelRow[]),
+        safe(trpc.tasks.mine.query(), [] as HomeTask[]),
+        safe(trpc.calendar.list.query({ from: now.toISOString(), to: in30.toISOString() }), [] as HomeEvent[]),
       ]);
       setN({ companies: companies.length, orders: orders.length, quotes: quotes.length, leads: leads.length, invoices: invoices.length, suppliers: suppliers.length, articles: articles.length });
       setOpenOrders(orders.filter((o) => !["ABGESCHLOSSEN", "STORNIERT"].includes(String(o.status))).length);
       setOpenQuotes(quotes.filter((q) => !["ANGENOMMEN", "ABGELEHNT", "VERWORFEN"].includes(String(q.status))).length);
       setTasks(taskCount);
+      // Auftragsampel-Zählung (PROBLEM/ACHTUNG/OK).
+      const c = { rot: 0, gelb: 0, gruen: 0, total: ampelRows.length };
+      for (const r of ampelRows) { if (r.overall === "ROT") c.rot += 1; else if (r.overall === "GELB") c.gelb += 1; else if (r.overall === "GRUEN") c.gruen += 1; }
+      setAuftrag(c);
+      if (ampelSum) setTermin({ rot: ampelSum.rot, overdue: ampelSum.overdue, kritisch: ampelSum.kritisch, total: ampelSum.total });
+      // Überfälligste/offene Vorgänge (overview ist bereits nach Dringlichkeit sortiert).
+      setOverdue(ampelOv.filter((r) => !r.done).slice(0, 5));
+      // Offene Aufgaben nach Fälligkeit (datierte zuerst), Top 5.
+      setMyTasks([...mine].sort((a, b) => {
+        if (a.dueDate && b.dueDate) return +new Date(a.dueDate) - +new Date(b.dueDate);
+        if (a.dueDate) return -1; if (b.dueDate) return 1; return 0;
+      }).slice(0, 5));
+      // Nächste Termine ab heute, Top 5.
+      const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      setEvents([...cal].filter((e) => new Date(e.start) >= dayStart).sort((a, b) => +new Date(a.start) - +new Date(b.start)).slice(0, 5));
     })();
   }, []);
 
+  // KPI-Kachel: klickbar UND tastaturbedienbar (role=button, Enter/Space), Signal nicht nur Farbe (P2.7 a11y).
   const kpi = (label: string, value: number | string, color: string, navKey: string): JSX.Element => (
-    <Box onClick={() => onNavigate(navKey)} style={{ flex: "1 1 180px", minWidth: 160, cursor: "pointer", border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, padding: 16 }}>
+    <Box role="button" tabIndex={0} aria-label={`${label}: ${value}`}
+      onClick={() => onNavigate(navKey)}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onNavigate(navKey); } }}
+      style={{ flex: "1 1 180px", minWidth: 160, cursor: "pointer", border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, padding: 16 }}>
       <Text size="xs" fw={700} tt="uppercase" c="dimmed">{label}</Text>
       <Text fz={28} fw={700} c={color} mt={4}>{value}</Text>
     </Box>
   );
+  // Quick-View-Panel (Kalender/Aufgaben/Überfällig): kompakte Top-5-Liste + „Alle"-Sprung.
+  const quickPanel = (title: string, moreNav: string, emptyText: string,
+    items: Array<{ key: string; primary: string; secondary?: string; color?: string; onClick?: () => void }>): JSX.Element => (
+    <Card withBorder padding="sm">
+      <Group justify="space-between" mb={4} wrap="nowrap">
+        <Text fw={700} size="sm">{title}</Text>
+        <Text size="xs" c="blue" style={{ cursor: "pointer", whiteSpace: "nowrap" }} onClick={() => onNavigate(moreNav)}>Alle ↗</Text>
+      </Group>
+      {items.length === 0 ? <Text size="sm" c="dimmed" py={4}>{emptyText}</Text> : items.map((it) => (
+        <Group key={it.key} justify="space-between" wrap="nowrap" gap="xs" py={5}
+          style={{ borderTop: "1px solid var(--mantine-color-gray-1)", cursor: it.onClick ? "pointer" : undefined }}
+          onClick={it.onClick}>
+          <Text size="sm" lineClamp={1} style={{ flex: 1, minWidth: 0 }}>{it.primary}</Text>
+          {it.secondary && <Text size="xs" c={it.color ?? "dimmed"} fw={it.color ? 600 : 400} style={{ whiteSpace: "nowrap" }}>{it.secondary}</Text>}
+        </Group>
+      ))}
+    </Card>
+  );
+  // Termin-Frist eines Vorgangs als kurzer Text (überfällig/heute/in N Tagen).
+  const fristText = (r: HomeAmpelRow): string =>
+    r.overdueDays > 0 ? `${r.overdueDays} T überfällig` : r.daysRemaining === 0 ? "heute fällig" : `in ${r.daysRemaining} T`;
+  const fmtEventDate = (iso: string, allDay: boolean): string => {
+    const d = new Date(iso);
+    const day = d.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
+    return allDay ? day : `${day} ${d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}`;
+  };
+  const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
   const counts: Record<string, number> = { ...n, tasks };
   // Sichtbare Schnellzugriffe in gespeicherter Reihenfolge; unbekannte Keys ignorieren.
   const ordered = layout.order.map((k) => HOME_SHORTCUTS.find((s) => s.key === k)).filter((s): s is (typeof HOME_SHORTCUTS)[number] => !!s);
@@ -5647,7 +5715,7 @@ export function HomePage({ userName, onNavigate }: { userName?: string; onNaviga
   return (
     <>
       <Title order={3}>Willkommen{userName ? `, ${userName}` : ""}</Title>
-      <Text size="sm" c="dimmed" mt={4}>Startübersicht — zentrale Kennzahlen, Schnellzugriffe und Sprungbretter in alle Module.</Text>
+      <Text size="sm" c="dimmed" mt={4}>Operations-Übersicht — heutige Arbeitslage: Status-Ampeln, dringende Vorgänge, Termine und Aufgaben auf einen Blick.</Text>
 
       <Group mt="md" gap="sm" align="stretch" wrap="wrap">
         {kpi("Offene Aufträge", openOrders, "navy", "orders")}
@@ -5655,6 +5723,68 @@ export function HomePage({ userName, onNavigate }: { userName?: string; onNaviga
         {kpi("Kunden", n.companies ?? 0, "blue", "companies")}
         {kpi("Meine Aufgaben", tasks, tasks > 0 ? "orange" : "gray", "tasks")}
       </Group>
+
+      {/* Statuslage: Auftragsampel (Prüfungen) + Termin-Ampel (Fristen), je Karte ein Sprung in die Detailsicht. */}
+      <Title order={5} mt="xl">Statuslage</Title>
+      <SimpleGrid cols={{ base: 1, sm: 2 }} mt="xs" spacing="md">
+        <Card withBorder padding="md" role="button" tabIndex={0} aria-label="Auftragsampel öffnen"
+          onClick={() => onNavigate("statusampel")}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onNavigate("statusampel"); } }}
+          style={{ cursor: "pointer" }}>
+          <Group justify="space-between" mb="xs" wrap="nowrap">
+            <Text fw={700} size="sm">Auftragsampel — Prüfungen</Text>
+            <Text size="xs" c="blue">Status-Ampel ↗</Text>
+          </Group>
+          <Group gap="xs" wrap="wrap">
+            <Badge color="red" variant="light" size="lg">{auftrag?.rot ?? 0} Problem</Badge>
+            <Badge color="yellow" variant="light" size="lg">{auftrag?.gelb ?? 0} Achtung</Badge>
+            <Badge color="green" variant="light" size="lg">{auftrag?.gruen ?? 0} OK</Badge>
+          </Group>
+          <Text size="xs" c="dimmed" mt="xs">{auftrag?.total ?? 0} aktive Aufträge (Bestand, USt-IdNr., Zahlung, Freigabe …).</Text>
+        </Card>
+        <Card withBorder padding="md" role="button" tabIndex={0} aria-label="Termin-Ampel öffnen"
+          onClick={() => onNavigate("dashboard")}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onNavigate("dashboard"); } }}
+          style={{ cursor: "pointer" }}>
+          <Group justify="space-between" mb="xs" wrap="nowrap">
+            <Text fw={700} size="sm">Termin-Ampel — Fristen</Text>
+            <Text size="xs" c="blue">Übersicht ↗</Text>
+          </Group>
+          <Group gap="xs" wrap="wrap">
+            <Badge color="red" variant="light" size="lg">{termin?.overdue ?? 0} überfällig</Badge>
+            <Badge color="orange" variant="light" size="lg">{termin?.kritisch ?? 0} kritisch</Badge>
+            <Badge color="gray" variant="light" size="lg">{termin?.total ?? 0} Vorgänge</Badge>
+          </Group>
+          <Text size="xs" c="dimmed" mt="xs">Ebenenübergreifende Terminlage (Angebot/Auftrag/Produktion/Veredler).</Text>
+        </Card>
+      </SimpleGrid>
+
+      {/* Quick-Views: dringendste Vorgänge, nächste Termine, eigene Aufgaben (Top 5). */}
+      <SimpleGrid cols={{ base: 1, md: 3 }} mt="md" spacing="md">
+        {quickPanel("Dringend / überfällig", "dashboard", "Keine offenen Terminvorgänge.",
+          overdue.map((r) => ({
+            key: `${r.level}-${r.id}`,
+            primary: `${HOME_LEVEL_LABEL[r.level] ?? r.level} · ${r.label}`,
+            secondary: fristText(r),
+            color: r.overdueDays > 0 ? "red.7" : r.daysRemaining <= 2 ? "orange.7" : undefined,
+            onClick: () => onNavigate("dashboard"),
+          })))}
+        {quickPanel("Nächste Termine", "calendar", "Keine anstehenden Termine.",
+          events.map((e) => ({
+            key: e.id,
+            primary: e.title,
+            secondary: fmtEventDate(e.start, e.allDay),
+            onClick: () => onNavigate("calendar"),
+          })))}
+        {quickPanel("Meine Aufgaben", "tasks", "Keine offenen Aufgaben.",
+          myTasks.map((t) => ({
+            key: t.id,
+            primary: t.title,
+            secondary: t.dueDate ? new Date(t.dueDate).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }) : "—",
+            color: t.dueDate && new Date(t.dueDate) < dayStart ? "red.7" : undefined,
+            onClick: () => onNavigate(t.navKey ?? "tasks"),
+          })))}
+      </SimpleGrid>
 
       <Group mt="xl" justify="space-between">
         <Title order={5}>Schnellzugriffe</Title>
@@ -5679,13 +5809,18 @@ export function HomePage({ userName, onNavigate }: { userName?: string; onNaviga
         </Group>
       )}
 
-      <Title order={5} mt="xl">Berichte &amp; Stammdaten</Title>
-      <Group mt="xs" gap="xl" align="flex-start" wrap="wrap">
-        {card("Vertrieb", [{ label: "Firmen/Kunden", navKey: "companies" }, { label: "Leads", navKey: "leads" }, { label: "Verkaufschancen", navKey: "opportunities" }, { label: "Angebote", navKey: "quotes" }, { label: "Aufträge", navKey: "orders" }])}
-        {card("Beschaffung", [{ label: "Lieferanten", navKey: "suppliers" }, { label: "Eingangsrechnungen", navKey: "incoming" }, { label: "Nachbestellung", navKey: "reorder" }, { label: "Muster-Leihgut", navKey: "samples" }, { label: "Lager & Inventur", navKey: "lager" }])}
-        {card("Finanzen", [{ label: "Mahnwesen", navKey: "dunning" }, { label: "Banking", navKey: "banking" }, { label: "Auswertungen", navKey: "reporting" }, { label: "GoBD-Archiv", navKey: "archive" }, { label: "Kostenstellen", navKey: "costcenters" }])}
-        {card("Produktion & System", [{ label: "Produktions-Reporting", navKey: "prodreport" }, { label: "Fremdvergabe", navKey: "subproduction" }, { label: "Automationen", navKey: "automation" }, { label: "Einstellungen", navKey: "admin" }, { label: "Personalwesen", navKey: "hr" }])}
+      <Group mt="xl" gap="xs" align="center">
+        <Title order={5}>Berichte &amp; Stammdaten</Title>
+        <Button size="compact-xs" variant="subtle" onClick={() => setShowLinks((v) => !v)}>{showLinks ? "ausblenden" : "einblenden"}</Button>
       </Group>
+      {showLinks && (
+        <Group mt="xs" gap="xl" align="flex-start" wrap="wrap">
+          {card("Vertrieb", [{ label: "Firmen/Kunden", navKey: "companies" }, { label: "Leads", navKey: "leads" }, { label: "Verkaufschancen", navKey: "opportunities" }, { label: "Angebote", navKey: "quotes" }, { label: "Aufträge", navKey: "orders" }])}
+          {card("Beschaffung", [{ label: "Lieferanten", navKey: "suppliers" }, { label: "Eingangsrechnungen", navKey: "incoming" }, { label: "Nachbestellung", navKey: "reorder" }, { label: "Muster-Leihgut", navKey: "samples" }, { label: "Lager & Inventur", navKey: "lager" }])}
+          {card("Finanzen", [{ label: "Mahnwesen", navKey: "dunning" }, { label: "Banking", navKey: "banking" }, { label: "Auswertungen", navKey: "reporting" }, { label: "GoBD-Archiv", navKey: "archive" }, { label: "Kostenstellen", navKey: "costcenters" }])}
+          {card("Produktion & System", [{ label: "Produktions-Reporting", navKey: "prodreport" }, { label: "Fremdvergabe", navKey: "subproduction" }, { label: "Automationen", navKey: "automation" }, { label: "Einstellungen", navKey: "admin" }, { label: "Personalwesen", navKey: "hr" }])}
+        </Group>
+      )}
     </>
   );
 }
