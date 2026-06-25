@@ -4,7 +4,7 @@
 
 :root {
   color-scheme: light; /* korrekte Kontraste für Scrollbars & Device-UI */
-  --erp-surface: #f5f6f8;
+  --erp-surface: #f2f5fa; /* ruhiger Body-Hintergrund (an Xentral angelehnt) */
   --erp-border: #e2e5ea;
   --erp-focus: #34548a; /* Navy-Akzent für den Fokus-Ring */
 }
