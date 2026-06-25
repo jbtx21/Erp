@@ -16,9 +16,9 @@ export class InMemoryCrmRepository implements CrmRepository {
   }
   async create(input: CreateCrmLeadInput & { stage: CrmStage }): Promise<CrmLeadRecord> {
     const rec: CrmLeadRecord = {
-      id: `crm-${++seq}`, name: input.name, companyId: input.companyId ?? null, contactName: input.contactName ?? null,
+      id: `crm-${++seq}`, name: input.name, companyId: input.companyId ?? null, companyName: null, contactName: input.contactName ?? null,
       email: input.email ?? null, phone: input.phone ?? null, source: input.source ?? null, stage: input.stage,
-      valueCents: input.valueCents ?? null, probability: null, expectedCloseAt: null,
+      valueCents: input.valueCents ?? null, probability: null, expectedCloseAt: input.expectedCloseAt ?? null,
       text: input.text ?? null, note: input.note ?? null, lostReason: null, quoteId: null, createdAt: new Date(0),
     };
     this.rows.push(rec);

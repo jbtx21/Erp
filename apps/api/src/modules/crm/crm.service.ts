@@ -10,6 +10,7 @@ export interface CrmLeadRecord {
   id: string;
   name: string;
   companyId: string | null;
+  companyName: string | null;
   contactName: string | null;
   email: string | null;
   phone: string | null;
@@ -33,6 +34,7 @@ export interface CreateCrmLeadInput {
   phone?: string | null;
   source?: InquirySource | null;
   valueCents?: number | null;
+  expectedCloseAt?: Date | null;
   text?: string | null;
   note?: string | null;
 }

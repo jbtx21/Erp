@@ -6,24 +6,42 @@ const VIEW = {
   id: true, name: true, companyId: true, contactName: true, email: true, phone: true,
   source: true, stage: true, valueCents: true, probability: true, expectedCloseAt: true,
   text: true, note: true, lostReason: true, quoteId: true, createdAt: true,
+  company: { select: { name: true } },
 } as const;
+
+type ViewRow = {
+  id: string; name: string; companyId: string | null; contactName: string | null; email: string | null;
+  phone: string | null; source: CrmLeadRecord["source"]; stage: CrmStage; valueCents: number | null;
+  probability: number | null; expectedCloseAt: Date | null; text: string | null; note: string | null;
+  lostReason: string | null; quoteId: string | null; createdAt: Date; company: { name: string } | null;
+};
+
+// Firma-Relation flach in companyName auflösen (Liste zeigt den Namen, nicht die cuid).
+function toRecord(r: ViewRow): CrmLeadRecord {
+  const { company, ...rest } = r;
+  return { ...rest, companyName: company?.name ?? null };
+}
 
 export class PrismaCrmRepository implements CrmRepository {
   async list(): Promise<CrmLeadRecord[]> {
-    return prisma.crmLead.findMany({ orderBy: { createdAt: "desc" }, select: VIEW }) as Promise<CrmLeadRecord[]>;
+    const rows = (await prisma.crmLead.findMany({ orderBy: { createdAt: "desc" }, select: VIEW })) as ViewRow[];
+    return rows.map(toRecord);
   }
   async load(id: string): Promise<CrmLeadRecord | null> {
-    return prisma.crmLead.findUnique({ where: { id }, select: VIEW }) as Promise<CrmLeadRecord | null>;
+    const r = (await prisma.crmLead.findUnique({ where: { id }, select: VIEW })) as ViewRow | null;
+    return r ? toRecord(r) : null;
   }
   async create(input: CreateCrmLeadInput & { stage: CrmStage }): Promise<CrmLeadRecord> {
-    return prisma.crmLead.create({
+    const r = (await prisma.crmLead.create({
       data: {
         name: input.name, companyId: input.companyId ?? null, contactName: input.contactName ?? null,
         email: input.email ?? null, phone: input.phone ?? null, source: input.source ?? null,
-        valueCents: input.valueCents ?? null, text: input.text ?? null, note: input.note ?? null, stage: input.stage,
+        valueCents: input.valueCents ?? null, expectedCloseAt: input.expectedCloseAt ?? null,
+        text: input.text ?? null, note: input.note ?? null, stage: input.stage,
       },
       select: VIEW,
-    }) as Promise<CrmLeadRecord>;
+    })) as ViewRow;
+    return toRecord(r);
   }
   async setStage(id: string, stage: CrmStage, lostReason: string | null): Promise<void> {
     await prisma.crmLead.update({ where: { id }, data: { stage, lostReason } });

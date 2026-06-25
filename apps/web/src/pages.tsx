@@ -3,7 +3,7 @@
 // Bereiche mit wenig Code anbindbar sind. Interaktive Aktionen (Versand bestätigen,
 // Mahnlauf, Reorder→Bestellungen) sind je Seite ergänzt.
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Alert, Badge, Box, Button, Card, Checkbox, Group, Loader, Modal, NumberInput, PasswordInput, Select, SimpleGrid, Switch, Table, Tabs, Text, Textarea, TextInput, Title } from "@mantine/core";
+import { Alert, Badge, Box, Button, Card, Checkbox, Group, Loader, Modal, NumberInput, Paper, PasswordInput, Select, SimpleGrid, Switch, Table, Tabs, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { validateVatId } from "@texma/shared/vat";
 import { resolveMarkupFactor, DEFAULT_MARKUP_CONFIG, type MarkupConfig } from "@texma/shared/markup";
@@ -3055,10 +3055,15 @@ const CRM_CONVERTIBLE = new Set(["NEU", "KONTAKTIERT", "QUALIFIZIERT"]);
 
 export function CrmPipelinePage(_props: { onNavigate?: (k: string) => void } = {}): JSX.Element {
   const [rows, setRows] = useState<CrmRow[]>([]);
+  // Lead-Qualifizierung: Wer (Firma/Ansprechpartner/Kontakt), Was (Bedarf), Wann (Termin), Wie (Quelle).
   const [name, setName] = useState("");
   const [companyId, setCompanyId] = useState("");
+  const [contactName, setContactName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [source, setSource] = useState("WEB");
   const [valueEur, setValueEur] = useState("");
+  const [expectedCloseAt, setExpectedCloseAt] = useState("");
   const [text, setText] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -3075,8 +3080,6 @@ export function CrmPipelinePage(_props: { onNavigate?: (k: string) => void } = {
   };
 
   const counts = CRM_STAGE_ORDER.map((s) => ({ stage: s, n: rows.filter((r) => r.stage === s).length }));
-  const forecastCents = rows.filter((r) => CRM_OPEN_STAGES.has(r.stage))
-    .reduce((sum, r) => sum + Math.round(((r.valueCents ?? 0) * (r.probability ?? 100)) / 100), 0);
 
   const actionsFor = (r: Row): ReactNode => {
     const id = String(r.id); const stage = String(r.stage); const hasCompany = Boolean(r.companyId);
@@ -3101,7 +3104,7 @@ export function CrmPipelinePage(_props: { onNavigate?: (k: string) => void } = {
   return (
     <>
       <DocListHeader module="CRM" title="Vertriebs-Pipeline"
-        hint="Ein durchgängiger Funnel auf EINER Entität (CrmLead): NEU → Kontaktiert → Qualifiziert → Angebot → Gewonnen (oder Verloren). Eine Statusmaschine statt drei getrennter Belegarten." />
+        hint="Ein durchgängiger Funnel: Lead (Wer/Was/Wann/Wie qualifizieren) → Qualifiziert = konkrete Anfrage → Angebot → Gewonnen oder Verloren. Eine Entität, eine Statusmaschine." />
       {err && <Alert color="red" mt="sm">{err}</Alert>}
 
       <Group align="stretch" mt="md" gap="xs" wrap="wrap">
@@ -3112,31 +3115,36 @@ export function CrmPipelinePage(_props: { onNavigate?: (k: string) => void } = {
           </Box>
         ))}
       </Group>
-      <Group mt="sm" gap="xs">
-        <Text size="xs" c="dimmed">Gewichteter Forecast (offene Stufen):</Text>
-        <Text size="sm" fw={700} c="teal">{euro(forecastCents)}</Text>
-      </Group>
 
-      <Group mt="md" gap="xs" align="end">
-        <TextInput label="Bezeichnung" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Müller GmbH — 200 Polos Stick" w={260} />
-        <CompanyPicker value={companyId} onChange={setCompanyId} label="Firma (optional)" w={200} allowEmpty />
-        <Select label="Quelle" value={source} onChange={(v) => v && setSource(v)} data={["WEB", "EMAIL", "SHOP", "TELEFON"]} w={110} />
-        <TextInput label="Wert (€, optional)" value={valueEur} onChange={(e) => setValueEur(e.currentTarget.value)} w={130} />
-        <TextInput label="Notiz (optional)" value={text} onChange={(e) => setText(e.currentTarget.value)} placeholder="Anfragetext / Bedarf" w={220} />
-        <Button loading={busy} disabled={!name.trim()} onClick={async () => {
-          setBusy(true); setErr(null);
-          try {
-            const valueCents = valueEur.trim() ? Math.round(Number(valueEur.replace(",", ".")) * 100) : undefined;
-            await trpc.crm.create.mutate({
-              name: name.trim(), companyId: companyId || undefined, source: source as "WEB" | "EMAIL" | "SHOP" | "TELEFON",
-              valueCents: Number.isFinite(valueCents) ? valueCents : undefined, text: text.trim() || undefined,
-            });
-            setName(""); setValueEur(""); setText(""); await load();
-          } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
-        }}>Anlegen</Button>
-      </Group>
+      <Paper withBorder p="md" mt="md" radius="md">
+        <Text fw={600} size="sm" mb="xs">Lead anlegen — Qualifizierung für die konkrete Anfrage</Text>
+        <Group gap="xs" align="end" wrap="wrap">
+          <TextInput label="Bezeichnung" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Müller GmbH — 200 Polos Stick" w={240} />
+          <CompanyPicker value={companyId} onChange={setCompanyId} label="Firma (Wer)" w={190} allowEmpty />
+          <TextInput label="Ansprechpartner (Wer)" value={contactName} onChange={(e) => setContactName(e.currentTarget.value)} placeholder="Max Mustermann" w={170} />
+          <TextInput label="E-Mail" value={email} onChange={(e) => setEmail(e.currentTarget.value)} w={170} />
+          <TextInput label="Telefon" value={phone} onChange={(e) => setPhone(e.currentTarget.value)} w={140} />
+          <Select label="Quelle (Wie)" value={source} onChange={(v) => v && setSource(v)} data={["WEB", "EMAIL", "SHOP", "TELEFON"]} w={120} />
+          <TextInput label="Wunschtermin (Wann)" type="date" value={expectedCloseAt} onChange={(e) => setExpectedCloseAt(e.currentTarget.value)} w={160} />
+          <TextInput label="Budget € (optional)" value={valueEur} onChange={(e) => setValueEur(e.currentTarget.value)} w={130} />
+          <TextInput label="Bedarf (Was/Wo)" value={text} onChange={(e) => setText(e.currentTarget.value)} placeholder="200 Polos, Brust-Logo gestickt, Lieferung Werk Nürnberg" w={320} />
+          <Button loading={busy} disabled={!name.trim()} onClick={async () => {
+            setBusy(true); setErr(null);
+            try {
+              const valueCents = valueEur.trim() ? Math.round(Number(valueEur.replace(",", ".")) * 100) : undefined;
+              await trpc.crm.create.mutate({
+                name: name.trim(), companyId: companyId || undefined, source: source as "WEB" | "EMAIL" | "SHOP" | "TELEFON",
+                contactName: contactName.trim() || undefined, email: email.trim() || undefined, phone: phone.trim() || undefined,
+                expectedCloseAt: expectedCloseAt || undefined,
+                valueCents: Number.isFinite(valueCents) ? valueCents : undefined, text: text.trim() || undefined,
+              });
+              setName(""); setCompanyId(""); setContactName(""); setEmail(""); setPhone(""); setExpectedCloseAt(""); setValueEur(""); setText(""); await load();
+            } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+          }}>Lead anlegen</Button>
+        </Group>
+      </Paper>
 
-      <AutoTable rows={rows as Row[]} hide={["note", "expectedCloseAt", "legacyKind", "legacyId", "probability"]} action={actionsFor} />
+      <AutoTable rows={rows as Row[]} hide={["id", "companyId", "email", "phone", "note", "probability", "lostReason", "legacyKind", "legacyId", "quoteId", "createdAt"]} action={actionsFor} />
     </>
   );
 }

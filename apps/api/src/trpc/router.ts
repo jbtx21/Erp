@@ -1994,11 +1994,13 @@ export const appRouter = router({
         phone: z.string().optional(),
         source: z.enum(["WEB", "EMAIL", "SHOP", "TELEFON"]).optional(),
         valueCents: z.number().int().nonnegative().optional(),
+        expectedCloseAt: z.string().optional(), // Wunsch-/Zieltermin (ISO)
         text: z.string().optional(),
         note: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
-        try { return await ctx.crm.create(input); } catch (e) { throw toTrpcError(e); }
+        const { expectedCloseAt, ...rest } = input;
+        try { return await ctx.crm.create({ ...rest, expectedCloseAt: expectedCloseAt ? new Date(expectedCloseAt) : null }); } catch (e) { throw toTrpcError(e); }
       }),
     advance: roleProcedure(...supplierRoles)
       .input(z.object({
