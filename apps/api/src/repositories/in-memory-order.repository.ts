@@ -7,6 +7,7 @@ import type {
   OrderRepository,
 } from "../modules/shop-import/order-import.service.js";
 import type { MappedOrder } from "@texma/shared";
+import { orderStatusMachine, type OrderStatus } from "@texma/shared";
 import type { OrderLineItem, OrderListItem, OrderQueryRepository } from "./read.js";
 
 interface StoredOrder {
@@ -125,6 +126,7 @@ export class InMemoryOrderRepository
         employeeNote: o.employeeNote,
         totalNetCents: o.totalNetCents,
         fastLane: o.fastLane ?? false,
+        allowedTransitions: [...orderStatusMachine.next(o.status as OrderStatus)],
         createdAt: o.createdAt,
       }));
   }

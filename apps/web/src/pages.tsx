@@ -2650,7 +2650,9 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
           },
         }]}
         action={!canAct ? undefined : (r) => {
-        const next = orderStatusMachine.next(String(r.status) as OrderStatus);
+        // Single Source of Truth: erlaubte Übergänge kommen vom Server (echter DB-Status),
+        // Fallback auf die geteilte Maschine. So bietet die UI nie einen illegalen Übergang an.
+        const next = (r.allowedTransitions as string[] | undefined) ?? orderStatusMachine.next(String(r.status) as OrderStatus);
         return (
           <Group gap={4} justify="flex-end" wrap="nowrap">
             <Button size="compact-xs" variant={r.fastLane === true ? "filled" : "subtle"} color="orange"

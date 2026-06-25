@@ -7,7 +7,7 @@ import { InMemoryApiTokenRepository } from "../repositories/in-memory-api-token.
 class MemAudit { async append(): Promise<void> { /* noop */ } }
 
 const ORDERS = [
-  { id: "o1", number: "AB-2026-0001", companyId: "c1", companyName: "Muster GmbH", status: "ANGELEGT", lieferstatus: "NICHT", fakturastatus: "NICHT", zugesagterLiefertermin: null, externalNumber: null, employeeNote: "Hinweis", totalNetCents: 50000, fastLane: false, createdAt: new Date(0) },
+  { id: "o1", number: "AB-2026-0001", companyId: "c1", companyName: "Muster GmbH", status: "ANGELEGT", lieferstatus: "NICHT", fakturastatus: "NICHT", zugesagterLiefertermin: null, externalNumber: null, employeeNote: "Hinweis", totalNetCents: 50000, fastLane: false, allowedTransitions: ["IN_BEARBEITUNG", "STORNIERT"], createdAt: new Date(0) },
 ];
 
 function deps(svc: ApiTokenService): RestV1Deps {

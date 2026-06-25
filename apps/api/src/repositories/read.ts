@@ -14,6 +14,8 @@ export interface OrderListItem {
   employeeNote: string | null; // Kundendaten — für PRODUKTION redigiert (RBAC)
   totalNetCents: number | null; // Auftragswert — für PRODUKTION redigiert (RBAC)
   fastLane: boolean; // Eilauftrag-Priorisierung (Xentral „Fast-Lane")
+  /** Server-berechnete erlaubte Status-Übergänge (Single Source of Truth, OrderStatus-Maschine). */
+  allowedTransitions: string[];
   createdAt: Date;
 }
 

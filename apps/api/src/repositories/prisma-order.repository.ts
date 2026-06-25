@@ -4,6 +4,7 @@
 
 import { prisma } from "@texma/db";
 import type { MappedOrder } from "@texma/shared";
+import { orderStatusMachine, type OrderStatus } from "@texma/shared";
 import type {
   CreatedOrder,
   OrderRepository,
@@ -112,6 +113,7 @@ export class PrismaOrderRepository
       employeeNote: r.employeeNote,
       totalNetCents: r.lines.reduce((sum, l) => sum + l.qty * l.unitNetCents, 0),
       fastLane: r.fastLane,
+      allowedTransitions: [...orderStatusMachine.next(r.status as OrderStatus)],
       createdAt: r.createdAt,
     }));
   }
