@@ -3036,6 +3036,66 @@ export function CompaniesPage({ focusId }: { focusId?: string } = {}): JSX.Eleme
   );
 }
 
+// Vertriebs-Pipeline (Funnel-Konsolidierung): EIN Einstieg, der die drei getrennt
+// modellierten CRM-Stufen — Leads → Anfragen → Verkaufschancen — als durchgängigen
+// Funnel zeigt (Live-Zähler + gewichteter Forecast) und in die Detailseiten springt.
+export function CrmPipelinePage({ onNavigate }: { onNavigate?: (k: string) => void } = {}): JSX.Element {
+  const [leads, setLeads] = useState<Awaited<ReturnType<typeof trpc.leads.list.query>>>([]);
+  const [inquiries, setInquiries] = useState<Awaited<ReturnType<typeof trpc.inquiries.list.query>>>([]);
+  const [pipeline, setPipeline] = useState<Awaited<ReturnType<typeof trpc.opportunities.pipeline.query>> | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    void (async () => {
+      try {
+        const [l, i, p] = await Promise.all([trpc.leads.list.query(), trpc.inquiries.list.query(), trpc.opportunities.pipeline.query()]);
+        setLeads(l); setInquiries(i); setPipeline(p); setErr(null);
+      } catch (e) { setErr(errMsg(e)); }
+    })();
+  }, []);
+
+  const countBy = <T extends { status: string }>(rows: T[]): Record<string, number> =>
+    rows.reduce((acc, r) => { acc[r.status] = (acc[r.status] ?? 0) + 1; return acc; }, {} as Record<string, number>);
+  const leadByStatus = countBy(leads);
+  const inqByStatus = countBy(inquiries);
+
+  const arrow = <Box style={{ display: "flex", alignItems: "center" }}><Text c="dimmed" fz={24}>→</Text></Box>;
+  const stage = (title: string, count: number, navKey: string, sub: ReactNode, color: string): JSX.Element => (
+    <Box p="md" style={{ flex: 1, minWidth: 200, border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, borderTop: `3px solid var(--mantine-color-${color}-6)` }}>
+      <Group justify="space-between" align="flex-start">
+        <Box>
+          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>{title}</Text>
+          <Text fz={34} fw={700} lh={1.1}>{count}</Text>
+        </Box>
+        <Button size="compact-xs" variant="light" onClick={() => onNavigate?.(navKey)}>öffnen →</Button>
+      </Group>
+      <Box mt="sm">{sub}</Box>
+    </Box>
+  );
+  const chips = (m: Record<string, number>): ReactNode => (
+    <Group gap={4}>{Object.entries(m).length === 0 ? <Text size="xs" c="dimmed">—</Text> : Object.entries(m).map(([s, n]) => <Badge key={s} size="sm" variant="light">{prettyStatus(s)}: {n}</Badge>)}</Group>
+  );
+
+  return (
+    <>
+      <DocListHeader module="CRM" title="Vertriebs-Pipeline"
+        hint="Durchgängiger Funnel über die drei CRM-Stufen: Leads (Roh-Interesse) → Anfragen (RFQ) → Verkaufschancen (gewichteter Forecast). Ein Einstieg, Detailpflege weiterhin je Stufe." />
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      <Group align="stretch" mt="md" gap="md" wrap="wrap">
+        {stage("1 · Leads", leads.length, "leads", chips(leadByStatus), "gray")}
+        {arrow}
+        {stage("2 · Anfragen", inquiries.length, "inquiries", chips(inqByStatus), "blue")}
+        {arrow}
+        {stage("3 · Verkaufschancen", pipeline?.openCount ?? 0, "opportunities",
+          <Box>
+            <Text size="xs" c="dimmed">Gewichteter Forecast</Text>
+            <Text fw={700} c="teal">{euro(pipeline?.forecastCents ?? 0)}</Text>
+          </Box>, "teal")}
+      </Group>
+      <Text size="xs" c="dimmed" mt="md">Hinweis: Die Stufen sind bewusst eigene Belegarten (Lead/Anfrage/Chance) mit eigener Statusmaschine — diese Seite bündelt nur den Überblick und die Navigation, ohne die Datenmodelle zu vermischen.</Text>
+    </>
+  );
+}
+
 export function InquiriesPage(): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [text, setText] = useState("");
