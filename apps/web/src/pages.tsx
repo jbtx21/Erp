@@ -4918,14 +4918,18 @@ function LagerVerfuegbarkeit(): JSX.Element {
   const [avail, setAvail] = useState<Awaited<ReturnType<typeof trpc.stock.availability.query>>>([]);
   const [reservs, setReservs] = useState<Awaited<ReturnType<typeof trpc.stock.reservations.query>>>([]);
   const [supply, setSupply] = useState<Awaited<ReturnType<typeof trpc.stock.supplyTimeline.query>>>([]);
+  const [shop, setShop] = useState<Awaited<ReturnType<typeof trpc.stock.shopStock.query>>>([]);
+  const [pufferDraft, setPufferDraft] = useState<Record<string, number>>({});
   const [rv, setRv] = useState(""); const [rl, setRl] = useState("TRANSFERDRUCK"); const [rq, setRq] = useState(0); const [rref, setRref] = useState("");
   const [tv, setTv] = useState(""); const [tl, setTl] = useState("TRANSFERDRUCK"); const [tq, setTq] = useState(0);
   const [msg, setMsg] = useState<string | null>(null); const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [a, r, s] = await Promise.all([trpc.stock.availability.query(), trpc.stock.reservations.query({ status: "AKTIV" }), trpc.stock.supplyTimeline.query()]);
-      setAvail(a); setReservs(r); setSupply(s); setErr(null);
+      const [a, r, s, sh] = await Promise.all([trpc.stock.availability.query(), trpc.stock.reservations.query({ status: "AKTIV" }), trpc.stock.supplyTimeline.query(), trpc.stock.shopStock.query()]);
+      setAvail(a); setReservs(r); setSupply(s); setShop(sh);
+      setPufferDraft(Object.fromEntries(sh.map((x) => [x.variantId, x.puffer])));
+      setErr(null);
     } catch (e) { setErr(errMsg(e)); }
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -5034,6 +5038,39 @@ function LagerVerfuegbarkeit(): JSX.Element {
             </Table.Tbody>
           </Table>
         </>
+      )}
+
+      <Title order={4} mt="xl">Shop-Bestand (Pseudo-Bestand)</Title>
+      <Text size="xs" c="dimmed" mb={4}>An den Shop gemeldeter Bestand = verfügbar (HAUPT) − Sicherheitspuffer, nie negativ. Der Puffer sichert eine Reserve (Eilaufträge/Muster) und verhindert Überverkauf. Der reale Push an den Shop läuft im Worker-Tier (liest diesen Puffer).</Text>
+      {shop.length === 0 ? <Text size="sm" c="dimmed">Kein bestandsgeführter Artikel im HAUPT-Lager.</Text> : (
+        <Table withTableBorder withColumnBorders w="auto" fz="sm">
+          <Table.Thead><Table.Tr>
+            <Table.Th>SKU</Table.Th><Table.Th>Artikel</Table.Th>
+            <Table.Th ta="right">Verfügbar (HAUPT)</Table.Th><Table.Th ta="right">Puffer</Table.Th>
+            <Table.Th ta="right">Shop-Bestand</Table.Th><Table.Th />
+          </Table.Tr></Table.Thead>
+          <Table.Tbody>
+            {shop.map((r) => {
+              const p = pufferDraft[r.variantId] ?? r.puffer;
+              const shopQty = Math.max(0, r.availableHaupt - Math.max(0, p));
+              return (
+                <Table.Tr key={r.variantId}>
+                  <Table.Td>{r.sku}</Table.Td><Table.Td>{r.name}</Table.Td>
+                  <Table.Td ta="right">{r.availableHaupt}</Table.Td>
+                  <Table.Td ta="right"><NumberInput size="xs" w={90} min={0} value={p} onChange={(v) => setPufferDraft((d) => ({ ...d, [r.variantId]: Number(v) || 0 }))} /></Table.Td>
+                  <Table.Td ta="right"><Text fw={600} c={shopQty === 0 ? "red" : undefined}>{shopQty}</Text></Table.Td>
+                  <Table.Td>
+                    {p !== r.puffer && <Button size="compact-xs" onClick={async () => {
+                      setErr(null); setMsg(null);
+                      try { await trpc.stock.setShopPuffer.mutate({ variantId: r.variantId, puffer: p }); setMsg(`Puffer für ${r.sku} gespeichert.`); await load(); }
+                      catch (e) { setErr(errMsg(e)); }
+                    }}>Speichern</Button>}
+                  </Table.Td>
+                </Table.Tr>
+              );
+            })}
+          </Table.Tbody>
+        </Table>
       )}
     </>
   );

@@ -7,7 +7,7 @@
 // Flanke benachrichtigt (StockThreshold.alerting verhindert wiederholtes Spammen).
 // Die On-Hand-Salden kommen aus dem bestehenden Bewegungs-Ledger (StockService).
 
-import type { StockLager } from "@texma/shared";
+import { shopStockQty, type StockLager } from "@texma/shared";
 
 export interface ReserveInput {
   variantId: string;
@@ -111,6 +111,20 @@ export interface ReservationRepository {
   setAlerting(variantId: string, lager: StockLager, alerting: boolean): Promise<void>;
   /** Bestell-/Einlagerungs-Historie je Artikel (aus Bestellungen + Eingangsbelegen). */
   supplyTimeline(): Promise<SupplyRow[]>;
+  /** Shop-Sicherheitspuffer je Variante (`variantId` → puffer); fehlende = 0. */
+  shopPuffers(): Promise<Record<string, number>>;
+  /** Setzt den Shop-Sicherheitspuffer einer Variante (≥ 0). */
+  setShopPuffer(variantId: string, puffer: number): Promise<void>;
+}
+
+/** Shop-Bestandszeile: verfügbarer HAUPT-Bestand, Puffer und der an den Shop gemeldete Bestand. */
+export interface ShopStockRow {
+  variantId: string;
+  sku: string;
+  name: string;
+  availableHaupt: number;
+  puffer: number;
+  shopQty: number;
 }
 
 export class ReservationError extends Error {}
@@ -195,6 +209,31 @@ export class ReservationService {
       }
     }
     return rows;
+  }
+
+  // ── Shop-Bestand (Pseudo-Bestand, Xentral-Vorbild) ────────────────────────
+  /** Je Variante: verfügbarer HAUPT-Bestand (Ist − reserviert), Puffer und gemeldeter Shop-Bestand. */
+  async shopStock(): Promise<ShopStockRow[]> {
+    const [balances, reservedMap, puffers] = await Promise.all([
+      this.onHand.listBalances(),
+      this.repo.reservedMap(),
+      this.repo.shopPuffers(),
+    ]);
+    const rows: ShopStockRow[] = [];
+    for (const b of balances) {
+      const onHandQty = b.balances.HAUPT ?? 0;
+      const reserved = reservedMap[key(b.variantId, "HAUPT")] ?? 0;
+      const puffer = puffers[b.variantId] ?? 0;
+      if (onHandQty === 0 && puffer === 0) continue; // nur relevante Zeilen
+      const availableHaupt = onHandQty - reserved;
+      rows.push({ variantId: b.variantId, sku: b.sku, name: b.name, availableHaupt, puffer, shopQty: shopStockQty(availableHaupt, puffer) });
+    }
+    return rows;
+  }
+
+  /** Setzt den Shop-Sicherheitspuffer einer Variante (≥ 0). */
+  async setShopPuffer(variantId: string, puffer: number): Promise<void> {
+    await this.repo.setShopPuffer(variantId, Math.max(0, Math.trunc(puffer)));
   }
 
   // ── Meldebestände ─────────────────────────────────────────────────────────

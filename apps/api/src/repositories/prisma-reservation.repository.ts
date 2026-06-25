@@ -120,4 +120,13 @@ export class PrismaReservationRepository implements ReservationRepository {
     for (const r of map.values()) r.unterwegs = Math.max(0, r.orderedQty - r.receivedQty);
     return [...map.values()];
   }
+
+  async shopPuffers(): Promise<Record<string, number>> {
+    const rows = await prisma.variant.findMany({ where: { shopPuffer: { gt: 0 } }, select: { id: true, shopPuffer: true } });
+    return Object.fromEntries(rows.map((r) => [r.id, r.shopPuffer]));
+  }
+
+  async setShopPuffer(variantId: string, puffer: number): Promise<void> {
+    await prisma.variant.update({ where: { id: variantId }, data: { shopPuffer: puffer } });
+  }
 }

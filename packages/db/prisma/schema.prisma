@@ -454,6 +454,9 @@ model Variant {
   bundleUsages     VariantComponent[] @relation("BundleComponent") // Verwendung als Komponente
   gtin        String? // EAN/GTIN-13 (B18)
   weightGrams Int? // B18
+  // Shop-Sicherheitspuffer (Pseudo-Bestand, Xentral-Vorbild): an den Shop gemeldeter Bestand =
+  // max(0, verfügbar(HAUPT) − shopPuffer). Schützt vor Überverkauf / sichert eine Reserve.
+  shopPuffer  Int     @default(0)
   mediaAssets MediaAsset[] // B18
   sampleLoans SampleLoan[] // Muster-Leihgut (B5)
   createdAt  DateTime @default(now())

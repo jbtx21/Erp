@@ -1436,6 +1436,11 @@ export const appRouter = router({
 
     // Verfügbarkeit (Ist − reserviert), Vormerkung gegen Aufträge, Meldebestände.
     availability: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.reservations.availability()),
+    // Shop-Bestand (Pseudo-Bestand): gemeldeter Bestand = verfügbar(HAUPT) − Puffer (≥ 0).
+    shopStock: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.reservations.shopStock()),
+    setShopPuffer: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ variantId: z.string().min(1), puffer: z.number().int().min(0) }))
+      .mutation(async ({ input, ctx }) => { await ctx.reservations.setShopPuffer(input.variantId, input.puffer); return { ok: true as const }; }),
     reservations: roleProcedure(...supplierRoles)
       .input(z.object({ variantId: z.string().optional(), orderId: z.string().optional(), status: z.enum(["AKTIV", "ERLEDIGT", "STORNIERT"]).optional(), lager: z.enum(["HAUPT", "MUSTER", "SHOWROOM", "TRANSFERDRUCK"]).optional() }).optional())
       .query(({ input, ctx }) => ctx.reservations.listReservations(input)),

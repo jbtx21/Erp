@@ -24,6 +24,7 @@ export * from "./invoice.js";
 export * from "./quote-totals.js";
 export * from "./datev.js";
 export * from "./kontenrahmen.js";
+export * from "./shop-stock.js";
 export * from "./einvoice.js";
 export * from "./procurement.js";
 export * from "./subproduction.js";

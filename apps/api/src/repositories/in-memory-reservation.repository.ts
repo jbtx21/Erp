@@ -104,4 +104,12 @@ export class InMemoryReservationRepository implements ReservationRepository {
   async supplyTimeline(): Promise<SupplyRow[]> {
     return this.supply.map((r) => ({ ...r }));
   }
+
+  private readonly puffers = new Map<string, number>();
+  async shopPuffers(): Promise<Record<string, number>> {
+    return Object.fromEntries([...this.puffers].filter(([, v]) => v > 0));
+  }
+  async setShopPuffer(variantId: string, puffer: number): Promise<void> {
+    this.puffers.set(variantId, puffer);
+  }
 }
