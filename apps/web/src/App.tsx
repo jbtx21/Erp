@@ -306,6 +306,15 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<voi
     if (typeof location !== "undefined") location.hash = navKey;
   }, []);
 
+  // Deep-Linking (P0): Hash ↔ Ansicht in BEIDE Richtungen synchron halten. Browser-
+  // Zurück/Vor, Lesezeichen und manuelles Ändern des #hash wechseln die Ansicht — nicht
+  // nur die Sidebar. (setActive schreibt den Hash; hier reagiert die Ansicht auf den Hash.)
+  useEffect(() => {
+    const onHash = (): void => { setActiveState(hashKey()); setFocus(null); };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
   // Genauer Seitentitel je Bereich (Web Interface Guidelines: accurate page titles).
   useEffect(() => {
     if (typeof document !== "undefined") document.title = `TEXMA ERP · ${activeLabel(active)}`;

@@ -5,6 +5,7 @@ export interface OrderListItem {
   id: string;
   number: string;
   companyId: string;
+  companyName: string | null; // Klarname statt Kürzel; für PRODUKTION redigiert (RBAC)
   status: string; // OrderStatus (B9) — Workflow-Übergänge via F2
   lieferstatus: string; // Teil-Status (G-4): NICHT/TEILWEISE/VOLL
   fakturastatus: string; // Teil-Status (G-4): NICHT/TEILWEISE/VOLL

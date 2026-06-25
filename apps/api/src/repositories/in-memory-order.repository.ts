@@ -111,6 +111,7 @@ export class InMemoryOrderRepository
         id: o.id,
         number: o.number,
         companyId: o.companyId,
+        companyName: o.companyId, // In-Memory: kein Stammsatz-Join → ID als Fallback
         status: o.status,
         lieferstatus: o.lieferstatus,
         fakturastatus: o.fakturastatus,

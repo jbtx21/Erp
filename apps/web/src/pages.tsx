@@ -13,6 +13,7 @@ import { euro, numTd, statusMantineColor, prettyStatus } from "./theme.js";
 import { MultiLineChart } from "./charts.js";
 import { DocFormShell, DocListHeader, StatusDot } from "./doc-layout.js";
 import { OrderAmpelDetail } from "./StatusAmpel.js";
+import { useUnsavedGuard } from "./use-unsaved-guard.js";
 
 type Row = Record<string, unknown>;
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
@@ -86,6 +87,9 @@ function fmtCell(key: string, v: unknown): ReactNode {
     return <Badge color={statusMantineColor[v] ?? "gray"} variant="light">{prettyStatus(v)}</Badge>;
   if (/(at|date|termin|am)$/i.test(key) && typeof v === "string" && !Number.isNaN(Date.parse(v)))
     return new Date(v).toLocaleDateString("de-DE");
+  // Varianten-Attribute [{name,value}] lesbar rendern: „Navy / L" statt Roh-JSON (P1).
+  if (Array.isArray(v) && v.length > 0 && v.every((x) => x !== null && typeof x === "object" && "value" in (x as object)))
+    return (v as Array<{ value: unknown }>).map((x) => String(x.value)).join(" / ");
   if (typeof v === "object") return <code style={{ fontSize: 11 }}>{JSON.stringify(v)}</code>;
   if (/cents$/i.test(key) && typeof v === "number") return euro(v);
   // Negative Mengen (v. a. Lagerbestand) sind fast immer ein Fehlerzustand → rot markieren.
@@ -1597,6 +1601,8 @@ export function QuotesPage(): JSX.Element {
   type QuoteListRow = Awaited<ReturnType<typeof trpc.quotes.list.query>>[number];
   const [rows, setRows] = useState<QuoteListRow[]>([]);
   const [view, setView] = useState<"list" | "create">("list");
+  const [dirty, setDirty] = useState(false); // ungespeicherte Änderungen im Angebots-Editor
+  useUnsavedGuard(view === "create" && dirty);
   const [editId, setEditId] = useState<string | null>(null); // gesetzt = Bearbeitung statt Neuanlage
   const [convertId, setConvertId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -1664,7 +1670,7 @@ export function QuotesPage(): JSX.Element {
 
   const resetForm = (): void => {
     setLines([{ description: "", qty: 10, euro: 12.9, kind: "TEXTIL" }]); setCompanyId(""); setTerms(""); setEditId(null);
-    setZahlungszielTage(""); setIncoterm(""); setVersandregel(""); setExempt(false);
+    setZahlungszielTage(""); setIncoterm(""); setVersandregel(""); setExempt(false); setDirty(false);
   };
   const startEdit = async (id: string): Promise<void> => {
     setErr(null);
@@ -1675,7 +1681,7 @@ export function QuotesPage(): JSX.Element {
       setZahlungszielTage(q.zahlungszielTage ?? ""); setIncoterm(q.incoterm ?? ""); setVersandregel(q.versandregel ?? "");
       if (q.gueltigBisAm) setGueltigBis(new Date(q.gueltigBisAm).toISOString().slice(0, 10));
       setLines(fromStoredLines(q.lines));
-      setView("create");
+      setDirty(false); setView("create");
     } catch (e) { setErr(errMsg(e)); }
   };
   const saveQuote = async (): Promise<void> => {
@@ -1727,13 +1733,13 @@ export function QuotesPage(): JSX.Element {
               <Select label="Bestellart" w={170} data={[{ value: "SALES", label: "Vertrieb" }, { value: "MAINTENANCE", label: "Wartung" }, { value: "SHOPPING_CART", label: "Warenkorb" }]} value={orderType} onChange={(v) => v && setOrderType(v)} />
               <Select label="Angebot für" w={140} data={[{ value: "CUSTOMER", label: "Kunde" }, { value: "LEAD", label: "Lead" }]} value={quotationTo} onChange={(v) => v && setQuotationTo(v)} />
               <TextInput label="Gültig bis" type="date" value={gueltigBis} onChange={(e) => setGueltigBis(e.currentTarget.value)} w={150} />
-              <CompanyPicker value={companyId} onChange={setCompanyId} w={240} />
+              <CompanyPicker value={companyId} onChange={(v) => { setCompanyId(v); setDirty(true); }} w={240} />
             </Group>
             <Collapsible title="Währung und Preisliste">
               <Text size="sm" c="dimmed">Währung: <b>EUR</b> · Preisfindung über Preisgruppe des Kunden + Mengenstaffeln (B4).</Text>
             </Collapsible>
             <Title order={5} mt="lg">Artikel</Title>
-            <LinesEditor lines={lines} onChange={setLines} quoteMode companyId={companyId || undefined} taxRate={exempt ? 0 : globalTaxRate} />
+            <LinesEditor lines={lines} onChange={(l) => { setLines(l); setDirty(true); }} quoteMode companyId={companyId || undefined} taxRate={exempt ? 0 : globalTaxRate} />
             <Collapsible title="Stickerei-Mengenstaffeln je Logo (Referenz)">
               <StickereiStaffelnSection />
             </Collapsible>
@@ -2413,6 +2419,8 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
   const [editOrderId, setEditOrderId] = useState<string | null>(null); // gesetzt = Auftrag bearbeiten
   const [newCompany, setNewCompany] = useState("co-muster");
   const [newLines, setNewLines] = useState<EditorLine[]>([{ description: "", qty: 10, euro: 12.9, kind: "TEXTIL" }]);
+  const [dirty, setDirty] = useState(false); // ungespeicherte Änderungen im Auftrags-Editor
+  useUnsavedGuard(showCreate && dirty);
 
   const load = useCallback(async () => {
     try { setRows((await trpc.shopOrders.list.query({ limit: 100 })) as Row[]); setErr(null); }
@@ -2423,7 +2431,7 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
   useEffect(() => { if (focusId) setTermOrder(focusId); }, [focusId]);
 
   const canAct = role === "ADMIN" || role === "BUERO";
-  const resetOrderForm = (): void => { setNewLines([{ description: "", qty: 10, euro: 12.9, kind: "TEXTIL" }]); setEditOrderId(null); setShowCreate(false); };
+  const resetOrderForm = (): void => { setNewLines([{ description: "", qty: 10, euro: 12.9, kind: "TEXTIL" }]); setEditOrderId(null); setShowCreate(false); setDirty(false); };
   const startEditOrder = async (id: string): Promise<void> => {
     setErr(null);
     try {
@@ -2436,7 +2444,7 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
       if (o.inProduction) hinweise.push("in Produktion — die Stückliste wird beim Speichern neu aufgebaut");
       if (o.delivered) hinweise.push("bereits teilgeliefert — gelieferte Mengen können nicht reduziert/entfernt werden");
       if (hinweise.length) window.alert(`Hinweis zu Auftrag ${o.number}: ${hinweise.join("; ")}.`);
-      setEditOrderId(id); setNewCompany(o.companyId); setNewLines(fromStoredLines(o.lines)); setShowCreate(true);
+      setEditOrderId(id); setNewCompany(o.companyId); setNewLines(fromStoredLines(o.lines)); setShowCreate(true); setDirty(false);
     } catch (e) { setErr(errMsg(e)); }
   };
   const saveOrder = async (): Promise<void> => {
@@ -2485,8 +2493,8 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
                 {editOrderId && <Tabs.Tab value="ampel">Auftragsampel</Tabs.Tab>}
               </Tabs.List>
               <Tabs.Panel value="details" pt="md">
-                <CompanyPicker value={newCompany} onChange={setNewCompany} w={240} />
-                <LinesEditor lines={newLines} onChange={setNewLines} companyId={newCompany || undefined} taxRate={globalTaxRate} />
+                <CompanyPicker value={newCompany} onChange={(v) => { setNewCompany(v); setDirty(true); }} w={240} />
+                <LinesEditor lines={newLines} onChange={(l) => { setNewLines(l); setDirty(true); }} companyId={newCompany || undefined} taxRate={globalTaxRate} />
               </Tabs.Panel>
               <Tabs.Panel value="stickerei" pt="md">
                 <StickereiStaffelnSection />
@@ -2500,7 +2508,7 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
           </DocFormShell>
         </Box>
       )}
-      <AutoTable rows={rows} hide={["rawPayload"]} action={!canAct ? undefined : (r) => {
+      <AutoTable rows={rows} hide={["rawPayload", "companyId"]} action={!canAct ? undefined : (r) => {
         const next = orderStatusMachine.next(String(r.status) as OrderStatus);
         return (
           <Group gap={4} justify="flex-end" wrap="nowrap">
