@@ -3560,6 +3560,7 @@ export function CostCentersPage(): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [nummer, setNummer] = useState("");
   const [name, setName] = useState("");
+  const [edit, setEdit] = useState<{ id: string; nummer: string; name: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -3584,12 +3585,30 @@ export function CostCentersPage(): JSX.Element {
       </Group>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
       <AutoTable rows={rows} action={(r) => (
-        <Button size="compact-xs" color="red" variant="light" onClick={async () => {
-          if (typeof window !== "undefined" && !window.confirm(`Kostenstelle „${String(r.nummer)}" löschen?`)) return;
-          try { await trpc.costCenters.delete.mutate({ id: String(r.id) }); await load(); }
-          catch (e) { setErr(errMsg(e)); }
-        }}>Löschen</Button>
+        <Group gap={4} justify="flex-end" wrap="nowrap">
+          <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setEdit({ id: String(r.id), nummer: String(r.nummer), name: String(r.name) })}>Bearbeiten</Button>
+          <Button size="compact-xs" color="red" variant="light" onClick={async () => {
+            if (typeof window !== "undefined" && !window.confirm(`Kostenstelle „${String(r.nummer)}" löschen?`)) return;
+            try { await trpc.costCenters.delete.mutate({ id: String(r.id) }); await load(); }
+            catch (e) { setErr(errMsg(e)); }
+          }}>Löschen</Button>
+        </Group>
       )} />
+      <Modal opened={!!edit} onClose={() => setEdit(null)} title="Kostenstelle bearbeiten" size="sm">
+        {edit && (
+          <Stack gap="sm">
+            <TextInput label="Nummer" value={edit.nummer} onChange={(e) => setEdit({ ...edit, nummer: e.currentTarget.value })} />
+            <TextInput label="Name" value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.currentTarget.value })} />
+            <Group justify="flex-end">
+              <Button variant="default" onClick={() => setEdit(null)}>Abbrechen</Button>
+              <Button disabled={!edit.nummer.trim() || !edit.name.trim()} onClick={async () => {
+                try { await trpc.costCenters.update.mutate({ id: edit.id, nummer: edit.nummer.trim(), name: edit.name.trim() }); setEdit(null); await load(); }
+                catch (e) { setErr(errMsg(e)); }
+              }}>Speichern</Button>
+            </Group>
+          </Stack>
+        )}
+      </Modal>
     </>
   );
 }

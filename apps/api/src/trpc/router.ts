@@ -2207,6 +2207,9 @@ export const appRouter = router({
     create: roleProcedure(...supplierRoles)
       .input(z.object({ nummer: z.string().min(1), name: z.string().min(1) }))
       .mutation(({ input, ctx }) => ctx.costCenters.create(input.nummer, input.name)),
+    update: roleProcedure(...supplierRoles)
+      .input(z.object({ id: z.string().min(1), nummer: z.string().min(1), name: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => { try { await ctx.costCenters.update(input.id, input.nummer, input.name); return { ok: true as const }; } catch (e) { throw toTrpcError(e); } }),
     delete: roleProcedure(...supplierRoles)
       .input(z.object({ id: z.string().min(1) }))
       .mutation(({ input, ctx }) => ctx.costCenters.remove(input.id)),

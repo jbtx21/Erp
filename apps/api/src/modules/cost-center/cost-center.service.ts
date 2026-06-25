@@ -14,6 +14,7 @@ export interface CostCenterRow {
 export interface CostCenterRepository {
   create(nummer: string, name: string): Promise<{ id: string; nummer: string }>;
   list(): Promise<CostCenterRow[]>;
+  update(id: string, nummer: string, name: string): Promise<void>;
   remove(id: string): Promise<void>;
   assignInvoice(invoiceId: string, costCenterId: string | null): Promise<void>;
   /** Rechnungs-Nettobeträge mit Kostenstellen-Zuordnung (null = nicht zugeordnet). */
@@ -32,6 +33,13 @@ export class CostCenterService {
       buildEntry({ entity: "CostCenter", entityId: cc.id, action: "CREATE", after: { nummer, name } })
     );
     return cc;
+  }
+
+  /** Bearbeitet Nummer/Bezeichnung einer Kostenstelle (GoBD-auditiert). */
+  async update(id: string, nummer: string, name: string): Promise<void> {
+    if (!nummer.trim() || !name.trim()) throw new Error("Nummer und Bezeichnung sind Pflicht.");
+    await this.repo.update(id, nummer.trim(), name.trim());
+    await this.audit.append(buildEntry({ entity: "CostCenter", entityId: id, action: "UPDATE", after: { nummer: nummer.trim(), name: name.trim() } }));
   }
 
   /** Alle Kostenstellen (Stammdaten). */
