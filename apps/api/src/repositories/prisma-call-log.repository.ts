@@ -8,6 +8,7 @@ import type {
   CallLogRow,
   CallStatus,
   CreateCallLogInput,
+  UpdateCallLogInput,
 } from "../modules/call-log/call-log.service.js";
 
 export class PrismaCallLogRepository implements CallLogRepository {
@@ -53,6 +54,23 @@ export class PrismaCallLogRepository implements CallLogRepository {
       status: r.status as CallStatus,
       createdAt: r.createdAt,
     }));
+  }
+
+  async update(id: string, patch: UpdateCallLogInput): Promise<void> {
+    await prisma.callLog.update({
+      where: { id },
+      data: {
+        ...(patch.richtung !== undefined ? { richtung: patch.richtung } : {}),
+        ...(patch.telefonnummer !== undefined ? { telefonnummer: patch.telefonnummer } : {}),
+        ...(patch.grund !== undefined ? { grund: patch.grund } : {}),
+        ...(patch.kontaktName !== undefined ? { kontaktName: patch.kontaktName } : {}),
+        ...(patch.companyId !== undefined ? { companyId: patch.companyId } : {}),
+        ...(patch.zeitpunkt !== undefined && patch.zeitpunkt !== null ? { zeitpunkt: patch.zeitpunkt } : {}),
+        ...(patch.dauerSek !== undefined ? { dauerSek: patch.dauerSek } : {}),
+        ...(patch.ergebnis !== undefined ? { ergebnis: patch.ergebnis } : {}),
+        ...(patch.status !== undefined ? { status: patch.status } : {}),
+      },
+    });
   }
 
   async setStatus(id: string, status: CallStatus): Promise<void> {

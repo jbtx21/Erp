@@ -6,6 +6,7 @@ import type {
   CallLogRow,
   CallStatus,
   CreateCallLogInput,
+  UpdateCallLogInput,
 } from "../modules/call-log/call-log.service.js";
 
 interface Stored extends Omit<CallLogRow, "companyName"> {}
@@ -45,6 +46,20 @@ export class InMemoryCallLogRepository implements CallLogRepository {
       .filter((c) => (filter?.status ? c.status === filter.status : true))
       .sort((a, b) => b.zeitpunkt.getTime() - a.zeitpunkt.getTime())
       .map((c) => ({ ...c, companyName: c.companyId ? (this.companyNames[c.companyId] ?? null) : null }));
+  }
+
+  async update(id: string, patch: UpdateCallLogInput): Promise<void> {
+    const c = this.calls.get(id);
+    if (!c) return;
+    if (patch.richtung !== undefined) c.richtung = patch.richtung;
+    if (patch.telefonnummer !== undefined) c.telefonnummer = patch.telefonnummer;
+    if (patch.grund !== undefined) c.grund = patch.grund;
+    if (patch.kontaktName !== undefined) c.kontaktName = patch.kontaktName;
+    if (patch.companyId !== undefined) c.companyId = patch.companyId;
+    if (patch.zeitpunkt !== undefined && patch.zeitpunkt !== null) c.zeitpunkt = patch.zeitpunkt;
+    if (patch.dauerSek !== undefined) c.dauerSek = patch.dauerSek;
+    if (patch.ergebnis !== undefined) c.ergebnis = patch.ergebnis;
+    if (patch.status !== undefined) c.status = patch.status;
   }
 
   async setStatus(id: string, status: CallStatus): Promise<void> {

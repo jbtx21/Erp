@@ -2101,6 +2101,23 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         try { return await ctx.callLogs.setStatus(input.id, input.status); } catch (e) { throw toTrpcError(e); }
       }),
+    update: roleProcedure(...supplierRoles)
+      .input(z.object({
+        id: z.string().min(1),
+        richtung: z.enum(["EINGEHEND", "AUSGEHEND"]).optional(),
+        telefonnummer: z.string().min(1).optional(),
+        grund: z.string().min(1).optional(),
+        kontaktName: z.string().nullable().optional(),
+        companyId: z.string().nullable().optional(),
+        zeitpunkt: z.coerce.date().optional(),
+        dauerSek: z.number().int().nonnegative().nullable().optional(),
+        ergebnis: z.string().nullable().optional(),
+        status: z.enum(["ERLEDIGT", "OFFEN", "RUECKRUF"]).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { id, ...patch } = input;
+        try { await ctx.callLogs.update(id, patch); return { ok: true as const }; } catch (e) { throw toTrpcError(e); }
+      }),
   }),
 
   // Multi-Mailkonten (IONOS): mehrere Konten, je eines Standard ein-/ausgehend, Passwort

@@ -3339,8 +3339,68 @@ export function LeadsPage({ focusId }: { focusId?: string } = {}): JSX.Element {
 
 // Telefon-Modul / Anrufliste: erfassen wer/wann/weswegen telefoniert hat, optional je
 // Firma, mit Rückruf-Nachverfolgung (Status RUECKRUF → ERLEDIGT).
+type CallRow = Awaited<ReturnType<typeof trpc.callLogs.list.query>>[number];
+function CallLogEditModal({ row, onClose, onSaved }: { row: CallRow | null; onClose: () => void; onSaved: () => void }): JSX.Element {
+  const [richtung, setRichtung] = useState("EINGEHEND");
+  const [telefonnummer, setTelefonnummer] = useState("");
+  const [kontaktName, setKontaktName] = useState("");
+  const [companyId, setCompanyId] = useState("");
+  const [grund, setGrund] = useState("");
+  const [dauer, setDauer] = useState<number | "">("");
+  const [ergebnis, setErgebnis] = useState("");
+  const [status, setStatus] = useState("ERLEDIGT");
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!row) return;
+    setRichtung(row.richtung ?? "EINGEHEND"); setTelefonnummer(row.telefonnummer ?? ""); setKontaktName(row.kontaktName ?? "");
+    setCompanyId(row.companyId ?? ""); setGrund(row.grund ?? ""); setDauer(row.dauerSek ?? "");
+    setErgebnis(row.ergebnis ?? ""); setStatus(row.status ?? "ERLEDIGT"); setErr(null);
+  }, [row]);
+  const save = async () => {
+    if (!row) return;
+    setBusy(true); setErr(null);
+    try {
+      await trpc.callLogs.update.mutate({
+        id: String(row.id), richtung: richtung as "EINGEHEND" | "AUSGEHEND",
+        telefonnummer: telefonnummer.trim(), grund: grund.trim(),
+        kontaktName: kontaktName.trim() || null, companyId: companyId || null,
+        dauerSek: typeof dauer === "number" ? dauer : null, ergebnis: ergebnis.trim() || null,
+        status: status as "ERLEDIGT" | "OFFEN" | "RUECKRUF",
+      });
+      onSaved(); onClose();
+    } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+  return (
+    <Modal opened={!!row} onClose={onClose} title="Anruf bearbeiten" size="lg">
+      {err && <Alert color="red" mb="sm">{err}</Alert>}
+      <Stack gap="sm">
+        <Group grow>
+          <Select label="Richtung" value={richtung} onChange={(v) => v && setRichtung(v)} data={[{ value: "EINGEHEND", label: "Eingehend" }, { value: "AUSGEHEND", label: "Ausgehend" }]} />
+          <Select label="Status" value={status} onChange={(v) => v && setStatus(v)} data={[{ value: "ERLEDIGT", label: "Erledigt" }, { value: "OFFEN", label: "Offen" }, { value: "RUECKRUF", label: "Rückruf" }]} />
+        </Group>
+        <Group grow>
+          <TextInput label="Telefonnr." value={telefonnummer} onChange={(e) => setTelefonnummer(e.currentTarget.value)} required />
+          <TextInput label="Kontakt" value={kontaktName} onChange={(e) => setKontaktName(e.currentTarget.value)} />
+        </Group>
+        <CompanyPicker value={companyId} onChange={setCompanyId} label="Firma" allowEmpty />
+        <TextInput label="Grund/Anliegen" value={grund} onChange={(e) => setGrund(e.currentTarget.value)} required />
+        <Group grow>
+          <NumberInput label="Dauer (s)" value={dauer} onChange={(v) => setDauer(typeof v === "number" ? v : "")} min={0} />
+          <TextInput label="Ergebnis" value={ergebnis} onChange={(e) => setErgebnis(e.currentTarget.value)} />
+        </Group>
+        <Group justify="flex-end" mt="xs">
+          <Button variant="default" onClick={onClose}>Abbrechen</Button>
+          <Button loading={busy} disabled={!telefonnummer.trim() || !grund.trim()} onClick={() => void save()}>Speichern</Button>
+        </Group>
+      </Stack>
+    </Modal>
+  );
+}
+
 export function CallLogsPage(): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
+  const [editRow, setEditRow] = useState<CallRow | null>(null);
   const [richtung, setRichtung] = useState("EINGEHEND");
   const [telefonnummer, setTelefonnummer] = useState("");
   const [kontaktName, setKontaktName] = useState("");
@@ -3368,9 +3428,12 @@ export function CallLogsPage(): JSX.Element {
 
   const actionsFor = (r: Row): ReactNode => {
     const id = String(r.id);
-    return String(r.status) === "RUECKRUF"
-      ? <Button size="compact-xs" color="green" onClick={() => void act(() => trpc.callLogs.setStatus.mutate({ id, status: "ERLEDIGT" }))}>Rückruf erledigt</Button>
-      : null;
+    return (
+      <Group gap={4} justify="flex-end" wrap="nowrap">
+        <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setEditRow((rows as unknown as CallRow[]).find((x) => String(x.id) === id) ?? null)}>Bearbeiten</Button>
+        {String(r.status) === "RUECKRUF" && <Button size="compact-xs" color="green" onClick={() => void act(() => trpc.callLogs.setStatus.mutate({ id, status: "ERLEDIGT" }))}>Rückruf erledigt</Button>}
+      </Group>
+    );
   };
 
   const create = async () => {
@@ -3414,6 +3477,7 @@ export function CallLogsPage(): JSX.Element {
       </Group>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
       <AutoTable rows={rows} hide={["id", "companyId", "createdAt"]} action={actionsFor} />
+      <CallLogEditModal row={editRow} onClose={() => setEditRow(null)} onSaved={() => void load()} />
     </>
   );
 }

@@ -41,9 +41,23 @@ export interface CallLogFilter {
   status?: CallStatus | null;
 }
 
+/** Bearbeitbare Felder eines Anrufeintrags. */
+export interface UpdateCallLogInput {
+  richtung?: CallDirection;
+  telefonnummer?: string;
+  grund?: string;
+  kontaktName?: string | null;
+  companyId?: string | null;
+  zeitpunkt?: Date | null;
+  dauerSek?: number | null;
+  ergebnis?: string | null;
+  status?: CallStatus;
+}
+
 export interface CallLogRepository {
   create(input: CreateCallLogInput): Promise<{ id: string }>;
   list(filter?: CallLogFilter): Promise<CallLogRow[]>;
+  update(id: string, patch: UpdateCallLogInput): Promise<void>;
   setStatus(id: string, status: CallStatus): Promise<void>;
   /** Anzahl offener Rückrufe (für ein Badge/Arbeitsliste). */
   openCallbackCount(): Promise<number>;
@@ -87,6 +101,18 @@ export class CallLogService {
   /** Anrufliste (neueste zuerst), optional je Firma/Status gefiltert. */
   async list(filter?: CallLogFilter): Promise<CallLogRow[]> {
     return this.repo.list(filter);
+  }
+
+  /** Bearbeitet einen Anrufeintrag (GoBD-auditiert). */
+  async update(id: string, patch: UpdateCallLogInput): Promise<void> {
+    if (patch.telefonnummer !== undefined && !patch.telefonnummer.trim()) throw new CallLogError("Telefonnummer ist Pflicht.");
+    if (patch.grund !== undefined && !patch.grund.trim()) throw new CallLogError("Grund/Anliegen ist Pflicht.");
+    if (patch.dauerSek != null && (!Number.isFinite(patch.dauerSek) || patch.dauerSek < 0)) throw new CallLogError("Dauer darf nicht negativ sein.");
+    const clean: UpdateCallLogInput = { ...patch };
+    if (clean.telefonnummer !== undefined) clean.telefonnummer = clean.telefonnummer.trim();
+    if (clean.grund !== undefined) clean.grund = clean.grund.trim();
+    await this.repo.update(id, clean);
+    await this.audit.append(buildEntry({ entity: "CallLog", entityId: id, action: "UPDATE", after: { ...clean } }));
   }
 
   /** Setzt den Status (z. B. offenen Rückruf auf ERLEDIGT). */
