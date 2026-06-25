@@ -2643,7 +2643,7 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
           <Tabs.Tab value="ampel">Ampel</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="liste" pt="md">
-      <AutoTable rows={rows} hide={["rawPayload", "companyId", "fastLane"]}
+      <AutoTable rows={rows} hide={["rawPayload", "companyId", "fastLane", "allowedTransitions"]}
         bulkActions={[{
           label: "CSV-Export der Auswahl",
           run: (selected) => {

@@ -207,15 +207,36 @@ async function main(): Promise<void> {
     await prisma.costCenter.upsert({ where: { id }, update: {}, create: { id, nummer, name } });
   }
 
-  // Nummernkreise auf die geseedeten Belege heben, damit die echte Nummernvergabe
-  // (NumberingService.next) kollisionsfrei dahinter weiterzählt (sonst AB-2026-0001-Kollision).
-  for (const [key, next] of [["ORDER", 4], ["QUOTE", 2], ["PRODUCTION_ORDER", 3], ["INVOICE", 2], ["INQUIRY", 2]] as const) {
+  // Nummernkreise auf das TATSÄCHLICHE Maximum der vorhandenen Belege heben (nicht
+  // hartkodiert), damit die echte Nummernvergabe (NumberingService.next) auch nach
+  // Re-Seeds und zur Laufzeit angelegten Belegen kollisionsfrei dahinter weiterzählt.
+  // Wurzel des „eindeutiges Feld verletzt"-Fehlers bei Anfrage→Angebot / Angebot→Auftrag:
+  // ein Reset hinter ein höher nummeriertes Bestandsdokument erzeugte Nummern-Kollisionen.
+  const year = 2026;
+  const syncSeq = async (key: string, numbers: ReadonlyArray<string | null>): Promise<void> => {
+    let max = 0;
+    for (const num of numbers) {
+      const parts = String(num ?? "").split("-");
+      if (parts.length >= 3 && Number(parts[parts.length - 2]) === year) {
+        max = Math.max(max, Number(parts[parts.length - 1]) || 0);
+      }
+    }
     await prisma.numberSequence.upsert({
-      where: { key_year: { key, year: 2026 } },
-      update: { next: { set: next } },
-      create: { key, year: 2026, next },
+      where: { key_year: { key, year } },
+      update: { next: { set: max } },
+      create: { key, year, next: max },
     });
-  }
+  };
+  const num = <T extends { number: string }>(rows: T[]): string[] => rows.map((r) => r.number);
+  await syncSeq("ORDER", num(await prisma.order.findMany({ select: { number: true } })));
+  await syncSeq("QUOTE", num(await prisma.quote.findMany({ select: { number: true } })));
+  await syncSeq("INVOICE", num(await prisma.invoice.findMany({ select: { number: true } })));
+  await syncSeq("INQUIRY", num(await prisma.inquiry.findMany({ select: { number: true } })));
+  await syncSeq("PRODUCTION_ORDER", num(await prisma.productionOrder.findMany({ select: { number: true } })));
+  await syncSeq("DELIVERY_NOTE", num(await prisma.deliveryNote.findMany({ select: { number: true } })));
+  await syncSeq("PURCHASE_ORDER", num(await prisma.purchaseOrder.findMany({ select: { number: true } })));
+  await syncSeq("CREDIT_NOTE", num(await prisma.creditNote.findMany({ select: { number: true } })));
+  await syncSeq("ABSCHLAG", num(await prisma.abschlagsrechnung.findMany({ select: { number: true } })));
 
   console.log("Seed fertig: Preisgruppen, 2 Firmen, Shop, Artikel+3 Varianten, 2 Lieferanten, 4 Aufträge, 3 Produktionsaufträge + 2 Fremdvergabe-Stufen + 2 Angebote (Ampel), 2 Eingangs-/2 Ausgangsrechnungen; Nummernkreise synchronisiert.");
 }
