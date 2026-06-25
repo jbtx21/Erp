@@ -429,7 +429,7 @@ export function ReorderPage(): JSX.Element {
 
   return (
     <>
-      <Title order={3}>Warenbestellvorschläge</Title>
+      <DocListHeader module="Einkauf" title="Warenbestellvorschläge" />
       <Text size="sm" c="dimmed" mt={4}>Mindestbestand-Vorschläge (T-12) und auftragsübergreifender Bedarf — gesammelt aus allen angelegten Aufträgen + Muster-Leihen, gegen Bestand verrechnet.</Text>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
 
@@ -520,7 +520,7 @@ export const ProcurementPage = (): JSX.Element => {
   const [err, setErr] = useState<string | null>(null);
   return (
     <>
-      <Title order={3}>Beschaffung — Produktionsstart-Status</Title>
+      <DocListHeader module="Einkauf" title="Beschaffung — Produktionsstart-Status" />
       <Text size="sm" c="dimmed" mt={4}>Multi-Lieferant: Start erst, wenn alle Wareneingänge da sind (T-05).</Text>
       <Group mt="sm" gap="xs" align="end">
         <ProductionPicker value={pid} onChange={setPid} />
@@ -648,7 +648,7 @@ export const ProductionReportingPage = (): JSX.Element => {
   useEffect(() => { void run(); }, [run]);
   return (
     <>
-      <Title order={3}>Produktions-Reporting</Title>
+      <DocListHeader module="Fertigung" title="Produktions-Reporting" />
       <Text size="sm" c="dimmed" mt={4}>Durchlaufzeit, Fehlerquote, Termintreue (Kap. 29).</Text>
       <Group mt="sm" gap="xs">
         <Select size="xs" value={tab} onChange={(v) => v && setTab(v as typeof tab)} data={[
@@ -3272,7 +3272,7 @@ export function CallLogsPage(): JSX.Element {
 
   return (
     <>
-      <Title order={3}>Anrufliste / Telefon</Title>
+      <DocListHeader module="CRM" title="Anrufliste / Telefon" />
       <Text size="sm" c="dimmed" mt={4}>Nachvollziehbar wer wann mit wem worüber telefoniert hat. Offene Rückrufe über den Status „Rückruf" nachverfolgen.</Text>
       <Group mt="sm" gap="xs" align="end" wrap="wrap">
         <Select label="Richtung" value={richtung} onChange={(v) => v && setRichtung(v)} w={130}
@@ -3327,7 +3327,7 @@ export function MailAccountsPage(): JSX.Element {
 
   return (
     <>
-      <Title order={3}>E-Mail-Konten</Title>
+      <DocListHeader module="Einstellungen" title="E-Mail-Konten" />
       <Text size="sm" c="dimmed" mt={4}>Mehrere IONOS-Postfächer für Senden/Empfangen. Je eines ist Standard für aus- und eingehend. Passwörter werden verschlüsselt gespeichert und nie angezeigt; ohne DB-Konto greift das ENV-Konto.</Text>
       <Group mt="sm" gap="xs" align="end" wrap="wrap">
         <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Vertrieb" w={160} />
@@ -3386,7 +3386,7 @@ export function CostCentersPage(): JSX.Element {
 
   return (
     <>
-      <Title order={3}>Kostenstellen</Title>
+      <DocListHeader module="Buchhaltung" title="Kostenstellen" />
       <Text size="sm" c="dimmed" mt={4}>Stammdaten je Kostenstelle (B7) — Auswertung, keine Buchung (G1).</Text>
       <Group mt="sm" gap="xs" align="end">
         <TextInput label="Nummer" value={nummer} onChange={(e) => setNummer(e.currentTarget.value)} w={120} placeholder="1000" />
@@ -3471,7 +3471,7 @@ export function DashboardsPage(): JSX.Element {
 
   return (
     <>
-      <Title order={3}>Meine Dashboards</Title>
+      <DocListHeader module="Start" title="Meine Dashboards" />
       <Text size="sm" c="dimmed" mt={4}>Personalisierbare Dashboards je Mitarbeiter — frei aus Charts + KPI-Kacheln (fester Metrik-Katalog) zusammenstellbar. „Geteilt" = für alle sichtbar, „Als mein Standard" wird beim Öffnen vorausgewählt. (Die feste Operations-Übersicht ist „Start".)</Text>
       {err && <Alert color="red" mt="sm" withCloseButton onClose={() => setErr(null)}>{err}</Alert>}
       {msg && <Alert color="green" mt="sm" withCloseButton onClose={() => setMsg(null)}>{msg}</Alert>}
@@ -3550,7 +3550,7 @@ export function EmailTemplatesPage(): JSX.Element {
 
   return (
     <>
-      <Title order={3}>E-Mail-Vorlagen</Title>
+      <DocListHeader module="Einstellungen" title="E-Mail-Vorlagen" />
       <Text size="sm" c="dimmed" mt={4}>Vorlagen mit Platzhaltern (doppelte geschweifte Klammern), z. B. „name" oder „nr" (G-5).</Text>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
       <AutoTable rows={list} hide={["id", "updatedAt", "body"]} action={(t) => (
@@ -3697,7 +3697,7 @@ export function PricingPage(): JSX.Element {
 
   return (
     <>
-      <Title order={3}>Preise &amp; Mengenstaffel (T-15)</Title>
+      <DocListHeader module="Vertrieb" title="Preise & Mengenstaffel (T-15)" />
       <Text size="sm" c="dimmed" mt={4}>
         Basispreis-Staffel je Preisgruppe + kundenindividuell. Präzedenz: Kunde → Gruppen-Staffel → Einzelpreis (Kap. 4.4).
       </Text>
@@ -3779,7 +3779,7 @@ export const ReklamationPage = (): JSX.Element => {
 
   return (
     <>
-      <Title order={3}>Reklamation</Title>
+      <DocListHeader module="Vertrieb" title="Reklamation" />
       <Text size="sm" c="dimmed" mt={4}>Reklamation je Auftragsposition → Folgevorgang (Gutschrift/Nachproduktion, Kap. 20).</Text>
       <Group mt="sm" gap="xs" align="end">
         <OrderPicker value={orderId} onChange={setOrderId} />
@@ -3929,7 +3929,7 @@ export function SubproductionPage(): JSX.Element {
 
   return (
     <>
-      <Title order={3}>Fremdvergabe (Lohnveredelung)</Title>
+      <DocListHeader module="Fertigung" title="Fremdvergabe (Lohnveredelung)" />
       <Text size="sm" c="dimmed" mt={4}>Mehrstufig &amp; sequenziell: Stufe n+1 startet erst, wenn der Rücklauf von Stufe n da ist (T-04, Kap. 5.3).</Text>
       <Group mt="sm" gap="xs" align="end">
         <TextInput label="Produktions-ID" value={productionId} onChange={(e) => setProductionId(e.currentTarget.value)} w={160} />
@@ -4010,7 +4010,7 @@ export function DataIoPage(): JSX.Element {
 
   return (
     <>
-      <Title order={3}>Import / Export</Title>
+      <DocListHeader module="Einstellungen" title="Import / Export" />
       <Text size="sm" c="dimmed" mt={4}>Stammdaten als CSV (deutsches Excel-Format, Trennzeichen „;"). Import upsertet je Artikelnummer bzw. Name; fehlerhafte Zeilen werden gemeldet und übersprungen.</Text>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
 
@@ -4091,7 +4091,7 @@ export function EanImportPage(): JSX.Element {
   const c = plan?.counts;
   return (
     <>
-      <Title order={3}>EAN-Listen-Import</Title>
+      <DocListHeader module="Einstellungen" title="EAN-Listen-Import" />
       <Text size="sm" c="dimmed" mt={4}>Massenimport von Artikelstammdaten mit automatischem Abgleich gegen den Bestand — primär per EAN/GTIN (Prüfziffer wird validiert), ersatzweise per Artikelnummer. Erst Vorschau, dann gezielt anwenden. Spalten: <b>EAN</b> (Pflicht), Artikelnummer, Bezeichnung, Marke, Material, Pflegehinweis, Zolltarifnummer, Ursprungsland, Gewicht (g), EK (EUR).</Text>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
 
@@ -4217,7 +4217,7 @@ export function FinanceReportingPage(): JSX.Element {
 
   return (
     <>
-      <Title order={3}>Finanz-Reporting — Offene Posten</Title>
+      <DocListHeader module="Buchhaltung" title="Finanz-Reporting — Offene Posten" />
       <Text size="sm" c="dimmed" mt={4}>OP-Aging (Fälligkeits-Buckets) und DSO (durchschnittliche Forderungslaufzeit) über die offenen Rechnungen. Auswertung, keine Buchung (G1). DSO bezieht den Umsatz im gewählten Zeitraum ein.</Text>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
 
@@ -4369,7 +4369,7 @@ export function WareneingangPage(): JSX.Element {
 
   return (
     <>
-      <Title order={3}>Wareneingang</Title>
+      <DocListHeader module="Einkauf" title="Wareneingang" />
       <Text size="sm" c="dimmed" mt={4}>Eingegangene Mengen je Bestellposition buchen (Kap. 6.3). Der Bestellstatus läuft BESTELLT → teilweise → vollständig; erst bei vollständigem Eingang aller benötigten Komponenten ist der Produktionsstart frei (T-05).</Text>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
       {msg && <Alert color="green" mt="sm">{msg}</Alert>}
@@ -4432,7 +4432,7 @@ export function ZahlungenPage(): JSX.Element {
   const totalOpen = items.reduce((s, i) => s + i.openCents, 0);
   return (
     <>
-      <Title order={3}>Zahlungseingänge erfassen</Title>
+      <DocListHeader module="Buchhaltung" title="Zahlungseingänge erfassen" />
       <Text size="sm" c="dimmed" mt={4}>Offene Posten und manuelle Zahlungsbuchung (Kap. 9.4) — für Barzahlung oder Zahlungen, die der automatische Bankabgleich (T-13) nicht zuordnet. Teil-, Voll- und Überzahlung möglich; bei 0 € gilt die Rechnung als bezahlt.</Text>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
       {msg && <Alert color="green" mt="sm">{msg}</Alert>}
@@ -4470,7 +4470,7 @@ export function NewsletterPage(): JSX.Element {
 
   return (
     <>
-      <Title order={3}>Newsletter</Title>
+      <DocListHeader module="CRM" title="Newsletter" />
       <Text size="sm" c="dimmed" mt={4}>Kampagnen über Brevo an Kontakte mit Newsletter-Einwilligung (DSGVO, Kap. 28). Aktuelle Empfänger mit Opt-in: <b>{audience}</b>.</Text>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
 
@@ -4637,7 +4637,7 @@ export function CalendarPage(): JSX.Element {
 
   return (
     <>
-      <Title order={3}>Kalender</Title>
+      <DocListHeader module="Start" title="Kalender" />
       <Text size="sm" c="dimmed" mt={4}>Büro-Termine, Urlaub und Abwesenheiten. „Geteilt" = für alle sichtbar. Externe Sync (CalDAV/Google) als Add-on vorgesehen.</Text>
       {err && <Alert color="red" mt="sm" withCloseButton onClose={() => setErr(null)}>{err}</Alert>}
 
@@ -4732,7 +4732,7 @@ export function MessagesPage(): JSX.Element {
 
   return (
     <>
-      <Title order={3}>Nachrichten</Title>
+      <DocListHeader module="Start" title="Nachrichten" />
       <Text size="sm" c="dimmed" mt={4}>Internes Mitarbeiter-Postfach (kein E-Mail-Versand).</Text>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
 
@@ -4796,7 +4796,7 @@ export function AdminPage(): JSX.Element {
 
   return (
     <>
-      <Title order={3}>Einstellungen (Admin)</Title>
+      <DocListHeader module="Einstellungen" title="Einstellungen (Admin)" />
       <Text size="sm" c="dimmed" mt={4}>Nur Geschäftsleitung. Briefkopf erscheint auf Lieferschein/Rechnung-PDFs; Freigabeschwellen steuern das Freigabe-Gate; Aufschlagsfaktor (Kap. 4.4).</Text>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
       {msg && <Alert color="green" mt="sm">{msg}</Alert>}
@@ -5245,7 +5245,7 @@ export function HrPage(): JSX.Element {
 
   return (
     <>
-      <Title order={3}>Personalwesen</Title>
+      <DocListHeader module="Personalwesen" title="Personalwesen" />
       <Text size="sm" c="dimmed" mt={4}>Nur Geschäftsleitung. Mitarbeiter-Stammdaten, Urlaubsanträge (Werktage automatisch), Genehmigung → geteilter Kalendereintrag.</Text>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
 
@@ -5372,7 +5372,7 @@ export function IntegrationsPage(): JSX.Element {
 
   return (
     <>
-      <Title order={3}>Schnittstellen (Connector-Plattform)</Title>
+      <DocListHeader module="Einstellungen" title="Schnittstellen (Connector-Plattform)" />
       <Text size="sm" c="dimmed" mt={4}>Zentrale Registry aller Anbindungen. Portal-pflegbare (Brevo, HubSpot, Slack, CalDAV) hier konfigurieren; Shop/Versand/Lieferanten laufen über die Worker-/ENV-Konfiguration.</Text>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
       {msg && <Alert color="green" mt="sm">{msg}</Alert>}
@@ -5444,7 +5444,7 @@ export function SecurityPage({ userName, onProfileUpdated }: { userName?: string
 
   return (
     <>
-      <Title order={3}>Mein Konto</Title>
+      <DocListHeader module="Einstellungen" title="Mein Konto" />
 
       <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, maxWidth: 560 }}>
         <Text fw={600}>Profil</Text>
@@ -5560,7 +5560,7 @@ export function ArchivePage({ role }: { role?: string } = {}): JSX.Element {
 
   return (
     <>
-      <Title order={3}>GoBD-Belegarchiv</Title>
+      <DocListHeader module="Einstellungen" title="GoBD-Belegarchiv" />
       <Text size="sm" c="dimmed" mt={4}>Unveränderbare (WORM) Ablage finalisierter Belege — inhaltsadressiert (SHA-256), mit gesetzlicher Aufbewahrungsfrist (6/10 Jahre) und GDPdU-„Z3"-Export für die Betriebsprüfung (Kap. 10).</Text>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
       {msg && <Alert color="green" mt="sm">{msg}</Alert>}
@@ -5636,7 +5636,7 @@ export function AuditLogPage(): JSX.Element {
 
   return (
     <>
-      <Title order={3}>Audit-Protokoll</Title>
+      <DocListHeader module="Einstellungen" title="Audit-Protokoll" />
       <Text size="sm" c="dimmed" mt={4}>Unveränderbares Änderungsprotokoll (GoBD, Kap. 10): wer hat wann welchen Beleg angelegt, geändert, finalisiert oder storniert. Nur lesbar. Zeile anklicken zeigt vorher → nachher.</Text>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
 
@@ -5734,7 +5734,7 @@ export function AutomationPage(): JSX.Element {
 
   return (
     <>
-      <Title order={3}>Automationen (Regel-Engine)</Title>
+      <DocListHeader module="Einstellungen" title="Automationen (Regel-Engine)" />
       <Text size="sm" c="dimmed" mt={4}>„Wenn Event X und Bedingung Y, dann Aktion Z" — native Automation im ERP, ohne zweite Datenschicht. Platzhalter <Text span ff="monospace">{"{{feld}}"}</Text> aus dem Event-Payload.</Text>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
       {msg && <Alert color="green" mt="sm">{msg}</Alert>}
@@ -5816,7 +5816,7 @@ export function TasksPage({ onNavigate }: { onNavigate?: (k: string) => void } =
 
   return (
     <>
-      <Title order={3}>Meine Aufgaben</Title>
+      <DocListHeader module="Start" title="Meine Aufgaben" />
       <Text size="sm" c="dimmed" mt={4}>Persönliche Arbeitsliste — zugewiesene Vorgänge, optional an einen Beleg gekoppelt.</Text>
       {err && <Alert color="red" mt="sm" withCloseButton onClose={() => setErr(null)}>{err}</Alert>}
       {msg && <Alert color="green" mt="sm" withCloseButton onClose={() => setMsg(null)}>{msg}</Alert>}
@@ -6313,7 +6313,7 @@ export function GuVReportPage(): JSX.Element {
     <>
       <Group justify="space-between" align="center">
         <Box>
-          <Title order={3}>Gewinn- und Verlustrechnung</Title>
+          <DocListHeader module="Buchhaltung" title="Gewinn- und Verlustrechnung" />
           <Text size="sm" c="dimmed" mt={2}>P&amp;L · Ertrag aus Umsatzerlösen, Aufwand aus erfassten Eingangsrechnungen.</Text>
         </Box>
         <Group gap="xs">
