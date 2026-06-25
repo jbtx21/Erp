@@ -45,6 +45,12 @@ table {
   font-variant-numeric: tabular-nums;
 }
 
+/* Badge-Mindestschrift 11px (Skill T-1 / Lesbarkeit): Mantine-„xs"-Badges rendern sonst
+   ~10px. Greift per Source-Order nach den Mantine-Styles, ohne !important. */
+.mantine-Badge-root {
+  font-size: 11px;
+}
+
 /* Aufklappbarer Sektionskopf der Modul-Navigation: ruhiger Hover, kein Signalfarbe. */
 .erp-nav-group {
   transition: background 120ms ease;

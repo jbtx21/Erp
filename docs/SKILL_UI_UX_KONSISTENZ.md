@@ -182,8 +182,10 @@ radius 8px, shadow-md, Titel h4, Footer rechtsbündig:
 
 ## Umsetzungsstand TEXMA (gepflegt)
 
-- F-1 Primärfarbe: Theme `primaryColor: "navy"` gesetzt; 9 `color="dark"`-Overrides auf
-  Primäraktionen entfernt → navy. (blue-Overrides: Folge-Audit.)
+- F-1 Primärfarbe: Theme `primaryColor: "navy"` gesetzt; 9 `color="dark"`- + 2
+  `color="blue"`-Overrides auf Primär-/Forward-Aktionen entfernt → navy/light.
+- T-1 Badge-Mindestschrift: globaler 11px-Floor (`.mantine-Badge-root`) gegen Mantine-„xs".
+- Inter-Font tatsächlich geladen (index.html); Body-BG #f2f5fa (Xentral).
 - UX-5 Overflow: `AutoTable` nutzt `Table.ScrollContainer`; Products-PIM-Tabelle gekapselt.
 - §3.5 Error: errorFormatter gibt keinen Stacktrace mehr aus (`TEXMA_DEBUG_ERRORS=1` nur lokal).
 - UX-6 Währung: Dashboard-Finanz-KPIs via `euro()`.

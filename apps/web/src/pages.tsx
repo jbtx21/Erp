@@ -1627,7 +1627,7 @@ function ConvertQuoteDialog({ quoteId, onDone, onClose }: { quoteId: string; onD
           })}
           <Group justify="flex-end" mt="md">
             <Button variant="default" onClick={onClose}>Abbrechen</Button>
-            <Button color="blue" loading={busy} disabled={!allResolved} onClick={() => void convert()}>Auftrag anlegen</Button>
+            <Button loading={busy} disabled={!allResolved} onClick={() => void convert()}>Auftrag anlegen</Button>
           </Group>
         </>
       )}
@@ -1694,7 +1694,7 @@ export function QuotesPage(): JSX.Element {
         {status !== "ANGENOMMEN" && status !== "ABGELEHNT" && <Button size="compact-xs" variant="subtle" onClick={() => void startEdit(id)}>Bearbeiten</Button>}
         {status === "ENTWURF" && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.quotes.transition.mutate({ id, to: "VERSENDET" }))}>→ Versendet</Button>}
         {(status === "VERSENDET" || status === "NACHFASSEN") && <Button size="compact-xs" color="green" onClick={() => void act(() => trpc.quotes.transition.mutate({ id, to: "ANGENOMMEN" }))}>Angenommen</Button>}
-        {status === "ANGENOMMEN" && !r.converted && <Button size="compact-xs" color="blue" onClick={() => setConvertId(id)}>→ Auftrag</Button>}
+        {status === "ANGENOMMEN" && !r.converted && <Button size="compact-xs" variant="light" onClick={() => setConvertId(id)}>→ Auftrag</Button>}
         {status === "ANGENOMMEN" && r.converted && <Badge size="sm" color="teal" variant="light">Auftrag erstellt</Badge>}
         {status !== "ANGENOMMEN" && status !== "ABGELEHNT" && (
           <Button size="compact-xs" color="red" variant="light" onClick={() => {
