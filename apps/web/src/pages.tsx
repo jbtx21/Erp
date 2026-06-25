@@ -1751,6 +1751,9 @@ export function QuotesPage(): JSX.Element {
           status={editId ? undefined : "Nicht gespeichert"}
           statusColor="orange"
           actions={<>
+            {/* 0 €-Plausibilität: warnen, wenn Positionen vorhanden, der Angebotswert aber 0 ist. */}
+            {toApiLines(lines).length > 0 && lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.euro) || 0), 0) === 0 &&
+              <Text size="xs" c="orange" fw={600} title="Nur bei Gratis-/Musterposition gewollt?">⚠ Angebotswert 0,00 €</Text>}
             <Button variant="default" onClick={() => { resetForm(); setView("list"); }}>Abbrechen</Button>
             <Button loading={busy} disabled={!companyId.trim() || toApiLines(lines).length === 0} onClick={() => void saveQuote()}>Speichern</Button>
           </>}
