@@ -344,11 +344,23 @@ model CallLog {
 // Stammdaten — Artikel & echte Varianten — Kap. 2.1, 8, 11, 27 (15k Artikel)
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Artikeltyp-Diskriminator (Xentral-typisierte Artikel): trennt Lagerartikel von
+// Veredelung/Dienstleistung/Stückliste. Strangler: ergänzt das ältere isVeredelung-Flag
+// (additiv, beide bleiben konsistent), damit Logos/Dienstleistungen nicht im regulären
+// Artikelkatalog auftauchen. FINISHING wird aus isVeredelung=true backfilled.
+enum ArticleType {
+  STOCK // Lagerartikel (Textil etc.)
+  FINISHING // Veredelung/Logo (Stick/Druck/Transfer)
+  SERVICE // Dienstleistung (kein Lager)
+  BOM // Stückliste/Set
+}
+
 model Article {
   id          String    @id @default(cuid())
   sku         String    @unique
   name        String
   description String?
+  type        ArticleType @default(STOCK) // Artikeltyp-Diskriminator (Backfill aus isVeredelung)
   isVeredelung Boolean  @default(false) // Transfer/Siebdruck/Stick (Kap. 11)
   // Zugewiesener Veredler (Pflicht bei Veredelungs-/Logo-Artikeln, analog Textil-„Hersteller").
   veredlerId  String?

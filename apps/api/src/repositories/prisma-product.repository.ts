@@ -67,6 +67,9 @@ export class PrismaProductRepository implements ProductRepository {
 
   async catalog(): Promise<import("../modules/product/product.service.js").CatalogEntry[]> {
     const rows = await prisma.variant.findMany({
+      // Nur echte Lagerartikel im Auftrags-/Angebots-Picker — Veredelung/Logo (FINISHING)
+      // und Dienstleistungen werden über eigene Pfade geführt, nicht als Katalogartikel.
+      where: { article: { type: "STOCK" } },
       orderBy: [{ article: { sku: "asc" } }, { sku: "asc" }],
       select: {
         id: true, sku: true, articleId: true, isBundle: true,
@@ -130,7 +133,7 @@ export class PrismaProductRepository implements ProductRepository {
     return prisma.$transaction(async (tx) => {
       const article = await tx.article.create({
         data: {
-          sku: input.sku, name: input.name, isVeredelung: true, veredlerId: input.veredlerId,
+          sku: input.sku, name: input.name, type: "FINISHING", isVeredelung: true, veredlerId: input.veredlerId,
           finishingSpecs: { create: { method: input.method as never, placement: input.placement ?? "" } },
           variants: { create: { sku: input.sku } },
         },
