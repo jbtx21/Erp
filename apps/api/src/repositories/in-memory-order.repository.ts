@@ -81,6 +81,10 @@ export class InMemoryOrderRepository
     return this.orders.find((o) => o.id === orderId)?.status ?? null;
   }
 
+  async getNumber(orderId: string): Promise<string | null> {
+    return this.orders.find((o) => o.id === orderId)?.number ?? null;
+  }
+
   async setStatus(orderId: string, status: string): Promise<void> {
     const o = this.orders.find((x) => x.id === orderId);
     if (o) o.status = status;

@@ -1,6 +1,6 @@
 // tRPC-AppRouter: Auth (Login/2FA/RBAC) + Shop-Order-Ingest/Liste.
 import { TRPCError } from "@trpc/server";
-import { ProductionSheetIncompleteError, redactOrderForRole, canViewFinancials, SubProductionTransitionError, scheduleBackward, backwardStart, type LeadStage } from "@texma/shared";
+import { ProductionSheetIncompleteError, redactOrderForRole, canViewFinancials, SubProductionTransitionError, scheduleBackward, backwardStart, orderStatusLabel, type LeadStage } from "@texma/shared";
 import { ReklamationValidationError } from "../modules/reklamation/reklamation.service.js";
 import { z } from "zod";
 import { AuthError, SESSION_TTL_SECONDS } from "../modules/auth/auth.service.js";
@@ -250,8 +250,10 @@ export const appRouter = router({
             // (verfügbarer Bestand steigt wieder).
             try { await ctx.reservations.releaseByOrder(input.orderId, "STORNIERT"); } catch { /* nicht blockierend */ }
           }
-          // G-5: In-App-Benachrichtigung über den Statuswechsel.
-          await ctx.notifications.notify(ctx.user.email, `Auftrag → ${input.to}`, `Auftrag ${input.orderId} ist jetzt ${input.to}.`, "orders");
+          // G-5: In-App-Benachrichtigung über den Statuswechsel — mit sprechender Belegnummer
+          // (AB-…) statt cuid und lesbarem Status statt Enum (P2.8).
+          const orderLabel = res.number ?? input.orderId;
+          await ctx.notifications.notify(ctx.user.email, `Auftrag ${orderLabel} → ${orderStatusLabel(input.to)}`, `Auftrag ${orderLabel} ist jetzt ${orderStatusLabel(input.to)}.`, "orders");
           // Regel-Engine: konfigurierte Automationen zum Statuswechsel auslösen (Event → Aktion).
           await ctx.automation.handleEvent("order.status.changed", { orderId: input.orderId, status: input.to, userEmail: ctx.user.email });
           // Auftragsampel-Trigger: aktuelle Prozessstufe + Gesamtampel nachrechnen und als

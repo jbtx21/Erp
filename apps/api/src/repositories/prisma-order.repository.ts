@@ -119,6 +119,11 @@ export class PrismaOrderRepository
     return o?.status ?? null;
   }
 
+  async getNumber(orderId: string): Promise<string | null> {
+    const o = await prisma.order.findUnique({ where: { id: orderId }, select: { number: true } });
+    return o?.number ?? null;
+  }
+
   async setStatus(orderId: string, status: string): Promise<void> {
     await prisma.order.update({ where: { id: orderId }, data: { status: status as never } });
   }

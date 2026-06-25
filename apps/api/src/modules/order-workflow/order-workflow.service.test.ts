@@ -19,6 +19,9 @@ class FakeOrderRepo implements OrderWorkflowRepository {
   async getStatus(id: string): Promise<string | null> {
     return this.status.get(id) ?? null;
   }
+  async getNumber(id: string): Promise<string | null> {
+    return this.status.has(id) ? `AB-${id}` : null;
+  }
   async setStatus(id: string, status: string): Promise<void> {
     this.status.set(id, status);
   }

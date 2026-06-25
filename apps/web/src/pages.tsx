@@ -81,8 +81,13 @@ function fmtCell(key: string, v: unknown): ReactNode {
   if (v === null || v === undefined) return "—";
   if (/cents$/i.test(key) && typeof v === "number") return <span style={numTd}>{euro(v)}</span>;
   if (typeof v === "boolean") return v ? "ja" : "nein";
-  if (/(status|ampel|level)$/i.test(key) && typeof v === "string")
+  if (/(status|ampel|level)$/i.test(key) && typeof v === "string") {
+    // Ampel-Gesamtlampe (Auftragsampel-„Monitor"-Spalte): Problem/Achtung/OK statt Status-Enum.
+    const LAMP: Record<string, [string, string]> = { ROT: ["red", "Problem"], GELB: ["yellow", "Achtung"], GRUEN: ["green", "OK"], GRAU: ["gray", "—"] };
+    const lamp = LAMP[v];
+    if (lamp) return <StatusDot color={`var(--mantine-color-${lamp[0]}-6)`} label={lamp[1]} />;
     return <StatusDot color={`var(--mantine-color-${statusMantineColor[v] ?? "gray"}-6)`} label={prettyStatus(v)} />;
+  }
   if (/kind$/i.test(key) && typeof v === "string")
     return <Badge color={statusMantineColor[v] ?? "gray"} variant="light">{prettyStatus(v)}</Badge>;
   if (/(at|date|termin|am)$/i.test(key) && typeof v === "string" && !Number.isNaN(Date.parse(v)))
@@ -2422,15 +2427,29 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
   const [dirty, setDirty] = useState(false); // ungespeicherte Änderungen im Auftrags-Editor
   useUnsavedGuard(showCreate && dirty);
 
+  const canAct = role === "ADMIN" || role === "BUERO";
+  // Preisberechtigte Rollen sehen die Auftragsampel (Monitor-Spalte). PRODUKTION nicht (rollen-gated).
+  const canSeeAmpel = role === "ADMIN" || role === "BUERO" || role === "BUCHHALTUNG";
+
   const load = useCallback(async () => {
-    try { setRows((await trpc.shopOrders.list.query({ limit: 100 })) as Row[]); setErr(null); }
-    catch (e) { setErr(errMsg(e)); }
-  }, []);
+    try {
+      const list = (await trpc.shopOrders.list.query({ limit: 100 })) as Row[];
+      // Mini-Ampel-Spalte (Xentral-„Monitor"): Gesamtlampe je Auftrag aus der Auftragsampel.
+      if (canSeeAmpel) {
+        try {
+          const amp = await trpc.ampel.auftragsampel.query();
+          const m = new Map(amp.map((a) => [a.id, a.overall]));
+          setRows(list.map((r) => ({ ...r, ampel: m.get(String(r.id)) ?? "GRAU" })));
+        } catch { setRows(list); }
+      } else {
+        setRows(list);
+      }
+      setErr(null);
+    } catch (e) { setErr(errMsg(e)); }
+  }, [canSeeAmpel]);
   useEffect(() => { void load(); }, [load]);
   // Direkter Sprung aus der globalen Suche: das Detail-/Belegketten-Panel des Auftrags öffnen.
   useEffect(() => { if (focusId) setTermOrder(focusId); }, [focusId]);
-
-  const canAct = role === "ADMIN" || role === "BUERO";
   const resetOrderForm = (): void => { setNewLines([{ description: "", qty: 10, euro: 12.9, kind: "TEXTIL" }]); setEditOrderId(null); setShowCreate(false); setDirty(false); };
   const startEditOrder = async (id: string): Promise<void> => {
     setErr(null);
@@ -3263,8 +3282,8 @@ export function DashboardsPage(): JSX.Element {
 
   return (
     <>
-      <Title order={3}>Dashboards</Title>
-      <Text size="sm" c="dimmed" mt={4}>Personalisierte Dashboards je Mitarbeiter — frei aus Charts + KPI-Kacheln (fester Metrik-Katalog, G-7) zusammenstellbar. „Geteilt" = für alle sichtbar.</Text>
+      <Title order={3}>Meine Dashboards</Title>
+      <Text size="sm" c="dimmed" mt={4}>Personalisierbare Dashboards je Mitarbeiter — frei aus Charts + KPI-Kacheln (fester Metrik-Katalog, G-7) zusammenstellbar. „Geteilt" = für alle sichtbar, „Als mein Standard" wird beim Öffnen vorausgewählt. (Die feste Operations-Übersicht ist „Start".)</Text>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
 
       <Group align="flex-end" gap="sm" mt="sm">
@@ -5550,7 +5569,6 @@ const HOME_SHORTCUTS: ReadonlyArray<{ key: string; label: string; nav: string; c
   { key: "suppliers", label: "Lieferanten", nav: "suppliers", countKey: "suppliers" },
   { key: "articles", label: "Artikel", nav: "products", countKey: "articles" },
   { key: "archive", label: "GoBD-Archiv", nav: "archive" },
-  { key: "tasks", label: "Meine Aufgaben", nav: "tasks", countKey: "tasks" },
   { key: "calendar", label: "Kalender", nav: "calendar" },
   { key: "automation", label: "Automationen", nav: "automation" },
 ];
@@ -5721,7 +5739,6 @@ export function HomePage({ userName, onNavigate }: { userName?: string; onNaviga
         {kpi("Offene Aufträge", openOrders, "navy", "orders")}
         {kpi("Offene Angebote", openQuotes, "teal", "quotes")}
         {kpi("Kunden", n.companies ?? 0, "blue", "companies")}
-        {kpi("Meine Aufgaben", tasks, tasks > 0 ? "orange" : "gray", "tasks")}
       </Group>
 
       {/* Statuslage: Auftragsampel (Prüfungen) + Termin-Ampel (Fristen), je Karte ein Sprung in die Detailsicht. */}

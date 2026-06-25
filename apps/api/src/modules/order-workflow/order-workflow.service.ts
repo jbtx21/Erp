@@ -15,6 +15,8 @@ export interface FulfillmentInput {
 
 export interface OrderWorkflowRepository {
   getStatus(orderId: string): Promise<string | null>;
+  /** Sprechende Belegnummer (AB-…) für Benachrichtigungen/Audit; null = unbekannt. */
+  getNumber(orderId: string): Promise<string | null>;
   setStatus(orderId: string, status: string): Promise<void>;
   /** Setzt (oder löscht) den zugesagten Liefertermin (B9, Kap. 35.2). null = entfernen. */
   setDeliveryDate(orderId: string, date: Date | null): Promise<void>;
@@ -35,7 +37,7 @@ export class OrderWorkflowService {
   ) {}
 
   /** Schaltet einen Auftrag auf den nächsten Status (F2-geprüft). */
-  async transition(orderId: string, to: OrderStatus): Promise<{ status: OrderStatus }> {
+  async transition(orderId: string, to: OrderStatus): Promise<{ status: OrderStatus; number: string | null }> {
     const current = await this.repo.getStatus(orderId);
     if (!current) throw new OrderWorkflowError(`Auftrag ${orderId} nicht gefunden.`);
     orderStatusMachine.assert(current as OrderStatus, to); // wirft bei illegalem Übergang
@@ -43,7 +45,7 @@ export class OrderWorkflowService {
     await this.audit.append(
       buildEntry({ entity: "Order", entityId: orderId, action: "UPDATE", after: { status: to, from: current } })
     );
-    return { status: to };
+    return { status: to, number: await this.repo.getNumber(orderId) };
   }
 
   /**

@@ -41,3 +41,20 @@ const PRODUCTION_DONE_STATES: ReadonlySet<OrderStatus> = new Set([
 export function isProductionDone(status: OrderStatus): boolean {
   return PRODUCTION_DONE_STATES.has(status);
 }
+
+/** Menschenlesbare deutsche Bezeichnung eines Auftragsstatus (UI/Benachrichtigungen). */
+export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
+  ANGELEGT: "Angelegt",
+  IN_BEARBEITUNG: "In Bearbeitung",
+  IN_PRODUKTION: "In Produktion",
+  VERSANDBEREIT: "Versandbereit",
+  VERSENDET: "Versendet",
+  FAKTURIERT: "Fakturiert",
+  ABGESCHLOSSEN: "Abgeschlossen",
+  STORNIERT: "Storniert",
+};
+
+/** Label eines Status; unbekannte Werte unverändert zurück (defensiv). */
+export function orderStatusLabel(status: string): string {
+  return ORDER_STATUS_LABEL[status as OrderStatus] ?? status;
+}
