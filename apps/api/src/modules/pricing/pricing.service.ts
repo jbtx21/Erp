@@ -46,6 +46,8 @@ export interface PricingRepository {
   listTiers(companyId: string, variantId: string): Promise<TierView>;
   /** Legt/aktualisiert eine Preisgruppen-Staffelstufe der Gruppe der Firma an (B4). */
   upsertGroupTier(companyId: string, variantId: string, minMenge: number, netCents: number): Promise<void>;
+  /** Entfernt eine Preisgruppen-Staffelstufe (Stammdaten-Pflege). */
+  removeGroupTier(companyId: string, variantId: string, minMenge: number): Promise<void>;
   /** Bester (niedrigster) Lieferanten-EK je Variante in Cent; null wenn keiner gepflegt. */
   bestEkCents(variantId: string): Promise<number | null>;
 }
@@ -98,6 +100,14 @@ export class PricingService {
         action: "CREATE",
         after: { companyId, variantId, minMenge, netCents },
       })
+    );
+  }
+
+  /** Entfernt eine Preisgruppen-Staffelstufe (Stammdaten-Pflege, auditiert). */
+  async removeGroupTier(companyId: string, variantId: string, minMenge: number): Promise<void> {
+    await this.repo.removeGroupTier(companyId, variantId, minMenge);
+    await this.audit.append(
+      buildEntry({ entity: "PriceGroupPriceTier", entityId: `${variantId}:${String(minMenge)}`, action: "UPDATE", after: { companyId, variantId, minMenge, deleted: true } })
     );
   }
 }

@@ -1329,6 +1329,12 @@ export const appRouter = router({
         try { await ctx.pricing.addGroupTier(input.companyId, input.variantId, input.minMenge, input.netCents); return { ok: true as const }; }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
+    removeGroupTier: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ companyId: z.string().min(1), variantId: z.string().min(1), minMenge: z.number().int().positive() }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.pricing.removeGroupTier(input.companyId, input.variantId, input.minMenge); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
   }),
 
   // Mehrfach-Teillieferung: Restmengen + (Teil-)Lieferscheine je Auftragsposition.

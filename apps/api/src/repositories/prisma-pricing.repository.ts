@@ -72,6 +72,12 @@ export class PrismaPricingRepository implements PricingRepository {
     });
   }
 
+  async removeGroupTier(companyId: string, variantId: string, minMenge: number): Promise<void> {
+    const company = await prisma.company.findUnique({ where: { id: companyId }, select: { priceGroupId: true } });
+    if (!company) throw new Error(`Company ${companyId} nicht gefunden`);
+    await prisma.priceGroupPriceTier.deleteMany({ where: { variantId, priceGroupId: company.priceGroupId, minMenge } });
+  }
+
   async bestEkCents(variantId: string): Promise<number | null> {
     const r = await prisma.supplierItem.aggregate({ where: { variantId }, _min: { ekCents: true } });
     return r._min.ekCents ?? null;

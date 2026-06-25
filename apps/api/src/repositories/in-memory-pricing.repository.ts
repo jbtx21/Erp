@@ -40,6 +40,11 @@ export class InMemoryPricingRepository implements PricingRepository {
     else ctx.groupTiers.push({ minMenge, netCents });
   }
 
+  async removeGroupTier(companyId: string, variantId: string, minMenge: number): Promise<void> {
+    const ctx = this.ensure(companyId, variantId);
+    ctx.groupTiers = ctx.groupTiers.filter((t) => t.minMenge !== minMenge);
+  }
+
   async bestEkCents(variantId: string): Promise<number | null> {
     return this.ek.get(variantId) ?? null;
   }

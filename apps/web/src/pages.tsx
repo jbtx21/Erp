@@ -3929,19 +3929,24 @@ export function PricingPage(): JSX.Element {
           <Title order={4} mt="xl">Hinterlegte Staffel</Title>
           <Table mt="xs" withTableBorder withColumnBorders striped>
             <Table.Thead><Table.Tr>
-              <Table.Th>Ebene</Table.Th><Table.Th ta="right">ab Menge</Table.Th><Table.Th ta="right">Netto/Stück</Table.Th>
+              <Table.Th>Ebene</Table.Th><Table.Th ta="right">ab Menge</Table.Th><Table.Th ta="right">Netto/Stück</Table.Th><Table.Th></Table.Th>
             </Table.Tr></Table.Thead>
             <Table.Tbody>
               {(tiers?.customerTiers ?? []).map((t, i) => (
                 <Table.Tr key={`c${String(i)}`}><Table.Td><Badge color="grape" variant="light">Kunde</Badge></Table.Td>
-                  <Table.Td ta="right">{t.minMenge}</Table.Td><Table.Td ta="right">{euro(t.netCents)}</Table.Td></Table.Tr>
+                  <Table.Td ta="right">{t.minMenge}</Table.Td><Table.Td ta="right">{euro(t.netCents)}</Table.Td><Table.Td /></Table.Tr>
               ))}
               {(tiers?.groupTiers ?? []).map((t, i) => (
                 <Table.Tr key={`g${String(i)}`}><Table.Td><Badge variant="light">Gruppe</Badge></Table.Td>
-                  <Table.Td ta="right">{t.minMenge}</Table.Td><Table.Td ta="right">{euro(t.netCents)}</Table.Td></Table.Tr>
+                  <Table.Td ta="right">{t.minMenge}</Table.Td><Table.Td ta="right">{euro(t.netCents)}</Table.Td>
+                  <Table.Td ta="right"><Button size="compact-xs" color="red" variant="subtle" onClick={async () => {
+                    setErr(null);
+                    try { await trpc.pricing.removeGroupTier.mutate({ companyId, variantId, minMenge: t.minMenge }); await loadTiers(); }
+                    catch (e) { setErr(errMsg(e)); }
+                  }}>Entfernen</Button></Table.Td></Table.Tr>
               ))}
               {(!tiers || (tiers.customerTiers.length === 0 && tiers.groupTiers.length === 0)) && (
-                <Table.Tr><Table.Td colSpan={3}><Text size="sm" c="dimmed">Keine Staffel hinterlegt.</Text></Table.Td></Table.Tr>
+                <Table.Tr><Table.Td colSpan={4}><Text size="sm" c="dimmed">Keine Staffel hinterlegt.</Text></Table.Td></Table.Tr>
               )}
             </Table.Tbody>
           </Table>
