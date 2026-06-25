@@ -1,6 +1,6 @@
 import { prisma } from "@texma/db";
 import type { CrmStage } from "@texma/shared";
-import type { CreateCrmLeadInput, CrmLeadRecord, CrmRepository } from "../modules/crm/crm.service.js";
+import type { CreateCrmLeadInput, CrmLeadRecord, CrmRepository, UpdateCrmLeadInput } from "../modules/crm/crm.service.js";
 
 const VIEW = {
   id: true, name: true, companyId: true, contactName: true, email: true, phone: true,
@@ -38,6 +38,25 @@ export class PrismaCrmRepository implements CrmRepository {
         email: input.email ?? null, phone: input.phone ?? null, source: input.source ?? null,
         valueCents: input.valueCents ?? null, expectedCloseAt: input.expectedCloseAt ?? null,
         text: input.text ?? null, note: input.note ?? null, stage: input.stage,
+      },
+      select: VIEW,
+    })) as ViewRow;
+    return toRecord(r);
+  }
+  async update(id: string, patch: UpdateCrmLeadInput): Promise<CrmLeadRecord> {
+    const r = (await prisma.crmLead.update({
+      where: { id },
+      data: {
+        ...(patch.name !== undefined ? { name: patch.name } : {}),
+        ...(patch.companyId !== undefined ? { companyId: patch.companyId } : {}),
+        ...(patch.contactName !== undefined ? { contactName: patch.contactName } : {}),
+        ...(patch.email !== undefined ? { email: patch.email } : {}),
+        ...(patch.phone !== undefined ? { phone: patch.phone } : {}),
+        ...(patch.source !== undefined ? { source: patch.source } : {}),
+        ...(patch.valueCents !== undefined ? { valueCents: patch.valueCents } : {}),
+        ...(patch.expectedCloseAt !== undefined ? { expectedCloseAt: patch.expectedCloseAt } : {}),
+        ...(patch.text !== undefined ? { text: patch.text } : {}),
+        ...(patch.note !== undefined ? { note: patch.note } : {}),
       },
       select: VIEW,
     })) as ViewRow;

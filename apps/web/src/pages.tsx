@@ -3,7 +3,7 @@
 // Bereiche mit wenig Code anbindbar sind. Interaktive Aktionen (Versand bestätigen,
 // Mahnlauf, Reorder→Bestellungen) sind je Seite ergänzt.
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Alert, Badge, Box, Button, Card, Checkbox, Group, Loader, Modal, NumberInput, Paper, PasswordInput, Select, SimpleGrid, Switch, Table, Tabs, Text, Textarea, TextInput, Title } from "@mantine/core";
+import { Alert, Badge, Box, Button, Card, Checkbox, Group, Loader, Modal, NumberInput, Paper, PasswordInput, Select, SimpleGrid, Stack, Switch, Table, Tabs, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { validateVatId } from "@texma/shared/vat";
 import { resolveMarkupFactor, DEFAULT_MARKUP_CONFIG, type MarkupConfig } from "@texma/shared/markup";
@@ -3053,7 +3053,76 @@ const CRM_STAGE_COLOR: Record<string, string> = { NEU: "gray", KONTAKTIERT: "blu
 const CRM_OPEN_STAGES = new Set(["NEU", "KONTAKTIERT", "QUALIFIZIERT", "ANGEBOT"]);
 const CRM_CONVERTIBLE = new Set(["NEU", "KONTAKTIERT", "QUALIFIZIERT"]);
 
+// Bearbeiten eines CRM-Eintrags (alle Stammfelder editierbar; Stufe läuft über die Aktionen).
+function CrmEditModal({ lead, onClose, onSaved }: { lead: CrmRow | null; onClose: () => void; onSaved: () => void }): JSX.Element {
+  const [name, setName] = useState("");
+  const [companyId, setCompanyId] = useState("");
+  const [contactName, setContactName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [source, setSource] = useState("WEB");
+  const [valueEur, setValueEur] = useState("");
+  const [expectedCloseAt, setExpectedCloseAt] = useState("");
+  const [text, setText] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!lead) return;
+    setName(lead.name ?? ""); setCompanyId(lead.companyId ?? ""); setContactName(lead.contactName ?? "");
+    setEmail(lead.email ?? ""); setPhone(lead.phone ?? ""); setSource(lead.source ?? "WEB");
+    setValueEur(lead.valueCents != null ? String(lead.valueCents / 100) : "");
+    setExpectedCloseAt(lead.expectedCloseAt ? String(lead.expectedCloseAt).slice(0, 10) : "");
+    setText(lead.text ?? ""); setErr(null);
+  }, [lead]);
+
+  const save = async () => {
+    if (!lead) return;
+    setBusy(true); setErr(null);
+    try {
+      const valueCents = valueEur.trim() ? Math.round(Number(valueEur.replace(",", ".")) * 100) : null;
+      await trpc.crm.update.mutate({
+        id: String(lead.id), name: name.trim(),
+        companyId: companyId || null, contactName: contactName.trim() || null,
+        email: email.trim() || null, phone: phone.trim() || null,
+        source: source as "WEB" | "EMAIL" | "SHOP" | "TELEFON",
+        valueCents: Number.isFinite(valueCents) ? valueCents : null,
+        expectedCloseAt: expectedCloseAt || null, text: text.trim() || null,
+      });
+      onSaved(); onClose();
+    } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+
+  return (
+    <Modal opened={!!lead} onClose={onClose} title="CRM-Eintrag bearbeiten" size="lg">
+      {err && <Alert color="red" mb="sm">{err}</Alert>}
+      <Stack gap="sm">
+        <TextInput label="Bezeichnung" value={name} onChange={(e) => setName(e.currentTarget.value)} required />
+        <CompanyPicker value={companyId} onChange={setCompanyId} label="Firma" allowEmpty />
+        <Group grow>
+          <TextInput label="Ansprechpartner" value={contactName} onChange={(e) => setContactName(e.currentTarget.value)} />
+          <Select label="Quelle" value={source} onChange={(v) => v && setSource(v)} data={["WEB", "EMAIL", "SHOP", "TELEFON"]} />
+        </Group>
+        <Group grow>
+          <TextInput label="E-Mail" value={email} onChange={(e) => setEmail(e.currentTarget.value)} />
+          <TextInput label="Telefon" value={phone} onChange={(e) => setPhone(e.currentTarget.value)} />
+        </Group>
+        <Group grow>
+          <TextInput label="Wunschtermin" type="date" value={expectedCloseAt} onChange={(e) => setExpectedCloseAt(e.currentTarget.value)} />
+          <TextInput label="Budget €" value={valueEur} onChange={(e) => setValueEur(e.currentTarget.value)} />
+        </Group>
+        <Textarea label="Bedarf (Was/Wo)" value={text} onChange={(e) => setText(e.currentTarget.value)} autosize minRows={2} />
+        <Group justify="flex-end" mt="xs">
+          <Button variant="default" onClick={onClose}>Abbrechen</Button>
+          <Button loading={busy} disabled={!name.trim()} onClick={() => void save()}>Speichern</Button>
+        </Group>
+      </Stack>
+    </Modal>
+  );
+}
+
 export function CrmPipelinePage(_props: { onNavigate?: (k: string) => void } = {}): JSX.Element {
+  const [editRow, setEditRow] = useState<CrmRow | null>(null);
   const [rows, setRows] = useState<CrmRow[]>([]);
   // Lead-Qualifizierung: Wer (Firma/Ansprechpartner/Kontakt), Was (Bedarf), Wann (Termin), Wie (Quelle).
   const [name, setName] = useState("");
@@ -3089,6 +3158,7 @@ export function CrmPipelinePage(_props: { onNavigate?: (k: string) => void } = {
     };
     return (
       <Group gap={4} justify="flex-end" wrap="nowrap">
+        <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setEditRow(rows.find((x) => String(x.id) === id) ?? null)}>Bearbeiten</Button>
         {stage === "NEU" && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.crm.advance.mutate({ id, to: "KONTAKTIERT" }))}>→ Kontaktiert</Button>}
         {stage === "KONTAKTIERT" && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.crm.advance.mutate({ id, to: "QUALIFIZIERT" }))}>→ Qualifiziert</Button>}
         {CRM_CONVERTIBLE.has(stage) && (
@@ -3145,6 +3215,7 @@ export function CrmPipelinePage(_props: { onNavigate?: (k: string) => void } = {
       </Paper>
 
       <AutoTable rows={rows as Row[]} hide={["id", "companyId", "email", "phone", "note", "probability", "lostReason", "legacyKind", "legacyId", "quoteId", "createdAt"]} action={actionsFor} />
+      <CrmEditModal lead={editRow} onClose={() => setEditRow(null)} onSaved={() => void load()} />
     </>
   );
 }

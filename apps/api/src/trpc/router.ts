@@ -2002,6 +2002,25 @@ export const appRouter = router({
         const { expectedCloseAt, ...rest } = input;
         try { return await ctx.crm.create({ ...rest, expectedCloseAt: expectedCloseAt ? new Date(expectedCloseAt) : null }); } catch (e) { throw toTrpcError(e); }
       }),
+    update: roleProcedure(...supplierRoles)
+      .input(z.object({
+        id: z.string().min(1),
+        name: z.string().min(1).optional(),
+        companyId: z.string().nullable().optional(),
+        contactName: z.string().nullable().optional(),
+        email: z.string().nullable().optional(),
+        phone: z.string().nullable().optional(),
+        source: z.enum(["WEB", "EMAIL", "SHOP", "TELEFON"]).nullable().optional(),
+        valueCents: z.number().int().nonnegative().nullable().optional(),
+        expectedCloseAt: z.string().nullable().optional(),
+        text: z.string().nullable().optional(),
+        note: z.string().nullable().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { id, expectedCloseAt, ...rest } = input;
+        const patch = { ...rest, ...(expectedCloseAt !== undefined ? { expectedCloseAt: expectedCloseAt ? new Date(expectedCloseAt) : null } : {}) };
+        try { return await ctx.crm.update(id, patch); } catch (e) { throw toTrpcError(e); }
+      }),
     advance: roleProcedure(...supplierRoles)
       .input(z.object({
         id: z.string().min(1),

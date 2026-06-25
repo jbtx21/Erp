@@ -1,5 +1,5 @@
 import type { CrmStage } from "@texma/shared";
-import type { CreateCrmLeadInput, CrmLeadRecord, CrmRepository } from "../modules/crm/crm.service.js";
+import type { CreateCrmLeadInput, CrmLeadRecord, CrmRepository, UpdateCrmLeadInput } from "../modules/crm/crm.service.js";
 
 let seq = 0;
 
@@ -23,6 +23,15 @@ export class InMemoryCrmRepository implements CrmRepository {
     };
     this.rows.push(rec);
     return { ...rec };
+  }
+  async update(id: string, patch: UpdateCrmLeadInput): Promise<CrmLeadRecord> {
+    const r = this.rows.find((x) => x.id === id);
+    if (!r) throw new Error(`CRM-Eintrag ${id} nicht gefunden`);
+    const row = r as unknown as Record<string, unknown>;
+    for (const k of Object.keys(patch) as (keyof UpdateCrmLeadInput)[]) {
+      if (patch[k] !== undefined) row[k] = patch[k] ?? null;
+    }
+    return { ...r };
   }
   async setStage(id: string, stage: CrmStage, lostReason: string | null): Promise<void> {
     const r = this.rows.find((x) => x.id === id);

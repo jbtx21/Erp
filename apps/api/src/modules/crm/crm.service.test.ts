@@ -36,6 +36,23 @@ describe("CrmService (vereinheitlichter Funnel)", () => {
     expect(list[0]?.stage).toBe("QUALIFIZIERT");
   });
 
+  it("bearbeitet Stammfelder und auditiert (Stufe unberührt)", async () => {
+    const { svc, audit } = setup();
+    const rec = await svc.create({ name: "Erstname", companyId: "c1" });
+    const upd = await svc.update(rec.id, { name: "Neuer Name", contactName: "Max Muster", valueCents: 50000 });
+    expect(upd.name).toBe("Neuer Name");
+    expect(upd.contactName).toBe("Max Muster");
+    expect(upd.valueCents).toBe(50000);
+    expect(upd.stage).toBe("NEU");
+    expect(audit.entries.length).toBe(2); // create + update
+  });
+
+  it("verbietet leeren Namen beim Bearbeiten", async () => {
+    const { svc } = setup();
+    const rec = await svc.create({ name: "X" });
+    await expect(svc.update(rec.id, { name: "   " })).rejects.toBeInstanceOf(CrmError);
+  });
+
   it("verbietet illegale Sprünge", async () => {
     const { svc } = setup();
     const rec = await svc.create({ name: "Lead B" });

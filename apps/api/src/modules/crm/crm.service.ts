@@ -39,10 +39,25 @@ export interface CreateCrmLeadInput {
   note?: string | null;
 }
 
+/** Bearbeitbare Felder eines CRM-Eintrags (Stufe läuft separat über advance/F2). */
+export interface UpdateCrmLeadInput {
+  name?: string;
+  companyId?: string | null;
+  contactName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  source?: InquirySource | null;
+  valueCents?: number | null;
+  expectedCloseAt?: Date | null;
+  text?: string | null;
+  note?: string | null;
+}
+
 export interface CrmRepository {
   list(): Promise<CrmLeadRecord[]>;
   load(id: string): Promise<CrmLeadRecord | null>;
   create(input: CreateCrmLeadInput & { stage: CrmStage }): Promise<CrmLeadRecord>;
+  update(id: string, patch: UpdateCrmLeadInput): Promise<CrmLeadRecord>;
   setStage(id: string, stage: CrmStage, lostReason: string | null): Promise<void>;
   /** Legt das Angebot an, setzt stage=ANGEBOT + quoteId (transaktional). */
   convertToQuote(id: string, input: { quoteNumber: string; companyId: string; text: string }): Promise<{ quoteId: string }>;
@@ -64,6 +79,22 @@ export class CrmService {
     const rec = await this.repo.create({ ...input, name: input.name.trim(), stage: "NEU" });
     await this.audit.append(buildEntry({ entity: "CrmLead", entityId: rec.id, action: "CREATE", after: { name: rec.name, stage: rec.stage } }));
     return rec;
+  }
+
+  /** Bearbeitet die Stammfelder eines CRM-Eintrags (GoBD-auditiert; Stufe bleibt unberührt). */
+  async update(id: string, patch: UpdateCrmLeadInput): Promise<CrmLeadRecord> {
+    const before = await this.repo.load(id);
+    if (!before) throw new CrmError(`CRM-Eintrag ${id} nicht gefunden.`);
+    if (patch.name !== undefined && !patch.name.trim()) throw new CrmError("Name/Bezeichnung darf nicht leer sein.");
+    const clean: UpdateCrmLeadInput = { ...patch };
+    if (clean.name !== undefined) clean.name = clean.name.trim();
+    const after = await this.repo.update(id, clean);
+    await this.audit.append(buildEntry({
+      entity: "CrmLead", entityId: id, action: "UPDATE",
+      before: { name: before.name, companyId: before.companyId, contactName: before.contactName, valueCents: before.valueCents },
+      after: { name: after.name, companyId: after.companyId, contactName: after.contactName, valueCents: after.valueCents },
+    }));
+    return after;
   }
 
   /** Funnel-Übergang (F2-geprüft); VERLOREN verlangt einen Grund. */
