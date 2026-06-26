@@ -124,6 +124,8 @@ export interface SupplierQueryRepository {
   /** Lieferanten-Detail + Historie. */
   supplierOverview(supplierId: string): Promise<SupplierOverview | null>;
   addSupplierContact(input: { supplierId: string; firstName: string; lastName: string; email?: string | null; phone?: string | null; role?: string | null }): Promise<{ id: string }>;
+  /** Bearbeitet einen Lieferanten-Ansprechpartner (nur gesetzte Felder). */
+  updateSupplierContact(id: string, fields: { firstName?: string; lastName?: string; email?: string | null; phone?: string | null; role?: string | null }): Promise<void>;
   deleteSupplierContact(id: string): Promise<void>;
 }
 

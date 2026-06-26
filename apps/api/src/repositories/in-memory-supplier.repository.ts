@@ -70,6 +70,16 @@ export class InMemorySupplierRepository
     return { id };
   }
 
+  async updateSupplierContact(id: string, fields: { firstName?: string; lastName?: string; email?: string | null; phone?: string | null; role?: string | null }): Promise<void> {
+    const c = this.contacts.find((x) => x.id === id);
+    if (!c) return;
+    if (fields.firstName !== undefined) c.firstName = fields.firstName;
+    if (fields.lastName !== undefined) c.lastName = fields.lastName;
+    if (fields.email !== undefined) c.email = fields.email ?? null;
+    if (fields.phone !== undefined) c.phone = fields.phone ?? null;
+    if (fields.role !== undefined) c.role = fields.role ?? null;
+  }
+
   async deleteSupplierContact(id: string): Promise<void> {
     const i = this.contacts.findIndex((c) => c.id === id);
     if (i >= 0) this.contacts.splice(i, 1);

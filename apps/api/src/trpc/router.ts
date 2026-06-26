@@ -419,6 +419,9 @@ export const appRouter = router({
     addContact: roleProcedure("ADMIN", "BUERO")
       .input(z.object({ supplierId: z.string().min(1), firstName: z.string().min(1), lastName: z.string().min(1), email: z.string().optional(), phone: z.string().optional(), role: z.string().optional() }))
       .mutation(({ input, ctx }) => ctx.suppliers.addSupplierContact(input)),
+    updateContact: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ id: z.string().min(1), firstName: z.string().optional(), lastName: z.string().optional(), email: z.string().nullable().optional(), phone: z.string().nullable().optional(), role: z.string().nullable().optional() }))
+      .mutation(async ({ input, ctx }) => { const { id, ...fields } = input; await ctx.suppliers.updateSupplierContact(id, fields); return { ok: true as const }; }),
     deleteContact: roleProcedure("ADMIN", "BUERO")
       .input(z.object({ id: z.string().min(1) }))
       .mutation(async ({ input, ctx }) => { await ctx.suppliers.deleteSupplierContact(input.id); return { ok: true as const }; }),

@@ -156,6 +156,11 @@ export class PrismaSupplierRepository
     });
   }
 
+  async updateSupplierContact(id: string, fields: { firstName?: string; lastName?: string; email?: string | null; phone?: string | null; role?: string | null }): Promise<void> {
+    const pick = <K extends keyof typeof fields>(k: K): object => (fields[k] !== undefined ? { [k]: fields[k] } : {});
+    await prisma.supplierContact.update({ where: { id }, data: { ...pick("firstName"), ...pick("lastName"), ...pick("email"), ...pick("phone"), ...pick("role") } });
+  }
+
   async deleteSupplierContact(id: string): Promise<void> {
     await prisma.supplierContact.delete({ where: { id } });
   }

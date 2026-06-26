@@ -279,6 +279,7 @@ function SupplierStammdatenEditor({ s, onSaved }: { s: SupplierDetail["supplier"
 function SupplierContactsBox({ supplierId, contacts, onChanged }: { supplierId: string; contacts: SupplierDetail["contacts"]; onChanged: () => void }): JSX.Element {
   const [fn, setFn] = useState(""); const [ln, setLn] = useState(""); const [email, setEmail] = useState(""); const [phone, setPhone] = useState(""); const [role, setRole] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  const [edit, setEdit] = useState<{ id: string; firstName: string; lastName: string; email: string; phone: string; role: string } | null>(null);
   const add = async (): Promise<void> => {
     if (!fn.trim() || !ln.trim()) { setErr("Vor- und Nachname sind Pflicht."); return; }
     setErr(null);
@@ -294,9 +295,25 @@ function SupplierContactsBox({ supplierId, contacts, onChanged }: { supplierId: 
           <Text size="sm">{c.firstName} {c.lastName}{c.role ? ` · ${c.role}` : ""}</Text>
           {c.email ? <Text size="xs" c="dimmed">{c.email}</Text> : null}
           {c.phone ? <Text size="xs" c="dimmed">{c.phone}</Text> : null}
+          <Button size="compact-xs" variant="subtle" onClick={() => setEdit({ id: c.id, firstName: c.firstName, lastName: c.lastName, email: c.email ?? "", phone: c.phone ?? "", role: c.role ?? "" })}>Bearbeiten</Button>
           <Button size="compact-xs" variant="subtle" color="red" onClick={async () => { try { await trpc.suppliers.deleteContact.mutate({ id: c.id }); onChanged(); } catch (e) { setErr(errMsg(e)); } }}>✕</Button>
         </Group>
       ))}
+      <Modal opened={edit !== null} onClose={() => setEdit(null)} title="Ansprechpartner bearbeiten" centered>
+        {edit && (
+          <Stack gap="xs">
+            <Group grow><TextInput label="Vorname" value={edit.firstName} onChange={(e) => setEdit({ ...edit, firstName: e.currentTarget.value })} />
+              <TextInput label="Nachname" value={edit.lastName} onChange={(e) => setEdit({ ...edit, lastName: e.currentTarget.value })} /></Group>
+            <TextInput label="E-Mail" value={edit.email} onChange={(e) => setEdit({ ...edit, email: e.currentTarget.value })} />
+            <Group grow><TextInput label="Telefon" value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.currentTarget.value })} />
+              <TextInput label="Funktion" value={edit.role} onChange={(e) => setEdit({ ...edit, role: e.currentTarget.value })} /></Group>
+            <Group justify="flex-end" mt="xs">
+              <Button variant="default" onClick={() => setEdit(null)}>Abbrechen</Button>
+              <Button onClick={async () => { try { await trpc.suppliers.updateContact.mutate({ id: edit.id, firstName: edit.firstName, lastName: edit.lastName, email: edit.email || null, phone: edit.phone || null, role: edit.role || null }); setEdit(null); onChanged(); } catch (e) { setErr(errMsg(e)); } }}>Speichern</Button>
+            </Group>
+          </Stack>
+        )}
+      </Modal>
       <Group gap="xs" align="end" mt={6} wrap="wrap">
         <TextInput size="xs" label="Vorname" w={120} value={fn} onChange={(e) => setFn(e.currentTarget.value)} />
         <TextInput size="xs" label="Nachname" w={120} value={ln} onChange={(e) => setLn(e.currentTarget.value)} />
