@@ -48,7 +48,7 @@ interface AuthUser { id: string; email: string; name: string; role: string; totp
 // Jede Sektion ist einzeln aufklappbar; die ganze Leiste klappt zur Icon-Schiene ein.
 const NAV: ReadonlyArray<{ group: string; icon: NavIconName; items: ReadonlyArray<{ key: string; label: string }> }> = [
   { group: "Start", icon: "uebersicht", items: [{ key: "home", label: "Start" }, { key: "dashboard", label: "Termin-Ampel" }, { key: "statusampel", label: "Status-Ampel" }, { key: "dashboards", label: "Meine Dashboards" }, { key: "calendar", label: "Kalender" }, { key: "tasks", label: "Meine Aufgaben" }, { key: "messages", label: "Nachrichten" }] },
-  { group: "CRM", icon: "crm", items: [{ key: "pipeline", label: "Vertriebs-Pipeline" }, { key: "calllogs", label: "Anrufliste" }, { key: "newsletter", label: "Newsletter" }] },
+  { group: "CRM", icon: "crm", items: [{ key: "pipeline", label: "Vertriebs-Pipeline" }, { key: "leads", label: "Leads" }, { key: "inquiries", label: "Anfragen" }, { key: "opportunities", label: "Verkaufschancen" }, { key: "calllogs", label: "Anrufliste" }, { key: "newsletter", label: "Newsletter" }] },
   { group: "Vertrieb", icon: "vertrieb", items: [{ key: "companies", label: "Kunden" }, { key: "quotes", label: "Angebote" }, { key: "orders", label: "Aufträge" }, { key: "sammelbestellungen", label: "Sammelbestellungen" }, { key: "pricing", label: "Preise/Staffel" }, { key: "reklamation", label: "Reklamation" }] },
   { group: "Einkauf", icon: "beschaffung", items: [
     { key: "suppliers", label: "Lieferanten" }, { key: "procurement", label: "Beschaffung" },
