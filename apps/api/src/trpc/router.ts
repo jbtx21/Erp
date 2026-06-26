@@ -2087,7 +2087,7 @@ export const appRouter = router({
         priceGroupKind: z.enum(["STANDARD", "TOP", "PREMIUM", "WIEDERVERKAEUFER", "AGENTUR"]),
       }))
       .mutation(async ({ input, ctx }) => {
-        try { return await ctx.companies.create(input); } catch (e) { throw toTrpcError(e); }
+        try { return await ctx.companies.create(input); } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
     update: roleProcedure("ADMIN", "BUERO")
       .input(z.object({
@@ -2111,13 +2111,13 @@ export const appRouter = router({
         kreditlimitCents: z.number().int().min(0).nullable().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
-        try { await ctx.companies.update(input); return { ok: true as const }; } catch (e) { throw toTrpcError(e); }
+        try { await ctx.companies.update(input); return { ok: true as const }; } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
     // Unbenutzten Kundenstammsatz löschen (Fehleingaben/Test-Müll, P1-4) — nur ohne Belege.
     delete: roleProcedure("ADMIN", "BUERO")
       .input(z.object({ id: z.string().min(1) }))
       .mutation(async ({ input, ctx }) => {
-        try { await ctx.companies.deleteCompany(input.id); return { ok: true as const }; } catch (e) { throw toTrpcError(e); }
+        try { await ctx.companies.deleteCompany(input.id); return { ok: true as const }; } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
   }),
 

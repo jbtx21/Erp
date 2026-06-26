@@ -11,10 +11,19 @@ function make() {
 }
 
 describe("CompanyService.create — Dedup + Validierung (P1-4)", () => {
-  it("lehnt zu kurze/leere Namen ab", async () => {
+  it("lehnt zu kurze/leere/Whitespace-Namen ab", async () => {
     const { svc } = make();
     await expect(svc.create({ name: " ", priceGroupKind: "STANDARD" })).rejects.toBeInstanceOf(CompanyError);
     await expect(svc.create({ name: "a", priceGroupKind: "STANDARD" })).rejects.toBeInstanceOf(CompanyError);
+    await expect(svc.create({ name: "   ", priceGroupKind: "STANDARD" })).rejects.toBeInstanceOf(CompanyError);
+  });
+
+  it("lehnt reine Platzhalter-/Sonderzeichennamen ab (kein Datenmüll)", async () => {
+    const { svc } = make();
+    await expect(svc.create({ name: "...", priceGroupKind: "STANDARD" })).rejects.toBeInstanceOf(CompanyError);
+    await expect(svc.create({ name: "---", priceGroupKind: "STANDARD" })).rejects.toBeInstanceOf(CompanyError);
+    // valide Kurznamen mit Ziffern bleiben erlaubt
+    await expect(svc.create({ name: "3M", priceGroupKind: "STANDARD" })).resolves.toBeTruthy();
   });
 
   it("legt eine neue Firma getrimmt an", async () => {

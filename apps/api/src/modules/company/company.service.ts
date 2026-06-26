@@ -99,6 +99,9 @@ export class CompanyService {
   async create(input: CreateCompanyInput): Promise<{ id: string }> {
     const name = input.name?.trim() ?? "";
     if (name.length < 2) throw new CompanyError("Firmenname ist Pflicht (mindestens 2 Zeichen).");
+    // Plausibilität: ein Firmenname muss Buchstaben/Ziffern enthalten — blockt reine
+    // Platzhalter/Sonderzeichen ("...", "---", "!!!") als Stammdaten-Müll.
+    if (!/[\p{L}\p{N}]/u.test(name)) throw new CompanyError("Firmenname muss Buchstaben oder Ziffern enthalten.");
     // Dedup (P1-4): kein zweiter Stammsatz für denselben Namen — verhindert ungeprüften
     // Freitext-Müll und doppelte Kunden. Bestehende Firma wird wiederverwendet.
     const existing = await this.repo.findByName(name);
