@@ -26,6 +26,8 @@ export interface ArticleRow {
   gender: string;
   gm2: number | null;
   styleFit: string;
+  /** Bestandsführung (Procure-to-Order): default false = kein Bestand. */
+  bestandsgefuehrt: boolean;
   /** PIM-Vollständigkeit (abgeleitet, nicht persistiert). */
   completeness: PimCompleteness;
 }
@@ -43,6 +45,7 @@ export type ArticlePatch = Partial<
     gender: string;
     gm2: number | null;
     styleFit: string;
+    bestandsgefuehrt: boolean;
   }
 >;
 
@@ -50,6 +53,8 @@ export interface VariantRow {
   id: string;
   sku: string;
   attributes: Array<{ name: string; value: string }>;
+  /** Bestandsführungs-Override (null = erbt vom Hauptartikel). */
+  bestandsgefuehrtOverride: boolean | null;
 }
 
 export interface CreateVariantInput {
@@ -125,6 +130,8 @@ export interface ProductRepository {
   generateMatrixVariants(articleId: string, combos: ReadonlyArray<{ farbe: string; groesse: string }>): Promise<{ created: number; skipped: number; createdSkus: string[] }>;
   /** Aktualisiert die angegebenen Felder eines Artikels; @returns false wenn unbekannt. */
   updateArticle(id: string, patch: ArticlePatch): Promise<boolean>;
+  /** Setzt das Bestandsführungs-Override einer Variante (null = erbt vom Artikel). */
+  setVariantStockManaged(variantId: string, value: boolean | null): Promise<boolean>;
   /** Massenupdate über SKUs; @returns Anzahl aktualisierter Artikel. */
   updateArticlesBySku(skus: string[], patch: ArticlePatch): Promise<number>;
   /** Stückliste (Komponenten) einer Set-Variante. */
@@ -166,6 +173,13 @@ export class ProductService {
     const ok = await this.repo.updateArticle(id, normalizePatch(patch));
     if (!ok) throw new ProductError(`Artikel ${id} nicht gefunden.`);
     await this.audit.append(buildEntry({ entity: "Article", entityId: id, action: "UPDATE", after: patch }));
+  }
+
+  /** Bestandsführung je Variante übersteuern (null = erbt vom Hauptartikel). */
+  async setVariantStockManaged(variantId: string, value: boolean | null): Promise<void> {
+    const ok = await this.repo.setVariantStockManaged(variantId, value);
+    if (!ok) throw new ProductError(`Variante ${variantId} nicht gefunden.`);
+    await this.audit.append(buildEntry({ entity: "Variant", entityId: variantId, action: "UPDATE", after: { bestandsgefuehrtOverride: value } }));
   }
 
   /** Massenbearbeitung: ein Feld-Patch auf viele Artikel (per SKU). */

@@ -23,7 +23,7 @@ function variantLabel(v: { sku: string; article: { name: string }; attributes: {
 const PIM_SELECT = {
   description: true, brand: true, materialComposition: true, careInstructions: true, hsCode: true, originCountry: true,
   itemGroup: true, stockUom: true, isSalesItem: true, isPurchaseItem: true, minOrderQty: true, maxDiscountPct: true,
-  leadTimeDays: true, gender: true, gm2: true, styleFit: true,
+  leadTimeDays: true, gender: true, gm2: true, styleFit: true, bestandsgefuehrt: true,
 } as const;
 const s = (v: string | null | undefined): string => v ?? "";
 
@@ -39,7 +39,7 @@ export class PrismaProductRepository implements ProductRepository {
       careInstructions: s(a.careInstructions), hsCode: s(a.hsCode), originCountry: s(a.originCountry),
       itemGroup: s(a.itemGroup), stockUom: a.stockUom, isSalesItem: a.isSalesItem, isPurchaseItem: a.isPurchaseItem,
       minOrderQty: a.minOrderQty, maxDiscountPct: a.maxDiscountPct, leadTimeDays: a.leadTimeDays,
-      gender: s(a.gender), gm2: a.gm2, styleFit: s(a.styleFit),
+      gender: s(a.gender), gm2: a.gm2, styleFit: s(a.styleFit), bestandsgefuehrt: a.bestandsgefuehrt,
     }));
   }
 
@@ -61,9 +61,14 @@ export class PrismaProductRepository implements ProductRepository {
     const rows = await prisma.variant.findMany({
       where: { articleId },
       orderBy: { sku: "asc" },
-      select: { id: true, sku: true, attributes: { select: { name: true, value: true } } },
+      select: { id: true, sku: true, bestandsgefuehrtOverride: true, attributes: { select: { name: true, value: true } } },
     });
-    return rows.map((v) => ({ id: v.id, sku: v.sku, attributes: v.attributes }));
+    return rows.map((v) => ({ id: v.id, sku: v.sku, bestandsgefuehrtOverride: v.bestandsgefuehrtOverride, attributes: v.attributes }));
+  }
+
+  async setVariantStockManaged(variantId: string, value: boolean | null): Promise<boolean> {
+    const res = await prisma.variant.updateMany({ where: { id: variantId }, data: { bestandsgefuehrtOverride: value } });
+    return res.count > 0;
   }
 
   async catalog(): Promise<import("../modules/product/product.service.js").CatalogEntry[]> {

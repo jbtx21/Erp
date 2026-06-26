@@ -112,4 +112,19 @@ export class InMemoryReservationRepository implements ReservationRepository {
   async setShopPuffer(variantId: string, puffer: number): Promise<void> {
     this.puffers.set(variantId, puffer);
   }
+
+  // Bestandsführung (Test-Double): standardmäßig gilt jede Variante als bestandsgeführt
+  // (die Stock-Tests modellieren Transferdruck-Lagerartikel). Tests können einzelne
+  // Varianten über `nonManaged` als nicht bestandsgeführt markieren.
+  readonly nonManaged = new Set<string>();
+  async isStockManaged(variantId: string): Promise<boolean> {
+    return !this.nonManaged.has(variantId);
+  }
+  async stockManagedVariantIds(): Promise<Set<string>> {
+    // „alle außer nonManaged": Set mit überschriebenem has(), da die Gesamtmenge unbekannt ist.
+    const excluded = this.nonManaged;
+    const s = new Set<string>();
+    s.has = (id: string): boolean => !excluded.has(id);
+    return s;
+  }
 }

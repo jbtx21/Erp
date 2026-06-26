@@ -100,6 +100,16 @@ describe("ReservationService", () => {
     expect(rows[0]).toMatchObject({ orderedQty: 100, receivedQty: 60, unterwegs: 40 });
   });
 
+  it("nicht bestandsgeführte Varianten: keine Reservierung, nicht in der Verfügbarkeit (Procure-to-Order)", async () => {
+    repo.nonManaged.add("v2"); // v2 = reiner Druck-/Phantomartikel
+    await expect(svc.reserve({ variantId: "v2", lager: "TRANSFERDRUCK", qty: 50 })).rejects.toBeInstanceOf(ReservationError);
+    // v1 (bestandsgeführt) bleibt regulär reservierbar + sichtbar; v2 fällt aus der Verfügbarkeit.
+    await svc.reserve({ variantId: "v1", lager: "TRANSFERDRUCK", qty: 10 });
+    const rows = await svc.availability();
+    expect(rows.some((r) => r.variantId === "v1")).toBe(true);
+    expect(rows.some((r) => r.variantId === "v2")).toBe(false);
+  });
+
   it("releaseByOrder schließt alle Vormerkungen eines Auftrags", async () => {
     await svc.reserve({ variantId: "v1", lager: "TRANSFERDRUCK", qty: 10, orderId: "ord-9" });
     await svc.reserve({ variantId: "v2", lager: "TRANSFERDRUCK", qty: 5, orderId: "ord-9" });

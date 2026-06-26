@@ -15,16 +15,16 @@ import type {
 
 type StoredArticle = {
   id: string; sku: string; name: string; description: string; brand: string; materialComposition: string; careInstructions: string; hsCode: string; originCountry: string;
-  itemGroup: string; stockUom: string; isSalesItem: boolean; isPurchaseItem: boolean; minOrderQty: number | null; maxDiscountPct: number | null; leadTimeDays: number | null; gender: string; gm2: number | null; styleFit: string;
+  itemGroup: string; stockUom: string; isSalesItem: boolean; isPurchaseItem: boolean; minOrderQty: number | null; maxDiscountPct: number | null; leadTimeDays: number | null; gender: string; gm2: number | null; styleFit: string; bestandsgefuehrt: boolean;
 };
 const emptyPim = {
   description: "", brand: "", materialComposition: "", careInstructions: "", hsCode: "", originCountry: "",
-  itemGroup: "", stockUom: "Stk", isSalesItem: true, isPurchaseItem: true, minOrderQty: null, maxDiscountPct: null, leadTimeDays: null, gender: "", gm2: null, styleFit: "",
+  itemGroup: "", stockUom: "Stk", isSalesItem: true, isPurchaseItem: true, minOrderQty: null, maxDiscountPct: null, leadTimeDays: null, gender: "", gm2: null, styleFit: "", bestandsgefuehrt: false,
 };
 
 export class InMemoryProductRepository implements ProductRepository {
   private readonly articles = new Map<string, StoredArticle>();
-  private readonly variants = new Map<string, { id: string; articleId: string; sku: string; attributes: Array<{ name: string; value: string }>; isBundle: boolean }>();
+  private readonly variants = new Map<string, { id: string; articleId: string; sku: string; attributes: Array<{ name: string; value: string }>; isBundle: boolean; bestandsgefuehrtOverride: boolean | null }>();
   private readonly components = new Map<string, ComponentInput[]>();
   private seq = 0;
 
@@ -58,12 +58,19 @@ export class InMemoryProductRepository implements ProductRepository {
   async listVariants(articleId: string): Promise<VariantRow[]> {
     return [...this.variants.values()]
       .filter((v) => v.articleId === articleId)
-      .map((v) => ({ id: v.id, sku: v.sku, attributes: v.attributes.map((a) => ({ ...a })) }));
+      .map((v) => ({ id: v.id, sku: v.sku, attributes: v.attributes.map((a) => ({ ...a })), bestandsgefuehrtOverride: v.bestandsgefuehrtOverride }));
+  }
+
+  async setVariantStockManaged(variantId: string, value: boolean | null): Promise<boolean> {
+    const v = this.variants.get(variantId);
+    if (!v) return false;
+    v.bestandsgefuehrtOverride = value;
+    return true;
   }
 
   async createVariant(input: CreateVariantInput): Promise<{ id: string }> {
     const id = `var_${++this.seq}`;
-    this.variants.set(id, { id, articleId: input.articleId, sku: input.sku, attributes: input.attributes.map((a) => ({ ...a })), isBundle: false });
+    this.variants.set(id, { id, articleId: input.articleId, sku: input.sku, attributes: input.attributes.map((a) => ({ ...a })), isBundle: false, bestandsgefuehrtOverride: null });
     return { id };
   }
 
@@ -91,7 +98,7 @@ export class InMemoryProductRepository implements ProductRepository {
       this.variants.set(id, {
         id, articleId, sku,
         attributes: [{ name: ATTR_FARBE, value: c.farbe }, { name: ATTR_GROESSE, value: c.groesse }],
-        isBundle: false,
+        isBundle: false, bestandsgefuehrtOverride: null,
       });
       createdSkus.push(sku);
     }
@@ -146,7 +153,7 @@ export class InMemoryProductRepository implements ProductRepository {
     const articleId = `art_${++this.seq}`;
     this.articles.set(articleId, { id: articleId, sku: input.sku, name: input.name, ...emptyPim });
     const variantId = `var_${++this.seq}`;
-    this.variants.set(variantId, { id: variantId, articleId, sku: input.sku, attributes: [], isBundle: false });
+    this.variants.set(variantId, { id: variantId, articleId, sku: input.sku, attributes: [], isBundle: false, bestandsgefuehrtOverride: null });
     this.veredelungArticles.set(articleId, { veredlerId: input.veredlerId, ekCents: input.ekCents, tiers: input.tiers });
     return { variantId, articleId, articleName: input.name, sku: input.sku, description: "", label: `${input.name} (${input.sku})`, unitNetCents: input.tiers[0]?.vkCents ?? 0, isBundle: false };
   }

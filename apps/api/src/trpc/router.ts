@@ -1296,10 +1296,18 @@ export const appRouter = router({
           maxDiscountPct: z.number().int().min(0).max(100).nullable().optional(),
           leadTimeDays: z.number().int().nonnegative().nullable().optional(),
           gender: z.string().optional(), gm2: z.number().int().nonnegative().nullable().optional(), styleFit: z.string().optional(),
+          // Bestandsführung als Eigenschaft (Procure-to-Order).
+          bestandsgefuehrt: z.boolean().optional(),
         }),
       }))
       .mutation(async ({ input, ctx }) => {
         try { await ctx.products.updateArticle(input.id, input.patch); return { ok: true as const }; } catch (e) { throw toTrpcError(e); }
+      }),
+    // Bestandsführung je Variante übersteuern (null = erbt vom Hauptartikel).
+    setVariantStockManaged: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ variantId: z.string().min(1), value: z.boolean().nullable() }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.products.setVariantStockManaged(input.variantId, input.value); return { ok: true as const }; } catch (e) { throw toTrpcError(e); }
       }),
     // Massenbearbeitung: ein Feld-Patch auf viele Artikel (per SKU).
     bulkUpdateArticles: roleProcedure("ADMIN", "BUERO")

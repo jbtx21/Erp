@@ -383,6 +383,10 @@ model Article {
   description String?
   type        ArticleType @default(STOCK) // Artikeltyp-Diskriminator (Backfill aus isVeredelung)
   isVeredelung Boolean  @default(false) // Transfer/Siebdruck/Stick (Kap. 11)
+  // Bestandsführung als Eigenschaft (Procure-to-Order): default KEIN Bestand (negative/
+  // beliebige Mengen okay). Nur ausgewählte Artikel (Transferdrucke) sind bestandsgeführt
+  // → volle Verfügbarkeits-/Reservierungs-/Meldebestand-/Shop-Puffer-Logik.
+  bestandsgefuehrt Boolean @default(false)
   // Zugewiesener Veredler (Pflicht bei Veredelungs-/Logo-Artikeln, analog Textil-„Hersteller").
   veredlerId  String?
   veredler    Supplier? @relation("ArticleVeredler", fields: [veredlerId], references: [id])
@@ -469,6 +473,8 @@ model Variant {
   articleId  String
   article    Article @relation(fields: [articleId], references: [id])
   sku        String  @unique
+  // Übersteuert die Bestandsführung des Hauptartikels je Variante (null = erbt vom Artikel).
+  bestandsgefuehrtOverride Boolean?
   // Echte Variantenstruktur: Attributnamen exakt "Farbe"/"Größe" (Kap. 3.2 / T-02)
   attributes VariantAttribute[]
   prices     PriceGroupPrice[]

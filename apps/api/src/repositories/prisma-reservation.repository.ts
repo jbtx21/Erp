@@ -129,4 +129,19 @@ export class PrismaReservationRepository implements ReservationRepository {
   async setShopPuffer(variantId: string, puffer: number): Promise<void> {
     await prisma.variant.update({ where: { id: variantId }, data: { shopPuffer: puffer } });
   }
+
+  async isStockManaged(variantId: string): Promise<boolean> {
+    const v = await prisma.variant.findUnique({ where: { id: variantId }, select: { bestandsgefuehrtOverride: true, article: { select: { bestandsgefuehrt: true } } } });
+    if (!v) return false;
+    return v.bestandsgefuehrtOverride ?? v.article.bestandsgefuehrt;
+  }
+
+  async stockManagedVariantIds(): Promise<Set<string>> {
+    // Bestandsgeführt = Override true, ODER (Override null UND Hauptartikel bestandsgeführt).
+    const rows = await prisma.variant.findMany({
+      where: { OR: [{ bestandsgefuehrtOverride: true }, { bestandsgefuehrtOverride: null, article: { bestandsgefuehrt: true } }] },
+      select: { id: true },
+    });
+    return new Set(rows.map((r) => r.id));
+  }
 }

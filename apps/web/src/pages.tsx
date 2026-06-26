@@ -925,6 +925,7 @@ function ArticleForm({ a, onClose, onSaved }: { a: ArticleData; onClose: () => v
   const [d, setD] = useState(() => ({
     name: str(a.name), itemGroup: str(a.itemGroup), stockUom: str(a.stockUom) || "Stk",
     isSalesItem: a.isSalesItem !== false, isPurchaseItem: a.isPurchaseItem !== false,
+    bestandsgefuehrt: a.bestandsgefuehrt === true,
     brand: str(a.brand), description: str(a.description), materialComposition: str(a.materialComposition),
     careInstructions: str(a.careInstructions), gender: str(a.gender), styleFit: str(a.styleFit),
     hsCode: str(a.hsCode), originCountry: str(a.originCountry),
@@ -938,7 +939,7 @@ function ArticleForm({ a, onClose, onSaved }: { a: ArticleData; onClose: () => v
     try {
       await trpc.products.updateArticle.mutate({ id: String(a.id), patch: {
         name: d.name.trim(), itemGroup: d.itemGroup.trim(), stockUom: d.stockUom.trim() || "Stk",
-        isSalesItem: d.isSalesItem, isPurchaseItem: d.isPurchaseItem,
+        isSalesItem: d.isSalesItem, isPurchaseItem: d.isPurchaseItem, bestandsgefuehrt: d.bestandsgefuehrt,
         brand: d.brand.trim(), description: d.description.trim(), materialComposition: d.materialComposition.trim(),
         careInstructions: d.careInstructions.trim(), gender: d.gender.trim(), styleFit: d.styleFit.trim(),
         hsCode: d.hsCode.trim(), originCountry: d.originCountry.trim(),
@@ -1007,12 +1008,18 @@ function ArticleForm({ a, onClose, onSaved }: { a: ArticleData; onClose: () => v
         </Tabs.Panel>
 
         <Tabs.Panel value="lager" pt="md">
-          <Text size="sm">Bestand wird je Variante und Lagerort geführt (Bewegungs-Ledger + Meldebestände). Gewicht je Variante im Variantenstamm.</Text>
+          <Switch
+            label="Bestand pflegen (bestandsgeführt)"
+            description="Aus = Procure-to-Order/Dropshipping: kein Bestand, keine Verfügbarkeits-/Reservierungs-/Meldebestand-Logik, negative Mengen erlaubt. Ein = volle Bestandslogik (z. B. Transferdrucke)."
+            checked={d.bestandsgefuehrt}
+            onChange={(e) => set({ bestandsgefuehrt: e.currentTarget.checked })}
+          />
+          <Text size="sm" mt="md">Bei bestandsgeführten Artikeln wird je Variante und Lagerort gebucht (Bewegungs-Ledger + Meldebestände). Einzelne Varianten lassen sich im Tab „Varianten" abweichend schalten.</Text>
           <Text size="sm" c="dimmed" mt={4}>Varianten dieses Artikels: {String(a.variantCount ?? "—")}</Text>
         </Tabs.Panel>
 
         <Tabs.Panel value="varianten" pt="md">
-          <ArticleVariantsTab articleId={String(a.id)} />
+          <ArticleVariantsTab articleId={String(a.id)} articleManaged={d.bestandsgefuehrt} />
         </Tabs.Panel>
       </Tabs>
     </DocFormShell>
@@ -1154,15 +1161,24 @@ function MatrixGridEditor({ articleId, existing, onCreated }: { articleId: strin
 }
 
 // Varianten-Tab des Artikelformulars: Matrix-Editor (Raster) + Einzelanlage + Liste.
-function ArticleVariantsTab({ articleId }: { articleId: string }): JSX.Element {
-  const [variants, setVariants] = useState<Row[]>([]);
+function ArticleVariantsTab({ articleId, articleManaged }: { articleId: string; articleManaged: boolean }): JSX.Element {
+  type Variant = Awaited<ReturnType<typeof trpc.products.listVariants.query>>[number];
+  const [variants, setVariants] = useState<Variant[]>([]);
   const [vsku, setVsku] = useState(""); const [farbe, setFarbe] = useState(""); const [groesse, setGroesse] = useState("");
   const [err, setErr] = useState<string | null>(null);
-  const load = useCallback(async () => { try { setVariants((await trpc.products.listVariants.query({ articleId })) as Row[]); setErr(null); } catch (e) { setErr(errMsg(e)); } }, [articleId]);
+  const load = useCallback(async () => { try { setVariants(await trpc.products.listVariants.query({ articleId })); setErr(null); } catch (e) { setErr(errMsg(e)); } }, [articleId]);
   useEffect(() => { void load(); }, [load]);
+  const inheritLabel = `Erbt (${articleManaged ? "bestandsgeführt" : "kein Bestand"})`;
+  const setOverride = (variantId: string, raw: string | null): Promise<void> =>
+    (async () => {
+      setErr(null);
+      const value = raw === "JA" ? true : raw === "NEIN" ? false : null;
+      try { await trpc.products.setVariantStockManaged.mutate({ variantId, value }); await load(); }
+      catch (e) { setErr(errMsg(e)); }
+    })();
   return (
     <Box>
-      <MatrixGridEditor articleId={articleId} existing={existingCombos(variants)} onCreated={load} />
+      <MatrixGridEditor articleId={articleId} existing={existingCombos(variants as unknown as Row[])} onCreated={load} />
       <Text size="xs" c="dimmed" mb={4}>Einzelne Sondervariante (außerhalb des Rasters):</Text>
       <Group gap="xs" align="end">
         <TextInput label="Varianten-SKU" value={vsku} onChange={(e) => setVsku(e.currentTarget.value)} placeholder="POLO-NAVY-L" w={180} />
@@ -1176,7 +1192,25 @@ function ArticleVariantsTab({ articleId }: { articleId: string }): JSX.Element {
         }}>Variante anlegen</Button>
       </Group>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
-      <AutoTable rows={variants} />
+      {variants.length === 0 ? <Text size="sm" c="dimmed" mt="sm">Keine Varianten.</Text> : (
+        <Table mt="sm" striped withTableBorder verticalSpacing="xs" fz="sm">
+          <Table.Thead><Table.Tr><Table.Th>SKU</Table.Th><Table.Th>Merkmale</Table.Th><Table.Th>Bestandsführung</Table.Th></Table.Tr></Table.Thead>
+          <Table.Tbody>
+            {variants.map((v) => (
+              <Table.Tr key={v.id}>
+                <Table.Td>{v.sku}</Table.Td>
+                <Table.Td>{v.attributes.map((a) => a.value).join(" / ") || "—"}</Table.Td>
+                <Table.Td>
+                  <Select size="xs" w={210} allowDeselect={false}
+                    value={v.bestandsgefuehrtOverride === true ? "JA" : v.bestandsgefuehrtOverride === false ? "NEIN" : "ERBT"}
+                    data={[{ value: "ERBT", label: inheritLabel }, { value: "JA", label: "bestandsgeführt" }, { value: "NEIN", label: "kein Bestand" }]}
+                    onChange={(val) => void setOverride(v.id, val === "ERBT" ? null : val)} />
+                </Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      )}
     </Box>
   );
 }

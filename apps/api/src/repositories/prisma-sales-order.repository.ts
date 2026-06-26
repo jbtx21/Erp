@@ -102,6 +102,11 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
         const l = input.lines[i]!;
         const variantId = l.variantId ?? variantByIndex.get(i);
         if (!variantId || l.qty <= 0) continue;
+        // Procure-to-Order: nur bestandsgeführte Artikel reservieren. Reine Druck-/Phantom-
+        // artikel (bestandsgefuehrt=false, Default) erzeugen keine Reservierung/Minusbestand.
+        const v = await tx.variant.findUnique({ where: { id: variantId }, select: { bestandsgefuehrtOverride: true, article: { select: { bestandsgefuehrt: true } } } });
+        const managed = v ? (v.bestandsgefuehrtOverride ?? v.article.bestandsgefuehrt) : false;
+        if (!managed) continue;
         await tx.stockReservation.create({ data: { variantId, lager: "HAUPT", warehouseId: "wh_haupt", qty: l.qty, orderId: order.id, belegRef: input.number, status: "AKTIV" } });
       }
       return order;

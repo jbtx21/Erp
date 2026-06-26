@@ -115,6 +115,10 @@ export interface ReservationRepository {
   shopPuffers(): Promise<Record<string, number>>;
   /** Setzt den Shop-Sicherheitspuffer einer Variante (≥ 0). */
   setShopPuffer(variantId: string, puffer: number): Promise<void>;
+  /** Bestandsführung einer Variante (Override ?? Hauptartikel-Flag); false für Phantom/Freiartikel. */
+  isStockManaged(variantId: string): Promise<boolean>;
+  /** Menge aller bestandsgeführten Varianten-IDs (für die gefilterte Verfügbarkeits-/Shop-Sicht). */
+  stockManagedVariantIds(): Promise<Set<string>>;
 }
 
 /** Shop-Bestandszeile: verfügbarer HAUPT-Bestand, Puffer und der an den Shop gemeldete Bestand. */
@@ -142,6 +146,11 @@ export class ReservationService {
   async reserve(input: ReserveInput): Promise<{ id: string; available: number }> {
     if (!input.variantId) throw new ReservationError("Variante ist Pflicht.");
     if (!Number.isInteger(input.qty) || input.qty <= 0) throw new ReservationError("Menge muss eine positive ganze Zahl sein.");
+    // Procure-to-Order: nicht bestandsgeführte Artikel werden NICHT reserviert (negative/
+    // beliebige Mengen sind okay, kein Verfügbarkeits-/Doppelvergabe-Schutz nötig).
+    if (!(await this.repo.isStockManaged(input.variantId))) {
+      throw new ReservationError("Variante ist nicht bestandsgeführt — es wird kein Bestand reserviert.");
+    }
     const lager = input.lager ?? "HAUPT";
     const { id } = await this.repo.createReservation({
       variantId: input.variantId,
@@ -190,15 +199,19 @@ export class ReservationService {
 
   /** Verfügbarkeits-Übersicht je Variante×Lager (Ist/reserviert/verfügbar + Meldebestand). */
   async availability(): Promise<AvailabilityRow[]> {
-    const [balances, reservedMap, thresholds] = await Promise.all([
+    const [balances, reservedMap, thresholds, managed] = await Promise.all([
       this.onHand.listBalances(),
       this.repo.reservedMap(),
       this.repo.listThresholds(),
+      this.repo.stockManagedVariantIds(),
     ]);
     const minByKey = new Map(thresholds.map((t) => [key(t.variantId, t.lager), t.minQty]));
     const lagers: StockLager[] = ["HAUPT", "MUSTER", "SHOWROOM", "TRANSFERDRUCK"];
     const rows: AvailabilityRow[] = [];
     for (const b of balances) {
+      // Nicht bestandsgeführte Artikel erscheinen NICHT in der Verfügbarkeit (keine
+      // irreführenden Minusbestände aus Procure-to-Order/Phantompositionen).
+      if (!managed.has(b.variantId)) continue;
       for (const lager of lagers) {
         const onHandQty = b.balances[lager] ?? 0;
         const reserved = reservedMap[key(b.variantId, lager)] ?? 0;
@@ -214,13 +227,15 @@ export class ReservationService {
   // ── Shop-Bestand (Pseudo-Bestand, Xentral-Vorbild) ────────────────────────
   /** Je Variante: verfügbarer HAUPT-Bestand (Ist − reserviert), Puffer und gemeldeter Shop-Bestand. */
   async shopStock(): Promise<ShopStockRow[]> {
-    const [balances, reservedMap, puffers] = await Promise.all([
+    const [balances, reservedMap, puffers, managed] = await Promise.all([
       this.onHand.listBalances(),
       this.repo.reservedMap(),
       this.repo.shopPuffers(),
+      this.repo.stockManagedVariantIds(),
     ]);
     const rows: ShopStockRow[] = [];
     for (const b of balances) {
+      if (!managed.has(b.variantId)) continue; // nur bestandsgeführte Artikel an den Shop melden
       const onHandQty = b.balances.HAUPT ?? 0;
       const reserved = reservedMap[key(b.variantId, "HAUPT")] ?? 0;
       const puffer = puffers[b.variantId] ?? 0;
@@ -256,15 +271,17 @@ export class ReservationService {
    * Für Cron/manuelles Auslösen.
    */
   async checkLowStock(): Promise<LowStockAlert[]> {
-    const [thresholds, balances, reservedMap] = await Promise.all([
+    const [thresholds, balances, reservedMap, managed] = await Promise.all([
       this.repo.listThresholds(),
       this.onHand.listBalances(),
       this.repo.reservedMap(),
+      this.repo.stockManagedVariantIds(),
     ]);
     const balByKey = new Map<string, { sku: string; name: string; onHand: number }>();
     for (const b of balances) for (const [lager, qty] of Object.entries(b.balances)) balByKey.set(key(b.variantId, lager as StockLager), { sku: b.sku, name: b.name, onHand: qty });
     const alerts: LowStockAlert[] = [];
     for (const t of thresholds) {
+      if (!managed.has(t.variantId)) continue; // Meldebestand nur für bestandsgeführte Artikel
       const meta = balByKey.get(key(t.variantId, t.lager));
       const onHandQty = meta?.onHand ?? 0;
       const available = onHandQty - (reservedMap[key(t.variantId, t.lager)] ?? 0);
