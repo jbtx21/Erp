@@ -30,6 +30,11 @@ const supplierCatalogItem = z.object({
   sku: z.string().min(1),
   ekCents: z.number().int(),
   availableQty: z.number().int().nonnegative().nullable(),
+  // Optionale Anreicherung (Säule C): erlaubt das Anlegen unbekannter SKUs als Artikel + Variante.
+  articleName: z.string().optional(),
+  parentSku: z.string().optional(),
+  farbe: z.string().optional(),
+  groesse: z.string().optional(),
 });
 
 function toTrpcError(err: unknown): never {
@@ -336,10 +341,11 @@ export const appRouter = router({
         z.object({
           supplierId: z.string().min(1),
           items: z.array(supplierCatalogItem),
+          createUnknown: z.boolean().optional(),
         })
       )
       .mutation(async ({ input, ctx }) =>
-        ctx.supplierImport.ingestCatalog(input.supplierId, input.items)
+        ctx.supplierImport.ingestCatalog(input.supplierId, input.items, { createUnknown: input.createUnknown })
       ),
 
     /** Lieferanten-Artikel mit EK-Preisen (rollen­geschützt, kein PRODUKTION-Zugriff). */

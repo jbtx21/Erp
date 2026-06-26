@@ -30,6 +30,17 @@ export interface SupplierCatalogItem {
   ekCents: number;
   /** Verfügbarer Lagerbestand beim Lieferanten; null = unbekannt. */
   availableQty: number | null;
+  // ── Optionale Anreicherung (C3, Säule C): nur gesetzt, wenn der Mapper sie liefert.
+  // Erlaubt dem Import, unbekannte SKUs als Artikel + Variante anzulegen statt zu
+  // überspringen. Mapper ohne diese Felder bleiben unverändert (rückwärtskompatibel).
+  /** Artikelname (für neu angelegte Hauptartikel). */
+  articleName?: string;
+  /** Hauptartikelnummer (Matrix-Parent); fehlt → die Variante wird eigener Artikel. */
+  parentSku?: string;
+  /** Variantenmerkmal Farbe. */
+  farbe?: string;
+  /** Variantenmerkmal Größe. */
+  groesse?: string;
 }
 
 export class SupplierCatalogError extends Error {

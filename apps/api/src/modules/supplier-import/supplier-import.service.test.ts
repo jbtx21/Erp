@@ -50,6 +50,28 @@ describe("SupplierImportService.ingestCatalog (C3)", () => {
     });
   });
 
+  it("legt unbekannte SKUs mit createUnknown als Artikel + Variante an (Säule C)", async () => {
+    const { repo, service } = setup();
+    const enriched: SupplierCatalogItem = {
+      supplierSku: "IDI-NEU-1", sku: "EAN-NEU-1", ekCents: 880, availableQty: 30,
+      articleName: "Neues Polo", parentSku: "POLO-NEU", farbe: "Navy", groesse: "M",
+    };
+    const res = await service.ingestCatalog(SUP, [enriched], { createUnknown: true });
+    expect(res.created).toBe(1);
+    expect(res.upserted).toBe(1);
+    expect(res.skipped).toBe(0);
+    // Variante wurde mit Merkmalen + Lieferanten-SKU angelegt und ist EK-verknüpft.
+    const v = [...repo.createdVariants.values()][0]!;
+    expect(v.sku).toBe("EAN-NEU-1");
+    expect(v.attributes).toEqual([{ name: "Farbe", value: "Navy" }, { name: "Größe", value: "M" }]);
+    const items = await repo.listItems(SUP, 50);
+    expect(items[0]).toMatchObject({ variantId: v.id, ekCents: 880 });
+    // Zweiter Lauf: SKU jetzt bekannt → nur Update, kein neuer Artikel.
+    const second = await service.ingestCatalog(SUP, [enriched], { createUnknown: true });
+    expect(second.created).toBe(0);
+    expect(second.upserted).toBe(1);
+  });
+
   it("ist idempotent: zweiter Lauf aktualisiert statt zu duplizieren", async () => {
     const { repo, service } = setup();
     await service.ingestCatalog(SUP, [item("0020-RED-L", 590, 120)]);

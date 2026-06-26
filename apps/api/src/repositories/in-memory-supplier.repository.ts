@@ -79,6 +79,26 @@ export class InMemorySupplierRepository
     return this.skuToVariant.get(sku) ?? null;
   }
 
+  /** Hier wachsen Artikel/Varianten durch createUnknown (Säule C). */
+  private readonly articles = new Map<string, { id: string; sku: string; name: string }>();
+  readonly createdVariants = new Map<string, { id: string; articleId: string; sku: string; attributes: Array<{ name: string; value: string }> }>();
+
+  async findOrCreateArticle(sku: string, name: string): Promise<string> {
+    const existing = [...this.articles.values()].find((a) => a.sku === sku);
+    if (existing) return existing.id;
+    const id = `art_${++this.seq}`;
+    this.articles.set(id, { id, sku, name });
+    return id;
+  }
+
+  async createVariantWithAttributes(articleId: string, sku: string, attributes: ReadonlyArray<{ name: string; value: string }>): Promise<string> {
+    const id = `var_${++this.seq}`;
+    this.createdVariants.set(id, { id, articleId, sku, attributes: attributes.map((a) => ({ ...a })) });
+    // Damit ein erneuter Import dieselbe SKU als „vorhanden" auflöst (Idempotenz).
+    this.skuToVariant.set(sku, id);
+    return id;
+  }
+
   async upsertSupplierItem(input: UpsertSupplierItemInput): Promise<"created" | "updated"> {
     const existing = this.items.find(
       (i) => i.supplierId === input.supplierId && i.variantId === input.variantId

@@ -18,6 +18,21 @@ export class PrismaSupplierRepository
     return v?.id ?? null;
   }
 
+  async findOrCreateArticle(sku: string, name: string): Promise<string> {
+    const existing = await prisma.article.findUnique({ where: { sku }, select: { id: true } });
+    if (existing) return existing.id;
+    const created = await prisma.article.create({ data: { sku, name }, select: { id: true } });
+    return created.id;
+  }
+
+  async createVariantWithAttributes(articleId: string, sku: string, attributes: ReadonlyArray<{ name: string; value: string }>): Promise<string> {
+    const v = await prisma.variant.create({
+      data: { articleId, sku, attributes: { create: attributes.map((a) => ({ name: a.name, value: a.value })) } },
+      select: { id: true },
+    });
+    return v.id;
+  }
+
   async upsertSupplierItem(input: UpsertSupplierItemInput): Promise<"created" | "updated"> {
     const existing = await prisma.supplierItem.findUnique({
       where: { supplierId_variantId: { supplierId: input.supplierId, variantId: input.variantId } },

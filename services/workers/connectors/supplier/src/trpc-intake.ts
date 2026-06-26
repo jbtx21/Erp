@@ -4,7 +4,7 @@
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import type { AppRouter } from "@texma/api";
 import type { SupplierCatalogItem } from "@texma/shared";
-import type { SupplierIngestSummary, SupplierIntake } from "./index.js";
+import type { SupplierIngestOptions, SupplierIngestSummary, SupplierIntake } from "./index.js";
 
 export class TrpcSupplierIntake implements SupplierIntake {
   private readonly client: ReturnType<typeof createTRPCClient<AppRouter>>;
@@ -18,8 +18,9 @@ export class TrpcSupplierIntake implements SupplierIntake {
 
   async ingestCatalog(
     supplierId: string,
-    items: SupplierCatalogItem[]
+    items: SupplierCatalogItem[],
+    opts?: SupplierIngestOptions
   ): Promise<SupplierIngestSummary> {
-    return this.client.suppliers.ingestCatalog.mutate({ supplierId, items });
+    return this.client.suppliers.ingestCatalog.mutate({ supplierId, items, createUnknown: opts?.createUnknown });
   }
 }

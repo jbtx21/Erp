@@ -21,17 +21,26 @@ export interface SupplierCatalogClient {
 export interface SupplierIngestSummary {
   upserted: number;
   skipped: number;
+  /** Neu angelegte Artikel-Varianten (createUnknown, Säule C). */
+  created?: number;
+}
+
+export interface SupplierIngestOptions {
+  /** Unbekannte SKUs als Artikel + Variante anlegen statt überspringen (Säule C). */
+  createUnknown?: boolean;
 }
 
 /** Übergabepunkt in die Anwendung (apps/api SupplierImportService). */
 export interface SupplierIntake {
-  ingestCatalog(supplierId: string, items: SupplierCatalogItem[]): Promise<SupplierIngestSummary>;
+  ingestCatalog(supplierId: string, items: SupplierCatalogItem[], opts?: SupplierIngestOptions): Promise<SupplierIngestSummary>;
 }
 
 export interface SupplierConfig {
   supplierId: string;
   kind: SupplierKind;
   cursor: string | null;
+  /** Unbekannte SKUs beim Sync anlegen (je Lieferant konfigurierbar, Säule C). */
+  createUnknown?: boolean;
 }
 
 export interface SupplierRunResult extends SupplierIngestSummary {
@@ -51,7 +60,7 @@ export class SupplierConnector
   async run(config: SupplierConfig): Promise<SupplierRunResult> {
     const { items, nextCursor } = await this.client.fetchCatalogSince(config.cursor);
     const mapped = mapSupplierCatalog(items, config.kind);
-    const summary = await this.intake.ingestCatalog(config.supplierId, mapped);
+    const summary = await this.intake.ingestCatalog(config.supplierId, mapped, { createUnknown: config.createUnknown });
     return { ...summary, nextCursor };
   }
 }
