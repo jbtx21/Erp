@@ -1543,21 +1543,37 @@ export function ProductionPicker({ value, onChange, label = "Produktionsauftrag"
 export function CompanyPicker({ value, onChange, label = "Kunde", w = 240, allowEmpty = false }: { value: string; onChange: (id: string) => void; label?: string; w?: number; allowEmpty?: boolean }): JSX.Element {
   const [companies, setCompanies] = useState<Awaited<ReturnType<typeof trpc.companies.list.query>>>([]);
   const [search, setSearch] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
   const reload = useCallback(async () => { try { setCompanies(await trpc.companies.list.query()); } catch { /* ignore */ } }, []);
   useEffect(() => { void reload(); }, [reload]);
   const exact = companies.some((c) => c.name.toLowerCase() === search.trim().toLowerCase());
+  const canCreate = search.trim().length >= 2 && !exact;
+  // Neuen Kunden anlegen und direkt auswählen; Fehler werden sichtbar gemacht (nicht verschluckt).
+  const doCreate = async (): Promise<void> => {
+    const nm = search.trim();
+    if (!nm) return;
+    setCreating(true); setErr(null);
+    try { const r = await trpc.companies.create.mutate({ name: nm, priceGroupKind: "STANDARD" }); await reload(); onChange(r.id); setSearch(""); }
+    catch (e) { setErr(errMsg(e)); }
+    finally { setCreating(false); }
+  };
   return (
     <Box>
       <Select label={label} searchable clearable={allowEmpty} placeholder="Kunde suchen…" w={w}
         value={value || null} onChange={(v) => onChange(v ?? "")} searchValue={search} onSearchChange={setSearch}
-        nothingFoundMessage="Kein Treffer — unten anlegen"
+        nothingFoundMessage={
+          canCreate
+            // Klick direkt im Dropdown (onMouseDown, damit das Select nicht vorher schließt) —
+            // immer erreichbar, auch wenn der Button unter dem Feld vom Layout verdeckt würde.
+            ? <Text size="xs" c="blue" fw={600} style={{ cursor: "pointer" }} onMouseDown={(e) => { e.preventDefault(); void doCreate(); }}>+ „{search.trim()}" als neuen Kunden anlegen</Text>
+            : "Kein Treffer"
+        }
         data={companies.map((c) => ({ value: c.id, label: `${c.name}${c.branche ? ` · ${c.branche}` : ""}` }))} />
-      {search.trim().length >= 2 && !exact && (
-        <Button size="compact-xs" variant="light" mt={4} onClick={async () => {
-          try { const r = await trpc.companies.create.mutate({ name: search.trim(), priceGroupKind: "STANDARD" }); await reload(); onChange(r.id); setSearch(""); }
-          catch { /* ignore */ }
-        }}>+ „{search.trim()}" als Kunde anlegen</Button>
+      {canCreate && (
+        <Button size="compact-xs" variant="light" mt={4} loading={creating} onClick={() => void doCreate()}>+ „{search.trim()}" als Kunde anlegen</Button>
       )}
+      {err && <Text size="xs" c="red" mt={4} w={w}>{err}</Text>}
     </Box>
   );
 }
@@ -1566,21 +1582,34 @@ export function CompanyPicker({ value, onChange, label = "Kunde", w = 240, allow
 export function SupplierPicker({ value, onChange, label, w = 200 }: { value: string; onChange: (id: string) => void; label?: string; w?: number }): JSX.Element {
   const [suppliers, setSuppliers] = useState<Awaited<ReturnType<typeof trpc.suppliers.listAll.query>>>([]);
   const [search, setSearch] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
   const reload = useCallback(async () => { try { setSuppliers(await trpc.suppliers.listAll.query()); } catch { /* ignore */ } }, []);
   useEffect(() => { void reload(); }, [reload]);
   const exact = suppliers.some((s) => s.name.toLowerCase() === search.trim().toLowerCase());
+  const canCreate = search.trim().length >= 2 && !exact;
+  const doCreate = async (): Promise<void> => {
+    const nm = search.trim();
+    if (!nm) return;
+    setCreating(true); setErr(null);
+    try { const r = await trpc.suppliers.create.mutate({ name: nm }); await reload(); onChange(r.id); setSearch(""); }
+    catch (e) { setErr(errMsg(e)); }
+    finally { setCreating(false); }
+  };
   return (
     <Box>
       <Select label={label} size={label ? undefined : "xs"} searchable clearable placeholder="Lieferant suchen…" w={w}
         value={value || null} onChange={(v) => onChange(v ?? "")} searchValue={search} onSearchChange={setSearch}
-        nothingFoundMessage="Kein Treffer — unten anlegen"
+        nothingFoundMessage={
+          canCreate
+            ? <Text size="xs" c="blue" fw={600} style={{ cursor: "pointer" }} onMouseDown={(e) => { e.preventDefault(); void doCreate(); }}>+ „{search.trim()}" als neuen Lieferant anlegen</Text>
+            : "Kein Treffer"
+        }
         data={suppliers.map((s) => ({ value: s.id, label: s.name }))} />
-      {search.trim().length >= 2 && !exact && (
-        <Button size="compact-xs" variant="light" mt={4} onClick={async () => {
-          try { const r = await trpc.suppliers.create.mutate({ name: search.trim() }); await reload(); onChange(r.id); setSearch(""); }
-          catch { /* ignore */ }
-        }}>+ „{search.trim()}" als Lieferant anlegen</Button>
+      {canCreate && (
+        <Button size="compact-xs" variant="light" mt={4} loading={creating} onClick={() => void doCreate()}>+ „{search.trim()}" als Lieferant anlegen</Button>
       )}
+      {err && <Text size="xs" c="red" mt={4} w={w}>{err}</Text>}
     </Box>
   );
 }
