@@ -2558,6 +2558,68 @@ export const appRouter = router({
     unlink: roleProcedure("ADMIN", "BUERO")
       .input(z.object({ id: z.string().min(1) }))
       .mutation(async ({ input, ctx }) => { await ctx.contactLinks.unlink(input.id); return { ok: true as const }; }),
+
+    /** Person direkt in der Kundenmaske anlegen (Stammkontakt der Firma). */
+    create: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ companyId: z.string().min(1), firstName: z.string(), lastName: z.string(), email: z.string().optional(), phone: z.string().optional(), role: z.string().optional() }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.contactLinks.createForCompany(input.companyId, input); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+
+    /** Stammdaten einer Person bearbeiten (nur gesetzte Felder, null = leeren). */
+    update: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ id: z.string().min(1), firstName: z.string().optional(), lastName: z.string().optional(), email: z.string().nullable().optional(), phone: z.string().nullable().optional(), role: z.string().nullable().optional() }))
+      .mutation(async ({ input, ctx }) => {
+        const { id, ...fields } = input;
+        try { await ctx.contactLinks.updateContact(id, fields); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+
+    /** Eigenen Stammkontakt löschen (Fremde nur entkoppeln). */
+    delete: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ id: z.string().min(1), companyId: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.contactLinks.deleteContactForCompany(input.id, input.companyId); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+  }),
+
+  // Lieferadressen je Firma (B3 / Xentral-Benchmark): mehrere benannte Adressen + Standard.
+  addresses: router({
+    forCompany: roleProcedure(...supplierRoles)
+      .input(z.object({ companyId: z.string().min(1) }))
+      .query(({ input, ctx }) => ctx.companyAddresses.list(input.companyId)),
+
+    create: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ companyId: z.string().min(1), label: z.string(), street: z.string(), zip: z.string(), city: z.string(), country: z.string().optional() }))
+      .mutation(async ({ input, ctx }) => {
+        const { companyId, ...fields } = input;
+        try { return await ctx.companyAddresses.create(companyId, fields); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+
+    update: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ id: z.string().min(1), companyId: z.string().min(1), label: z.string().optional(), street: z.string().optional(), zip: z.string().optional(), city: z.string().optional(), country: z.string().optional() }))
+      .mutation(async ({ input, ctx }) => {
+        const { id, companyId, ...fields } = input;
+        try { await ctx.companyAddresses.update(id, companyId, fields); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+
+    setDefault: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ id: z.string().min(1), companyId: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.companyAddresses.setDefault(input.companyId, input.id); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+
+    delete: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ id: z.string().min(1), companyId: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.companyAddresses.delete(input.id, input.companyId); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
   }),
 
   // Order → Invoice „Make-Target" (Kap. 9.1): Auftrag fakturieren (ERPNext-Muster).

@@ -66,6 +66,7 @@ import type { ArchiveService } from "../modules/archive/archive.service.js";
 import type { InvoiceService } from "../modules/invoice/invoice.service.js";
 import type { ConnectionsService } from "../modules/connections/connections.service.js";
 import type { ContactLinkService } from "../modules/contact/contact-link.service.js";
+import type { CompanyAddressService } from "../modules/company/company-address.service.js";
 import type { AutomationService } from "../modules/automation/automation.service.js";
 import type { TaskService } from "../modules/task/task.service.js";
 import type { PreferencesService } from "../modules/preferences/preferences.service.js";
@@ -157,6 +158,7 @@ export interface Context {
   invoices: InvoiceService;
   connections: ConnectionsService;
   contactLinks: ContactLinkService;
+  companyAddresses: CompanyAddressService;
   automation: AutomationService;
   tasks: TaskService;
   preferences: PreferencesService;

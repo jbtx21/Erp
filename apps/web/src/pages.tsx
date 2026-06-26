@@ -3404,39 +3404,155 @@ function CompanyDetailPanel({ companyId, onNavigate }: { companyId: string; onNa
 // zusätzlich verknüpfte Personen; erlaubt das Verknüpfen einer Person mit einer
 // weiteren Firma (Person ↔ mehrere Parteien).
 function CompanyContactsPanel({ companyId, companies }: { companyId: string; companies: Array<{ id: string; name: string }> }): JSX.Element {
-  const [people, setPeople] = useState<Awaited<ReturnType<typeof trpc.contacts.forEntity.query>>>([]);
+  type Person = Awaited<ReturnType<typeof trpc.contacts.forEntity.query>>[number];
+  const [people, setPeople] = useState<Person[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  // Anlage-Formular für eine neue Person (Stammkontakt der Firma, Xentral „in der Maske").
+  const [nf, setNf] = useState({ firstName: "", lastName: "", email: "", phone: "", role: "" });
+  // Bearbeitungszustand: contactId → Felder.
+  const [edit, setEdit] = useState<{ id: string; firstName: string; lastName: string; email: string; phone: string; role: string } | null>(null);
+
   const load = useCallback(async () => {
     try { setPeople(await trpc.contacts.forEntity.query({ entity: "Company", entityId: companyId })); setErr(null); }
     catch (e) { setErr(errMsg(e)); }
   }, [companyId]);
   useEffect(() => { void load(); }, [load]);
 
+  const run = async (fn: () => Promise<unknown>): Promise<void> => {
+    setBusy(true); setErr(null);
+    try { await fn(); await load(); } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+
   return (
     <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
       <Text fw={600}>Personen &amp; Verknüpfungen</Text>
       {err && <Alert color="red" mt="xs">{err}</Alert>}
-      {people.length === 0 ? <Text size="sm" c="dimmed" mt="xs">Keine Personen.</Text> : (
-        <Table mt="xs"><Table.Tbody>
+
+      {/* Neue Person direkt in der Kundenmaske anlegen */}
+      <Group gap="xs" mt="xs" align="flex-end" wrap="wrap">
+        <TextInput size="xs" label="Vorname" value={nf.firstName} onChange={(e) => setNf({ ...nf, firstName: e.currentTarget.value })} w={120} />
+        <TextInput size="xs" label="Nachname" value={nf.lastName} onChange={(e) => setNf({ ...nf, lastName: e.currentTarget.value })} w={120} />
+        <TextInput size="xs" label="E-Mail" value={nf.email} onChange={(e) => setNf({ ...nf, email: e.currentTarget.value })} w={170} />
+        <TextInput size="xs" label="Telefon" value={nf.phone} onChange={(e) => setNf({ ...nf, phone: e.currentTarget.value })} w={130} />
+        <TextInput size="xs" label="Funktion" value={nf.role} onChange={(e) => setNf({ ...nf, role: e.currentTarget.value })} w={130} placeholder="Einkauf" />
+        <Button size="compact-sm" loading={busy} disabled={!nf.firstName.trim() && !nf.lastName.trim()}
+          onClick={() => run(async () => { await trpc.contacts.create.mutate({ companyId, firstName: nf.firstName, lastName: nf.lastName, email: nf.email || undefined, phone: nf.phone || undefined, role: nf.role || undefined }); setNf({ firstName: "", lastName: "", email: "", phone: "", role: "" }); })}>
+          Person anlegen
+        </Button>
+      </Group>
+
+      {people.length === 0 ? <Text size="sm" c="dimmed" mt="sm">Keine Personen.</Text> : (
+        <Table mt="sm"><Table.Tbody>
           {people.map((p) => (
             <Table.Tr key={p.contactId}>
               <Table.Td><Badge size="xs" variant="light" color={p.primary ? "blue" : "grape"}>{p.primary ? "Stamm" : "Verknüpft"}</Badge></Table.Td>
               <Table.Td>{p.name}{p.role ? <Text span size="xs" c="dimmed"> · {p.role}</Text> : null}</Table.Td>
               <Table.Td><Text size="xs" c="dimmed">{p.email ?? p.phone ?? ""}</Text></Table.Td>
               <Table.Td>
-                <Select size="xs" placeholder="mit Firma verknüpfen…" w={200} searchable
-                  data={companies.filter((c) => c.id !== companyId).map((c) => ({ value: c.id, label: c.name }))}
-                  onChange={async (target) => {
-                    if (!target) return;
-                    setErr(null);
-                    try { await trpc.contacts.link.mutate({ contactId: p.contactId, entity: "Company", entityId: target }); await load(); }
-                    catch (e) { setErr(errMsg(e)); }
-                  }} />
+                <Group gap={4} justify="flex-end" wrap="nowrap">
+                  {p.primary && <Button size="compact-xs" variant="subtle" onClick={() => setEdit({ id: p.contactId, firstName: p.firstName, lastName: p.lastName, email: p.email ?? "", phone: p.phone ?? "", role: p.role ?? "" })}>Bearbeiten</Button>}
+                  <Select size="xs" placeholder="mit Firma verknüpfen…" w={180} searchable
+                    data={companies.filter((c) => c.id !== companyId).map((c) => ({ value: c.id, label: c.name }))}
+                    onChange={(target) => { if (target) void run(async () => { await trpc.contacts.link.mutate({ contactId: p.contactId, entity: "Company", entityId: target }); }); }} />
+                  {p.primary && <Button size="compact-xs" variant="subtle" color="red"
+                    onClick={() => { if (typeof window === "undefined" || window.confirm(`Person „${p.name}" löschen?`)) void run(async () => { await trpc.contacts.delete.mutate({ id: p.contactId, companyId }); }); }}>Löschen</Button>}
+                </Group>
               </Table.Td>
             </Table.Tr>
           ))}
         </Table.Tbody></Table>
       )}
+
+      <Modal opened={edit !== null} onClose={() => setEdit(null)} title="Person bearbeiten" centered>
+        {edit && (
+          <Stack gap="xs">
+            <Group grow><TextInput label="Vorname" value={edit.firstName} onChange={(e) => setEdit({ ...edit, firstName: e.currentTarget.value })} />
+              <TextInput label="Nachname" value={edit.lastName} onChange={(e) => setEdit({ ...edit, lastName: e.currentTarget.value })} /></Group>
+            <TextInput label="E-Mail" value={edit.email} onChange={(e) => setEdit({ ...edit, email: e.currentTarget.value })} />
+            <Group grow><TextInput label="Telefon" value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.currentTarget.value })} />
+              <TextInput label="Funktion" value={edit.role} onChange={(e) => setEdit({ ...edit, role: e.currentTarget.value })} /></Group>
+            <Group justify="flex-end" mt="xs">
+              <Button variant="default" onClick={() => setEdit(null)}>Abbrechen</Button>
+              <Button loading={busy} onClick={() => run(async () => { await trpc.contacts.update.mutate({ id: edit.id, firstName: edit.firstName, lastName: edit.lastName, email: edit.email || null, phone: edit.phone || null, role: edit.role || null }); setEdit(null); })}>Speichern</Button>
+            </Group>
+          </Stack>
+        )}
+      </Modal>
+    </Box>
+  );
+}
+
+function CompanyAddressesPanel({ companyId }: { companyId: string }): JSX.Element {
+  type Addr = Awaited<ReturnType<typeof trpc.addresses.forCompany.query>>[number];
+  const [rows, setRows] = useState<Addr[]>([]);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const empty = { label: "", street: "", zip: "", city: "", country: "DE" };
+  const [nf, setNf] = useState(empty);
+  const [edit, setEdit] = useState<(Addr & { country: string }) | null>(null);
+
+  const load = useCallback(async () => {
+    try { setRows(await trpc.addresses.forCompany.query({ companyId })); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
+  }, [companyId]);
+  useEffect(() => { void load(); }, [load]);
+
+  const run = async (fn: () => Promise<unknown>): Promise<void> => {
+    setBusy(true); setErr(null);
+    try { await fn(); await load(); } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+
+  return (
+    <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+      <Text fw={600}>Lieferadressen <Text span size="xs" c="dimmed">· Rechnungsadresse liegt im Tab „Stammdaten"</Text></Text>
+      {err && <Alert color="red" mt="xs">{err}</Alert>}
+
+      <Group gap="xs" mt="xs" align="flex-end" wrap="wrap">
+        <TextInput size="xs" label="Bezeichnung" value={nf.label} onChange={(e) => setNf({ ...nf, label: e.currentTarget.value })} w={140} placeholder="Lager / Filiale" />
+        <TextInput size="xs" label="Straße" value={nf.street} onChange={(e) => setNf({ ...nf, street: e.currentTarget.value })} w={170} />
+        <TextInput size="xs" label="PLZ" value={nf.zip} onChange={(e) => setNf({ ...nf, zip: e.currentTarget.value })} w={80} />
+        <TextInput size="xs" label="Ort" value={nf.city} onChange={(e) => setNf({ ...nf, city: e.currentTarget.value })} w={140} />
+        <TextInput size="xs" label="Land" value={nf.country} onChange={(e) => setNf({ ...nf, country: e.currentTarget.value })} w={70} />
+        <Button size="compact-sm" loading={busy} disabled={!nf.label.trim() || !nf.street.trim() || !nf.zip.trim() || !nf.city.trim()}
+          onClick={() => run(async () => { await trpc.addresses.create.mutate({ companyId, ...nf, country: nf.country || undefined }); setNf(empty); })}>
+          Adresse anlegen
+        </Button>
+      </Group>
+
+      {rows.length === 0 ? <Text size="sm" c="dimmed" mt="sm">Keine Lieferadressen.</Text> : (
+        <Table mt="sm"><Table.Tbody>
+          {rows.map((a) => (
+            <Table.Tr key={a.id}>
+              <Table.Td>{a.isDefault && <Badge size="xs" color="blue" variant="light">Standard</Badge>}</Table.Td>
+              <Table.Td><Text fw={500} size="sm">{a.label}</Text><Text size="xs" c="dimmed">{a.street}, {a.zip} {a.city}{a.country !== "DE" ? ` · ${a.country}` : ""}</Text></Table.Td>
+              <Table.Td>
+                <Group gap={4} justify="flex-end" wrap="nowrap">
+                  {!a.isDefault && <Button size="compact-xs" variant="subtle" onClick={() => run(async () => { await trpc.addresses.setDefault.mutate({ id: a.id, companyId }); })}>Als Standard</Button>}
+                  <Button size="compact-xs" variant="subtle" onClick={() => setEdit({ ...a })}>Bearbeiten</Button>
+                  <Button size="compact-xs" variant="subtle" color="red" onClick={() => { if (typeof window === "undefined" || window.confirm(`Lieferadresse „${a.label}" löschen?`)) void run(async () => { await trpc.addresses.delete.mutate({ id: a.id, companyId }); }); }}>Löschen</Button>
+                </Group>
+              </Table.Td>
+            </Table.Tr>
+          ))}
+        </Table.Tbody></Table>
+      )}
+
+      <Modal opened={edit !== null} onClose={() => setEdit(null)} title="Lieferadresse bearbeiten" centered>
+        {edit && (
+          <Stack gap="xs">
+            <TextInput label="Bezeichnung" value={edit.label} onChange={(e) => setEdit({ ...edit, label: e.currentTarget.value })} />
+            <TextInput label="Straße" value={edit.street} onChange={(e) => setEdit({ ...edit, street: e.currentTarget.value })} />
+            <Group grow><TextInput label="PLZ" value={edit.zip} onChange={(e) => setEdit({ ...edit, zip: e.currentTarget.value })} />
+              <TextInput label="Ort" value={edit.city} onChange={(e) => setEdit({ ...edit, city: e.currentTarget.value })} />
+              <TextInput label="Land" value={edit.country} onChange={(e) => setEdit({ ...edit, country: e.currentTarget.value })} /></Group>
+            <Group justify="flex-end" mt="xs">
+              <Button variant="default" onClick={() => setEdit(null)}>Abbrechen</Button>
+              <Button loading={busy} onClick={() => run(async () => { await trpc.addresses.update.mutate({ id: edit.id, companyId, label: edit.label, street: edit.street, zip: edit.zip, city: edit.city, country: edit.country || undefined }); setEdit(null); })}>Speichern</Button>
+            </Group>
+          </Stack>
+        )}
+      </Modal>
     </Box>
   );
 }
@@ -3493,6 +3609,7 @@ export function CompaniesPage({ focusId }: { focusId?: string } = {}): JSX.Eleme
         </Group>
       )} />
       {openCompany && <CompanyDetailPanel companyId={openCompany} />}
+      {openCompany && <CompanyAddressesPanel companyId={openCompany} />}
       {openCompany && <CompanyContactsPanel companyId={openCompany} companies={rows.map((r) => ({ id: String(r.id), name: String(r.name ?? r.id) }))} />}
     </>
   );

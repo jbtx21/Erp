@@ -90,6 +90,8 @@ import { ConnectionsService } from "../modules/connections/connections.service.j
 import { InMemoryConnectionsRepository } from "../repositories/in-memory-connections.repository.js";
 import { ContactLinkService } from "../modules/contact/contact-link.service.js";
 import { InMemoryContactLinkRepository } from "../repositories/in-memory-contact-link.repository.js";
+import { CompanyAddressService } from "../modules/company/company-address.service.js";
+import { InMemoryCompanyAddressRepository } from "../repositories/in-memory-company-address.repository.js";
 import { AutomationService } from "../modules/automation/automation.service.js";
 import { InMemoryAutomationRepository } from "../repositories/in-memory-automation.repository.js";
 import { TaskService } from "../modules/task/task.service.js";
@@ -366,6 +368,7 @@ function setup(user: AuthUser | null = BUERO) {
     invoices: new InvoiceService(new InMemoryInvoiceRepository([]), new NumberingService(new InMemoryNumberingRepository()), new MemoryAuditSink()),
     connections: new ConnectionsService(new InMemoryConnectionsRepository({})),
     contactLinks: new ContactLinkService(new InMemoryContactLinkRepository([]), new MemoryAuditSink()),
+    companyAddresses: new CompanyAddressService(new InMemoryCompanyAddressRepository(), new MemoryAuditSink()),
     automation: new AutomationService(new InMemoryAutomationRepository(), { notify: async () => undefined }, new MemoryAuditSink()),
     tasks: new TaskService(new InMemoryTaskRepository(), new MemoryAuditSink()),
     preferences: new PreferencesService(new InMemoryUserPreferenceRepository()),
@@ -506,6 +509,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       invoices: {} as Context["invoices"],
       connections: {} as Context["connections"],
       contactLinks: {} as Context["contactLinks"],
+      companyAddresses: {} as Context["companyAddresses"],
       automation: {} as Context["automation"],
       tasks: {} as Context["tasks"],
       preferences: {} as Context["preferences"],

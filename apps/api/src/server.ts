@@ -84,6 +84,8 @@ import { PrismaInquiryRepository } from "./repositories/prisma-inquiry.repositor
 import { SampleLoanService } from "./modules/sample/sample.service.js";
 import { PrismaSampleLoanRepository } from "./repositories/prisma-sample.repository.js";
 import { CompanyService } from "./modules/company/company.service.js";
+import { CompanyAddressService } from "./modules/company/company-address.service.js";
+import { PrismaCompanyAddressRepository } from "./repositories/prisma-company-address.repository.js";
 import { PrismaCompanyRepository } from "./repositories/prisma-company.repository.js";
 import { ProductService } from "./modules/product/product.service.js";
 import { PrismaProductRepository } from "./repositories/prisma-product.repository.js";
@@ -339,6 +341,8 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const connections = new ConnectionsService(new PrismaConnectionsRepository());
   // Contact-Dynamic-Link (CRM): Person ↔ mehrere Parteien (Company/Lead/Supplier).
   const contactLinks = new ContactLinkService(new PrismaContactLinkRepository(), new PrismaAuditSink());
+  // Lieferadressen je Firma (B3 / Xentral-Benchmark): mehrere benannte Adressen + Standard.
+  const companyAddresses = new CompanyAddressService(new PrismaCompanyAddressRepository(), new PrismaAuditSink());
   // Aufgaben/Zuweisung (Assigned To/ToDo): persönliche Arbeitsliste.
   const tasks = new TaskService(new PrismaTaskRepository(), new PrismaAuditSink());
   // Persönliche UI-Einstellungen je Nutzer (z. B. Home-Workspace-Layout, geräteübergreifend).
@@ -548,6 +552,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           invoices,
           connections,
           contactLinks,
+          companyAddresses,
           automation,
           tasks,
           preferences,
