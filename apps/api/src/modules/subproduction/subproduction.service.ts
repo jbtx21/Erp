@@ -76,18 +76,31 @@ export class SubProductionService {
       }
     }
 
+    // Übergangslegalität zuerst (wirft mit klarer Meldung bei unerlaubtem Wechsel),
+    // bevor wir die Mengen-Pflichtregeln prüfen — so meldet ein illegaler Sprung den
+    // Übergangsfehler, nicht „Menge fehlt".
+    const next = transitionStage(stage, to, at);
+
     // Mengenfluss: Beistellmenge beim Versand, Rücklaufmenge (gegen Beistellung geprüft) beim Rücklauf.
     let beistellMenge = stage.beistellMenge ?? null;
     let ruecklaufMenge = stage.ruecklaufMenge ?? null;
     if (to === "BEISTELLUNG_VERSANDT" && opts.menge != null) {
       beistellMenge = opts.menge;
     }
-    if (to === "RUECKLAUF_ERHALTEN" && opts.menge != null) {
+    // Rücklauf ohne Menge wäre ein stiller Mengenbruch (Schwund/Ausbeute nicht bestimmbar,
+    // T-04). Die zurückerhaltene Menge ist daher Pflicht beim Rücklauf.
+    if (to === "RUECKLAUF_ERHALTEN") {
+      if (opts.menge == null) {
+        throw new SubProductionTransitionError("Rücklaufmenge ist beim Rücklauf Pflicht (Schwund/Ausbeute, T-04).");
+      }
       validateReturnQty(beistellMenge, opts.menge);
       ruecklaufMenge = opts.menge;
     }
+    // Abschluss setzt eine erfasste Rücklaufmenge voraus (Mengenkette lückenlos).
+    if (to === "ABGESCHLOSSEN" && ruecklaufMenge == null) {
+      throw new SubProductionTransitionError("Abschluss erst möglich, wenn die Rücklaufmenge erfasst ist (T-04).");
+    }
 
-    const next = transitionStage(stage, to, at);
     await this.repo.updateStage(subProductionId, {
       status: next.status,
       beistellungVersandtAm: next.beistellungVersandtAm ?? null,

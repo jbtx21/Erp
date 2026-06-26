@@ -27,7 +27,7 @@ const log = (s: string): void => console.log(s);
 async function main(): Promise<void> {
   const audit = new PrismaAuditSink();
   const numbering = new NumberingService(new PrismaNumberingRepository());
-  const leads = new LeadService(new PrismaLeadRepository(), audit);
+  const leads = new LeadService(new PrismaLeadRepository(), audit, numbering);
   const quotes = new QuoteService(new PrismaQuoteRepository(), numbering, audit);
   const sales = new SalesOrderService(new PrismaSalesOrderRepository(), numbering, audit);
   const invoices = new InvoiceService(new PrismaInvoiceRepository(), numbering, audit);

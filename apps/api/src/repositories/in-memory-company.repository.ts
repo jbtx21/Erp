@@ -9,7 +9,7 @@ import type {
   UpdateCompanyInput,
 } from "../modules/company/company.service.js";
 
-const STAMMDATEN_KEYS = ["street", "zip", "city", "country", "vatId", "taxNumber", "taxRule", "iban", "bic", "bankName", "sepaMandateRef", "sepaMandateDate", "skontoPercent", "skontoDays", "paymentMethod", "lieferbedingung", "notiz", "kreditlimitCents", "liefersperre", "liefersperreGrund", "debitorenkonto", "belegsprache", "waehrung", "betreuer"] as const;
+const STAMMDATEN_KEYS = ["street", "zip", "city", "country", "vatId", "taxNumber", "taxRule", "iban", "bic", "bankName", "sepaMandateRef", "sepaMandateDate", "skontoPercent", "skontoDays", "paymentMethod", "lieferbedingung", "notiz", "kreditlimitCents", "liefersperre", "liefersperreGrund", "debitorenkonto", "belegsprache", "waehrung", "betreuer", "email"] as const;
 
 export class InMemoryCompanyRepository implements CompanyRepository {
   private readonly companies = new Map<string, CompanyRow>();
@@ -74,7 +74,7 @@ export class InMemoryCompanyRepository implements CompanyRepository {
         skontoPercent: sd("skontoPercent", null), skontoDays: sd("skontoDays", null), paymentMethod: sd("paymentMethod", null),
         lieferbedingung: sd("lieferbedingung", null), notiz: sd("notiz", null), kreditlimitCents: sd("kreditlimitCents", null),
         liefersperre: sd("liefersperre", false), liefersperreGrund: sd("liefersperreGrund", null), debitorenkonto: sd("debitorenkonto", null),
-        belegsprache: sd("belegsprache", "DE"), waehrung: sd("waehrung", "EUR"), betreuer: sd("betreuer", null),
+        belegsprache: sd("belegsprache", "DE"), waehrung: sd("waehrung", "EUR"), betreuer: sd("betreuer", null), email: sd("email", null),
       },
       contactsCount: 0, orders: [], quotes: [], invoices: [], sampleLoans: [], openCents: 0,
       metrics: { revenueNetCents: 0, revenueGrossCents: 0, revenueYtdGrossCents: 0, invoiceCount: 0, orderCount: 0, avgInvoiceGrossCents: 0 },

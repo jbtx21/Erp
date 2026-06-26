@@ -53,6 +53,8 @@ export interface CompanyStammdaten {
   belegsprache: string | null;
   waehrung: string | null;
   betreuer: string | null;
+  /** Zentrale E-Mail der Firma (Belegversand). */
+  email: string | null;
 }
 
 export interface UpdateCompanyInput extends Partial<CompanyStammdaten> {

@@ -10,6 +10,7 @@ import {
   type LeadStatus,
 } from "@texma/shared";
 import { buildEntry, type AuditSink } from "@texma/audit";
+import type { NumberingService } from "../numbering/numbering.service.js";
 
 export interface CreateLeadInput {
   name: string;
@@ -47,14 +48,17 @@ export interface LeadRepository {
   /**
    * Erzeugt Company (+ Kontakt) und verknüpft den Lead — atomar, nur aus QUALIFIZIERT.
    * Bei B2B-Leads ist `firma` der Firmenname der Company, `name` der Ansprechpartner.
+   * `customerNumber` ist die sprechende Kundennummer (KD-JJJJ-NNNN); `email` wird auf
+   * die Company übernommen (nicht nur auf den Kontakt), damit Belegversand sie findet.
    */
-  convert(id: string, input: { name: string; firma: string | null; email: string | null; phone: string | null }): Promise<{ companyId: string }>;
+  convert(id: string, input: { name: string; firma: string | null; email: string | null; phone: string | null; customerNumber: string }): Promise<{ companyId: string }>;
 }
 
 export class LeadService {
   constructor(
     private readonly repo: LeadRepository,
-    private readonly audit: AuditSink
+    private readonly audit: AuditSink,
+    private readonly numbering: NumberingService
   ) {}
 
   async create(input: CreateLeadInput): Promise<{ id: string }> {
@@ -91,9 +95,12 @@ export class LeadService {
     if (!canConvertLead(lead.status)) {
       leadStatusMachine.assert(lead.status, "KONVERTIERT"); // wirft mit klarer Meldung
     }
-    const { companyId } = await this.repo.convert(id, { name: lead.name, firma: lead.firma, email: lead.email, phone: lead.phone });
+    // Sprechende Kundennummer (KD-JJJJ-NNNN) wie bei der direkten Firmenanlage (B3),
+    // damit aus Leads entstandene Kunden nicht ohne Nummer im Stamm landen.
+    const customerNumber = await this.numbering.next("CUSTOMER");
+    const { companyId } = await this.repo.convert(id, { name: lead.name, firma: lead.firma, email: lead.email, phone: lead.phone, customerNumber });
     await this.audit.append(
-      buildEntry({ entity: "Lead", entityId: id, action: "UPDATE", after: { status: "KONVERTIERT", companyId } })
+      buildEntry({ entity: "Lead", entityId: id, action: "UPDATE", after: { status: "KONVERTIERT", companyId, customerNumber } })
     );
     return { companyId };
   }

@@ -42,7 +42,7 @@ export class PrismaLeadRepository implements LeadRepository {
     await prisma.lead.update({ where: { id }, data: { status: "VERWORFEN", verworfenGrund: grund } });
   }
 
-  async convert(id: string, input: { name: string; firma: string | null; email: string | null; phone: string | null }): Promise<{ companyId: string }> {
+  async convert(id: string, input: { name: string; firma: string | null; email: string | null; phone: string | null; customerNumber: string }): Promise<{ companyId: string }> {
     const priceGroup = await prisma.priceGroup.findUnique({ where: { kind: "STANDARD" }, select: { id: true } });
     if (!priceGroup) throw new Error("Standard-Preisgruppe fehlt — Lead-Konvertierung nicht möglich");
 
@@ -58,6 +58,8 @@ export class PrismaLeadRepository implements LeadRepository {
       const company = await tx.company.create({
         data: {
           name: input.firma?.trim() || input.name,
+          customerNumber: input.customerNumber,
+          email: input.email,
           priceGroupId: priceGroup.id,
           contacts:
             input.email || input.phone

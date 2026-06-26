@@ -1278,7 +1278,7 @@ export const appRouter = router({
       .input(z.object({
         name: z.string().min(1),
         sku: z.string().min(1),
-        method: z.enum(["STICK", "DRUCK", "TRANSFER"]),
+        method: z.enum(["STICK", "DRUCK", "DRUCK_DIGITAL", "TRANSFER"]),
         placement: z.string().optional(),
         veredlerId: z.string().min(1),
         ekCents: z.number().int().nonnegative().optional(),
@@ -1884,11 +1884,17 @@ export const appRouter = router({
       .input(z.object({
         kind: z.enum(["QUOTE", "AUFTRAGSBESTAETIGUNG", "INVOICE"]),
         id: z.string().min(1),
-        to: z.string().email(),
+        // Bewusst nur z.string(): die E-Mail-Plausibilität prüfen wir im Handler mit
+        // klarer deutscher Meldung, statt den rohen Zod-„invalid_string"-Fehler ans UI zu reichen.
+        to: z.string(),
         subject: z.string().optional(),
         body: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
+        // Empfänger zuerst sauber prüfen — leer/ungültig → verständliche Rückmeldung.
+        const to = input.to.trim();
+        if (!to) throw new TRPCError({ code: "BAD_REQUEST", message: "Bitte eine Empfänger-E-Mail angeben." });
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) throw new TRPCError({ code: "BAD_REQUEST", message: `„${to}" ist keine gültige E-Mail-Adresse.` });
         try {
           const pdf = input.kind === "QUOTE" ? await ctx.print.quotePdf(input.id)
             : input.kind === "INVOICE" ? await ctx.print.invoicePdf(input.id)
@@ -1896,7 +1902,7 @@ export const appRouter = router({
           const labels = { QUOTE: "Angebot", AUFTRAGSBESTAETIGUNG: "Auftragsbestätigung", INVOICE: "Rechnung" } as const;
           const subject = input.subject ?? `${labels[input.kind]} ${pdf.filename.replace(/\.pdf$/, "").replace(/^[^-]+-/, "")}`;
           const body = input.body ?? `Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie ${labels[input.kind] === "Rechnung" ? "Ihre Rechnung" : `unser ${labels[input.kind]}`} als PDF.\n\nMit freundlichen Grüßen\nTEXMA Textilveredelung GmbH`;
-          await ctx.mailSend.send({ to: input.to, subject, body, attachments: [{ filename: pdf.filename, contentBase64: pdf.base64, contentType: "application/pdf" }] });
+          await ctx.mailSend.send({ to, subject, body, attachments: [{ filename: pdf.filename, contentBase64: pdf.base64, contentType: "application/pdf" }] });
           return { ok: true as const, filename: pdf.filename };
         } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
@@ -2189,6 +2195,7 @@ export const appRouter = router({
         belegsprache: z.enum(["DE", "EN"]).nullable().optional(),
         waehrung: z.string().nullable().optional(),
         betreuer: z.string().nullable().optional(),
+        email: z.string().nullable().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         try { await ctx.companies.update(input); return { ok: true as const }; } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }

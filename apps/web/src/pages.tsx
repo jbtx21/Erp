@@ -1844,7 +1844,7 @@ function BundlePreview({ variantId, positionQty }: { variantId: string; position
 interface TierRow { minMenge: number; euro: number }
 function LogoArticleDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (e: { label: string; variantId: string; unitNetCents: number }) => void }): JSX.Element {
   const [name, setName] = useState(""); const [sku, setSku] = useState("");
-  const [method, setMethod] = useState<"STICK" | "DRUCK" | "TRANSFER">("STICK");
+  const [method, setMethod] = useState<"STICK" | "DRUCK" | "DRUCK_DIGITAL" | "TRANSFER">("STICK");
   const [placement, setPlacement] = useState("");
   const [veredlerId, setVeredlerId] = useState("");
   const [ek, setEk] = useState<number | "">("");
@@ -1884,7 +1884,7 @@ function LogoArticleDialog({ onClose, onCreated }: { onClose: () => void; onCrea
         <TextInput label="Bezeichnung" placeholder="z. B. Logo TSV Emden" value={name} onChange={(e) => setName(e.currentTarget.value)} w={240} />
         <TextInput label="Artikel-Nr. (SKU)" placeholder="LOGO-…" value={sku} onChange={(e) => setSku(e.currentTarget.value)} w={150} />
         <Select label="Veredelungsart" w={150} value={method} onChange={(v) => v && setMethod(v as typeof method)}
-          data={[{ value: "STICK", label: "Stick" }, { value: "DRUCK", label: "Siebdruck" }, { value: "TRANSFER", label: "Transfer" }]} />
+          data={[{ value: "STICK", label: "Stick" }, { value: "DRUCK", label: "Siebdruck" }, { value: "DRUCK_DIGITAL", label: "Digitaldruck" }, { value: "TRANSFER", label: "Transfer" }]} />
         <TextInput label="Position" placeholder="Brust links" value={placement} onChange={(e) => setPlacement(e.currentTarget.value)} w={140} />
       </Group>
       <Group gap="md" align="end" wrap="wrap" mt="sm">
@@ -3436,7 +3436,7 @@ interface SDForm {
   street: string; zip: string; city: string; country: string; vatId: string; taxNumber: string;
   taxRule: string; iban: string; bic: string; bankName: string; sepaMandateRef: string; sepaMandateDate: string;
   skontoPercent: string; skontoDays: string; paymentMethod: string; lieferbedingung: string; kreditEuro: string; notiz: string;
-  liefersperre: boolean; liefersperreGrund: string; debitorenkonto: string; belegsprache: string; waehrung: string; betreuer: string;
+  liefersperre: boolean; liefersperreGrund: string; debitorenkonto: string; belegsprache: string; waehrung: string; betreuer: string; email: string;
 }
 const TAX_RULE_LABEL: Record<string, string> = {
   INLAND: "Inland", EU_B2B: "EU (innergem. B2B, §13b)", DRITTLAND: "Drittland (Ausfuhr)", KLEINUNTERNEHMER: "Kleinunternehmer §19",
@@ -3455,6 +3455,7 @@ function CompanyStammdaten({ company, onSaved }: { company: CompanyDetail; onSav
     kreditEuro: company.kreditlimitCents != null ? (company.kreditlimitCents / 100).toString() : "", notiz: company.notiz ?? "",
     liefersperre: company.liefersperre ?? false, liefersperreGrund: company.liefersperreGrund ?? "",
     debitorenkonto: company.debitorenkonto ?? "", belegsprache: company.belegsprache ?? "DE", waehrung: company.waehrung ?? "EUR", betreuer: company.betreuer ?? "",
+    email: company.email ?? "",
   });
   const [f, setF] = useState<SDForm>(init);
   const set = (k: keyof SDForm) => (v: string): void => setF((s) => ({ ...s, [k]: v }));
@@ -3478,7 +3479,7 @@ function CompanyStammdaten({ company, onSaved }: { company: CompanyDetail; onSav
         liefersperre: f.liefersperre, liefersperreGrund: f.liefersperreGrund.trim() || null,
         debitorenkonto: f.debitorenkonto.trim() || null,
         belegsprache: (f.belegsprache || "DE") as "DE" | "EN", waehrung: f.waehrung.trim() || null,
-        betreuer: f.betreuer.trim() || null,
+        betreuer: f.betreuer.trim() || null, email: f.email.trim() || null,
       });
       setEdit(false); onSaved();
     } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
@@ -3506,6 +3507,7 @@ function CompanyStammdaten({ company, onSaved }: { company: CompanyDetail; onSav
           <Text size="sm">Debitor: <b>{company.debitorenkonto || "—"}</b></Text>
           <Text size="sm">Beleg: <b>{(company.belegsprache ?? "DE")} · {(company.waehrung ?? "EUR")}</b></Text>
           <Text size="sm">Betreuer: <b>{company.betreuer || "—"}</b></Text>
+          <Text size="sm">E-Mail: <b>{company.email || "—"}</b></Text>
         </Group>
         {company.notiz ? <Text size="sm" mt={4}>Notiz: {company.notiz}</Text> : null}
       </Box>
@@ -3556,6 +3558,7 @@ function CompanyStammdaten({ company, onSaved }: { company: CompanyDetail; onSav
         <Select size="xs" label="Belegsprache" w={110} data={["DE", "EN"]} value={f.belegsprache || "DE"} onChange={(v) => set("belegsprache")(v ?? "DE")} />
         <TextInput size="xs" label="Währung" w={90} value={f.waehrung} onChange={(e) => set("waehrung")(e.currentTarget.value)} />
         <TextInput size="xs" label="Betreuer" w={160} value={f.betreuer} onChange={(e) => set("betreuer")(e.currentTarget.value)} />
+        <TextInput size="xs" label="E-Mail" w={220} value={f.email} onChange={(e) => set("email")(e.currentTarget.value)} />
       </Group>
       <Group gap="xs" mt="sm">
         <Button size="compact-xs" loading={busy} onClick={() => void save()}>Speichern</Button>

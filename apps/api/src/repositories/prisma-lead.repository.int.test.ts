@@ -6,7 +6,9 @@ import { prisma } from "@texma/db";
 import { LeadError } from "@texma/shared";
 import { MemoryAuditSink } from "../audit/memory-audit-sink.js";
 import { PrismaLeadRepository } from "./prisma-lead.repository.js";
+import { PrismaNumberingRepository } from "./prisma-numbering.repository.js";
 import { LeadService } from "../modules/lead/lead.service.js";
+import { NumberingService } from "../modules/numbering/numbering.service.js";
 
 const PG = "pg_b15";
 
@@ -18,7 +20,7 @@ if (!dbConfigured) {
   });
 } else {
   describe("PrismaLeadRepository — Lead-Funnel + Konvertierung gegen echtes Postgres", () => {
-    const service = new LeadService(new PrismaLeadRepository(), new MemoryAuditSink());
+    const service = new LeadService(new PrismaLeadRepository(), new MemoryAuditSink(), new NumberingService(new PrismaNumberingRepository()));
     const createdCompanies: string[] = [];
 
     async function cleanup() {
@@ -46,8 +48,10 @@ if (!dbConfigured) {
       const conv = await service.convert(lead.id);
       createdCompanies.push(conv.companyId);
 
-      const company = await prisma.company.findUnique({ where: { id: conv.companyId }, select: { name: true, priceGroupId: true } });
-      expect(company).toMatchObject({ name: "B15-Acme", priceGroupId: PG });
+      const company = await prisma.company.findUnique({ where: { id: conv.companyId }, select: { name: true, priceGroupId: true, customerNumber: true, email: true } });
+      expect(company).toMatchObject({ name: "B15-Acme", priceGroupId: PG, email: "info@acme.de" });
+      // Sprechende Kundennummer (KD-JJJJ-NNNN) wird wie bei direkter Anlage vergeben.
+      expect(company?.customerNumber).toMatch(/^KD-\d{4}-\d{4}$/);
       const contact = await prisma.contact.findFirst({ where: { companyId: conv.companyId } });
       expect(contact).toMatchObject({ lastName: "B15-Acme", email: "info@acme.de" });
 

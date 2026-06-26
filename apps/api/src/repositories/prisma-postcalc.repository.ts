@@ -61,7 +61,7 @@ export class PrismaPostCalcRepository implements PostCalcRepository {
     const targets = await prisma.finishingTargetTime.findMany({ select: { kind: true, targetMinutes: true, basis: true } });
     const targetByKind = new Map(targets.map((t) => [t.kind as string, t]));
     // FinishingMethod (Artikel) → FinishingKind (Sollzeit).
-    const methodToKind: Record<string, string> = { STICK: "STICK", DRUCK: "SIEBDRUCK_DRUCK", TRANSFER: "TRANSFER" };
+    const methodToKind: Record<string, string> = { STICK: "STICK", DRUCK: "SIEBDRUCK_DRUCK", DRUCK_DIGITAL: "SIEBDRUCK_DRUCK", TRANSFER: "TRANSFER" };
 
     let minutes = 0;
     for (const l of lines) {

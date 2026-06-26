@@ -252,7 +252,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const reporting = new ReportingService(new PrismaReportingRepository(), AnthropicReportClient.fromEnv());
   const productionReporting = new ProductionReportingService(new PrismaProductionReportingRepository());
   const costCenters = new CostCenterService(new PrismaCostCenterRepository(), new PrismaAuditSink());
-  const leads = new LeadService(new PrismaLeadRepository(), new PrismaAuditSink());
+  const leads = new LeadService(new PrismaLeadRepository(), new PrismaAuditSink(), new NumberingService(new PrismaNumberingRepository()));
   const callLogs = new CallLogService(new PrismaCallLogRepository(), new PrismaAuditSink());
   const inquiries = new InquiryService(
     new PrismaInquiryRepository(),

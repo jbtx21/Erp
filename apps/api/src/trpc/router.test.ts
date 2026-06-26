@@ -330,7 +330,7 @@ function setup(user: AuthUser | null = BUERO) {
     reporting,
     productionReporting,
     costCenters: new CostCenterService(new InMemoryCostCenterRepository(), new MemoryAuditSink()),
-    leads: new LeadService(new InMemoryLeadRepository(), new MemoryAuditSink()),
+    leads: new LeadService(new InMemoryLeadRepository(), new MemoryAuditSink(), new NumberingService(new InMemoryNumberingRepository())),
     callLogs: new CallLogService(new InMemoryCallLogRepository(), new MemoryAuditSink()),
     mailAccounts: new MailAccountService(new InMemoryMailAccountRepository(), null),
     reservations: new ReservationService(new InMemoryReservationRepository(), { balance: async () => ({ HAUPT: 0, MUSTER: 0, SHOWROOM: 0, TRANSFERDRUCK: 0 }), listBalances: async () => [] }),
@@ -730,9 +730,9 @@ describe("tRPC subproduction — mehrstufige Fremdvergabe (T-04)", () => {
       caller.subproduction.advance({ subProductionId: "sub_2", to: "BEISTELLUNG_VERSANDT" })
     ).rejects.toMatchObject({ code: "CONFLICT" });
 
-    // Stufe 1 durchlaufen: Beistellung → Rücklauf.
+    // Stufe 1 durchlaufen: Beistellung → Rücklauf (Rücklaufmenge ist Pflicht).
     await caller.subproduction.advance({ subProductionId: "sub_1", to: "BEISTELLUNG_VERSANDT" });
-    await caller.subproduction.advance({ subProductionId: "sub_1", to: "RUECKLAUF_ERHALTEN" });
+    await caller.subproduction.advance({ subProductionId: "sub_1", to: "RUECKLAUF_ERHALTEN", menge: 10 });
 
     // Jetzt darf Stufe 2 starten.
     const s2 = await caller.subproduction.advance({ subProductionId: "sub_2", to: "BEISTELLUNG_VERSANDT" });

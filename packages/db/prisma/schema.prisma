@@ -111,6 +111,7 @@ model Company {
   belegsprache   String? @default("DE") // DE | EN
   waehrung       String? @default("EUR")
   betreuer       String? // Vertriebs-/Innendienstbetreuer (frei)
+  email          String? // zentrale E-Mail der Firma (Belegversand); aus Lead-Konvertierung übernommen
   // Rechnungsadresse (Pflicht auf Rechnung, § 14 UStG) + Steuerangaben (Paket 1)
   street       String?
   zip          String?
@@ -452,7 +453,8 @@ model MediaAsset {
 // Veredelungs-Metadaten je Artikel (B18) — Platzierung/Stichzahl/Farben.
 enum FinishingMethod {
   STICK
-  DRUCK
+  DRUCK // Siebdruck
+  DRUCK_DIGITAL // Digitaldruck (DTG/DTF)
   TRANSFER
 }
 

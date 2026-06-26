@@ -208,7 +208,7 @@ export class PrismaProductRepository implements ProductRepository {
     return (await prisma.supplier.count({ where: { id } })) > 0;
   }
 
-  async createVeredelungArticle(input: { name: string; sku: string; method: "STICK" | "DRUCK" | "TRANSFER"; placement: string | null; veredlerId: string; ekCents: number | null; tiers: VeredelungTier[] }): Promise<CatalogEntry> {
+  async createVeredelungArticle(input: { name: string; sku: string; method: "STICK" | "DRUCK" | "DRUCK_DIGITAL" | "TRANSFER"; placement: string | null; veredlerId: string; ekCents: number | null; tiers: VeredelungTier[] }): Promise<CatalogEntry> {
     // VK-Staffel des Logos liegt unter der Basis-Preisgruppe STANDARD (Preisgruppe ≠ Mengenstaffel).
     const standard = input.tiers.length > 0 ? await prisma.priceGroup.findFirst({ where: { kind: "STANDARD" }, select: { id: true } }) : null;
     if (input.tiers.length > 0 && !standard) throw new Error("Keine Preisgruppe STANDARD vorhanden — Staffel kann nicht angelegt werden.");

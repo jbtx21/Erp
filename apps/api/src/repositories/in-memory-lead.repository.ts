@@ -71,7 +71,7 @@ export class InMemoryLeadRepository implements LeadRepository {
 
   async convert(
     id: string,
-    _input: { name: string; firma: string | null; email: string | null; phone: string | null }
+    _input: { name: string; firma: string | null; email: string | null; phone: string | null; customerNumber: string }
   ): Promise<{ companyId: string }> {
     const l = this.leads.get(id);
     if (!l) throw new Error(`Lead ${id} nicht gefunden`);

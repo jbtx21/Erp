@@ -107,7 +107,7 @@ export interface VeredelungTier {
 export interface CreateVeredelungInput {
   name: string;
   sku: string;
-  method: "STICK" | "DRUCK" | "TRANSFER";
+  method: "STICK" | "DRUCK" | "DRUCK_DIGITAL" | "TRANSFER";
   placement?: string;
   /** Zugewiesener Veredler (Pflicht; analog Textil-„Hersteller"). */
   veredlerId: string;

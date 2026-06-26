@@ -5,11 +5,13 @@ import { describe, expect, it } from "vitest";
 import { LeadError } from "@texma/shared";
 import { MemoryAuditSink } from "../../audit/memory-audit-sink.js";
 import { InMemoryLeadRepository } from "../../repositories/in-memory-lead.repository.js";
+import { InMemoryNumberingRepository } from "../../repositories/in-memory-numbering.repository.js";
 import { LeadService } from "./lead.service.js";
+import { NumberingService } from "../numbering/numbering.service.js";
 
 function setup() {
   const repo = new InMemoryLeadRepository();
-  return { repo, service: new LeadService(repo, new MemoryAuditSink()) };
+  return { repo, service: new LeadService(repo, new MemoryAuditSink(), new NumberingService(new InMemoryNumberingRepository())) };
 }
 
 describe("LeadService (B15)", () => {

@@ -37,7 +37,7 @@ describe("SubProductionService.advanceStage (T-04)", () => {
     const { service } = setup();
     const at = new Date(Date.UTC(2026, 5, 1));
     await service.advanceStage("s1", "BEISTELLUNG_VERSANDT", at);
-    await service.advanceStage("s1", "RUECKLAUF_ERHALTEN", at);
+    await service.advanceStage("s1", "RUECKLAUF_ERHALTEN", at, { menge: 10 });
     const s2 = await service.advanceStage("s2", "BEISTELLUNG_VERSANDT", at);
     expect(s2.status).toBe("BEISTELLUNG_VERSANDT");
     expect(s2.beistellungVersandtAm).toEqual(at);
@@ -54,9 +54,9 @@ describe("SubProductionService.advanceStage (T-04)", () => {
     const { service } = setup();
     const at = new Date();
     await service.advanceStage("s1", "BEISTELLUNG_VERSANDT", at);
-    await service.advanceStage("s1", "RUECKLAUF_ERHALTEN", at);
+    await service.advanceStage("s1", "RUECKLAUF_ERHALTEN", at, { menge: 10 });
     await service.advanceStage("s2", "BEISTELLUNG_VERSANDT", at);
-    await service.advanceStage("s2", "RUECKLAUF_ERHALTEN", at);
+    await service.advanceStage("s2", "RUECKLAUF_ERHALTEN", at, { menge: 10 });
     const status = await service.productionSubStatus("pa");
     expect(status.allReturned).toBe(true);
   });
