@@ -4,10 +4,12 @@ import { describe, expect, it } from "vitest";
 import { CompanyError, CompanyService } from "./company.service.js";
 import { InMemoryCompanyRepository } from "../../repositories/in-memory-company.repository.js";
 import { MemoryAuditSink } from "../../audit/memory-audit-sink.js";
+import { NumberingService } from "../numbering/numbering.service.js";
+import { InMemoryNumberingRepository } from "../../repositories/in-memory-numbering.repository.js";
 
 function make() {
   const repo = new InMemoryCompanyRepository();
-  return { repo, svc: new CompanyService(repo, new MemoryAuditSink()) };
+  return { repo, svc: new CompanyService(repo, new MemoryAuditSink(), new NumberingService(new InMemoryNumberingRepository())) };
 }
 
 describe("CompanyService.create — Dedup + Validierung (P1-4)", () => {

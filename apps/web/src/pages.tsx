@@ -58,7 +58,7 @@ function downloadBase64(filename: string, base64: string, type: string): void {
 
 // Deutsche Spaltenbezeichnungen statt roher Feldnamen ("Don't ship the schema").
 const COL_LABELS: Record<string, string> = {
-  id: "ID", number: "Nr.", name: "Name", status: "Status", kind: "Art", quelle: "Quelle",
+  id: "ID", number: "Nr.", customerNumber: "Kunden-Nr.", name: "Name", status: "Status", kind: "Art", quelle: "Quelle",
   richtung: "Richtung", telefonnummer: "Telefonnr.", companyName: "Firma",
   bearbeiter: "Bearbeiter", zeitpunkt: "Zeitpunkt", dauerSek: "Dauer (s)", grund: "Grund/Anliegen",
   ergebnis: "Ergebnis", firma: "Firma", webseite: "Webseite", verantwortlicher: "Verantwortlich",
@@ -3366,6 +3366,7 @@ function CompanyDetailPanel({ companyId, onNavigate }: { companyId: string; onNa
         status={ov.company.priceGroupKind}
         statusColor="blue"
         actions={<>
+          {ov.company.customerNumber ? <Badge size="xs" variant="light" color="blue">{ov.company.customerNumber}</Badge> : null}
           {ov.company.fromLead ? <Badge size="xs" color="grape" variant="light">aus Lead</Badge> : null}
           <Badge size="xs" variant="light" color="gray">Zahlungsziel {ov.company.zahlungszielTage} T</Badge>
           {ov.openCents > 0 ? <Badge size="xs" color="orange">offen {euro(ov.openCents)}</Badge> : <Badge size="xs" color="teal">keine offenen Posten</Badge>}

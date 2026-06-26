@@ -20,10 +20,11 @@ export class InMemoryCompanyRepository implements CompanyRepository {
     return [...this.companies.values()].map((c) => ({ ...c })).sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  async create(input: CreateCompanyInput): Promise<{ id: string }> {
+  async create(input: CreateCompanyInput & { customerNumber: string }): Promise<{ id: string }> {
     const id = `co_${++this.seq}`;
     this.companies.set(id, {
       id,
+      customerNumber: input.customerNumber,
       name: input.name,
       branche: input.branche ?? null,
       zahlungszielTage: input.zahlungszielTage ?? 14,

@@ -95,6 +95,7 @@ model PriceGroup {
 // Firma = Kunde. KEIN 1:1-Import Firma↔Kontakt (Kap. 8.3).
 model Company {
   id           String        @id @default(cuid())
+  customerNumber String?     @unique // sprechende Kundennummer (KD-JJJJ-NNNN), Xentral-Benchmark
   name         String
   branche      String?
   gesperrtAm     DateTime?   // DSGVO-Sperre (B12, Kap. 28)

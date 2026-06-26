@@ -4,9 +4,11 @@
 
 import type { PriceGroupKind } from "@texma/shared";
 import { buildEntry, type AuditSink } from "@texma/audit";
+import type { NumberingService } from "../numbering/numbering.service.js";
 
 export interface CompanyRow {
   id: string;
+  customerNumber: string | null;
   name: string;
   branche: string | null;
   zahlungszielTage: number;
@@ -68,7 +70,7 @@ export interface CompanyOverview {
 
 export interface CompanyRepository {
   list(): Promise<CompanyRow[]>;
-  create(input: Required<Pick<CreateCompanyInput, "name" | "priceGroupKind">> & CreateCompanyInput): Promise<{ id: string }>;
+  create(input: Required<Pick<CreateCompanyInput, "name" | "priceGroupKind">> & CreateCompanyInput & { customerNumber: string }): Promise<{ id: string }>;
   update(input: UpdateCompanyInput): Promise<void>;
   overview(companyId: string): Promise<CompanyOverview | null>;
   /** Firma mit exakt diesem Namen (case-insensitive) — für die Dedup-Anlage (B3/P1-4). */
@@ -84,7 +86,8 @@ export class CompanyError extends Error {}
 export class CompanyService {
   constructor(
     private readonly repo: CompanyRepository,
-    private readonly audit: AuditSink
+    private readonly audit: AuditSink,
+    private readonly numbering: NumberingService
   ) {}
 
   async list(): Promise<CompanyRow[]> {
@@ -106,9 +109,11 @@ export class CompanyService {
     // Freitext-Müll und doppelte Kunden. Bestehende Firma wird wiederverwendet.
     const existing = await this.repo.findByName(name);
     if (existing) return existing;
-    const res = await this.repo.create({ ...input, name });
+    // Sprechende Kundennummer (KD-JJJJ-NNNN) aus dem Nummernkreis (lückenlos, je Jahr).
+    const customerNumber = await this.numbering.next("CUSTOMER");
+    const res = await this.repo.create({ ...input, name, customerNumber });
     await this.audit.append(
-      buildEntry({ entity: "Company", entityId: res.id, action: "CREATE", after: { name, priceGroupKind: input.priceGroupKind } })
+      buildEntry({ entity: "Company", entityId: res.id, action: "CREATE", after: { customerNumber, name, priceGroupKind: input.priceGroupKind } })
     );
     return res;
   }

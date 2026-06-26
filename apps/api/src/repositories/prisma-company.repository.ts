@@ -13,11 +13,12 @@ import type {
 export class PrismaCompanyRepository implements CompanyRepository {
   async list(): Promise<CompanyRow[]> {
     const rows = await prisma.company.findMany({
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, branche: true, zahlungszielTage: true, mahnsperre: true, gesperrtAm: true, priceGroup: { select: { kind: true } } },
+      orderBy: { customerNumber: "asc" },
+      select: { id: true, customerNumber: true, name: true, branche: true, zahlungszielTage: true, mahnsperre: true, gesperrtAm: true, priceGroup: { select: { kind: true } } },
     });
     return rows.map((c) => ({
       id: c.id,
+      customerNumber: c.customerNumber,
       name: c.name,
       branche: c.branche,
       zahlungszielTage: c.zahlungszielTage,
@@ -27,7 +28,7 @@ export class PrismaCompanyRepository implements CompanyRepository {
     }));
   }
 
-  async create(input: CreateCompanyInput): Promise<{ id: string }> {
+  async create(input: CreateCompanyInput & { customerNumber: string }): Promise<{ id: string }> {
     const pg = await prisma.priceGroup.upsert({
       where: { kind: input.priceGroupKind },
       update: {},
@@ -36,6 +37,7 @@ export class PrismaCompanyRepository implements CompanyRepository {
     });
     return prisma.company.create({
       data: {
+        customerNumber: input.customerNumber,
         name: input.name,
         branche: input.branche ?? null,
         zahlungszielTage: input.zahlungszielTage ?? 14,
@@ -90,7 +92,7 @@ export class PrismaCompanyRepository implements CompanyRepository {
     const c = await prisma.company.findUnique({
       where: { id: companyId },
       select: {
-        id: true, name: true, branche: true, zahlungszielTage: true, mahnsperre: true, gesperrtAm: true,
+        id: true, customerNumber: true, name: true, branche: true, zahlungszielTage: true, mahnsperre: true, gesperrtAm: true,
         street: true, zip: true, city: true, country: true, vatId: true, taxNumber: true,
         skontoPercent: true, skontoDays: true, paymentMethod: true, lieferbedingung: true, notiz: true, kreditlimitCents: true,
         priceGroup: { select: { kind: true } },
@@ -113,7 +115,7 @@ export class PrismaCompanyRepository implements CompanyRepository {
     const invoiceCount = revAll._count;
     return {
       company: {
-        id: c.id, name: c.name, branche: c.branche, zahlungszielTage: c.zahlungszielTage, mahnsperre: c.mahnsperre,
+        id: c.id, customerNumber: c.customerNumber, name: c.name, branche: c.branche, zahlungszielTage: c.zahlungszielTage, mahnsperre: c.mahnsperre,
         priceGroupKind: c.priceGroup.kind as PriceGroupKind, gesperrt: c.gesperrtAm !== null, fromLead: c.lead !== null,
         street: c.street, zip: c.zip, city: c.city, country: c.country, vatId: c.vatId, taxNumber: c.taxNumber,
         skontoPercent: c.skontoPercent, skontoDays: c.skontoDays, paymentMethod: c.paymentMethod,

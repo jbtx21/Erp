@@ -267,7 +267,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
     new NumberingService(new PrismaNumberingRepository()),
     new PrismaAuditSink()
   );
-  const companies = new CompanyService(new PrismaCompanyRepository(), new PrismaAuditSink());
+  const companies = new CompanyService(new PrismaCompanyRepository(), new PrismaAuditSink(), new NumberingService(new PrismaNumberingRepository()));
   const products = new ProductService(new PrismaProductRepository(), new PrismaAuditSink());
   const orderWorkflow = new OrderWorkflowService(repo, new PrismaAuditSink());
   const quotes = new QuoteService(

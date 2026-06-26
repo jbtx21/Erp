@@ -335,7 +335,7 @@ function setup(user: AuthUser | null = BUERO) {
     inquiries: new InquiryService(new InMemoryInquiryRepository(), new NumberingService(new InMemoryNumberingRepository()), new MemoryAuditSink()),
     crm: new CrmService(new InMemoryCrmRepository(), new NumberingService(new InMemoryNumberingRepository()), new MemoryAuditSink()),
     sampleLoans: new SampleLoanService(new InMemorySampleLoanRepository(), new NumberingService(new InMemoryNumberingRepository()), new MemoryAuditSink()),
-    companies: new CompanyService(new InMemoryCompanyRepository(), new MemoryAuditSink()),
+    companies: new CompanyService(new InMemoryCompanyRepository(), new MemoryAuditSink(), new NumberingService(new InMemoryNumberingRepository())),
     products: new ProductService(new InMemoryProductRepository(), new MemoryAuditSink()),
     orderWorkflow: new OrderWorkflowService(repo, new MemoryAuditSink()),
     quotes: new QuoteService(new InMemoryQuoteRepository(), new NumberingService(new InMemoryNumberingRepository()), new MemoryAuditSink()),
