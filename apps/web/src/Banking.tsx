@@ -2,7 +2,7 @@
 // Matching-Pipeline) und SEPA-Überweisungen auslösen (PIS, pain.001). Eine Provider-
 // Abstraktion im Backend kapselt die Unterschiede; hier die Bedienoberfläche dazu.
 import { useCallback, useEffect, useState } from "react";
-import { Badge, Button, Card, Group, NumberInput, Select, Table, Tabs, Text, TextInput, Title } from "@mantine/core";
+import { Badge, Button, Card, Group, NumberInput, Select, Table, Tabs, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { ibanIsValid } from "@texma/shared/pain001";
 import { trpc } from "./trpc.js";
 import { euro, numTd } from "./theme.js";
@@ -52,7 +52,7 @@ export function Banking({ role }: { role: string }): JSX.Element {
           <Tabs.Tab value="connections">Bank-Verbindungen &amp; Auszüge</Tabs.Tab>
           <Tabs.Tab value="payments">Zahlungsverkehr</Tabs.Tab>
         </Tabs.List>
-        <Tabs.Panel value="connections" pt="md"><Connections /></Tabs.Panel>
+        <Tabs.Panel value="connections" pt="md"><Connections /><Statements /></Tabs.Panel>
         <Tabs.Panel value="payments" pt="md"><Payments /></Tabs.Panel>
       </Tabs>
     </>
@@ -172,6 +172,76 @@ function Connections(): JSX.Element {
       </Group>
       {status && <Text size="sm" c="dimmed" mt="xs">{status}</Text>}
       {err && <Text c="red" size="sm" mt="xs">Fehler: {err}</Text>}
+    </Card>
+  );
+}
+
+// ── Kontoauszüge (CAMT.053): Datei einlesen → Matching, offene Klärungsfälle anzeigen ──
+function Statements(): JSX.Element {
+  type Clarification = Awaited<ReturnType<typeof trpc.banking.listClarifications.query>>[number];
+  const [klaerung, setKlaerung] = useState<Clarification[]>([]);
+  const [xml, setXml] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState("");
+  const [err, setErr] = useState("");
+
+  const load = useCallback(async () => {
+    try { setKlaerung(await trpc.banking.listClarifications.query({ limit: 100 })); }
+    catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => void load(), [load]);
+
+  const importXml = useCallback(async (content: string) => {
+    setErr(""); setStatus(""); setBusy(true);
+    try {
+      const r = await trpc.banking.importStatement.mutate({ xml: content });
+      setStatus(`Auszug eingelesen: ${r.imported} importiert, ${r.matched} zugeordnet, ${r.clarified} zur Klärung, ${r.skipped} übersprungen.`);
+      setXml("");
+      await load();
+    } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  }, [load]);
+
+  return (
+    <Card withBorder mt="md" padding="md">
+      <Title order={4}>Kontoauszug einlesen (CAMT.053)</Title>
+      <Text size="sm" c="dimmed" mt={4}>
+        CAMT.053-Datei der Bank hochladen oder XML einfügen — Zahlungseingänge werden gegen offene
+        Posten abgeglichen; nicht eindeutige Eingänge landen unten in der Klärungsliste (Kap. 9.4).
+      </Text>
+      <Group gap="sm" mt="sm" align="center">
+        <Button size="compact-sm" component="label" variant="light" loading={busy}>
+          CAMT.053-Datei wählen
+          <input type="file" hidden accept=".xml,text/xml,application/xml" onChange={(e) => {
+            const f = e.currentTarget.files?.[0]; e.currentTarget.value = "";
+            if (f) void f.text().then((t) => importXml(t));
+          }} />
+        </Button>
+        <Text size="xs" c="dimmed">oder XML einfügen und „Einlesen":</Text>
+      </Group>
+      <Textarea mt="xs" autosize minRows={2} maxRows={6} placeholder="<Document …>…CAMT.053…</Document>" value={xml} onChange={(e) => setXml(e.currentTarget.value)} />
+      <Group mt="xs">
+        <Button size="compact-sm" loading={busy} disabled={!xml.trim()} onClick={() => void importXml(xml)}>Einlesen</Button>
+      </Group>
+      {status && <Text size="sm" c="dimmed" mt="xs">{status}</Text>}
+      {err && <Text c="red" size="sm" mt="xs">Fehler: {err}</Text>}
+
+      <Title order={5} mt="lg">Klärungsliste — nicht zugeordnete Zahlungseingänge ({klaerung.length})</Title>
+      <Table withTableBorder mt="sm" verticalSpacing="xs" fz="sm">
+        <Table.Thead><Table.Tr>
+          <Table.Th>Gebucht</Table.Th><Table.Th>Referenz</Table.Th><Table.Th>Verwendungszweck</Table.Th><Table.Th ta="right">Betrag</Table.Th>
+        </Table.Tr></Table.Thead>
+        <Table.Tbody>
+          {klaerung.map((k) => (
+            <Table.Tr key={k.id}>
+              <Table.Td>{fmtDate(k.bookedAt)}</Table.Td>
+              <Table.Td><Text size="xs" ff="monospace">{k.externalRef ?? "—"}</Text></Table.Td>
+              <Table.Td>{k.reference ?? "—"}</Table.Td>
+              <Table.Td ta="right" style={numTd}>{euro(k.amountCents)}</Table.Td>
+            </Table.Tr>
+          ))}
+          {klaerung.length === 0 && <Table.Tr><Table.Td colSpan={4}><Text size="sm" c="dimmed">Keine offenen Klärungsfälle.</Text></Table.Td></Table.Tr>}
+        </Table.Tbody>
+      </Table>
     </Card>
   );
 }

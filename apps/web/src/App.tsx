@@ -68,7 +68,9 @@ const NAV: ReadonlyArray<{ group: string; icon: NavIconName; items: ReadonlyArra
   ] },
   { group: "Buchhaltung", icon: "finanzen", items: [
     { key: "guv", label: "Gewinn- und Verlustrechnung" },
-    { key: "zahlungsabgleich", label: "Zahlungsabgleich" }, { key: "dunning", label: "Mahnwesen" },
+    { key: "zahlungsabgleich", label: "Zahlungsabgleich" }, { key: "zahlungen", label: "Zahlungseingänge" },
+    { key: "finance", label: "Offene Posten (OP-Aging)" }, { key: "banking", label: "Banking / Bank-Anbindung" },
+    { key: "dunning", label: "Mahnwesen" },
     { key: "costcenters", label: "Kostenstellen" }, { key: "nachkalkfin", label: "Nachkalkulation" }, { key: "gutscheine", label: "Gutscheine" }, { key: "reporting", label: "Auswertungen" },
   ] },
   { group: "Personalwesen", icon: "hr", items: [{ key: "hr", label: "Personalwesen" }] },
