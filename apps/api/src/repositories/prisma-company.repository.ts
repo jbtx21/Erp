@@ -45,6 +45,33 @@ export class PrismaCompanyRepository implements CompanyRepository {
     });
   }
 
+  async findByName(name: string): Promise<{ id: string } | null> {
+    return prisma.company.findFirst({ where: { name: { equals: name.trim(), mode: "insensitive" } }, select: { id: true } });
+  }
+
+  async countDocuments(companyId: string): Promise<number> {
+    // Operative Belege/Vorgänge, die eine Firma „in Benutzung" machen (Löschschutz, GoBD).
+    const c = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { _count: { select: { orders: true, quotes: true, invoices: true, abschlaege: true, collectiveOrders: true, sampleLoans: true, opportunities: true, inquiries: true } } },
+    });
+    if (!c) return 0;
+    const n = c._count;
+    return n.orders + n.quotes + n.invoices + n.abschlaege + n.collectiveOrders + n.sampleLoans + n.opportunities + n.inquiries;
+  }
+
+  async deleteEmpty(companyId: string): Promise<void> {
+    // Weiche Verweise lösen, dann löschen — in einer Transaktion. Nur für unbenutzte
+    // Firmen (Beleg-Check liegt im Service). CrmLeads werden entkoppelt (companyId → null).
+    await prisma.$transaction(async (tx) => {
+      await tx.crmLead.updateMany({ where: { companyId }, data: { companyId: null } });
+      await tx.contact.deleteMany({ where: { companyId } });
+      await tx.deliveryAddress.deleteMany({ where: { companyId } });
+      await tx.customerPriceTier.deleteMany({ where: { companyId } });
+      await tx.company.delete({ where: { id: companyId } });
+    });
+  }
+
   async update(input: UpdateCompanyInput): Promise<void> {
     const pick = (k: keyof UpdateCompanyInput): object => (input[k] !== undefined ? { [k]: input[k] } : {});
     await prisma.company.update({

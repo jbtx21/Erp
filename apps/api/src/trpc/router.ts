@@ -2032,6 +2032,12 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         try { await ctx.companies.update(input); return { ok: true as const }; } catch (e) { throw toTrpcError(e); }
       }),
+    // Unbenutzten Kundenstammsatz löschen (Fehleingaben/Test-Müll, P1-4) — nur ohne Belege.
+    delete: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ id: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.companies.deleteCompany(input.id); return { ok: true as const }; } catch (e) { throw toTrpcError(e); }
+      }),
   }),
 
   // Muster-Leihgut (B5): Ausgabe/Rückgabe + 21-Tage-Berechnung (Listenpreis).

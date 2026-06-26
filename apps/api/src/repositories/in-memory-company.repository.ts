@@ -46,6 +46,20 @@ export class InMemoryCompanyRepository implements CompanyRepository {
     }
   }
 
+  async findByName(name: string): Promise<{ id: string } | null> {
+    const c = [...this.companies.values()].find((x) => x.name.toLowerCase() === name.trim().toLowerCase());
+    return c ? { id: c.id } : null;
+  }
+
+  // Test-Hilfe: simulierte Beleganzahl je Firma (Default 0 = unbenutzt).
+  readonly documentCounts = new Map<string, number>();
+  async countDocuments(companyId: string): Promise<number> {
+    return this.documentCounts.get(companyId) ?? 0;
+  }
+  async deleteEmpty(companyId: string): Promise<void> {
+    this.companies.delete(companyId);
+  }
+
   async overview(companyId: string): Promise<CompanyOverview | null> {
     const c = this.companies.get(companyId);
     if (!c) return null;

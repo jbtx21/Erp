@@ -71,6 +71,12 @@ export interface CompanyRepository {
   create(input: Required<Pick<CreateCompanyInput, "name" | "priceGroupKind">> & CreateCompanyInput): Promise<{ id: string }>;
   update(input: UpdateCompanyInput): Promise<void>;
   overview(companyId: string): Promise<CompanyOverview | null>;
+  /** Firma mit exakt diesem Namen (case-insensitive) — für die Dedup-Anlage (B3/P1-4). */
+  findByName(name: string): Promise<{ id: string } | null>;
+  /** Anzahl operativer Belege/Vorgänge (Aufträge/Angebote/Rechnungen/… ) — Löschschutz. */
+  countDocuments(companyId: string): Promise<number>;
+  /** Löscht eine unbenutzte Firma; weiche Verweise (Leads/Kontakte/Adressen) werden gelöst. */
+  deleteEmpty(companyId: string): Promise<void>;
 }
 
 export class CompanyError extends Error {}
@@ -91,12 +97,30 @@ export class CompanyService {
   }
 
   async create(input: CreateCompanyInput): Promise<{ id: string }> {
-    if (!input.name?.trim()) throw new CompanyError("Name ist Pflicht.");
-    const res = await this.repo.create({ ...input, name: input.name.trim() });
+    const name = input.name?.trim() ?? "";
+    if (name.length < 2) throw new CompanyError("Firmenname ist Pflicht (mindestens 2 Zeichen).");
+    // Dedup (P1-4): kein zweiter Stammsatz für denselben Namen — verhindert ungeprüften
+    // Freitext-Müll und doppelte Kunden. Bestehende Firma wird wiederverwendet.
+    const existing = await this.repo.findByName(name);
+    if (existing) return existing;
+    const res = await this.repo.create({ ...input, name });
     await this.audit.append(
-      buildEntry({ entity: "Company", entityId: res.id, action: "CREATE", after: { name: input.name, priceGroupKind: input.priceGroupKind } })
+      buildEntry({ entity: "Company", entityId: res.id, action: "CREATE", after: { name, priceGroupKind: input.priceGroupKind } })
     );
     return res;
+  }
+
+  /**
+   * Löscht eine **unbenutzte** Firma (Fehleingaben/Test-Müll, P1-4). Hat die Firma operative
+   * Belege (Aufträge/Angebote/Rechnungen/…), wird die Löschung verweigert — Stammdaten mit
+   * Geschäftsvorfällen bleiben GoBD-relevant erhalten. Weiche Verweise (Leads/Kontakte/
+   * Adressen) werden beim Löschen gelöst.
+   */
+  async deleteCompany(id: string): Promise<void> {
+    const docs = await this.repo.countDocuments(id);
+    if (docs > 0) throw new CompanyError("Kunde hat verknüpfte Vorgänge (Aufträge/Angebote/Rechnungen) und kann nicht gelöscht werden. Nur unbenutzte Stammsätze sind löschbar.");
+    await this.repo.deleteEmpty(id);
+    await this.audit.append(buildEntry({ entity: "Company", entityId: id, action: "STORNO", after: { deleted: true } }));
   }
 
   async update(input: UpdateCompanyInput): Promise<void> {

@@ -3424,6 +3424,14 @@ export function CompaniesPage({ focusId }: { focusId?: string } = {}): JSX.Eleme
             try { await trpc.companies.update.mutate({ id: String(r.id), mahnsperre: !r.mahnsperre }); await load(); }
             catch (e) { setErr(errMsg(e)); }
           }}>{r.mahnsperre ? "Mahnsperre aufheben" : "Mahnsperre setzen"}</Button>
+          {/* Löschen nur für unbenutzte Stammsätze (Fehleingaben/Test-Müll, P1-4); Server
+              verweigert die Löschung bei verknüpften Belegen mit klarer Meldung. */}
+          <Button size="compact-xs" variant="subtle" color="red" onClick={async () => {
+            if (typeof window !== "undefined" && !window.confirm(`Kunde „${String(r.name ?? r.id)}" löschen? Nur möglich, wenn keine Belege/Vorgänge verknüpft sind.`)) return;
+            setErr(null);
+            try { await trpc.companies.delete.mutate({ id: String(r.id) }); setOpenCompany(null); await load(); }
+            catch (e) { setErr(errMsg(e)); }
+          }}>Löschen</Button>
         </Group>
       )} />
       {openCompany && <CompanyDetailPanel companyId={openCompany} />}
