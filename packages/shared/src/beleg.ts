@@ -20,7 +20,7 @@ export interface BelegSumme {
   value: string;
 }
 
-export type BelegTyp = "LIEFERSCHEIN" | "RECHNUNG" | "LAUFZETTEL" | "ANGEBOT" | "AUFTRAGSBESTAETIGUNG";
+export type BelegTyp = "LIEFERSCHEIN" | "RECHNUNG" | "LAUFZETTEL" | "ANGEBOT" | "AUFTRAGSBESTAETIGUNG" | "GUTSCHRIFT" | "MAHNUNG";
 
 export interface BelegDokument {
   typ: BelegTyp;
@@ -229,6 +229,81 @@ export function auftragsbestaetigungDokument(input: AuftragsbestaetigungInput): 
       ...(input.bestellreferenz ? [`Bezug: Ihre Bestellung ${input.bestellreferenz}.`] : []),
       ...(input.liefertermin ? [`Zugesagter Liefertermin: ${formatDatum(input.liefertermin)}.`] : []),
       "Wir bestätigen Ihren Auftrag zu den genannten Konditionen.",
+    ],
+    zeigePreise: true,
+  };
+}
+
+export interface GutschriftInput {
+  nummer: string;
+  datum: Date;
+  empfaenger: string[];
+  /** Ursprungsrechnung, die per Gutschrift neutralisiert wird. */
+  rechnungNummer: string;
+  grund: string;
+  /** Gutgeschriebener Bruttobetrag (positiv). */
+  amountCents: Cents;
+  absender?: string[];
+}
+
+/** Gutschrift/Storno — neutralisiert eine Rechnung (GoBD: Original bleibt erhalten). */
+export function gutschriftDokument(input: GutschriftInput): BelegDokument {
+  return {
+    typ: "GUTSCHRIFT",
+    titel: "Gutschrift / Storno",
+    nummer: input.nummer,
+    datum: formatDatum(input.datum),
+    absender: briefkopf(input.absender),
+    empfaenger: input.empfaenger,
+    positionen: [{
+      menge: 1,
+      bezeichnung: `Gutschrift zu Rechnung ${input.rechnungNummer}${input.grund ? ` — ${input.grund}` : ""}`,
+      einzelpreis: formatEur(input.amountCents),
+      gesamt: formatEur(input.amountCents),
+    }],
+    summen: [{ label: "Gutschriftbetrag (brutto)", value: formatEur(input.amountCents) }],
+    hinweise: ["Storno per Gutschrift (GoBD): die ursprüngliche Rechnung bleibt unverändert erhalten."],
+    zeigePreise: true,
+  };
+}
+
+export interface MahnungInput {
+  nummer: string;
+  datum: Date;
+  empfaenger: string[];
+  /** Angemahnte Rechnung. */
+  rechnungNummer: string;
+  /** Mahnstufe (1..3). */
+  stufe: number;
+  /** Offener Betrag (brutto) + optionale Mahngebühr. */
+  offenCents: Cents;
+  mahngebuehrCents?: Cents;
+  faelligSeit?: Date;
+  zahlbarBis?: Date;
+  absender?: string[];
+}
+
+const MAHN_TITEL: Record<number, string> = { 1: "Zahlungserinnerung", 2: "1. Mahnung", 3: "2. Mahnung" };
+
+/** Mahnung — angemahnte Rechnung, Stufe, offener Betrag + ggf. Mahngebühr. */
+export function mahnungDokument(input: MahnungInput): BelegDokument {
+  const gebuehr = input.mahngebuehrCents ?? 0;
+  const positionen: BelegPosition[] = [
+    { menge: 1, bezeichnung: `Offener Betrag Rechnung ${input.rechnungNummer}`, einzelpreis: formatEur(input.offenCents), gesamt: formatEur(input.offenCents) },
+    ...(gebuehr > 0 ? [{ menge: 1, bezeichnung: "Mahngebühr", einzelpreis: formatEur(gebuehr), gesamt: formatEur(gebuehr) }] : []),
+  ];
+  return {
+    typ: "MAHNUNG",
+    titel: MAHN_TITEL[input.stufe] ?? `Mahnung (Stufe ${input.stufe})`,
+    nummer: input.nummer,
+    datum: formatDatum(input.datum),
+    absender: briefkopf(input.absender),
+    empfaenger: input.empfaenger,
+    positionen,
+    summen: [{ label: "Zu zahlen (brutto)", value: formatEur(input.offenCents + gebuehr) }],
+    hinweise: [
+      ...(input.faelligSeit ? [`Fällig seit ${formatDatum(input.faelligSeit)}.`] : []),
+      ...(input.zahlbarBis ? [`Wir bitten um Ausgleich bis ${formatDatum(input.zahlbarBis)}.`] : ["Wir bitten um umgehenden Ausgleich."]),
     ],
     zeigePreise: true,
   };

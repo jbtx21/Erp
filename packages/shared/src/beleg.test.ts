@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { angebotDokument, auftragsbestaetigungDokument, laufzettelDokument, lieferscheinDokument, rechnungDokument } from "./beleg.js";
+import { angebotDokument, auftragsbestaetigungDokument, gutschriftDokument, laufzettelDokument, lieferscheinDokument, mahnungDokument, rechnungDokument } from "./beleg.js";
 
 describe("Belegdokumente", () => {
   it("Lieferschein hat keine Preise", () => {
@@ -24,6 +24,29 @@ describe("Belegdokumente", () => {
     expect(d.positionen[0]?.einzelpreis).toContain("10,00");
     expect(d.positionen[0]?.gesamt).toContain("30,00");
     expect(d.summen.find((s) => s.label === "Brutto")?.value).toContain("35,70");
+  });
+});
+
+describe("Gutschrift / Mahnung", () => {
+  it("Gutschrift referenziert die Rechnung und zeigt den Bruttobetrag", () => {
+    const d = gutschriftDokument({
+      nummer: "GS-1", datum: new Date("2026-06-23"), empfaenger: ["Muster GmbH"],
+      rechnungNummer: "RE-2026-0003", grund: "Kunde hat storniert", amountCents: 153510,
+    });
+    expect(d.typ).toBe("GUTSCHRIFT");
+    expect(d.positionen[0]?.bezeichnung).toContain("RE-2026-0003");
+    expect(d.summen[0]?.value).toContain("1.535,10");
+  });
+
+  it("Mahnung zeigt Stufe, offenen Betrag und Mahngebühr", () => {
+    const d = mahnungDokument({
+      nummer: "MA-1", datum: new Date("2026-07-15"), empfaenger: ["Muster GmbH"],
+      rechnungNummer: "RE-2026-0003", stufe: 2, offenCents: 153510, mahngebuehrCents: 500,
+    });
+    expect(d.typ).toBe("MAHNUNG");
+    expect(d.titel).toBe("1. Mahnung");
+    expect(d.positionen).toHaveLength(2);
+    expect(d.summen[0]?.value).toContain("1.540,10"); // 1535,10 + 5,00
   });
 });
 

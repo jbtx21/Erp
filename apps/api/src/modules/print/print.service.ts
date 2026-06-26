@@ -2,7 +2,7 @@
 // Belegen. Die Datenform wird vom Repository geliefert; das reine Inhaltsmodell baut
 // @texma/shared, gerendert wird mit pdf-lib (beleg-pdf). Rückgabe = Dateiname + Base64.
 
-import { angebotDokument, auftragsbestaetigungDokument, laufzettelDokument, lieferscheinDokument, rechnungDokument, type PositionKind } from "@texma/shared";
+import { angebotDokument, auftragsbestaetigungDokument, gutschriftDokument, laufzettelDokument, lieferscheinDokument, rechnungDokument, type PositionKind } from "@texma/shared";
 import { renderBelegPdf } from "../../pdf/beleg-pdf.js";
 
 export interface PricePrintLine { menge: number; bezeichnung: string; einzelpreisCents: number; listenpreisCents?: number | null; rabattPct?: number | null }
@@ -55,8 +55,19 @@ export interface OrderConfirmationPrintData {
   bestellreferenz: string | null;
 }
 
+export interface CreditNotePrintData {
+  number: string;
+  createdAt: Date;
+  empfaenger: string[];
+  rechnungNummer: string;
+  grund: string;
+  amountCents: number;
+}
+
 export interface PrintRepository {
   deliveryNoteForPrint(id: string): Promise<DeliveryNotePrintData | null>;
+  /** Gutschrift/Storno-Beleg für den PDF-Druck. */
+  creditNoteForPrint(id: string): Promise<CreditNotePrintData | null>;
   /** Muster-Leihgut als Lieferschein-Daten (Empfänger + Positionen, ohne Preise). */
   sampleLoanForPrint(loanId: string): Promise<DeliveryNotePrintData | null>;
   invoiceForPrint(id: string): Promise<InvoicePrintData | null>;
@@ -119,6 +130,18 @@ export class PrintService {
       netCents: i.netCents, taxCents: i.taxCents, grossCents: i.grossCents, absender,
     }));
     return { filename: `Rechnung-${i.number}.pdf`, base64: Buffer.from(bytes).toString("base64") };
+  }
+
+  /** Gutschrift-/Storno-PDF (neutralisiert eine Rechnung, GoBD). */
+  async creditNotePdf(id: string): Promise<PdfResult> {
+    const c = await this.repo.creditNoteForPrint(id);
+    if (!c) throw new PrintError(`Gutschrift ${id} nicht gefunden.`);
+    const absender = await this.repo.briefkopf();
+    const bytes = await renderBelegPdf(gutschriftDokument({
+      nummer: c.number, datum: c.createdAt, empfaenger: c.empfaenger,
+      rechnungNummer: c.rechnungNummer, grund: c.grund, amountCents: c.amountCents, absender,
+    }));
+    return { filename: `Gutschrift-${c.number}.pdf`, base64: Buffer.from(bytes).toString("base64") };
   }
 
   /** Angebots-PDF (mit Preisen, Bindefrist). */

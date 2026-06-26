@@ -1926,6 +1926,13 @@ export const appRouter = router({
         try { return await ctx.print.invoicePdf(input.invoiceId); }
         catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
       }),
+    // Gutschrift-/Storno-PDF (Finanzbeleg → kein PRODUKTION).
+    creditNote: roleProcedure(...supplierRoles)
+      .input(z.object({ creditNoteId: z.string().min(1) }))
+      .query(async ({ input, ctx }) => {
+        try { return await ctx.print.creditNotePdf(input.creditNoteId); }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
+      }),
     // Laufzettel/Produktionszettel zum Auftrag (Workflow-Aktion LAUFZETTEL; ohne Preise → allRoles).
     laufzettel: roleProcedure(...allRoles)
       .input(z.object({ orderId: z.string().min(1) }))
@@ -2546,7 +2553,12 @@ export const appRouter = router({
     cancelByCreditNote: roleProcedure("ADMIN", "BUCHHALTUNG")
       .input(z.object({ invoiceId: z.string().min(1), reason: z.string().min(1), restock: z.boolean().optional() }))
       .mutation(async ({ input, ctx }) => {
-        try { return await ctx.invoices.cancelByCreditNote(input.invoiceId, input.reason, input.restock ?? false); }
+        try {
+          const res = await ctx.invoices.cancelByCreditNote(input.invoiceId, input.reason, input.restock ?? false);
+          // GoBD: Gutschrift/Storno-Beleg unveränderbar archivieren (WORM).
+          await autoArchive(ctx, "GUTSCHRIFT", "CreditNote", res.id, () => ctx.print.creditNotePdf(res.id));
+          return res;
+        }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
   }),
