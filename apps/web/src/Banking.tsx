@@ -179,14 +179,22 @@ function Connections(): JSX.Element {
 // ── Kontoauszüge (CAMT.053): Datei einlesen → Matching, offene Klärungsfälle anzeigen ──
 function Statements(): JSX.Element {
   type Clarification = Awaited<ReturnType<typeof trpc.banking.listClarifications.query>>[number];
+  type StatementEntry = Awaited<ReturnType<typeof trpc.banking.statements.list.query>>[number];
   const [klaerung, setKlaerung] = useState<Clarification[]>([]);
+  const [entries, setEntries] = useState<StatementEntry[]>([]);
   const [xml, setXml] = useState("");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [err, setErr] = useState("");
 
   const load = useCallback(async () => {
-    try { setKlaerung(await trpc.banking.listClarifications.query({ limit: 100 })); }
+    try {
+      const [kl, st] = await Promise.all([
+        trpc.banking.listClarifications.query({ limit: 100 }),
+        trpc.banking.statements.list.query({ limit: 100 }),
+      ]);
+      setKlaerung(kl); setEntries(st);
+    }
     catch (e) { setErr(errMsg(e)); }
   }, []);
   useEffect(() => void load(), [load]);
@@ -194,7 +202,7 @@ function Statements(): JSX.Element {
   const importXml = useCallback(async (content: string) => {
     setErr(""); setStatus(""); setBusy(true);
     try {
-      const r = await trpc.banking.importStatement.mutate({ xml: content });
+      const r = await trpc.banking.statements.import.mutate({ xml: content });
       setStatus(`Auszug eingelesen: ${r.imported} importiert, ${r.matched} zugeordnet, ${r.clarified} zur Klärung, ${r.skipped} übersprungen.`);
       setXml("");
       await load();
@@ -224,6 +232,26 @@ function Statements(): JSX.Element {
       </Group>
       {status && <Text size="sm" c="dimmed" mt="xs">{status}</Text>}
       {err && <Text c="red" size="sm" mt="xs">Fehler: {err}</Text>}
+
+      <Title order={5} mt="lg">Importierte Kontoauszug-Eingänge ({entries.length})</Title>
+      <Table withTableBorder mt="sm" verticalSpacing="xs" fz="sm">
+        <Table.Thead><Table.Tr>
+          <Table.Th>Gebucht</Table.Th><Table.Th>Quelle</Table.Th><Table.Th>Referenz</Table.Th><Table.Th>Verwendungszweck</Table.Th><Table.Th ta="right">Betrag</Table.Th><Table.Th>Abgleich</Table.Th>
+        </Table.Tr></Table.Thead>
+        <Table.Tbody>
+          {entries.map((s) => (
+            <Table.Tr key={s.id}>
+              <Table.Td>{fmtDate(s.bookedAt)}</Table.Td>
+              <Table.Td><Text size="xs">{s.source}</Text></Table.Td>
+              <Table.Td><Text size="xs" ff="monospace">{s.externalRef ?? "—"}</Text></Table.Td>
+              <Table.Td>{s.reference ?? "—"}</Table.Td>
+              <Table.Td ta="right" style={numTd}>{euro(s.amountCents)}</Table.Td>
+              <Table.Td>{s.matched ? <Badge size="xs" color="teal" variant="light">zugeordnet</Badge> : <Badge size="xs" color="orange" variant="light">Klärung</Badge>}</Table.Td>
+            </Table.Tr>
+          ))}
+          {entries.length === 0 && <Table.Tr><Table.Td colSpan={6}><Text size="sm" c="dimmed">Noch keine Kontoauszüge importiert.</Text></Table.Td></Table.Tr>}
+        </Table.Tbody>
+      </Table>
 
       <Title order={5} mt="lg">Klärungsliste — nicht zugeordnete Zahlungseingänge ({klaerung.length})</Title>
       <Table withTableBorder mt="sm" verticalSpacing="xs" fz="sm">

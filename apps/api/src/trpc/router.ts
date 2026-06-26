@@ -494,6 +494,16 @@ export const appRouter = router({
       .input(z.object({ limit: z.number().int().positive().max(200) }).optional())
       .query(async ({ input, ctx }) => ctx.banking.listClarifications(input?.limit ?? 50)),
 
+    /** Kontoauszüge (CAMT.053): benannte Endpunkte — Import + Eingangs-/Abgleichhistorie (T-13). */
+    statements: router({
+      import: roleProcedure(...supplierRoles)
+        .input(z.object({ xml: z.string().min(1) }))
+        .mutation(async ({ input, ctx }) => ctx.bankingImport.importStatement(input.xml)),
+      list: roleProcedure(...supplierRoles)
+        .input(z.object({ limit: z.number().int().positive().max(200) }).optional())
+        .query(async ({ input, ctx }) => ctx.banking.listStatementEntries(input?.limit ?? 50)),
+    }),
+
     /** Bank-Verbindungen (EBICS/PSD2): Auszüge abrufen (AIS, Kap. 9). */
     connections: router({
       list: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.bankConnections.listConnections()),

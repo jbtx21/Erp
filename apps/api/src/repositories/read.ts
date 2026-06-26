@@ -155,8 +155,22 @@ export interface BankingClarificationItem {
   bookedAt: Date;
 }
 
+// Importierter Kontoauszug-Eintrag (CAMT.053/Provider): Zahlungseingang mit Herkunft +
+// Abgleichstatus — die „statements"-Historie über alle importierten Bankzahlungen.
+export interface BankingStatementEntry {
+  id: string;
+  externalRef: string | null;
+  amountCents: number;
+  reference: string | null;
+  matched: boolean;
+  source: string;
+  bookedAt: Date;
+}
+
 export interface BankingQueryRepository {
   listClarifications(limit: number): Promise<BankingClarificationItem[]>;
+  /** Importierte Kontoauszug-Eingänge (neueste zuerst) — Quelle + Abgleichstatus. */
+  listStatementEntries(limit: number): Promise<BankingStatementEntry[]>;
 }
 
 // Mahnwesen-Übersicht (T-14): offene Posten mit Mahnstufe + Sperre.

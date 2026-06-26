@@ -651,6 +651,12 @@ describe("tRPC banking — CAMT-Abgleich + RBAC (T-13, Kap. 9.4/12)", () => {
     const klaerung = await caller.banking.listClarifications();
     expect(klaerung).toHaveLength(1);
     expect(klaerung[0]).toMatchObject({ externalRef: "REF-2", amountCents: 4200 });
+
+    // Benannter Kontoauszug-Endpunkt: alle importierten Eingänge mit Quelle + Abgleichstatus.
+    const entries = await caller.banking.statements.list();
+    expect(entries).toHaveLength(2);
+    expect(entries.map((e) => e.matched).sort()).toEqual([false, true]);
+    expect(entries.every((e) => e.source === "CAMT")).toBe(true);
   });
 
   it("ist idempotent: erneuter Import derselben Referenz wird übersprungen", async () => {

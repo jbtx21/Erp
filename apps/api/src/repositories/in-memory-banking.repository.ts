@@ -6,7 +6,7 @@ import type {
   BankingRepository,
   PersistablePayment,
 } from "../modules/banking/banking-import.service.js";
-import type { BankingClarificationItem, BankingQueryRepository } from "./read.js";
+import type { BankingClarificationItem, BankingQueryRepository, BankingStatementEntry } from "./read.js";
 
 interface StoredOpenItem {
   id: string;
@@ -69,6 +69,21 @@ export class InMemoryBankingRepository implements BankingRepository, BankingQuer
         externalRef: p.externalRef,
         amountCents: p.amountCents,
         reference: p.reference,
+        bookedAt: p.bookedAt,
+      }));
+  }
+
+  async listStatementEntries(limit: number): Promise<BankingStatementEntry[]> {
+    return [...this.payments]
+      .sort((a, b) => b.bookedAt.getTime() - a.bookedAt.getTime())
+      .slice(0, limit)
+      .map((p) => ({
+        id: p.id,
+        externalRef: p.externalRef,
+        amountCents: p.amountCents,
+        reference: p.reference,
+        matched: p.matched,
+        source: p.source,
         bookedAt: p.bookedAt,
       }));
   }

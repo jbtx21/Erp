@@ -8,7 +8,7 @@ import type {
   BankingRepository,
   PersistablePayment,
 } from "../modules/banking/banking-import.service.js";
-import type { BankingClarificationItem, BankingQueryRepository } from "./read.js";
+import type { BankingClarificationItem, BankingQueryRepository, BankingStatementEntry } from "./read.js";
 
 export class PrismaBankingRepository implements BankingRepository, BankingQueryRepository {
   async existingExternalRefs(refs: string[]): Promise<Set<string>> {
@@ -60,6 +60,14 @@ export class PrismaBankingRepository implements BankingRepository, BankingQueryR
       orderBy: { bookedAt: "desc" },
       take: limit,
       select: { id: true, externalRef: true, amountCents: true, reference: true, bookedAt: true },
+    });
+  }
+
+  async listStatementEntries(limit: number): Promise<BankingStatementEntry[]> {
+    return prisma.payment.findMany({
+      orderBy: { bookedAt: "desc" },
+      take: limit,
+      select: { id: true, externalRef: true, amountCents: true, reference: true, matched: true, source: true, bookedAt: true },
     });
   }
 }
