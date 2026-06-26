@@ -16,8 +16,14 @@ import { buildEntry, type AuditSink } from "@texma/audit";
 export interface DunningRepository {
   /** Offene Posten (> 0) inkl. Fälligkeit, aktueller Mahnstufe und Mahnsperre. */
   listDunnable(): Promise<DunnableItem[]>;
-  /** Hebt die Mahnstufe an UND schreibt den Mahnbeleg (Historie) — atomar (G2). */
-  applyDunningStep(notice: DunningNoticeDraft): Promise<void>;
+  /** Hebt die Mahnstufe an UND schreibt den Mahnbeleg (Historie) — atomar (G2).
+   *  @returns die ID des erzeugten Mahnbelegs (null, wenn der Optimistik-Guard übersprang). */
+  applyDunningStep(notice: DunningNoticeDraft): Promise<{ noticeId: string | null }>;
+}
+
+/** Mahnlauf-Ergebnis inkl. der erzeugten Mahnbeleg-IDs (für die GoBD-Auto-Archivierung). */
+export interface DunningRunResult extends DunningRun {
+  noticeIds: string[];
 }
 
 export class DunningService {
@@ -27,12 +33,14 @@ export class DunningService {
   ) {}
 
   /** Führt den Mahnlauf aus: je überfälligem, nicht gesperrtem Posten +1 Stufe. */
-  async runDunning(today: Date = new Date()): Promise<DunningRun> {
+  async runDunning(today: Date = new Date()): Promise<DunningRunResult> {
     const items = await this.repo.listDunnable();
     const run = computeDunning(items, today, DEFAULT_DUNNING);
 
+    const noticeIds: string[] = [];
     for (const p of run.proposals) {
-      await this.repo.applyDunningStep(buildDunningNotice(p));
+      const { noticeId } = await this.repo.applyDunningStep(buildDunningNotice(p));
+      if (noticeId) noticeIds.push(noticeId);
     }
 
     await this.audit.append(
@@ -44,6 +52,6 @@ export class DunningService {
       })
     );
 
-    return run;
+    return { ...run, noticeIds };
   }
 }

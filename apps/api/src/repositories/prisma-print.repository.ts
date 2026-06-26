@@ -75,6 +75,28 @@ export class PrismaPrintRepository implements PrintRepository {
     };
   }
 
+  async mahnungForPrint(id: string): Promise<import("../modules/print/print.service.js").MahnungPrintData | null> {
+    const n = await prisma.dunningNotice.findUnique({
+      where: { id },
+      select: {
+        id: true, stufe: true, gebuehrCents: true, erzeugtAm: true,
+        openItem: { select: { openCents: true, dueDate: true, invoice: { select: { number: true, company: { select: { name: true, street: true, zip: true, city: true, country: true, vatId: true } }, order: { select: { deliveryAddress: { select: { street: true, zip: true, city: true } } } } } } } },
+      },
+    });
+    if (!n) return null;
+    const inv = n.openItem.invoice;
+    return {
+      nummer: `MA-${n.stufe}-${n.id.slice(-6).toUpperCase()}`,
+      erstelltAm: n.erzeugtAm,
+      empfaenger: recipientLines(inv.company, inv.order?.deliveryAddress ?? null),
+      rechnungNummer: inv.number,
+      stufe: n.stufe,
+      offenCents: n.openItem.openCents,
+      mahngebuehrCents: n.gebuehrCents,
+      faelligSeit: n.openItem.dueDate,
+    };
+  }
+
   async sampleLoanForPrint(loanId: string): Promise<DeliveryNotePrintData | null> {
     const l = await prisma.sampleLoan.findUnique({
       where: { id: loanId },

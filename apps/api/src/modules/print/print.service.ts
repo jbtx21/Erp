@@ -2,7 +2,7 @@
 // Belegen. Die Datenform wird vom Repository geliefert; das reine Inhaltsmodell baut
 // @texma/shared, gerendert wird mit pdf-lib (beleg-pdf). Rückgabe = Dateiname + Base64.
 
-import { angebotDokument, auftragsbestaetigungDokument, gutschriftDokument, laufzettelDokument, lieferscheinDokument, rechnungDokument, type PositionKind } from "@texma/shared";
+import { angebotDokument, auftragsbestaetigungDokument, gutschriftDokument, laufzettelDokument, lieferscheinDokument, mahnungDokument, rechnungDokument, type PositionKind } from "@texma/shared";
 import { renderBelegPdf } from "../../pdf/beleg-pdf.js";
 
 export interface PricePrintLine { menge: number; bezeichnung: string; einzelpreisCents: number; listenpreisCents?: number | null; rabattPct?: number | null }
@@ -64,10 +64,23 @@ export interface CreditNotePrintData {
   amountCents: number;
 }
 
+export interface MahnungPrintData {
+  nummer: string;
+  erstelltAm: Date;
+  empfaenger: string[];
+  rechnungNummer: string;
+  stufe: number;
+  offenCents: number;
+  mahngebuehrCents: number;
+  faelligSeit: Date;
+}
+
 export interface PrintRepository {
   deliveryNoteForPrint(id: string): Promise<DeliveryNotePrintData | null>;
   /** Gutschrift/Storno-Beleg für den PDF-Druck. */
   creditNoteForPrint(id: string): Promise<CreditNotePrintData | null>;
+  /** Mahnbeleg (DunningNotice) für den PDF-Druck. */
+  mahnungForPrint(id: string): Promise<MahnungPrintData | null>;
   /** Muster-Leihgut als Lieferschein-Daten (Empfänger + Positionen, ohne Preise). */
   sampleLoanForPrint(loanId: string): Promise<DeliveryNotePrintData | null>;
   invoiceForPrint(id: string): Promise<InvoicePrintData | null>;
@@ -142,6 +155,18 @@ export class PrintService {
       rechnungNummer: c.rechnungNummer, grund: c.grund, amountCents: c.amountCents, absender,
     }));
     return { filename: `Gutschrift-${c.number}.pdf`, base64: Buffer.from(bytes).toString("base64") };
+  }
+
+  /** Mahnungs-PDF (Stufe, offener Betrag, Mahngebühr). */
+  async mahnungPdf(id: string): Promise<PdfResult> {
+    const m = await this.repo.mahnungForPrint(id);
+    if (!m) throw new PrintError(`Mahnung ${id} nicht gefunden.`);
+    const absender = await this.repo.briefkopf();
+    const bytes = await renderBelegPdf(mahnungDokument({
+      nummer: m.nummer, datum: m.erstelltAm, empfaenger: m.empfaenger, rechnungNummer: m.rechnungNummer,
+      stufe: m.stufe, offenCents: m.offenCents, mahngebuehrCents: m.mahngebuehrCents, faelligSeit: m.faelligSeit, absender,
+    }));
+    return { filename: `Mahnung-${m.nummer}.pdf`, base64: Buffer.from(bytes).toString("base64") };
   }
 
   /** Angebots-PDF (mit Preisen, Bindefrist). */

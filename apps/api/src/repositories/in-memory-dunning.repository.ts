@@ -24,10 +24,12 @@ export class InMemoryDunningRepository implements DunningRepository, DunningQuer
     }));
   }
 
-  async applyDunningStep(notice: DunningNoticeDraft): Promise<void> {
+  private seq = 0;
+  async applyDunningStep(notice: DunningNoticeDraft): Promise<{ noticeId: string | null }> {
     const it = this.items.find((x) => x.id === notice.itemId);
     if (it) it.dunningLevel = notice.stufe;
     this.notices.push(notice);
+    return { noticeId: `dn_${++this.seq}` };
   }
 
   async listDunning(limit: number): Promise<DunningOverviewItem[]> {

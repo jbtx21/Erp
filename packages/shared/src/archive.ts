@@ -14,6 +14,7 @@ export type Belegart =
   | "LIEFERSCHEIN"
   | "AUFTRAGSBESTAETIGUNG"
   | "ANGEBOT"
+  | "MAHNUNG"
   | "GESCHAEFTSBRIEF"
   | "LOGO"
   | "SONSTIGES";

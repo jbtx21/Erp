@@ -535,9 +535,14 @@ export const appRouter = router({
     /** Startet den Mahnlauf: überfällige, nicht gesperrte Posten +1 Stufe (T-14). */
     run: roleProcedure(...supplierRoles)
       .input(z.object({ today: z.string().datetime().optional() }).optional())
-      .mutation(async ({ input, ctx }) =>
-        ctx.dunning.runDunning(input?.today ? new Date(input.today) : new Date())
-      ),
+      .mutation(async ({ input, ctx }) => {
+        const res = await ctx.dunning.runDunning(input?.today ? new Date(input.today) : new Date());
+        // GoBD: jeden erzeugten Mahnbeleg unveränderbar archivieren (WORM).
+        for (const noticeId of res.noticeIds) {
+          await autoArchive(ctx, "MAHNUNG", "DunningNotice", noticeId, () => ctx.print.mahnungPdf(noticeId));
+        }
+        return res;
+      }),
 
     /** Mahnübersicht: offene Posten mit Mahnstufe + Sperre (Kap. 9.5). */
     list: roleProcedure(...supplierRoles)
@@ -1933,6 +1938,13 @@ export const appRouter = router({
         try { return await ctx.print.creditNotePdf(input.creditNoteId); }
         catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
       }),
+    // Mahnungs-PDF (Finanzbeleg → kein PRODUKTION).
+    mahnung: roleProcedure(...supplierRoles)
+      .input(z.object({ noticeId: z.string().min(1) }))
+      .query(async ({ input, ctx }) => {
+        try { return await ctx.print.mahnungPdf(input.noticeId); }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
+      }),
     // Laufzettel/Produktionszettel zum Auftrag (Workflow-Aktion LAUFZETTEL; ohne Preise → allRoles).
     laufzettel: roleProcedure(...allRoles)
       .input(z.object({ orderId: z.string().min(1) }))
@@ -2594,7 +2606,7 @@ export const appRouter = router({
     /** Beleg unveränderbar archivieren (Datei base64-kodiert). */
     archive: roleProcedure(...supplierRoles)
       .input(z.object({
-        belegart: z.enum(["RECHNUNG", "GUTSCHRIFT", "EINGANGSRECHNUNG", "BUCHUNGSBELEG", "LIEFERSCHEIN", "AUFTRAGSBESTAETIGUNG", "ANGEBOT", "GESCHAEFTSBRIEF", "LOGO", "SONSTIGES"]),
+        belegart: z.enum(["RECHNUNG", "GUTSCHRIFT", "EINGANGSRECHNUNG", "BUCHUNGSBELEG", "LIEFERSCHEIN", "AUFTRAGSBESTAETIGUNG", "ANGEBOT", "MAHNUNG", "GESCHAEFTSBRIEF", "LOGO", "SONSTIGES"]),
         sourceEntity: z.string().min(1),
         sourceId: z.string().min(1),
         fileName: z.string().min(1),

@@ -6337,7 +6337,7 @@ export function SecurityPage({ userName, onProfileUpdated }: { userName?: string
   );
 }
 
-const BELEGARTEN = ["RECHNUNG", "GUTSCHRIFT", "EINGANGSRECHNUNG", "BUCHUNGSBELEG", "LIEFERSCHEIN", "AUFTRAGSBESTAETIGUNG", "ANGEBOT", "GESCHAEFTSBRIEF", "LOGO", "SONSTIGES"] as const;
+const BELEGARTEN = ["RECHNUNG", "GUTSCHRIFT", "EINGANGSRECHNUNG", "BUCHUNGSBELEG", "LIEFERSCHEIN", "AUFTRAGSBESTAETIGUNG", "ANGEBOT", "MAHNUNG", "GESCHAEFTSBRIEF", "LOGO", "SONSTIGES"] as const;
 
 // GoBD-Belegarchiv (Kap. 10): unveränderbare WORM-Ablage + GDPdU-„Z3"-Export. Nur
 // Büro/Buchhaltung/Admin (finanzrelevant). Export nur Admin/Buchhaltung.
