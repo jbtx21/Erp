@@ -49,7 +49,7 @@ export class ShipmentService {
         entity: "Order",
         entityId: input.orderId,
         action: "UPDATE",
-        after: { status: "VERSENDET", trackingNumber: input.trackingNumber, carrier: input.carrier ?? null },
+        after: { status: "VERSENDET", lieferstatus: "VOLL", trackingNumber: input.trackingNumber, carrier: input.carrier ?? null },
       })
     );
     return res;

@@ -52,7 +52,9 @@ export class PrismaShipmentRepository implements ShipmentRepository {
     return prisma.$transaction(async (tx) => {
       const order = await tx.order.update({
         where: { id: input.orderId },
-        data: { status: "VERSENDET", trackingNumber: input.trackingNumber, ...(input.carrier ? { carrier: input.carrier } : {}) },
+        // Versand = vollständige Auslieferung → Lieferstatus VOLL (G-4), damit ein versandter
+        // Auftrag nicht fälschlich als „nicht/teilweise geliefert" in den Listen/Ampeln steht.
+        data: { status: "VERSENDET", lieferstatus: "VOLL", trackingNumber: input.trackingNumber, ...(input.carrier ? { carrier: input.carrier } : {}) },
         select: { id: true, externalNumber: true, shopConnectorId: true },
       });
       await tx.outboxEvent.create({

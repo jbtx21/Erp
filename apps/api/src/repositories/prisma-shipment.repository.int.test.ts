@@ -75,7 +75,8 @@ if (!dbConfigured) {
       expect(res).toMatchObject({ orderId: ORD, externalNumber: "500", trackingNumber: "DPD123" });
 
       const order = await prisma.order.findUnique({ where: { id: ORD } });
-      expect(order).toMatchObject({ status: "VERSENDET", trackingNumber: "DPD123" });
+      // Versand setzt zusätzlich den Lieferstatus auf VOLL (G-4).
+      expect(order).toMatchObject({ status: "VERSENDET", trackingNumber: "DPD123", lieferstatus: "VOLL" });
 
       const event = await prisma.outboxEvent.findFirst({ where: { aggregateId: ORD, type: "order.status.update" } });
       expect(event?.payload).toMatchObject({ status: "VERSENDET", trackingNumber: "DPD123", externalNumber: "500" });
