@@ -4,7 +4,8 @@ import { ProductionSheetIncompleteError, redactOrderForRole, canViewFinancials, 
 import { ReklamationValidationError } from "../modules/reklamation/reklamation.service.js";
 import { z } from "zod";
 import { AuthError, SESSION_TTL_SECONDS } from "../modules/auth/auth.service.js";
-import { protectedProcedure, publicProcedure, roleProcedure, router } from "./trpc.js";
+import { protectedProcedure, publicProcedure, roleProcedure, router, type Context } from "./trpc.js";
+import type { Belegart } from "@texma/shared";
 
 // EK-Preise sind finanziell sensibel → kein PRODUKTION-Zugriff (Kap. 12, C3).
 const supplierRoles = ["ADMIN", "BUERO", "BUCHHALTUNG"] as const;
@@ -43,6 +44,35 @@ function toTrpcError(err: unknown): never {
     throw new TRPCError({ code, message: err.message });
   }
   throw err;
+}
+
+/**
+ * Auto-Archivierung (GoBD, Kap. 10): schreibt einen finalisierten/versendeten Beleg server-
+ * seitig, idempotent (SHA-256) und nicht-umgehbar ins WORM-Archiv. Best-effort: ein Archiv-
+ * Fehler darf die bereits erfolgte Finalisierung (Rechnung/Versand …) NICHT zurückrollen —
+ * nicht archivierte Finals deckt der Vollständigkeits-Report (archive.missing) auf, und der
+ * Backfill (archive.backfill) zieht sie nach. Das PDF wird aus dem vorhandenen Generator
+ * erzeugt (kein erneuter Upload durch den Nutzer).
+ */
+async function autoArchive(
+  ctx: Context,
+  belegart: Belegart,
+  sourceEntity: string,
+  sourceId: string,
+  pdf: () => Promise<{ filename: string; base64: string }>
+): Promise<boolean> {
+  try {
+    const r = await pdf();
+    await ctx.archive.archive({
+      belegart, sourceEntity, sourceId, fileName: r.filename, contentType: "application/pdf",
+      data: new Uint8Array(Buffer.from(r.base64, "base64")), userId: ctx.user?.id,
+    });
+    return true;
+  } catch (e) {
+    // Bewusst nur protokollieren — Finalisierung bleibt gültig; Report/Backfill fangen es auf.
+    console.warn(`[auto-archive] ${belegart} ${sourceEntity}/${sourceId}: ${(e as Error).message}`);
+    return false;
+  }
 }
 
 export const appRouter = router({
@@ -419,6 +449,10 @@ export const appRouter = router({
         const res = await ctx.shipments.confirmShipped(input);
         // Shop-Push hat confirmShipped bereits eingereiht → nur Kunden-Mail für Nicht-Shop-Aufträge.
         await ctx.orderStatusSync.onStatusChanged(res.orderId, "VERSENDET", { enqueueShopPush: false });
+        // GoBD: alle Lieferscheine des Auftrags unveränderbar archivieren (WORM).
+        for (const dn of await ctx.deliveries.listDeliveryNotes(res.orderId)) {
+          await autoArchive(ctx, "LIEFERSCHEIN", "DeliveryNote", dn.id, () => ctx.print.deliveryNotePdf(dn.id));
+        }
         return res;
       }),
   }),
@@ -1375,7 +1409,12 @@ export const appRouter = router({
     transition: roleProcedure("ADMIN", "BUERO")
       .input(z.object({ id: z.string().min(1), to: z.enum(["VERSENDET", "NACHFASSEN", "ANGENOMMEN"]) }))
       .mutation(async ({ input, ctx }) => {
-        try { await ctx.quotes.transition(input.id, input.to); return { ok: true as const }; }
+        try {
+          await ctx.quotes.transition(input.id, input.to);
+          // GoBD: versendetes Angebot unveränderbar archivieren (WORM).
+          if (input.to === "VERSENDET") await autoArchive(ctx, "ANGEBOT", "Quote", input.id, () => ctx.print.quotePdf(input.id));
+          return { ok: true as const };
+        }
         catch (e) { throw new TRPCError({ code: "CONFLICT", message: (e as Error).message }); }
       }),
     reject: roleProcedure("ADMIN", "BUERO")
@@ -1684,7 +1723,12 @@ export const appRouter = router({
     sendAuftragsbestaetigung: roleProcedure("ADMIN", "BUERO")
       .input(z.object({ orderId: z.string().min(1) }))
       .mutation(async ({ input, ctx }) => {
-        try { return await ctx.workflow.sendAuftragsbestaetigung(input.orderId, ctx.user.email); }
+        try {
+          const res = await ctx.workflow.sendAuftragsbestaetigung(input.orderId, ctx.user.email);
+          // GoBD: versendete Auftragsbestätigung unveränderbar archivieren (WORM).
+          await autoArchive(ctx, "AUFTRAGSBESTAETIGUNG", "Auftragsbestaetigung", input.orderId, () => ctx.print.auftragsbestaetigungPdf(input.orderId));
+          return res;
+        }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
   }),
@@ -2489,7 +2533,12 @@ export const appRouter = router({
     createFromOrder: roleProcedure("ADMIN", "BUERO", "BUCHHALTUNG")
       .input(z.object({ orderId: z.string().min(1) }))
       .mutation(async ({ input, ctx }) => {
-        try { return await ctx.invoices.createFromOrder(input.orderId); }
+        try {
+          const res = await ctx.invoices.createFromOrder(input.orderId);
+          // GoBD: Rechnung sofort unveränderbar archivieren (WORM), nicht umgehbar.
+          await autoArchive(ctx, "RECHNUNG", "Invoice", res.id, () => ctx.print.invoicePdf(res.id));
+          return res;
+        }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
 
@@ -2507,6 +2556,28 @@ export const appRouter = router({
     list: roleProcedure(...supplierRoles)
       .input(z.object({ limit: z.number().int().positive().max(500) }).optional())
       .query(({ input, ctx }) => ctx.archive.list(input?.limit ?? 50)),
+
+    /**
+     * Backfill (P1): zieht alle bereits finalisierten Belege idempotent ins WORM-Archiv nach
+     * (Rechnungen, versendete/entschiedene Angebote, Lieferscheine). PDFs werden aus den
+     * vorhandenen Generatoren erzeugt; SHA-256-Dedupe verhindert Dubletten. GoBD-Erstbefüllung.
+     */
+    backfill: roleProcedure("ADMIN", "BUCHHALTUNG").mutation(async ({ ctx }) => {
+      let invoices = 0, quotes = 0, deliveryNotes = 0;
+      for (const i of await ctx.invoices.listRecent(500)) {
+        if (await autoArchive(ctx, "RECHNUNG", "Invoice", i.id, () => ctx.print.invoicePdf(i.id))) invoices++;
+      }
+      const DECIDED = new Set(["VERSENDET", "NACHFASSEN", "ANGENOMMEN", "ABGELEHNT"]);
+      for (const q of await ctx.quotes.list()) {
+        if (DECIDED.has(q.status) && await autoArchive(ctx, "ANGEBOT", "Quote", q.id, () => ctx.print.quotePdf(q.id))) quotes++;
+      }
+      for (const o of await ctx.orders.listRecent(500)) {
+        for (const dn of await ctx.deliveries.listDeliveryNotes(String(o.id))) {
+          if (await autoArchive(ctx, "LIEFERSCHEIN", "DeliveryNote", dn.id, () => ctx.print.deliveryNotePdf(dn.id))) deliveryNotes++;
+        }
+      }
+      return { invoices, quotes, deliveryNotes, total: invoices + quotes + deliveryNotes };
+    }),
 
     /** Beleg unveränderbar archivieren (Datei base64-kodiert). */
     archive: roleProcedure(...supplierRoles)

@@ -6385,12 +6385,22 @@ export function ArchivePage({ role }: { role?: string } = {}): JSX.Element {
     } catch (e) { setErr(errMsg(e)); }
   };
 
+  const [backfilling, setBackfilling] = useState(false);
+  const backfill = async () => {
+    setErr(null); setMsg(null); setBackfilling(true);
+    try {
+      const r = await trpc.archive.backfill.mutate();
+      setMsg(`Backfill abgeschlossen: ${r.invoices} Rechnung(en), ${r.quotes} Angebot(e), ${r.deliveryNotes} Lieferschein(e) im Archiv (idempotent, ohne Dubletten).`);
+      await refresh();
+    } catch (e) { setErr(errMsg(e)); } finally { setBackfilling(false); }
+  };
+
   const fmtDate = (d: string | Date): string => new Date(d).toLocaleDateString("de-DE");
 
   return (
     <>
       <DocListHeader module="Einstellungen" title="GoBD-Belegarchiv" />
-      <Text size="sm" c="dimmed" mt={4}>Unveränderbare (WORM) Ablage finalisierter Belege — inhaltsadressiert (SHA-256), mit gesetzlicher Aufbewahrungsfrist (6/10 Jahre) und GDPdU-„Z3"-Export für die Betriebsprüfung (Kap. 10).</Text>
+      <Text size="sm" c="dimmed" mt={4}>Unveränderbare (WORM) Ablage finalisierter Belege — inhaltsadressiert (SHA-256), mit gesetzlicher Aufbewahrungsfrist (6/10 Jahre) und GDPdU-„Z3"-Export für die Betriebsprüfung (Kap. 10). <b>Rechnungen, versendete Angebote, Auftragsbestätigungen und Lieferscheine werden beim Finalisieren automatisch archiviert</b> — das Formular unten ist nur für Sonderfälle/Nachträge.</Text>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
       {msg && <Alert color="green" mt="sm">{msg}</Alert>}
 
@@ -6405,6 +6415,7 @@ export function ArchivePage({ role }: { role?: string } = {}): JSX.Element {
         <Group mt="sm">
           <Button onClick={() => void archive()} disabled={!file || !sourceId.trim()}>Archivieren (WORM)</Button>
           {canExport && <Button variant="default" onClick={() => void gobdExport()}>GoBD-Z3-Export</Button>}
+          {canExport && <Button variant="light" color="grape" loading={backfilling} onClick={() => void backfill()} title="Alle bereits finalisierten Belege idempotent ins Archiv nachziehen">Backfill (Bestandsbelege)</Button>}
         </Group>
       </Box>
 
