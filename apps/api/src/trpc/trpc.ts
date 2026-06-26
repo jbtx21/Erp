@@ -76,6 +76,7 @@ import type { GoodsReceiptService } from "../modules/goods-receipt/goods-receipt
 import type { PaymentService } from "../modules/payment/payment.service.js";
 import type { ReconciliationService } from "../modules/reconciliation/reconciliation.service.js";
 import type { MatrixService } from "../modules/matrix/matrix.service.js";
+import type { MatrixImportService } from "../modules/matrix-import/matrix-import.service.js";
 import type {
   BankingQueryRepository,
   DunningQueryRepository,
@@ -166,6 +167,7 @@ export interface Context {
   payments: PaymentService;
   reconciliation: ReconciliationService;
   matrix: MatrixService;
+  matrixImport: MatrixImportService;
   auth: AuthService;
   user: AuthUser | null;
   /** Roh-Token aus dem Cookie (für den 2FA-Zwischenschritt/Logout, wenn user noch null ist). */

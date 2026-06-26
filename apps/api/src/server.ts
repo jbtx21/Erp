@@ -170,6 +170,8 @@ import { ReconciliationService } from "./modules/reconciliation/reconciliation.s
 import { PrismaReconciliationRepository } from "./repositories/prisma-reconciliation.repository.js";
 import { MatrixService } from "./modules/matrix/matrix.service.js";
 import { PrismaMatrixRepository } from "./repositories/prisma-matrix.repository.js";
+import { MatrixImportService } from "./modules/matrix-import/matrix-import.service.js";
+import { PrismaMatrixImportRepository } from "./repositories/prisma-matrix-import.repository.js";
 import { PrismaIntegrationsRepository } from "./repositories/prisma-integrations.repository.js";
 import { HttpSlackSender } from "./modules/integrations/slack-provider.js";
 import { appRouter } from "./trpc/router.js";
@@ -354,6 +356,8 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const reconciliation = new ReconciliationService(new PrismaReconciliationRepository());
   // Matrixprodukt-Grundtabelle (Farb-/Größen-Stamm + Größenläufe) für den Matrix-Editor.
   const matrix = new MatrixService(new PrismaMatrixRepository(), new PrismaAuditSink());
+  // Matrixprodukt-Import (Säule B): flache Lieferanten-CSV → Hauptartikel + Farbe×Größe-Raster (+EK).
+  const matrixImport = new MatrixImportService(new PrismaMatrixImportRepository(), new PrismaAuditSink());
   // Regel-Engine: Aktions-Handler bündeln vorhandene Seiteneffekte (In-App, Mail, Aufgabe).
   // Weitere Handler (Slack o. Ä.) lassen sich hier ohne Engine-Änderung ergänzen.
   const automationHandlers: Record<string, ActionHandler> = {
@@ -554,6 +558,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           payments,
           reconciliation,
           matrix,
+          matrixImport,
           auth,
           user,
           sessionToken,

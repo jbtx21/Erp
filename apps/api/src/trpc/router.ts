@@ -1302,6 +1302,21 @@ export const appRouter = router({
       }),
   }),
 
+  // Matrixprodukt-Import (Säule B): flache Lieferanten-CSV → Hauptartikel + Farbe×Größe-Raster
+  // (+ optional EK je Lieferant). EK-Preise → kein PRODUKTION-Zugriff (Kap. 12).
+  matrixImport: router({
+    preview: roleProcedure("ADMIN", "BUERO", "BUCHHALTUNG")
+      .input(z.object({ csv: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.matrixImport.preview(input.csv); } catch (e) { throw toTrpcError(e); }
+      }),
+    run: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ csv: z.string().min(1), ekSupplierId: z.string().min(1).optional() }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.matrixImport.apply(input.csv, input.ekSupplierId ? { ek: { supplierId: input.ekSupplierId } } : {}); } catch (e) { throw toTrpcError(e); }
+      }),
+  }),
+
   // Angebote (B8): auflisten + Entwurf anlegen + Status weiterschalten + ablehnen.
   quotes: router({
     list: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.quotes.list()),

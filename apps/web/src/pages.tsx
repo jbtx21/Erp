@@ -1072,6 +1072,98 @@ function ArticleVariantsTab({ articleId }: { articleId: string }): JSX.Element {
   );
 }
 
+// Matrix-Import (Säule B, Xentral "Matrix-Produkt-Import"): flache Lieferanten-CSV
+// (Hauptartikel + Farbe + Größe + optional EK/Lieferanten-SKU) → Hauptartikel + Farbe×Größe-
+// Raster. Zweistufig: Vorschau (Neu/Vorhanden) → Übernehmen. EK optional je Lieferant.
+const MATRIX_STATUS_COLOR: Record<string, string> = { neu: "green", vorhanden: "gray", duplikat: "orange" };
+function MatrixImportPanel(): JSX.Element {
+  const [csv, setCsv] = useState("");
+  const [ekSupplier, setEkSupplier] = useState("");
+  const [plan, setPlan] = useState<Awaited<ReturnType<typeof trpc.matrixImport.preview.mutate>> | null>(null);
+  const [summary, setSummary] = useState<Awaited<ReturnType<typeof trpc.matrixImport.run.mutate>> | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const doPreview = async (): Promise<void> => {
+    setErr(null); setSummary(null); setBusy(true);
+    try { setPlan(await trpc.matrixImport.preview.mutate({ csv })); } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+  const doRun = async (): Promise<void> => {
+    setErr(null); setBusy(true);
+    try { setSummary(await trpc.matrixImport.run.mutate({ csv, ...(ekSupplier ? { ekSupplierId: ekSupplier } : {}) })); await doPreview(); }
+    catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+
+  return (
+    <Card withBorder padding="md" mt="md">
+      <Title order={5} mb={4}>Matrix-Import (CSV)</Title>
+      <Text size="xs" c="dimmed" mb="sm">Eine Zeile je Hauptartikel + Farbe + Größe. Spalten (Kopfzeile): <b>Artikelnummer</b> (Pflicht), Bezeichnung, <b>Farbe</b> (Pflicht), <b>Größe</b> (Pflicht), Lieferantennummer, EK netto. Hauptartikel und Varianten werden idempotent angelegt (vorhandene übersprungen). Mit Lieferantenwahl wird je Zeile mit EK ein Einkaufspreis verknüpft.</Text>
+      {err && <Alert color="red" mb="sm">{err}</Alert>}
+      <Group gap="sm">
+        <input type="file" accept=".csv,text/csv" onChange={(e) => {
+          const f = e.currentTarget.files?.[0]; if (!f) return;
+          const reader = new FileReader();
+          reader.onload = () => setCsv(String(reader.result ?? ""));
+          reader.readAsText(f);
+        }} />
+      </Group>
+      <Textarea label="…oder CSV einfügen" autosize minRows={4} maxRows={12} mt="xs" value={csv} onChange={(e) => setCsv(e.currentTarget.value)}
+        placeholder={"Artikelnummer;Bezeichnung;Farbe;Größe;Lieferantennummer;EK netto\nPOLO-01;Premium Polo;Navy;M;SS-100;9,90\nPOLO-01;Premium Polo;Navy;L;SS-101;9,90"} />
+      <Group align="end" gap="xs" mt="sm">
+        <SupplierPicker label="EK + Lieferant verknüpfen (optional)" value={ekSupplier} onChange={setEkSupplier} w={260} />
+        {ekSupplier && <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setEkSupplier("")}>abwählen</Button>}
+        <Button disabled={!csv.trim() || busy} loading={busy} onClick={() => void doPreview()}>Vorschau / Abgleich</Button>
+      </Group>
+
+      {plan && (
+        <>
+          <Group mt="md" gap="xs">
+            <Badge color="green" variant="light">Neue Artikel: {plan.newArticles}</Badge>
+            <Badge color="green" variant="light">Neue Varianten: {plan.newVariants}</Badge>
+            <Badge color="gray" variant="light">Vorhandene Varianten: {plan.existingVariants}</Badge>
+            <Badge color={plan.withEk ? "blue" : "gray"} variant="light">Zeilen mit EK: {plan.withEk}</Badge>
+            {plan.errors.length > 0 && <Badge color="red" variant="light">Fehler: {plan.errors.length}</Badge>}
+          </Group>
+          {plan.errors.length > 0 && (
+            <Alert color="yellow" mt="sm" title="Zeilenfehler (werden übersprungen)">
+              {plan.errors.slice(0, 8).map((e, i) => <Text key={i} size="xs">Zeile {e.row}: {e.message}</Text>)}
+              {plan.errors.length > 8 && <Text size="xs" c="dimmed">… {plan.errors.length - 8} weitere</Text>}
+            </Alert>
+          )}
+          <Box mt="md" style={{ maxHeight: 320, overflowY: "auto" }}>
+            <Table withTableBorder stickyHeader>
+              <Table.Thead>
+                <Table.Tr><Table.Th>Artikel</Table.Th><Table.Th>Farbe</Table.Th><Table.Th>Größe</Table.Th><Table.Th>Varianten-SKU</Table.Th><Table.Th>EK</Table.Th><Table.Th>Status</Table.Th></Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {plan.rows.slice(0, 200).map((r, i) => (
+                  <Table.Tr key={i}>
+                    <Table.Td><Text size="xs">{r.sku} {r.articleStatus === "neu" && <Badge size="xs" color="green" variant="dot">neu</Badge>}</Text></Table.Td>
+                    <Table.Td><Text size="xs">{r.farbe}</Text></Table.Td>
+                    <Table.Td><Text size="xs">{r.groesse}</Text></Table.Td>
+                    <Table.Td><Text size="xs" c="dimmed">{r.variantSku}</Text></Table.Td>
+                    <Table.Td><Text size="xs">{r.ekCents !== null ? euro(r.ekCents) : "—"}</Text></Table.Td>
+                    <Table.Td><Badge size="xs" color={MATRIX_STATUS_COLOR[r.variantStatus] ?? "gray"} variant="light">{r.variantStatus}</Badge></Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+            {plan.rows.length > 200 && <Text size="xs" c="dimmed" mt={4}>… {plan.rows.length - 200} weitere Zeilen (Vorschau gekürzt)</Text>}
+          </Box>
+          <Button mt="md" color="navy" disabled={busy || plan.newVariants === 0} loading={busy} onClick={() => void doRun()}>
+            Übernehmen ({plan.newArticles} Artikel, {plan.newVariants} Varianten{ekSupplier ? `, ${plan.withEk}× EK` : ""})
+          </Button>
+        </>
+      )}
+      {summary && (
+        <Alert color={summary.errors.length > 0 ? "yellow" : "green"} mt="md" title="Import-Ergebnis">
+          {summary.articlesCreated} Artikel · {summary.variantsCreated} Varianten angelegt · {summary.variantsSkipped} übersprungen{summary.ekLinked ? ` · ${summary.ekLinked}× EK verknüpft` : ""}{summary.errors.length ? ` · ${summary.errors.length} Fehler` : ""}.
+        </Alert>
+      )}
+    </Card>
+  );
+}
+
 // Matrix-Stamm (Xentral "Grundtabelle"): globaler Farb-/Größen-Stamm + Größenlauf-Vorlagen.
 // Pflegt die Achswerte, aus denen der Matrix-Editor am Artikel das Farbe×Größe-Raster baut.
 export function MatrixStammPage(): JSX.Element {
@@ -1182,6 +1274,7 @@ export function MatrixStammPage(): JSX.Element {
           </Table.Tbody>
         </Table>
       </Card>
+      <MatrixImportPanel />
     </Box>
   );
 }

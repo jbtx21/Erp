@@ -3,6 +3,7 @@ export * from "./csv.js";
 export * from "./dataio.js";
 export * from "./ean.js";
 export * from "./ean-import.js";
+export * from "./matrix-import.js";
 export * from "./quote-report.js";
 export * from "./beleg.js";
 export * from "./mail.js";
