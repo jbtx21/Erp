@@ -2,8 +2,9 @@
 // Belegen. Die Datenform wird vom Repository geliefert; das reine Inhaltsmodell baut
 // @texma/shared, gerendert wird mit pdf-lib (beleg-pdf). Rückgabe = Dateiname + Base64.
 
-import { angebotDokument, auftragsbestaetigungDokument, gutschriftDokument, laufzettelDokument, lieferscheinDokument, mahnungDokument, rechnungDokument, type PositionKind } from "@texma/shared";
+import { angebotDokument, auftragsbestaetigungDokument, gutschriftDokument, kundenStammblatt, laufzettelDokument, lieferantenStammblatt, lieferscheinDokument, mahnungDokument, rechnungDokument, type KundenStammblattInput, type LieferantenStammblattInput, type PositionKind } from "@texma/shared";
 import { renderBelegPdf } from "../../pdf/beleg-pdf.js";
+import { renderDataSheetPdf } from "../../pdf/datasheet-pdf.js";
 
 export interface PricePrintLine { menge: number; bezeichnung: string; einzelpreisCents: number; listenpreisCents?: number | null; rabattPct?: number | null }
 
@@ -75,8 +76,17 @@ export interface MahnungPrintData {
   faelligSeit: Date;
 }
 
+/** Kunden-Stammdaten fürs Datenblatt (alle Felder außer Datum/Absender — die ergänzt der Service). */
+export type CompanyDataSheetData = Omit<KundenStammblattInput, "datum" | "absender">;
+/** Lieferanten-Stammdaten fürs Datenblatt. */
+export type SupplierDataSheetData = Omit<LieferantenStammblattInput, "datum" | "absender">;
+
 export interface PrintRepository {
   deliveryNoteForPrint(id: string): Promise<DeliveryNotePrintData | null>;
+  /** Kunden-Stammdaten fürs Stammdatenblatt; null, wenn unbekannt. */
+  companyForDataSheet(companyId: string): Promise<CompanyDataSheetData | null>;
+  /** Lieferanten-Stammdaten fürs Stammdatenblatt; null, wenn unbekannt. */
+  supplierForDataSheet(supplierId: string): Promise<SupplierDataSheetData | null>;
   /** Gutschrift/Storno-Beleg für den PDF-Druck. */
   creditNoteForPrint(id: string): Promise<CreditNotePrintData | null>;
   /** Mahnbeleg (DunningNotice) für den PDF-Druck. */
@@ -193,5 +203,25 @@ export class PrintService {
       liefertermin: o.liefertermin ?? undefined, bestellreferenz: o.bestellreferenz ?? undefined, absender,
     }));
     return { filename: `Auftragsbestaetigung-${o.number}.pdf`, base64: Buffer.from(bytes).toString("base64") };
+  }
+
+  /** Kunden-Stammdatenblatt (internes Datenblatt, kein Beleg). */
+  async customerDataSheetPdf(companyId: string): Promise<PdfResult> {
+    const c = await this.repo.companyForDataSheet(companyId);
+    if (!c) throw new PrintError(`Kunde ${companyId} nicht gefunden.`);
+    const absender = await this.repo.briefkopf();
+    const bytes = await renderDataSheetPdf(kundenStammblatt({ ...c, datum: new Date(), absender }));
+    const slug = (c.customerNumber ?? c.name).replace(/[^\w.-]+/g, "_");
+    return { filename: `Kundenstammblatt-${slug}.pdf`, base64: Buffer.from(bytes).toString("base64") };
+  }
+
+  /** Lieferanten-Stammdatenblatt (internes Datenblatt). */
+  async supplierDataSheetPdf(supplierId: string): Promise<PdfResult> {
+    const s = await this.repo.supplierForDataSheet(supplierId);
+    if (!s) throw new PrintError(`Lieferant ${supplierId} nicht gefunden.`);
+    const absender = await this.repo.briefkopf();
+    const bytes = await renderDataSheetPdf(lieferantenStammblatt({ ...s, datum: new Date(), absender }));
+    const slug = s.name.replace(/[^\w.-]+/g, "_");
+    return { filename: `Lieferantenstammblatt-${slug}.pdf`, base64: Buffer.from(bytes).toString("base64") };
   }
 }

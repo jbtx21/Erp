@@ -2,7 +2,7 @@
 
 import { prisma } from "@texma/db";
 import { lineNet, taxOnNet, VAT_STANDARD, type PositionKind } from "@texma/shared";
-import type { DeliveryNotePrintData, InvoicePrintData, LaufzettelPrintData, OrderConfirmationPrintData, PrintRepository, PricePrintLine, QuotePrintData } from "../modules/print/print.service.js";
+import type { CompanyDataSheetData, DeliveryNotePrintData, InvoicePrintData, LaufzettelPrintData, OrderConfirmationPrintData, PrintRepository, PricePrintLine, QuotePrintData, SupplierDataSheetData } from "../modules/print/print.service.js";
 
 /** Netto/USt/Brutto aus Preis-Positionen (Standard-USt) — für Angebot/AB ohne gespeicherte Steuer. */
 function totals(lines: PricePrintLine[]): { netCents: number; taxCents: number; grossCents: number } {
@@ -41,6 +41,37 @@ export class PrismaPrintRepository implements PrintRepository {
   async briefkopf(): Promise<string[]> {
     const row = await prisma.appSetting.findUnique({ where: { key: "briefkopf" } });
     return row ? row.value.split("\n").map((l) => l.trim()).filter(Boolean) : [];
+  }
+
+  async companyForDataSheet(companyId: string): Promise<CompanyDataSheetData | null> {
+    const c = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: {
+        name: true, customerNumber: true, branche: true, priceGroup: { select: { kind: true } },
+        street: true, zip: true, city: true, country: true, vatId: true, taxNumber: true, taxRule: true,
+        iban: true, bic: true, bankName: true, sepaMandateRef: true, sepaMandateDate: true,
+        zahlungszielTage: true, skontoPercent: true, skontoDays: true, paymentMethod: true, kreditlimitCents: true,
+        liefersperre: true, liefersperreGrund: true, debitorenkonto: true, belegsprache: true, waehrung: true, betreuer: true,
+      },
+    });
+    if (!c) return null;
+    const { priceGroup, ...rest } = c;
+    return { ...rest, priceGroupKind: priceGroup.kind };
+  }
+
+  async supplierForDataSheet(supplierId: string): Promise<SupplierDataSheetData | null> {
+    const s = await prisma.supplier.findUnique({
+      where: { id: supplierId },
+      select: {
+        name: true, kind: true, street: true, zip: true, city: true, country: true,
+        vatId: true, iban: true, bic: true,
+        zahlungszielTage: true, skontoPercent: true, skontoDays: true, lieferzeitTage: true, notiz: true,
+        _count: { select: { supplierItems: true } },
+      },
+    });
+    if (!s) return null;
+    const { _count, ...rest } = s;
+    return { ...rest, itemCount: _count.supplierItems };
   }
   async deliveryNoteForPrint(id: string): Promise<DeliveryNotePrintData | null> {
     const d = await prisma.deliveryNote.findUnique({

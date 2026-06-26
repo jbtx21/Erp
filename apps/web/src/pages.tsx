@@ -3416,6 +3416,10 @@ function CompanyDetailPanel({ companyId, companies = [], onNavigate }: { company
           {ov.openCents > 0 ? <Badge size="xs" color="orange">offen {euro(ov.openCents)}</Badge> : <Badge size="xs" color="teal">keine offenen Posten</Badge>}
           {ov.company.mahnsperre ? <Badge size="xs" color="red">Mahnsperre</Badge> : null}
           {ov.company.liefersperre ? <Badge size="xs" color="red">Liefersperre</Badge> : null}
+          <Button size="compact-xs" variant="default" onClick={async () => {
+            try { const r = await trpc.print.customerDataSheet.query({ companyId }); downloadBase64(r.filename, r.base64, "application/pdf"); }
+            catch (e) { setErr(errMsg(e)); }
+          }}>Stammblatt PDF</Button>
         </>}
       >
       <Text size="xs" c="dimmed" mt={2}>{ov.company.branche ?? "—"} · {ov.contactsCount} Kontakt(e)</Text>

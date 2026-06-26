@@ -1966,6 +1966,20 @@ export const appRouter = router({
         try { return await ctx.print.auftragsbestaetigungPdf(input.orderId); }
         catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
       }),
+    // Kunden-Stammdatenblatt (internes Datenblatt mit Konditionen/Bank → kein PRODUKTION).
+    customerDataSheet: roleProcedure(...supplierRoles)
+      .input(z.object({ companyId: z.string().min(1) }))
+      .query(async ({ input, ctx }) => {
+        try { return await ctx.print.customerDataSheetPdf(input.companyId); }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
+      }),
+    // Lieferanten-Stammdatenblatt (internes Datenblatt mit EK-Konditionen → kein PRODUKTION).
+    supplierDataSheet: roleProcedure(...supplierRoles)
+      .input(z.object({ supplierId: z.string().min(1) }))
+      .query(async ({ input, ctx }) => {
+        try { return await ctx.print.supplierDataSheetPdf(input.supplierId); }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
+      }),
   }),
 
   // Verknüpfte Belege („Connections"): alle mit einem Auftrag verbundenen Dokumente.
