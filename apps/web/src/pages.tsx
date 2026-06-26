@@ -537,11 +537,26 @@ export const ProcurementPage = (): JSX.Element => {
 };
 
 // ── Logistik / Finanzen ─────────────────────────────────────────────────────
+// Empfängeradresse lesbar formatieren statt rohem JSON (Versand-Modul-Bug).
+function formatShippingAddr(a: unknown): string {
+  if (!a || typeof a !== "object") return "";
+  const r = a as Record<string, unknown>;
+  const s = (k: string): string => (typeof r[k] === "string" ? (r[k] as string).trim() : "");
+  const name = s("name") || [s("firstName"), s("lastName")].filter(Boolean).join(" ");
+  const land = s("country") && s("country").toUpperCase() !== "DE" ? `, ${s("country")}` : "";
+  const ort = [s("zip"), s("city")].filter(Boolean).join(" ");
+  return [name, s("street"), ort].filter(Boolean).join(" · ") + land;
+}
+
 export function ShipmentsPage({ onOpen }: { onOpen?: (navKey: string, id: string) => void } = {}): JSX.Element {
   return (
     <>
       <ListPage module="Logistik / Versand" title="Versand" hint="Versandbereite Aufträge → als versendet bestätigen (Carrier + Tracking, T-06). Manuelles Etikett unten."
-        load={() => trpc.shipments.listShippable.query({ limit: 100 }) as Promise<Row[]>}
+        load={async () => {
+          const rows = (await trpc.shipments.listShippable.query({ limit: 100 })) as Row[];
+          // Empfänger-Objekt → lesbare Adresszeile (sonst rohes JSON in der Tabelle).
+          return rows.map((r) => ({ ...r, recipient: formatShippingAddr(r.recipient) }));
+        }}
         action={(r, reload) => {
           const oid = String((r as Row).id ?? (r as Row).orderId ?? "");
           return (
@@ -2972,7 +2987,7 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
       />
       {err && <Alert color="red" mt="sm" withCloseButton onClose={() => setErr(null)}>{err}</Alert>}
       {msg && <Alert color="green" mt="sm" withCloseButton onClose={() => setMsg(null)}>{msg}</Alert>}
-      {canAct && <ManualShopFetch onDone={() => void load()} />}
+      {canAct && !showCreate && <ManualShopFetch onDone={() => void load()} />}
       {canAct && showCreate && (
         <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
           <DocFormShell
@@ -3015,7 +3030,7 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
           </DocFormShell>
         </Box>
       )}
-      <Tabs defaultValue="liste" mt="md" keepMounted={false}>
+      {!showCreate && <Tabs defaultValue="liste" mt="md" keepMounted={false}>
         <Tabs.List>
           <Tabs.Tab value="liste">Liste</Tabs.Tab>
           <Tabs.Tab value="ampel">Ampel</Tabs.Tab>
@@ -3072,9 +3087,9 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
           {/* Prüfungsbasierte Auftragsampel (gleiche Komponente wie #statusampel), Zeilenklick öffnet den Auftrag. */}
           <Auftragsampel onOpenOrder={(id) => void startEditOrder(id)} />
         </Tabs.Panel>
-      </Tabs>
+      </Tabs>}
 
-      {canAct && (
+      {canAct && !showCreate && (
         <>
           <Title order={4} mt="xl">Liefertermin &amp; Rückwärtsterminierung (Kap. 35.2)</Title>
           <Text size="sm" c="dimmed" mt={4}>

@@ -135,6 +135,18 @@ export class QuoteService {
     const status = await this.repo.getStatus(quoteId);
     if (!status) throw new QuoteError(`Angebot ${quoteId} nicht gefunden`);
     quoteStatusMachine.assert(status, to);
+    // 0-€-/Leer-Schutz: ein Angebot ohne werthaltige Position darf nicht versendet oder
+    // angenommen werden (sonst entstünde später eine 0-€-Rechnung). Alternativpositionen
+    // zählen nicht zur verbindlichen Summe.
+    if (to === "VERSENDET" || to === "ANGENOMMEN") {
+      const data = await this.repo.forEdit(quoteId);
+      const netCents = (data?.lines ?? [])
+        .filter((l) => !l.isAlternative)
+        .reduce((s, l) => s + l.qty * l.unitNetCents, 0);
+      if (netCents <= 0) {
+        throw new QuoteError("Angebot ohne werthaltige Position (Netto 0 €) kann nicht versendet/angenommen werden.");
+      }
+    }
     await this.repo.setStatus(quoteId, to);
     await this.audit.append(buildEntry({ entity: "Quote", entityId: quoteId, action: "UPDATE", after: { status: to } }));
   }

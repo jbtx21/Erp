@@ -50,3 +50,24 @@ describe("QuoteService.update (vollständige Bearbeitung)", () => {
     await expect(svc.getForEdit("nope")).rejects.toBeInstanceOf(QuoteError);
   });
 });
+
+describe("QuoteService.transition — 0-€-/Leer-Schutz (P0-2)", () => {
+  it("blockt VERSENDET bei Netto 0 €", async () => {
+    const { svc } = setup();
+    const { id } = await svc.create({ companyId: "co-1", lines: [{ description: "Gratis", qty: 1, unitNetCents: 0 }] });
+    await expect(svc.transition(id, "VERSENDET")).rejects.toBeInstanceOf(QuoteError);
+  });
+
+  it("blockt auch ANGENOMMEN bei Netto 0 € (defensiv, falls VERSENDET umgangen wurde)", async () => {
+    const { repo, svc } = setup();
+    const { id } = await svc.create({ companyId: "co-1", lines: [{ description: "Gratis", qty: 1, unitNetCents: 0 }] });
+    await repo.setStatus(id, "VERSENDET");
+    await expect(svc.transition(id, "ANGENOMMEN")).rejects.toBeInstanceOf(QuoteError);
+  });
+
+  it("lässt werthaltige Angebote normal versenden", async () => {
+    const { svc } = setup();
+    const { id } = await svc.create({ companyId: "co-1", lines: [{ description: "Polo", qty: 10, unitNetCents: 1290 }] });
+    await expect(svc.transition(id, "VERSENDET")).resolves.toBeUndefined();
+  });
+});

@@ -45,6 +45,11 @@ describe("InvoiceService — Order → Invoice (Make-Target)", () => {
     await expect(service.createFromOrder("o1")).rejects.toBeInstanceOf(InvoiceError);
   });
 
+  it("lehnt einen Auftrag mit Gesamtwert 0 € ab (P0-2)", async () => {
+    const { service } = setup([{ description: "Gratis-Muster", qty: 5, unitNetCents: 0 }]);
+    await expect(service.createFromOrder("o1")).rejects.toBeInstanceOf(InvoiceError);
+  });
+
   it("wirft bei unbekanntem Auftrag", async () => {
     const { service } = setup();
     await expect(service.createFromOrder("nope")).rejects.toBeInstanceOf(InvoiceError);

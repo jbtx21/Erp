@@ -77,6 +77,8 @@ export class InvoiceService {
     if (order.lines.length === 0) throw new InvoiceError("Auftrag ohne Positionen kann nicht fakturiert werden.");
 
     const totals = buildInvoiceTotals(order.lines);
+    // 0-€-Schutz: keine Nullrechnung erzeugen (verhindert leeres Angebot → leerer Auftrag → 0-€-Rechnung).
+    if (totals.grossCents <= 0) throw new InvoiceError("Auftrag mit Gesamtwert 0 € kann nicht fakturiert werden.");
     const number = await this.numbering.next("INVOICE", this.now());
     const dueDate = new Date(this.now().getTime() + order.zahlungszielTage * 24 * 60 * 60 * 1000);
 
