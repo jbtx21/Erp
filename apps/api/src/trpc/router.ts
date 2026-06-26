@@ -1267,7 +1267,14 @@ export const appRouter = router({
         tiers: z.array(z.object({ minMenge: z.number().int().positive(), vkCents: z.number().int().nonnegative() })).optional(),
       }))
       .mutation(async ({ input, ctx }) => {
-        try { return await ctx.products.createVeredelungArticle(input); } catch (e) { throw toTrpcError(e); }
+        try { return await ctx.products.createVeredelungArticle(input); }
+        catch (e) {
+          // Doppelte SKU (Prisma P2002) → sauberer 409 CONFLICT statt Server-Crash (500).
+          if ((e as { code?: string }).code === "P2002") {
+            throw new TRPCError({ code: "CONFLICT", message: `Artikel-Nr. „${input.sku}" existiert bereits — bitte eine andere SKU wählen.` });
+          }
+          throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message });
+        }
       }),
     // Set/Bundle-Stückliste (Kap. 5.1): Komponenten einer Variante lesen/setzen.
     components: roleProcedure(...supplierRoles)

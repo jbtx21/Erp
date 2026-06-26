@@ -1537,7 +1537,7 @@ export type PositionKind = "TEXTIL" | "VEREDELUNG" | "SONSTIGE";
 // Eine Position kann auf eine konkrete Variante (variantId) ODER nur auf einen
 // Hauptartikel (articleId, Farbe×Größe noch offen) verweisen; isAlternative kennzeichnet
 // ein unverbindliches Alternativangebot (wird beim Wandeln in den Auftrag weggelassen).
-export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind; variantId?: string; articleId?: string; articleNumber?: string; articleName?: string; isAlternative?: boolean; ekEuro?: number; isBundle?: boolean; rabattPct?: number; taxRatePct?: number }
+export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind; variantId?: string; articleId?: string; articleNumber?: string; articleName?: string; isAlternative?: boolean; ekEuro?: number; isBundle?: boolean; rabattPct?: number; taxRatePct?: number; vkManual?: boolean }
 
 // Artikel-Picker: durchsuchbare Auswahl aus dem Artikelstamm (ERPNext „Link field").
 // Bei Auswahl wird eine Position vorbefüllt (Bezeichnung, Standardpreis, Variante).
@@ -1850,6 +1850,15 @@ function LogoArticleDialog({ onClose, onCreated }: { onClose: () => void; onCrea
   const [ek, setEk] = useState<number | "">("");
   const [tiers, setTiers] = useState<TierRow[]>([{ minMenge: 1, euro: 0 }]);
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
+  // Aufschlagsfaktor (Kap. 4.4) für die automatische Staffel-VK-Vorbelegung aus dem EK.
+  const [markupCfg, setMarkupCfg] = useState<MarkupConfig | null>(null);
+  useEffect(() => { void trpc.stickerei.markup.getConfig.query().then((c) => setMarkupCfg(c as MarkupConfig)).catch(() => undefined); }, []);
+  // Staffel-VK = EK × Aufschlagsfaktor (je Stufe nach Menge), nur für noch nicht von Hand
+  // gesetzte Stufen (euro===0) — überschreibbar. Wird bei EK-Eingabe ausgelöst.
+  const prefillTiers = (ekEuro: number, ts: TierRow[]): TierRow[] =>
+    ekEuro > 0
+      ? ts.map((t) => (t.euro === 0 ? { ...t, euro: Math.round(ekEuro * resolveMarkupFactor(markupCfg ?? DEFAULT_MARKUP_CONFIG, { menge: t.minMenge, ekCents: Math.round(ekEuro * 100) }).factor * 100) / 100 } : t))
+      : ts;
   // Standard-Siebdruck-Veredler: bei Veredelungsart Siebdruck vorbelegen (sofern noch leer).
   const [siebdruckDefault, setSiebdruckDefault] = useState<string | null>(null);
   useEffect(() => { void (async () => { try { setSiebdruckDefault(await trpc.settings.siebdruckVeredler.query()); } catch { /* ignore */ } })(); }, []);
@@ -1880,7 +1889,7 @@ function LogoArticleDialog({ onClose, onCreated }: { onClose: () => void; onCrea
       </Group>
       <Group gap="md" align="end" wrap="wrap" mt="sm">
         <SupplierPicker label={method === "DRUCK" ? "Siebdruck-Lieferant (Pflicht)" : "Veredler (Pflicht)"} value={veredlerId} onChange={setVeredlerId} w={240} />
-        <NumberInput label="EK beim Veredler (€)" value={ek} onChange={(v) => setEk(typeof v === "number" ? v : "")} min={0} decimalScale={2} w={170} placeholder="je Logo abweichend" />
+        <NumberInput label="EK beim Veredler (€)" value={ek} onChange={(v) => { const n = typeof v === "number" ? v : ""; setEk(n); if (typeof n === "number") setTiers((ts) => prefillTiers(n, ts)); }} min={0} decimalScale={2} w={170} placeholder="je Logo abweichend" title="VK je Staffelstufe wird automatisch über den Aufschlagsfaktor vorbelegt (überschreibbar)" />
       </Group>
       <Title order={6} mt="md">Mengenstaffel (VK je Stück)</Title>
       {tiers.map((t, i) => (
@@ -1890,7 +1899,7 @@ function LogoArticleDialog({ onClose, onCreated }: { onClose: () => void; onCrea
           <Button size="compact-sm" variant="subtle" color="red" disabled={tiers.length === 1} onClick={() => setTiers((ts) => ts.filter((_, j) => j !== i))}>✕</Button>
         </Group>
       ))}
-      <Button size="compact-xs" variant="light" mt="xs" onClick={() => setTiers((ts) => [...ts, { minMenge: (ts.at(-1)?.minMenge ?? 0) + 10, euro: 0 }])}>+ Staffelstufe</Button>
+      <Button size="compact-xs" variant="light" mt="xs" onClick={() => setTiers((ts) => prefillTiers(typeof ek === "number" ? ek : 0, [...ts, { minMenge: (ts.at(-1)?.minMenge ?? 0) + 10, euro: 0 }]))}>+ Staffelstufe</Button>
       <Group justify="flex-end" mt="lg">
         <Button variant="default" onClick={onClose}>Abbrechen</Button>
         <Button loading={busy} disabled={!name.trim() || !sku.trim() || !veredlerId} onClick={() => void create()}>Anlegen &amp; übernehmen</Button>
@@ -1917,8 +1926,10 @@ export function LinesEditor({ lines, onChange, quoteMode = false, companyId, tax
     if (raw === "") { set(i, { ekEuro: undefined }); return; }
     const ek = Number(raw);
     const patch: Partial<EditorLine> = { ekEuro: ek };
+    // EK→VK-Automatik bei freien Positionen: auch bei MANUELLER EK-Eingabe feuern, solange
+    // der VK nicht von Hand überschrieben wurde (vkManual). Faktor aus dem Aufschlag (Kap. 4.4).
     const isFree = !l.variantId && !l.articleId;
-    if (isFree && ek > 0 && !l.euro) {
+    if (isFree && ek > 0 && !l.vkManual) {
       const { factor } = resolveMarkupFactor(markupCfg ?? DEFAULT_MARKUP_CONFIG, { menge: l.qty, ekCents: Math.round(ek * 100) });
       patch.euro = Math.round(ek * factor * 100) / 100;
     }
@@ -1927,11 +1938,21 @@ export function LinesEditor({ lines, onChange, quoteMode = false, companyId, tax
   const [bundleFor, setBundleFor] = useState<number | null>(null); // Index der Zeile mit offenem Stücklisten-Editor
   const [shown, setShown] = useState<Record<number, boolean>>({}); // aufgeklappte Stücklisten-Vorschauen
   const [logoOpen, setLogoOpen] = useState(false); // Dialog „Logo/Veredelung anlegen"
-  // Erste leere Zeile ersetzen, sonst anhängen; gibt den Zielindex zurück.
+  // Nur eine WIRKLICH leere Platzhalterzeile ersetzen (keine Beschreibung, kein Preis,
+  // keine Artikel-/Variantenbindung), sonst anhängen — verhindert Datenverlust, wenn eine
+  // gefüllte Position (z. B. 200× Textil) nur keine Beschreibung trägt. Gibt den Zielindex zurück.
+  const isBlank = (l: EditorLine): boolean =>
+    !l.description.trim() && !l.variantId && !l.articleId && !l.articleNumber && !l.articleName && !l.ekEuro && !l.euro;
   const addLine = (line: EditorLine): number => {
-    const idx = lines.findIndex((l) => !l.description.trim());
+    const idx = lines.findIndex(isBlank);
     onChange(idx >= 0 ? lines.map((l, j) => (j === idx ? line : l)) : [...lines, line]);
     return idx >= 0 ? idx : lines.length;
+  };
+  // Veredelung IMMER als zusätzliche Position anhängen (nie eine bestehende ersetzen); Menge
+  // an die zugehörige Textilposition koppeln, damit die Mengenstaffel greift (Kap. 5.4/11).
+  const appendVeredelung = (e: { label: string; variantId: string; unitNetCents: number }): void => {
+    const textilQty = lines.find((l) => l.kind === "TEXTIL" && l.qty > 0)?.qty ?? 1;
+    onChange([...lines, { description: e.label, qty: textilQty, euro: e.unitNetCents / 100, kind: "VEREDELUNG", variantId: e.variantId }]);
   };
   // Staffelpreis + Lieferanten-EK (→ Deckungsbeitrag) für eine Variante des Kunden ziehen.
   const resolve = async (variantId: string, qty: number): Promise<{ euro?: number; ekEuro?: number }> => {
@@ -1962,7 +1983,7 @@ export function LinesEditor({ lines, onChange, quoteMode = false, companyId, tax
         {quoteMode && <Button size="xs" variant="light" color="grape" onClick={() => setLogoOpen(true)}>+ Logo/Veredelung</Button>}
         <Text size="xs" c="dimmed">{quoteMode ? "Variante/Hauptartikel wählen, Logo anlegen oder unten frei erfassen" : "aus dem Artikelstamm wählen oder unten frei erfassen"}</Text>
       </Group>
-      {logoOpen && <LogoArticleDialog onClose={() => setLogoOpen(false)} onCreated={(e) => { addLine({ description: e.label, qty: 1, euro: e.unitNetCents / 100, kind: "VEREDELUNG", variantId: e.variantId }); setLogoOpen(false); }} />}
+      {logoOpen && <LogoArticleDialog onClose={() => setLogoOpen(false)} onCreated={(e) => { appendVeredelung(e); setLogoOpen(false); }} />}
       {lines.map((l, i) => {
         const db = lineDbCents(l);
         const effEuro = effUnitEuro(l);
@@ -1985,7 +2006,7 @@ export function LinesEditor({ lines, onChange, quoteMode = false, companyId, tax
             onBlur={() => { if (companyId && l.variantId) void resolve(l.variantId, l.qty).then((p) => { if (p.euro !== undefined || p.ekEuro !== undefined) set(i, p); }); }}
             min={1} w={70} />
           <NumberInput label={i === 0 ? "EK (€)" : undefined} value={l.ekEuro ?? ""} onChange={(v) => applyEk(i, l, v)} min={0} decimalScale={2} w={90} placeholder="—" title="Einkaufspreis — VK wird bei freien Positionen automatisch über den Aufschlagsfaktor berechnet" />
-          <NumberInput label={i === 0 ? "VK (€)" : undefined} value={l.euro} onChange={(v) => set(i, { euro: Number(v) || 0 })} min={0} decimalScale={2} w={90} />
+          <NumberInput label={i === 0 ? "VK (€)" : undefined} value={l.euro} onChange={(v) => set(i, { euro: Number(v) || 0, vkManual: true })} min={0} decimalScale={2} w={90} />
           <NumberInput label={i === 0 ? "Rabatt %" : undefined} value={l.rabattPct ?? ""} onChange={(v) => set(i, { rabattPct: v === "" ? undefined : Math.min(100, Math.max(0, Number(v))) })} min={0} max={100} decimalScale={1} w={80} placeholder="0" />
           {hasRabatt && <Text size="xs" c="dimmed" title="Netto-Einzelpreis nach Rabatt">= {euro(Math.round(effEuro * 100))}</Text>}
           {db !== null && <Badge color={db >= 0 ? "teal" : "red"} variant="light" size="sm" title="Deckungsbeitrag (VK nach Rabatt − EK) × Menge">DB {euro(db)}{margePct !== null ? ` · ${(margePct * 100).toFixed(0)}%` : ""}</Badge>}
@@ -2026,8 +2047,9 @@ function useDefaultTaxRate(): number {
 // Auto-berechnete Summen (Netto/USt/Brutto + Deckungsbeitrag) aus den Positionen — read-only (ERPNext-Muster).
 // USt zentral über den globalen Satz (taxRate), nicht je Position.
 function LineTotals({ lines, taxRate }: { lines: EditorLine[]; taxRate: number }): JSX.Element {
-  // Alternativpositionen zählen nicht zur Angebotssumme (unverbindlich).
-  const main = lines.filter((l) => l.description.trim() && !l.isAlternative);
+  // Alternativpositionen zählen nicht zur Angebotssumme (unverbindlich). Bepreiste Positionen
+  // ohne Beschreibung zählen trotzdem mit (sonst stünde die Summe fälschlich auf 0).
+  const main = lines.filter((l) => lineHasContent(l) && !l.isAlternative);
   const netCents = main.reduce((s, l) => s + Math.round(l.qty * effUnitEuro(l) * 100), 0);
   // Gewährter Rabatt gegenüber den VK-Listenpreisen (für die Summenanzeige).
   const listCents = main.reduce((s, l) => s + Math.round(l.qty * l.euro * 100), 0);
@@ -2056,15 +2078,23 @@ const lineMoney = (l: EditorLine): { unitNetCents: number; listNetCents?: number
   return { unitNetCents, ...(r > 0 ? { listNetCents: listCents, rabattPct: r } : {}), ...(dbPerUnit !== undefined ? { dbCents: dbPerUnit } : {}) };
 };
 
+// Eine Position ist „real" (zählt zu Summe + Speicherung), wenn sie Inhalt trägt: Beschreibung
+// ODER Artikel-/Variantenbindung ODER ein VK > 0. Verhindert den stillen Verlust einer
+// bepreisten Position nur weil das Beschreibungsfeld leer ist (Datenverlust-Bug).
+export const lineHasContent = (l: EditorLine): boolean =>
+  l.description.trim() !== "" || !!l.variantId || !!l.articleId || l.euro > 0;
+// Beschreibung mit Fallback (Server verlangt eine nicht-leere Beschreibung je Position).
+const lineDesc = (l: EditorLine): string => l.description.trim() || l.articleName?.trim() || l.articleNumber?.trim() || "Position";
+
 export const toApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; kind: PositionKind; variantId?: string; dbCents?: number }[] =>
-  lines.filter((l) => l.description.trim()).map((l) => ({
-    description: l.description.trim(), qty: l.qty, kind: l.kind, ...lineMoney(l), ...(l.variantId ? { variantId: l.variantId } : {}),
+  lines.filter(lineHasContent).map((l) => ({
+    description: lineDesc(l), qty: l.qty, kind: l.kind, ...lineMoney(l), ...(l.variantId ? { variantId: l.variantId } : {}),
   }));
 
 // Wie toApiLines, aber inkl. Artikel-/Varianten-Referenz und Alternativ-Kennzeichen (Angebot).
 export const toQuoteApiLines = (lines: EditorLine[], taxRatePct = 19): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; articleId?: string; variantId?: string; isAlternative?: boolean; dbCents?: number }[] =>
-  lines.filter((l) => l.description.trim()).map((l) => ({
-    description: l.description.trim(), qty: l.qty, kind: l.kind, ...lineMoney(l), taxRatePct,
+  lines.filter(lineHasContent).map((l) => ({
+    description: lineDesc(l), qty: l.qty, kind: l.kind, ...lineMoney(l), taxRatePct,
     ...(l.articleId ? { articleId: l.articleId } : {}), ...(l.variantId ? { variantId: l.variantId } : {}), ...(l.isAlternative ? { isAlternative: true } : {}),
   }));
 
@@ -2155,7 +2185,7 @@ export function QuotesPage({ focusId }: { focusId?: string } = {}): JSX.Element 
   const [err, setErr] = useState<string | null>(null);
   // Anlage-Formular
   const [companyId, setCompanyId] = useState("");
-  const [lines, setLines] = useState<EditorLine[]>([{ description: "", qty: 10, euro: 12.9, kind: "TEXTIL" }]);
+  const [lines, setLines] = useState<EditorLine[]>([{ description: "", qty: 10, euro: 0, kind: "TEXTIL" }]);
   const datum = new Date().toISOString().slice(0, 10);
   const [gueltigBis, setGueltigBis] = useState<string>(() => new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10));
   const [orderType, setOrderType] = useState("SALES");
@@ -2216,7 +2246,7 @@ export function QuotesPage({ focusId }: { focusId?: string } = {}): JSX.Element 
   };
 
   const resetForm = (): void => {
-    setLines([{ description: "", qty: 10, euro: 12.9, kind: "TEXTIL" }]); setCompanyId(""); setTerms(""); setEditId(null);
+    setLines([{ description: "", qty: 10, euro: 0, kind: "TEXTIL" }]); setCompanyId(""); setTerms(""); setEditId(null);
     setZahlungszielTage(""); setIncoterm(""); setVersandregel(""); setExempt(false); setDirty(false);
   };
   const startEdit = async (id: string): Promise<void> => {
@@ -3103,7 +3133,7 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
   const [showCreate, setShowCreate] = useState(false);
   const [editOrderId, setEditOrderId] = useState<string | null>(null); // gesetzt = Auftrag bearbeiten
   const [newCompany, setNewCompany] = useState("co-muster");
-  const [newLines, setNewLines] = useState<EditorLine[]>([{ description: "", qty: 10, euro: 12.9, kind: "TEXTIL" }]);
+  const [newLines, setNewLines] = useState<EditorLine[]>([{ description: "", qty: 10, euro: 0, kind: "TEXTIL" }]);
   const [dirty, setDirty] = useState(false); // ungespeicherte Änderungen im Auftrags-Editor
   useUnsavedGuard(showCreate && dirty);
 
@@ -3138,7 +3168,7 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
     const pre = sessionStorage.getItem("texma:newOrderCompany");
     if (pre) { sessionStorage.removeItem("texma:newOrderCompany"); setNewCompany(pre); setEditOrderId(null); setShowCreate(true); }
   }, []);
-  const resetOrderForm = (): void => { setNewLines([{ description: "", qty: 10, euro: 12.9, kind: "TEXTIL" }]); setEditOrderId(null); setShowCreate(false); setDirty(false); };
+  const resetOrderForm = (): void => { setNewLines([{ description: "", qty: 10, euro: 0, kind: "TEXTIL" }]); setEditOrderId(null); setShowCreate(false); setDirty(false); };
   const startEditOrder = async (id: string): Promise<void> => {
     setErr(null);
     try {
