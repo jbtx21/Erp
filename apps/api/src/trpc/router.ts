@@ -383,6 +383,11 @@ export const appRouter = router({
       .input(z.object({ supplierId: z.string().min(1), limit: z.number().int().positive().max(500).optional() }))
       .query(async ({ input, ctx }) => ctx.suppliers.listItems(input.supplierId, input.limit ?? 100)),
 
+    /** Gesamtes Artikelsortiment eines Lieferanten (alle Katalogartikel, lesbar). */
+    catalogAll: roleProcedure(...supplierRoles)
+      .input(z.object({ supplierId: z.string().min(1) }))
+      .query(async ({ input, ctx }) => ctx.suppliers.catalogAll(input.supplierId)),
+
     /** Alle Lieferanten-Stammsätze. */
     listAll: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.suppliers.listSuppliers()),
 

@@ -58,6 +58,18 @@ export interface SupplierListItem {
   active: boolean;
 }
 
+/** Vollständiges Artikelsortiment eines Lieferanten (lesbar: Artikel + Farbe/Größe + EK). */
+export interface SupplierCatalogItem {
+  id: string;
+  sku: string;
+  articleName: string;
+  farbe: string | null;
+  groesse: string | null;
+  supplierSku: string | null;
+  ekCents: number;
+  availableQty: number | null;
+}
+
 /** Lieferanten-Stammdaten 360° (Paket 1): Adresse + Konditionen. */
 export interface SupplierStammdaten {
   street: string | null;
@@ -101,6 +113,8 @@ export interface SupplierOverview {
 
 export interface SupplierQueryRepository {
   listItems(supplierId: string, limit: number): Promise<SupplierItemListItem[]>;
+  /** Gesamtes Artikelsortiment eines Lieferanten (alle Katalogartikel, lesbar aufbereitet). */
+  catalogAll(supplierId: string): Promise<SupplierCatalogItem[]>;
   /** Alle Lieferanten-Stammsätze (B6). */
   listSuppliers(): Promise<SupplierListItem[]>;
   /** Legt einen Lieferanten an (manueller Stammsatz). */

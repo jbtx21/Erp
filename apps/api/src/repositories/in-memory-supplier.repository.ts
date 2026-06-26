@@ -6,7 +6,7 @@ import type {
   SupplierRepository,
   UpsertSupplierItemInput,
 } from "../modules/supplier-import/supplier-import.service.js";
-import type { SupplierContactRow, SupplierItemListItem, SupplierListItem, SupplierOverview, SupplierQueryRepository, UpdateSupplierInput } from "./read.js";
+import type { SupplierCatalogItem, SupplierContactRow, SupplierItemListItem, SupplierListItem, SupplierOverview, SupplierQueryRepository, UpdateSupplierInput } from "./read.js";
 
 interface StoredItem extends UpsertSupplierItemInput {
   id: string;
@@ -125,6 +125,21 @@ export class InMemorySupplierRepository
         ekCents: i.ekCents,
         availableQty: i.availableQty,
         priority: i.priority,
+      }));
+  }
+
+  async catalogAll(supplierId: string): Promise<SupplierCatalogItem[]> {
+    return this.items
+      .filter((i) => i.supplierId === supplierId)
+      .map((i) => ({
+        id: i.id,
+        sku: i.variantId,
+        articleName: i.variantId,
+        farbe: null,
+        groesse: null,
+        supplierSku: i.supplierSku,
+        ekCents: i.ekCents,
+        availableQty: i.availableQty,
       }));
   }
 }

@@ -8,7 +8,7 @@ import type {
   SupplierRepository,
   UpsertSupplierItemInput,
 } from "../modules/supplier-import/supplier-import.service.js";
-import type { SupplierItemListItem, SupplierListItem, SupplierOverview, SupplierQueryRepository, UpdateSupplierInput } from "./read.js";
+import type { SupplierCatalogItem, SupplierItemListItem, SupplierListItem, SupplierOverview, SupplierQueryRepository, UpdateSupplierInput } from "./read.js";
 
 export class PrismaSupplierRepository
   implements SupplierRepository, SupplierQueryRepository
@@ -72,6 +72,27 @@ export class PrismaSupplierRepository
       },
     });
     return rows;
+  }
+
+  async catalogAll(supplierId: string): Promise<SupplierCatalogItem[]> {
+    const rows = await prisma.supplierItem.findMany({
+      where: { supplierId },
+      orderBy: [{ priority: "asc" }, { id: "asc" }],
+      select: {
+        id: true, supplierSku: true, ekCents: true, availableQty: true,
+        variant: { select: { sku: true, article: { select: { name: true } }, attributes: { select: { name: true, value: true } } } },
+      },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      sku: r.variant.sku,
+      articleName: r.variant.article.name,
+      farbe: r.variant.attributes.find((a) => a.name === "Farbe")?.value ?? null,
+      groesse: r.variant.attributes.find((a) => a.name === "Größe")?.value ?? null,
+      supplierSku: r.supplierSku,
+      ekCents: r.ekCents,
+      availableQty: r.availableQty,
+    }));
   }
 
   async listSuppliers(): Promise<SupplierListItem[]> {

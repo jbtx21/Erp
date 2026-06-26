@@ -327,21 +327,98 @@ function SupplierDetailPanel({ supplierId }: { supplierId: string }): JSX.Elemen
         actions={<>
           <Badge size="xs" variant="light" color="gray">{ov.itemCount} Katalog-Artikel</Badge>
           <Badge size="xs" color="blue" variant="light">Einkaufsvolumen {euro(ov.purchaseVolumeCents)}</Badge>
+          <Button size="compact-xs" variant="default" onClick={async () => {
+            try { const r = await trpc.print.supplierDataSheet.query({ supplierId }); downloadBase64(r.filename, r.base64, "application/pdf"); }
+            catch (e) { setErr(errMsg(e)); }
+          }}>Stammblatt PDF</Button>
         </>}
       >
-      <SupplierStammdatenEditor s={ov.supplier} onSaved={reload} />
-      <SupplierContactsBox supplierId={supplierId} contacts={ov.contacts} onChanged={reload} />
-      <Group align="flex-start" gap="lg" mt="sm" wrap="wrap">
-        <Box miw={230}>
-          <Text size="xs" fw={700} tt="uppercase" c="dimmed" mb={4}>Bestellungen ({ov.purchaseOrders.length})</Text>
-          {ov.purchaseOrders.length === 0 ? <Text size="sm" c="dimmed">—</Text> : ov.purchaseOrders.slice(0, 8).map((p) => <Text key={p.id} size="sm">{p.number} · {p.status}</Text>)}
-        </Box>
-        <Box miw={230}>
-          <Text size="xs" fw={700} tt="uppercase" c="dimmed" mb={4}>Eingangsrechnungen ({ov.incomingInvoices.length})</Text>
-          {ov.incomingInvoices.length === 0 ? <Text size="sm" c="dimmed">—</Text> : ov.incomingInvoices.slice(0, 8).map((i) => <Text key={i.id} size="sm">{i.number} · {euro(i.grossCents)} · {d(i.receivedAt)}</Text>)}
-        </Box>
-      </Group>
+      {/* Getabbte Lieferantenmaske (analog Kundenmaske, Xentral-Benchmark). */}
+      <Tabs defaultValue="stammdaten" mt="md" keepMounted={false}>
+        <Tabs.List>
+          <Tabs.Tab value="stammdaten">Stammdaten</Tabs.Tab>
+          <Tabs.Tab value="kontakte">Kontakte ({ov.contacts.length})</Tabs.Tab>
+          <Tabs.Tab value="sortiment">Sortiment ({ov.itemCount})</Tabs.Tab>
+          <Tabs.Tab value="dateien">Dateien</Tabs.Tab>
+          <Tabs.Tab value="historie">Historie</Tabs.Tab>
+        </Tabs.List>
+        <Tabs.Panel value="stammdaten" pt="sm">
+          <SupplierStammdatenEditor s={ov.supplier} onSaved={reload} />
+        </Tabs.Panel>
+        <Tabs.Panel value="kontakte" pt="sm">
+          <SupplierContactsBox supplierId={supplierId} contacts={ov.contacts} onChanged={reload} />
+        </Tabs.Panel>
+        <Tabs.Panel value="sortiment" pt="sm">
+          <SupplierSortimentPanel supplierId={supplierId} />
+        </Tabs.Panel>
+        <Tabs.Panel value="dateien" pt="sm">
+          <RecordFilesPanel entity="Supplier" entityId={supplierId} />
+        </Tabs.Panel>
+        <Tabs.Panel value="historie" pt="sm">
+          <Group align="flex-start" gap="lg" wrap="wrap">
+            <Box miw={230}>
+              <Text size="xs" fw={700} tt="uppercase" c="dimmed" mb={4}>Bestellungen ({ov.purchaseOrders.length})</Text>
+              {ov.purchaseOrders.length === 0 ? <Text size="sm" c="dimmed">—</Text> : ov.purchaseOrders.slice(0, 8).map((p) => <Text key={p.id} size="sm">{p.number} · {p.status}</Text>)}
+            </Box>
+            <Box miw={230}>
+              <Text size="xs" fw={700} tt="uppercase" c="dimmed" mb={4}>Eingangsrechnungen ({ov.incomingInvoices.length})</Text>
+              {ov.incomingInvoices.length === 0 ? <Text size="sm" c="dimmed">—</Text> : ov.incomingInvoices.slice(0, 8).map((i) => <Text key={i.id} size="sm">{i.number} · {euro(i.grossCents)} · {d(i.receivedAt)}</Text>)}
+            </Box>
+          </Group>
+        </Tabs.Panel>
+      </Tabs>
       </DocFormShell>
+    </Box>
+  );
+}
+
+// Gesamtes Artikelsortiment eines Lieferanten (Xentral-Benchmark): ruft den vollständigen
+// Katalog ab (alle SupplierItems, lesbar mit Artikel/Farbe/Größe + EK), mit Suche + Abruf.
+function SupplierSortimentPanel({ supplierId }: { supplierId: string }): JSX.Element {
+  type Item = Awaited<ReturnType<typeof trpc.suppliers.catalogAll.query>>[number];
+  const [items, setItems] = useState<Item[]>([]);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [q, setQ] = useState("");
+  const load = useCallback(async () => {
+    setBusy(true); setErr(null);
+    try { setItems(await trpc.suppliers.catalogAll.query({ supplierId })); }
+    catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  }, [supplierId]);
+  useEffect(() => { void load(); }, [load]);
+  const term = q.trim().toLowerCase();
+  const filtered = term ? items.filter((i) => [i.articleName, i.sku, i.supplierSku, i.farbe, i.groesse].some((v) => (v ?? "").toLowerCase().includes(term))) : items;
+  return (
+    <Box>
+      {err && <Alert color="red" mb="xs">{err}</Alert>}
+      <Group gap="xs" mb="xs" align="flex-end">
+        <TextInput size="xs" label="Suche" placeholder="Artikel / SKU / Farbe…" value={q} onChange={(e) => setQ(e.currentTarget.value)} w={240} />
+        <Button size="compact-sm" variant="light" loading={busy} onClick={() => void load()}>Sortiment abrufen</Button>
+        <Text size="xs" c="dimmed">{filtered.length} / {items.length} Artikel</Text>
+      </Group>
+      {items.length === 0 ? <Text size="sm" c="dimmed">Kein Sortiment hinterlegt. Katalog über Import/Connector (Lieferanten-Sync) befüllen.</Text> : (
+        <Table.ScrollContainer minWidth={620}>
+          <Table striped withTableBorder verticalSpacing="xs" fz="sm">
+            <Table.Thead><Table.Tr>
+              <Table.Th>Artikel</Table.Th><Table.Th>Farbe</Table.Th><Table.Th>Größe</Table.Th>
+              <Table.Th>SKU</Table.Th><Table.Th>Lief.-SKU</Table.Th><Table.Th ta="right">EK</Table.Th><Table.Th ta="right">Verfügbar</Table.Th>
+            </Table.Tr></Table.Thead>
+            <Table.Tbody>
+              {filtered.map((i) => (
+                <Table.Tr key={i.id}>
+                  <Table.Td>{i.articleName}</Table.Td>
+                  <Table.Td>{i.farbe ?? "—"}</Table.Td>
+                  <Table.Td>{i.groesse ?? "—"}</Table.Td>
+                  <Table.Td><Text size="xs" c="dimmed">{i.sku}</Text></Table.Td>
+                  <Table.Td><Text size="xs" c="dimmed">{i.supplierSku ?? "—"}</Text></Table.Td>
+                  <Table.Td ta="right">{euro(i.ekCents)}</Table.Td>
+                  <Table.Td ta="right">{i.availableQty ?? "—"}</Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
+      )}
     </Box>
   );
 }
