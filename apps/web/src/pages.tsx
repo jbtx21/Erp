@@ -3463,6 +3463,7 @@ function CompanyDetailPanel({ companyId, companies = [], onNavigate }: { company
           <Tabs.Tab value="stammdaten">Stammdaten</Tabs.Tab>
           <Tabs.Tab value="adressen">Lieferadressen</Tabs.Tab>
           <Tabs.Tab value="kontakte">Kontakte ({ov.contactsCount})</Tabs.Tab>
+          <Tabs.Tab value="dateien">Dateien</Tabs.Tab>
           <Tabs.Tab value="historie">Historie</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="stammdaten" pt="sm">
@@ -3474,6 +3475,9 @@ function CompanyDetailPanel({ companyId, companies = [], onNavigate }: { company
         <Tabs.Panel value="kontakte" pt="sm">
           <CompanyContactsPanel companyId={companyId} companies={companies} />
         </Tabs.Panel>
+        <Tabs.Panel value="dateien" pt="sm">
+          <RecordFilesPanel entity="Company" entityId={companyId} />
+        </Tabs.Panel>
         <Tabs.Panel value="historie" pt="sm">
           <Group align="flex-start" gap="lg" wrap="wrap">
             {histGroup("Aufträge", "orders", ov.orders.map((o) => ({ id: o.id, label: o.number, sub: o.status })))}
@@ -3484,6 +3488,66 @@ function CompanyDetailPanel({ companyId, companies = [], onNavigate }: { company
         </Tabs.Panel>
       </Tabs>
       </DocFormShell>
+    </Box>
+  );
+}
+
+// Dateien/Dokumente an einem Stammsatz (DMS-Grundfunktion): generischer Anhang-Tab
+// über die Collab-Attachments (entity/entityId). Wiederverwendbar für Kunde + Lieferant.
+// Da (noch) kein Objektspeicher angebunden ist, wird eine Datei als Referenz registriert
+// (dms://entity/id/dateiname) bzw. ein externer Link verknüpft — Integrationspunkt (Kap. 7/10).
+function RecordFilesPanel({ entity, entityId }: { entity: string; entityId: string }): JSX.Element {
+  type Att = Awaited<ReturnType<typeof trpc.collab.list.query>>["attachments"][number];
+  const [atts, setAtts] = useState<Att[]>([]);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [linkName, setLinkName] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
+  const d = (x: string | Date): string => new Date(x).toLocaleDateString("de-DE");
+  const load = useCallback(async () => {
+    try { const r = await trpc.collab.list.query({ entity, entityId }); setAtts(r.attachments); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
+  }, [entity, entityId]);
+  useEffect(() => { void load(); }, [load]);
+  const run = async (fn: () => Promise<unknown>): Promise<void> => {
+    setBusy(true); setErr(null);
+    try { await fn(); await load(); } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+  return (
+    <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+      <Text fw={600}>Dateien &amp; Dokumente</Text>
+      {err && <Alert color="red" mt="xs">{err}</Alert>}
+      <Group gap="xs" mt="xs" align="flex-end" wrap="wrap">
+        {/* Lokale Datei registrieren (Referenz; echter Upload = Objektspeicher-Integration) */}
+        <Button size="compact-sm" component="label" variant="light" loading={busy}>
+          Datei hinzufügen
+          <input type="file" hidden onChange={(e) => {
+            const f = e.currentTarget.files?.[0]; e.currentTarget.value = "";
+            if (f) void run(async () => { await trpc.collab.addAttachment.mutate({ entity, entityId, fileName: f.name, mimeType: f.type || null, url: `dms://${entity}/${entityId}/${f.name}` }); });
+          }} />
+        </Button>
+        <Text size="xs" c="dimmed">oder externen Link verknüpfen:</Text>
+        <TextInput size="xs" label="Bezeichnung" value={linkName} onChange={(e) => setLinkName(e.currentTarget.value)} w={180} />
+        <TextInput size="xs" label="URL" value={linkUrl} onChange={(e) => setLinkUrl(e.currentTarget.value)} w={240} placeholder="https://…" />
+        <Button size="compact-sm" variant="default" loading={busy} disabled={!linkName.trim() || !linkUrl.trim()}
+          onClick={() => run(async () => { await trpc.collab.addAttachment.mutate({ entity, entityId, fileName: linkName.trim(), mimeType: null, url: linkUrl.trim() }); setLinkName(""); setLinkUrl(""); })}>Verknüpfen</Button>
+      </Group>
+      {atts.length === 0 ? <Text size="sm" c="dimmed" mt="sm">Keine Dateien.</Text> : (
+        <Table mt="sm"><Table.Tbody>
+          {atts.map((a) => {
+            const external = /^https?:\/\//.test(a.url);
+            return (
+              <Table.Tr key={a.id}>
+                <Table.Td><Text size="sm" fw={500}>{a.fileName}</Text>{a.mimeType ? <Text span size="xs" c="dimmed"> · {a.mimeType}</Text> : null}</Table.Td>
+                <Table.Td><Text size="xs" c="dimmed">{a.uploadedBy} · {d(a.createdAt)}</Text></Table.Td>
+                <Table.Td ta="right">{external
+                  ? <Button size="compact-xs" variant="subtle" component="a" href={a.url} target="_blank" rel="noreferrer">Öffnen</Button>
+                  : <Text size="xs" c="dimmed" title={a.url}>Referenz</Text>}</Table.Td>
+              </Table.Tr>
+            );
+          })}
+        </Table.Tbody></Table>
+      )}
     </Box>
   );
 }
