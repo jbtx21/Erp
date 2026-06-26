@@ -35,7 +35,7 @@ import { Reporting } from "./Reporting.js";
 import { Banking } from "./Banking.js";
 import {
   CompaniesPage, CallLogsPage, CostCentersPage, DunningPage, InquiriesPage, IncomingInvoicesPage, LeadsPage, CrmPipelinePage, MailAccountsPage, OrdersPage, ProcurementPage, ProductionReportingPage,
-  ProductsPage, PricingPage, EmailTemplatesPage, DashboardsPage, DataIoPage, EanImportPage, FinanceReportingPage, WareneingangPage, ZahlungenPage, ZahlungsabgleichOverview, NewsletterPage, OpportunitiesPage, CalendarPage, MessagesPage, AdminPage, ArchivePage, AuditLogPage, AutomationPage, TasksPage, HomePage, LagerPage, HrPage, IntegrationsPage, SecurityPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
+  ProductsPage, MatrixStammPage, PricingPage, EmailTemplatesPage, DashboardsPage, DataIoPage, EanImportPage, FinanceReportingPage, WareneingangPage, ZahlungenPage, ZahlungsabgleichOverview, NewsletterPage, OpportunitiesPage, CalendarPage, MessagesPage, AdminPage, ArchivePage, AuditLogPage, AutomationPage, TasksPage, HomePage, LagerPage, HrPage, IntegrationsPage, SecurityPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
   LogosPage, AufschlagPage, AusschreibungenPage, NachkalkulationPage, GuVReportPage, GutscheinePage,
 } from "./pages.js";
 import { trpc } from "./trpc.js";
@@ -54,7 +54,7 @@ const NAV: ReadonlyArray<{ group: string; icon: NavIconName; items: ReadonlyArra
     { key: "reorder", label: "Nachbestellung" }, { key: "incoming", label: "Eingangsrechnungen" },
   ] },
   { group: "Lager", icon: "lager", items: [
-    { key: "products", label: "Artikel/Varianten" }, { key: "lager", label: "Lager & Inventur" },
+    { key: "products", label: "Artikel/Varianten" }, { key: "matrixstamm", label: "Matrix-Stamm" }, { key: "lager", label: "Lager & Inventur" },
     { key: "wareneingang", label: "Wareneingang" }, { key: "samples", label: "Muster-Leihgut" }, { key: "shipments", label: "Versand" }, { key: "eanimport", label: "EAN-Listen-Import" },
   ] },
   // Veredelungs-Strang gebündelt (IA): Logo-Stammdaten → Ausschreibung an Veredler →
@@ -411,6 +411,7 @@ function Page({ k, role, userName, onNavigate, onOpen, focusId }: { k: string; r
     case "wareneingang": return <WareneingangPage />;
     case "samples": return <SampleLoansPage onOpen={onOpen} />;
     case "products": return <ProductsPage focusId={focusId} />;
+    case "matrixstamm": return <MatrixStammPage />;
     case "pricing": return <PricingPage />;
     case "emailtemplates": return <EmailTemplatesPage />;
     case "dataio": return <DataIoPage />;

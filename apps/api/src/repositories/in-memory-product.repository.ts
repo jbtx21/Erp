@@ -1,5 +1,6 @@
 // In-Memory-Artikel/Varianten-Repository für Unit-Tests/Dev.
 
+import { ATTR_FARBE, ATTR_GROESSE, skuCode } from "@texma/shared";
 import type {
   ArticlePatch,
   ArticleRow,
@@ -64,6 +65,37 @@ export class InMemoryProductRepository implements ProductRepository {
     const id = `var_${++this.seq}`;
     this.variants.set(id, { id, articleId: input.articleId, sku: input.sku, attributes: input.attributes.map((a) => ({ ...a })), isBundle: false });
     return { id };
+  }
+
+  async generateMatrixVariants(
+    articleId: string,
+    combos: ReadonlyArray<{ farbe: string; groesse: string }>
+  ): Promise<{ created: number; skipped: number; createdSkus: string[] }> {
+    const article = this.articles.get(articleId);
+    if (!article) throw new Error("Artikel nicht gefunden.");
+    const comboKey = (farbe: string, groesse: string) => `${farbe}|${groesse}`;
+    const seen = new Set(
+      [...this.variants.values()]
+        .filter((v) => v.articleId === articleId)
+        .map((v) => {
+          const f = v.attributes.find((a) => a.name === ATTR_FARBE)?.value ?? "";
+          const g = v.attributes.find((a) => a.name === ATTR_GROESSE)?.value ?? "";
+          return comboKey(f, g);
+        })
+    );
+    const toCreate = combos.filter((c) => !seen.has(comboKey(c.farbe, c.groesse)));
+    const createdSkus: string[] = [];
+    for (const c of toCreate) {
+      const id = `var_${++this.seq}`;
+      const sku = `${article.sku}-${skuCode(c.farbe)}-${skuCode(c.groesse)}`;
+      this.variants.set(id, {
+        id, articleId, sku,
+        attributes: [{ name: ATTR_FARBE, value: c.farbe }, { name: ATTR_GROESSE, value: c.groesse }],
+        isBundle: false,
+      });
+      createdSkus.push(sku);
+    }
+    return { created: createdSkus.length, skipped: combos.length - toCreate.length, createdSkus };
   }
 
   async catalog(): Promise<import("../modules/product/product.service.js").CatalogEntry[]> {

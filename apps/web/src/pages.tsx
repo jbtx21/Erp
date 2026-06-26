@@ -910,7 +910,141 @@ function ArticleForm({ a, onClose, onSaved }: { a: ArticleData; onClose: () => v
   );
 }
 
-// Varianten-Tab des Artikelformulars: listet Farbe×Größe-Varianten und legt neue an.
+type AxisValueRow = { id: string; axis: "FARBE" | "GROESSE"; value: string; skuSuffix: string | null; hex: string | null; sortOrder: number; active: boolean };
+type SizeRunRow = { id: string; name: string; values: string[] };
+const comboKey = (farbe: string, groesse: string): string => `${farbe} ${groesse}`;
+
+// Liest aus den Varianten-Attributen die belegten Farbe×Größe-Kombinationen (für die Vorauswahl
+// im Matrix-Raster). Attributnamen sind exakt "Farbe"/"Größe" (Kap. variants).
+function existingCombos(variants: Row[]): Set<string> {
+  const set = new Set<string>();
+  for (const v of variants) {
+    const attrs = (v.attributes as Array<{ name: string; value: string }> | undefined) ?? [];
+    const f = attrs.find((a) => a.name === "Farbe")?.value ?? "";
+    const g = attrs.find((a) => a.name === "Größe")?.value ?? "";
+    if (f || g) set.add(comboKey(f, g));
+  }
+  return set;
+}
+
+// Matrix-Editor (Xentral-Vorbild "Matrixprodukt"): Größen (Spalten) × Farben (Zeilen) als
+// Raster. Vorhandene Kombinationen sind vorgehakt und gesperrt; aus der Auswahl werden die
+// fehlenden Varianten in einem Schritt angelegt (products.generateMatrix, idempotent).
+function MatrixGridEditor({ articleId, existing, onCreated }: { articleId: string; existing: Set<string>; onCreated: () => void }): JSX.Element {
+  const [farben, setFarben] = useState<AxisValueRow[]>([]);
+  const [groessen, setGroessen] = useState<AxisValueRow[]>([]);
+  const [runs, setRuns] = useState<SizeRunRow[]>([]);
+  const [pickFarben, setPickFarben] = useState<Set<string>>(new Set());
+  const [pickGroessen, setPickGroessen] = useState<Set<string>>(new Set());
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  useEffect(() => { void (async () => {
+    try {
+      const [f, g, r] = await Promise.all([
+        trpc.matrix.axisValues.query({ axis: "FARBE" }),
+        trpc.matrix.axisValues.query({ axis: "GROESSE" }),
+        trpc.matrix.sizeRuns.query(),
+      ]);
+      setFarben(f as AxisValueRow[]); setGroessen(g as AxisValueRow[]); setRuns(r as SizeRunRow[]);
+    } catch (e) { setErr(errMsg(e)); }
+  })(); }, []);
+
+  // Aktive Achsen = ausgewählte Optionen; Default: alles abgewählt, Nutzer hakt gezielt an.
+  const colF = farben.filter((f) => pickFarben.has(f.value));
+  const rowG = groessen.filter((g) => pickGroessen.has(g.value));
+  const toggle = (set: Set<string>, key: string): Set<string> => { const n = new Set(set); n.has(key) ? n.delete(key) : n.add(key); return n; };
+  const applyRun = (vals: string[]): void => setPickGroessen(new Set([...pickGroessen, ...vals.filter((v) => groessen.some((g) => g.value === v))]));
+
+  const targets = colF.flatMap((f) => rowG.map((g) => ({ farbe: f.value, groesse: g.value })));
+  const toCreate = targets.filter((t) => !existing.has(comboKey(t.farbe, t.groesse)) && sel.has(comboKey(t.farbe, t.groesse)));
+
+  return (
+    <Card withBorder padding="sm" mb="md">
+      <Group justify="space-between" mb={4}>
+        <Text fw={600} size="sm">Matrix-Editor · Farbe × Größe</Text>
+        <Text size="xs" c="dimmed">Achswerte pflegst du unter Lager → Matrix-Stamm</Text>
+      </Group>
+      {err && <Alert color="red" mb="sm">{err}</Alert>}
+      {/* Achsen-Auswahl: welche Farben/Größen sollen ins Raster */}
+      <Text size="xs" fw={600} mt={4}>Farben</Text>
+      <Group gap={6} mt={2}>
+        {farben.length === 0 && <Text size="xs" c="dimmed">Keine Farben im Stamm — bitte unter Matrix-Stamm anlegen.</Text>}
+        {farben.map((f) => (
+          <Button key={f.id} size="compact-xs" variant={pickFarben.has(f.value) ? "filled" : "default"}
+            leftSection={f.hex ? <span style={{ width: 10, height: 10, borderRadius: 2, background: f.hex, display: "inline-block", border: "1px solid #ccc" }} /> : undefined}
+            onClick={() => setPickFarben(toggle(pickFarben, f.value))}>{f.value}</Button>
+        ))}
+      </Group>
+      <Group gap={6} mt="xs" align="center">
+        <Text size="xs" fw={600}>Größen</Text>
+        {runs.map((r) => <Button key={r.id} size="compact-xs" variant="light" onClick={() => applyRun(r.values)}>+ {r.name}</Button>)}
+      </Group>
+      <Group gap={6} mt={2}>
+        {groessen.length === 0 && <Text size="xs" c="dimmed">Keine Größen im Stamm — bitte unter Matrix-Stamm anlegen.</Text>}
+        {groessen.map((g) => (
+          <Button key={g.id} size="compact-xs" variant={pickGroessen.has(g.value) ? "filled" : "default"}
+            onClick={() => setPickGroessen(toggle(pickGroessen, g.value))}>{g.value}</Button>
+        ))}
+      </Group>
+      {/* Raster: nur wenn beide Achsen belegt */}
+      {colF.length > 0 && rowG.length > 0 && (
+        <Box mt="md" style={{ overflowX: "auto" }}>
+          <Table withTableBorder withColumnBorders style={{ width: "auto" }}>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>
+                  <Button size="compact-xs" variant="subtle" onClick={() => {
+                    const all = new Set(sel);
+                    let allOn = true;
+                    for (const t of targets) { if (!existing.has(comboKey(t.farbe, t.groesse)) && !all.has(comboKey(t.farbe, t.groesse))) allOn = false; }
+                    for (const t of targets) { const k = comboKey(t.farbe, t.groesse); if (!existing.has(k)) { allOn ? all.delete(k) : all.add(k); } }
+                    setSel(all);
+                  }}>alle</Button>
+                </Table.Th>
+                {rowG.map((g) => <Table.Th key={g.id} style={{ textAlign: "center" }}>{g.value}</Table.Th>)}
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {colF.map((f) => (
+                <Table.Tr key={f.id}>
+                  <Table.Td><Text size="sm" fw={500}>{f.value}</Text></Table.Td>
+                  {rowG.map((g) => {
+                    const k = comboKey(f.value, g.value);
+                    const isExisting = existing.has(k);
+                    return (
+                      <Table.Td key={g.id} style={{ textAlign: "center" }}>
+                        <Checkbox size="sm" checked={isExisting || sel.has(k)} disabled={isExisting}
+                          title={isExisting ? "bereits angelegt" : `${f.value} / ${g.value}`}
+                          onChange={() => setSel(toggle(sel, k))} />
+                      </Table.Td>
+                    );
+                  })}
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Box>
+      )}
+      {msg && <Alert color="green" mt="sm">{msg}</Alert>}
+      <Group mt="md">
+        <Button disabled={toCreate.length === 0 || busy} loading={busy} onClick={async () => {
+          setErr(null); setMsg(null); setBusy(true);
+          try {
+            const res = await trpc.products.generateMatrix.mutate({ articleId, combos: toCreate });
+            setMsg(`${res.created} Variante(n) angelegt${res.skipped ? `, ${res.skipped} übersprungen` : ""}.`);
+            setSel(new Set());
+            onCreated();
+          } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+        }}>Auswahl anlegen ({toCreate.length})</Button>
+      </Group>
+    </Card>
+  );
+}
+
+// Varianten-Tab des Artikelformulars: Matrix-Editor (Raster) + Einzelanlage + Liste.
 function ArticleVariantsTab({ articleId }: { articleId: string }): JSX.Element {
   const [variants, setVariants] = useState<Row[]>([]);
   const [vsku, setVsku] = useState(""); const [farbe, setFarbe] = useState(""); const [groesse, setGroesse] = useState("");
@@ -919,6 +1053,8 @@ function ArticleVariantsTab({ articleId }: { articleId: string }): JSX.Element {
   useEffect(() => { void load(); }, [load]);
   return (
     <Box>
+      <MatrixGridEditor articleId={articleId} existing={existingCombos(variants)} onCreated={load} />
+      <Text size="xs" c="dimmed" mb={4}>Einzelne Sondervariante (außerhalb des Rasters):</Text>
       <Group gap="xs" align="end">
         <TextInput label="Varianten-SKU" value={vsku} onChange={(e) => setVsku(e.currentTarget.value)} placeholder="POLO-NAVY-L" w={180} />
         <TextInput label="Farbe" value={farbe} onChange={(e) => setFarbe(e.currentTarget.value)} w={110} />
@@ -932,6 +1068,120 @@ function ArticleVariantsTab({ articleId }: { articleId: string }): JSX.Element {
       </Group>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
       <AutoTable rows={variants} />
+    </Box>
+  );
+}
+
+// Matrix-Stamm (Xentral "Grundtabelle"): globaler Farb-/Größen-Stamm + Größenlauf-Vorlagen.
+// Pflegt die Achswerte, aus denen der Matrix-Editor am Artikel das Farbe×Größe-Raster baut.
+export function MatrixStammPage(): JSX.Element {
+  const [farben, setFarben] = useState<AxisValueRow[]>([]);
+  const [groessen, setGroessen] = useState<AxisValueRow[]>([]);
+  const [runs, setRuns] = useState<SizeRunRow[]>([]);
+  const [err, setErr] = useState<string | null>(null);
+  // Neuanlage-Felder
+  const [nf, setNf] = useState(""); const [nfHex, setNfHex] = useState("");
+  const [ng, setNg] = useState(""); const [ngSort, setNgSort] = useState<number | "">("");
+  const [runName, setRunName] = useState(""); const [runVals, setRunVals] = useState("");
+
+  const load = useCallback(async () => {
+    try {
+      const [f, g, r] = await Promise.all([
+        trpc.matrix.axisValues.query({ axis: "FARBE", includeInactive: true }),
+        trpc.matrix.axisValues.query({ axis: "GROESSE", includeInactive: true }),
+        trpc.matrix.sizeRuns.query(),
+      ]);
+      setFarben(f as AxisValueRow[]); setGroessen(g as AxisValueRow[]); setRuns(r as SizeRunRow[]); setErr(null);
+    } catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  const toggleActive = async (v: AxisValueRow): Promise<void> => {
+    setErr(null);
+    try { await trpc.matrix.updateAxisValue.mutate({ id: v.id, patch: { active: !v.active } }); await load(); }
+    catch (e) { setErr(errMsg(e)); }
+  };
+
+  return (
+    <Box>
+      <DocListHeader module="Lager / Stammdaten" title="Matrix-Stamm" hint="Grundtabelle für Matrixprodukte (Xentral-Vorbild): globaler Farb-/Größen-Stamm und Größenlauf-Vorlagen. Aus diesen Achswerten baut der Matrix-Editor am Artikel das Farbe×Größe-Raster." />
+      {err && <Alert color="red" mb="md">{err}</Alert>}
+      <SimpleGrid cols={{ base: 1, md: 2 }}>
+        <Card withBorder padding="md">
+          <Title order={5} mb="xs">Farben</Title>
+          <Group gap="xs" align="end" mb="sm">
+            <TextInput label="Farbe" value={nf} onChange={(e) => setNf(e.currentTarget.value)} placeholder="Navy" w={140} />
+            <TextInput label="Hex (optional)" value={nfHex} onChange={(e) => setNfHex(e.currentTarget.value)} placeholder="#001F3F" w={120} />
+            <Button disabled={!nf.trim()} onClick={async () => {
+              setErr(null);
+              try { await trpc.matrix.createAxisValue.mutate({ axis: "FARBE", value: nf.trim(), hex: nfHex.trim() || null }); setNf(""); setNfHex(""); await load(); }
+              catch (e) { setErr(errMsg(e)); }
+            }}>+ Farbe</Button>
+          </Group>
+          <Table>
+            <Table.Tbody>
+              {farben.map((f) => (
+                <Table.Tr key={f.id} style={{ opacity: f.active ? 1 : 0.5 }}>
+                  <Table.Td w={28}>{f.hex ? <span style={{ width: 14, height: 14, borderRadius: 3, background: f.hex, display: "inline-block", border: "1px solid #ccc" }} /> : null}</Table.Td>
+                  <Table.Td><Text size="sm">{f.value}</Text></Table.Td>
+                  <Table.Td ta="right"><Button size="compact-xs" variant="subtle" color={f.active ? "red" : "green"} onClick={() => void toggleActive(f)}>{f.active ? "deaktivieren" : "aktivieren"}</Button></Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Card>
+        <Card withBorder padding="md">
+          <Title order={5} mb="xs">Größen</Title>
+          <Group gap="xs" align="end" mb="sm">
+            <TextInput label="Größe" value={ng} onChange={(e) => setNg(e.currentTarget.value)} placeholder="XL" w={100} />
+            <NumberInput label="Sortierung" value={ngSort} onChange={(v) => setNgSort(typeof v === "number" ? v : "")} w={100} />
+            <Button disabled={!ng.trim()} onClick={async () => {
+              setErr(null);
+              try { await trpc.matrix.createAxisValue.mutate({ axis: "GROESSE", value: ng.trim(), sortOrder: typeof ngSort === "number" ? ngSort : undefined }); setNg(""); setNgSort(""); await load(); }
+              catch (e) { setErr(errMsg(e)); }
+            }}>+ Größe</Button>
+          </Group>
+          <Table>
+            <Table.Tbody>
+              {groessen.map((g) => (
+                <Table.Tr key={g.id} style={{ opacity: g.active ? 1 : 0.5 }}>
+                  <Table.Td w={36}><Text size="xs" c="dimmed">{g.sortOrder}</Text></Table.Td>
+                  <Table.Td><Text size="sm">{g.value}</Text></Table.Td>
+                  <Table.Td ta="right"><Button size="compact-xs" variant="subtle" color={g.active ? "red" : "green"} onClick={() => void toggleActive(g)}>{g.active ? "deaktivieren" : "aktivieren"}</Button></Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Card>
+      </SimpleGrid>
+      <Card withBorder padding="md" mt="md">
+        <Title order={5} mb="xs">Größenläufe (Vorlagen)</Title>
+        <Text size="xs" c="dimmed" mb="sm">Ein Größenlauf ist eine wiederverwendbare Reihe (z. B. „Standard Erwachsene“ = S, M, L, XL). Im Matrix-Editor fügst du damit alle Größen auf einen Klick hinzu.</Text>
+        <Group gap="xs" align="end" mb="sm">
+          <TextInput label="Name" value={runName} onChange={(e) => setRunName(e.currentTarget.value)} placeholder="Standard Erwachsene" w={200} />
+          <TextInput label="Größen (kommagetrennt)" value={runVals} onChange={(e) => setRunVals(e.currentTarget.value)} placeholder="S, M, L, XL" w={260} />
+          <Button disabled={!runName.trim() || !runVals.trim()} onClick={async () => {
+            setErr(null);
+            const values = runVals.split(",").map((s) => s.trim()).filter(Boolean);
+            try { await trpc.matrix.saveSizeRun.mutate({ name: runName.trim(), values }); setRunName(""); setRunVals(""); await load(); }
+            catch (e) { setErr(errMsg(e)); }
+          }}>Speichern</Button>
+        </Group>
+        <Table>
+          <Table.Tbody>
+            {runs.map((r) => (
+              <Table.Tr key={r.id}>
+                <Table.Td><Text size="sm" fw={500}>{r.name}</Text></Table.Td>
+                <Table.Td><Text size="sm" c="dimmed">{r.values.join(" · ")}</Text></Table.Td>
+                <Table.Td ta="right"><Button size="compact-xs" variant="subtle" color="red" onClick={async () => {
+                  setErr(null);
+                  try { await trpc.matrix.deleteSizeRun.mutate({ id: r.id }); await load(); } catch (e) { setErr(errMsg(e)); }
+                }}>löschen</Button></Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      </Card>
     </Box>
   );
 }

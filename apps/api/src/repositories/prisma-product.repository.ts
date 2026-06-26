@@ -1,6 +1,7 @@
 // Prisma-Implementierung der Artikel/Varianten-Stammdaten (B16).
 
 import { prisma } from "@texma/db";
+import { ATTR_FARBE, ATTR_GROESSE, skuCode } from "@texma/shared";
 import type {
   ArticlePatch,
   ArticleRow,
@@ -94,6 +95,49 @@ export class PrismaProductRepository implements ProductRepository {
       },
       select: { id: true },
     });
+  }
+
+  async generateMatrixVariants(
+    articleId: string,
+    combos: ReadonlyArray<{ farbe: string; groesse: string }>
+  ): Promise<{ created: number; skipped: number; createdSkus: string[] }> {
+    const article = await prisma.article.findUnique({ where: { id: articleId }, select: { sku: true } });
+    if (!article) throw new Error("Artikel nicht gefunden.");
+    // Vorhandene Farbe×Größe-Kombinationen des Artikels (Idempotenz).
+    const existing = await prisma.variant.findMany({
+      where: { articleId },
+      select: { attributes: { select: { name: true, value: true } } },
+    });
+    const comboKey = (farbe: string, groesse: string) => `${farbe}|${groesse}`;
+    const seen = new Set(
+      existing.map((v) => {
+        const f = v.attributes.find((a) => a.name === ATTR_FARBE)?.value ?? "";
+        const g = v.attributes.find((a) => a.name === ATTR_GROESSE)?.value ?? "";
+        return comboKey(f, g);
+      })
+    );
+    // SKU-Anhang je Achswert aus der Grundtabelle; Fallback: aus dem Wert abgeleitet.
+    const axisVals = await prisma.axisValue.findMany({ select: { axis: true, value: true, skuSuffix: true } });
+    const suffix = (axis: "FARBE" | "GROESSE", value: string): string => {
+      const m = axisVals.find((a) => a.axis === axis && a.value === value);
+      return (m?.skuSuffix?.trim() || skuCode(value));
+    };
+
+    const toCreate = combos.filter((c) => !seen.has(comboKey(c.farbe, c.groesse)));
+    const createdSkus: string[] = [];
+    await prisma.$transaction(async (tx) => {
+      for (const c of toCreate) {
+        const sku = `${article.sku}-${suffix("FARBE", c.farbe)}-${suffix("GROESSE", c.groesse)}`;
+        await tx.variant.create({
+          data: {
+            articleId, sku,
+            attributes: { create: [{ name: ATTR_FARBE, value: c.farbe }, { name: ATTR_GROESSE, value: c.groesse }] },
+          },
+        });
+        createdSkus.push(sku);
+      }
+    });
+    return { created: createdSkus.length, skipped: combos.length - toCreate.length, createdSkus };
   }
 
   async listComponents(variantId: string): Promise<ComponentRow[]> {

@@ -107,6 +107,8 @@ import { InMemoryGoodsReceiptRepository } from "../repositories/in-memory-goods-
 import { PaymentService } from "../modules/payment/payment.service.js";
 import { InMemoryPaymentRepository } from "../repositories/in-memory-payment.repository.js";
 import { ReconciliationService } from "../modules/reconciliation/reconciliation.service.js";
+import { MatrixService } from "../modules/matrix/matrix.service.js";
+import { InMemoryMatrixRepository } from "../repositories/in-memory-matrix.repository.js";
 import { DeliveryService } from "../modules/delivery/delivery.service.js";
 import { InMemoryDeliveryRepository } from "../repositories/in-memory-delivery.repository.js";
 import { NumberingService } from "../modules/numbering/numbering.service.js";
@@ -371,6 +373,7 @@ function setup(user: AuthUser | null = BUERO) {
     goodsReceipts: new GoodsReceiptService(new InMemoryGoodsReceiptRepository(), new MemoryAuditSink()),
     payments: new PaymentService(new InMemoryPaymentRepository(), new MemoryAuditSink()),
     reconciliation: new ReconciliationService({ listPayments: async () => [], listOpenItems: async () => [] }),
+    matrix: new MatrixService(new InMemoryMatrixRepository(), new MemoryAuditSink()),
     auth: {} as Context["auth"],
     user,
     sessionToken: user ? "tok" : null,
@@ -509,6 +512,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       goodsReceipts: {} as Context["goodsReceipts"],
       payments: {} as Context["payments"],
       reconciliation: {} as Context["reconciliation"],
+      matrix: {} as Context["matrix"],
       auth: {} as Context["auth"],
       user: PRODUKTION,
       sessionToken: "tok",

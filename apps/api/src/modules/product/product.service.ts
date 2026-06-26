@@ -119,6 +119,8 @@ export interface ProductRepository {
   /** Flacher Varianten-Katalog (Artikelname + Merkmale + Standardpreis) für Picker. */
   catalog(): Promise<CatalogEntry[]>;
   createVariant(input: CreateVariantInput): Promise<{ id: string }>;
+  /** Erzeugt das Farbe×Größe-Raster eines Artikels; vorhandene Kombis werden übersprungen. */
+  generateMatrixVariants(articleId: string, combos: ReadonlyArray<{ farbe: string; groesse: string }>): Promise<{ created: number; skipped: number; createdSkus: string[] }>;
   /** Aktualisiert die angegebenen Felder eines Artikels; @returns false wenn unbekannt. */
   updateArticle(id: string, patch: ArticlePatch): Promise<boolean>;
   /** Massenupdate über SKUs; @returns Anzahl aktualisierter Artikel. */
@@ -196,6 +198,19 @@ export class ProductService {
     const res = await this.repo.createVariant({ ...input, sku: input.sku.trim() });
     await this.audit.append(buildEntry({ entity: "Variant", entityId: res.id, action: "CREATE", after: { sku: input.sku, articleId: input.articleId } }));
     return res;
+  }
+
+  /** Matrixprodukt: erzeugt die ausgewählten Farbe×Größe-Kombinationen (idempotent). GoBD-auditiert. */
+  async generateMatrix(articleId: string, combos: ReadonlyArray<{ farbe: string; groesse: string }>): Promise<{ created: number; skipped: number }> {
+    const clean = combos
+      .map((c) => ({ farbe: c.farbe.trim(), groesse: c.groesse.trim() }))
+      .filter((c) => c.farbe && c.groesse);
+    if (clean.length === 0) throw new ProductError("Keine Farbe×Größe-Kombination ausgewählt.");
+    const res = await this.repo.generateMatrixVariants(articleId, clean);
+    if (res.created > 0) {
+      await this.audit.append(buildEntry({ entity: "Article", entityId: articleId, action: "UPDATE", after: { matrixVariantsCreated: res.created, skus: res.createdSkus } }));
+    }
+    return { created: res.created, skipped: res.skipped };
   }
 
   /**

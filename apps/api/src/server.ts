@@ -168,6 +168,8 @@ import { PaymentService } from "./modules/payment/payment.service.js";
 import { PrismaPaymentRepository } from "./repositories/prisma-payment.repository.js";
 import { ReconciliationService } from "./modules/reconciliation/reconciliation.service.js";
 import { PrismaReconciliationRepository } from "./repositories/prisma-reconciliation.repository.js";
+import { MatrixService } from "./modules/matrix/matrix.service.js";
+import { PrismaMatrixRepository } from "./repositories/prisma-matrix.repository.js";
 import { PrismaIntegrationsRepository } from "./repositories/prisma-integrations.repository.js";
 import { HttpSlackSender } from "./modules/integrations/slack-provider.js";
 import { appRouter } from "./trpc/router.js";
@@ -350,6 +352,8 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   // Manuelle Zahlungserfassung (Kap. 9.4): Zahlungseingang auf offenen Posten buchen.
   const payments = new PaymentService(new PrismaPaymentRepository(), new PrismaAuditSink());
   const reconciliation = new ReconciliationService(new PrismaReconciliationRepository());
+  // Matrixprodukt-Grundtabelle (Farb-/Größen-Stamm + Größenläufe) für den Matrix-Editor.
+  const matrix = new MatrixService(new PrismaMatrixRepository(), new PrismaAuditSink());
   // Regel-Engine: Aktions-Handler bündeln vorhandene Seiteneffekte (In-App, Mail, Aufgabe).
   // Weitere Handler (Slack o. Ä.) lassen sich hier ohne Engine-Änderung ergänzen.
   const automationHandlers: Record<string, ActionHandler> = {
@@ -549,6 +553,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           goodsReceipts,
           payments,
           reconciliation,
+          matrix,
           auth,
           user,
           sessionToken,

@@ -1189,6 +1189,15 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         try { return await ctx.products.createVariant(input); } catch (e) { throw toTrpcError(e); }
       }),
+    // Matrixprodukt (Xentral-Vorbild): ausgewähltes Farbe×Größe-Raster anlegen (idempotent).
+    generateMatrix: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({
+        articleId: z.string().min(1),
+        combos: z.array(z.object({ farbe: z.string().min(1), groesse: z.string().min(1) })).min(1),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.products.generateMatrix(input.articleId, input.combos); } catch (e) { throw toTrpcError(e); }
+      }),
     // Logo/Veredelung als wiederverwendbaren Artikel anlegen (Pflicht-Veredler + eigene Staffel).
     createVeredelung: roleProcedure("ADMIN", "BUERO")
       .input(z.object({
@@ -1246,6 +1255,50 @@ export const appRouter = router({
       }))
       .mutation(async ({ input, ctx }) => {
         try { return await ctx.products.bulkUpdateArticles(input.skus, input.patch); } catch (e) { throw toTrpcError(e); }
+      }),
+  }),
+
+  // Matrixprodukt-Grundtabelle (Xentral-Vorbild): globaler Farb-/Größen-Stamm ("Gruppe"=Achse,
+  // "Option"=Wert) + Größenlauf-Vorlagen. Versorgt den Matrix-Editor am Artikel.
+  matrix: router({
+    axisValues: roleProcedure(...supplierRoles)
+      .input(z.object({ axis: z.enum(["FARBE", "GROESSE"]).optional(), includeInactive: z.boolean().optional() }).optional())
+      .query(({ input, ctx }) => ctx.matrix.listAxisValues(input?.axis, input?.includeInactive ?? false)),
+    createAxisValue: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({
+        axis: z.enum(["FARBE", "GROESSE"]),
+        value: z.string().min(1),
+        skuSuffix: z.string().nullish(),
+        hex: z.string().nullish(),
+        sortOrder: z.number().int().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.matrix.createAxisValue(input); } catch (e) { throw toTrpcError(e); }
+      }),
+    updateAxisValue: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({
+        id: z.string().min(1),
+        patch: z.object({
+          value: z.string().min(1).optional(),
+          skuSuffix: z.string().nullish(),
+          hex: z.string().nullish(),
+          sortOrder: z.number().int().optional(),
+          active: z.boolean().optional(),
+        }),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.matrix.updateAxisValue(input.id, input.patch); return { ok: true as const }; } catch (e) { throw toTrpcError(e); }
+      }),
+    sizeRuns: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.matrix.listSizeRuns()),
+    saveSizeRun: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ name: z.string().min(1), values: z.array(z.string().min(1)).min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.matrix.saveSizeRun(input.name, input.values); } catch (e) { throw toTrpcError(e); }
+      }),
+    deleteSizeRun: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ id: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.matrix.deleteSizeRun(input.id); return { ok: true as const }; } catch (e) { throw toTrpcError(e); }
       }),
   }),
 
