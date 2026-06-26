@@ -399,12 +399,12 @@ function Page({ k, role, userName, onNavigate, onOpen, focusId }: { k: string; r
     case "dashboards": return <DashboardsPage />;
     case "orders": return <OrdersPage role={role} focusId={focusId} />;
     case "companies": return <CompaniesPage focusId={focusId} />;
-    case "pipeline": return <CrmPipelinePage onNavigate={onNavigate} />;
+    case "pipeline": return <CrmPipelinePage onNavigate={onNavigate} onOpen={onOpen} />;
     case "leads": return <LeadsPage focusId={focusId} />;
     case "calllogs": return <CallLogsPage />;
     case "mailaccounts": return <MailAccountsPage />;
     case "inquiries": return <InquiriesPage />;
-    case "quotes": return <QuotesPage />;
+    case "quotes": return <QuotesPage focusId={focusId} />;
     case "reklamation": return <ReklamationPage />;
     case "suppliers": return <SuppliersPage focusId={focusId} />;
     case "incoming": return <IncomingInvoicesPage />;

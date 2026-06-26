@@ -1972,7 +1972,7 @@ function ConvertQuoteDialog({ quoteId, onDone, onClose }: { quoteId: string; onD
   );
 }
 
-export function QuotesPage(): JSX.Element {
+export function QuotesPage({ focusId }: { focusId?: string } = {}): JSX.Element {
   type QuoteListRow = Awaited<ReturnType<typeof trpc.quotes.list.query>>[number];
   const [rows, setRows] = useState<QuoteListRow[]>([]);
   const [view, setView] = useState<"list" | "create">("list");
@@ -2059,6 +2059,15 @@ export function QuotesPage(): JSX.Element {
       setDirty(false); setView("create");
     } catch (e) { setErr(errMsg(e)); }
   };
+  // Deep-Link (z. B. aus der Vertriebs-Pipeline „→ Angebot"): das verknüpfte Angebot direkt
+  // in der Angebotsanlage öffnen. Nur einmal je focusId, damit man danach frei navigieren kann.
+  const openedFocus = useRef<string | null>(null);
+  useEffect(() => {
+    if (focusId && openedFocus.current !== focusId) {
+      openedFocus.current = focusId;
+      void startEdit(focusId);
+    }
+  }, [focusId]); // eslint-disable-line react-hooks/exhaustive-deps
   const saveQuote = async (): Promise<void> => {
     setBusy(true); setErr(null);
     try {
@@ -3458,7 +3467,7 @@ function CrmEditModal({ lead, onClose, onSaved }: { lead: CrmRow | null; onClose
   );
 }
 
-export function CrmPipelinePage(_props: { onNavigate?: (k: string) => void } = {}): JSX.Element {
+export function CrmPipelinePage({ onOpen }: { onNavigate?: (k: string) => void; onOpen?: (navKey: string, id: string) => void } = {}): JSX.Element {
   const [editRow, setEditRow] = useState<CrmRow | null>(null);
   const [rows, setRows] = useState<CrmRow[]>([]);
   // Lead-Qualifizierung: Wer (Firma/Ansprechpartner/Kontakt), Was (Bedarf), Wann (Termin), Wie (Quelle).
@@ -3487,8 +3496,22 @@ export function CrmPipelinePage(_props: { onNavigate?: (k: string) => void } = {
 
   const counts = CRM_STAGE_ORDER.map((s) => ({ stage: s, n: rows.filter((r) => r.stage === s).length }));
 
+  // Lead → Angebot: erzeugt+verknüpft das Angebot und springt direkt in die Angebotsanlage
+  // (Editor des neuen Angebots), damit man sofort Positionen erfassen kann (F2).
+  const convertAndOpen = (id: string): void => {
+    setErr(null);
+    void (async () => {
+      try {
+        const res = await trpc.crm.convertToQuote.mutate({ id });
+        await load();
+        if (onOpen) onOpen("quotes", res.quoteId);
+      } catch (e) { setErr(errMsg(e)); }
+    })();
+  };
+
   const actionsFor = (r: Row): ReactNode => {
     const id = String(r.id); const stage = String(r.stage); const hasCompany = Boolean(r.companyId);
+    const quoteId = r.quoteId ? String(r.quoteId) : null;
     const lost = () => {
       const lostReason = typeof window !== "undefined" ? window.prompt("Verloren — Grund?") : null;
       if (lostReason) void act(() => trpc.crm.advance.mutate({ id, to: "VERLOREN", lostReason }));
@@ -3500,8 +3523,10 @@ export function CrmPipelinePage(_props: { onNavigate?: (k: string) => void } = {
         {stage === "KONTAKTIERT" && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.crm.advance.mutate({ id, to: "QUALIFIZIERT" }))}>→ Qualifiziert</Button>}
         {CRM_CONVERTIBLE.has(stage) && (
           <Button size="compact-xs" color="green" disabled={!hasCompany} title={hasCompany ? undefined : "Firma zuordnen, um ein Angebot zu erzeugen"}
-            onClick={() => void act(() => trpc.crm.convertToQuote.mutate({ id }))}>→ Angebot</Button>
+            onClick={() => convertAndOpen(id)}>→ Angebot</Button>
         )}
+        {/* Verknüpftes Angebot direkt öffnen (sichtbare Lead↔Angebot-Verbindung). */}
+        {quoteId && onOpen && <Button size="compact-xs" variant="light" color="violet" onClick={() => onOpen("quotes", quoteId)}>Angebot öffnen</Button>}
         {stage === "ANGEBOT" && <Button size="compact-xs" color="teal" onClick={() => void act(() => trpc.crm.advance.mutate({ id, to: "GEWONNEN" }))}>Gewonnen</Button>}
         {CRM_OPEN_STAGES.has(stage) && <Button size="compact-xs" color="red" variant="light" onClick={lost}>Verloren</Button>}
       </Group>
