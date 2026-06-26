@@ -400,7 +400,7 @@ function Page({ k, role, userName, onNavigate, onOpen, focusId }: { k: string; r
     case "sammelbestellungen": return <SammelbestellungPage />;
     case "dashboards": return <DashboardsPage />;
     case "orders": return <OrdersPage role={role} focusId={focusId} />;
-    case "companies": return <CompaniesPage focusId={focusId} />;
+    case "companies": return <CompaniesPage focusId={focusId} onNavigate={onNavigate} onOpen={onOpen} />;
     case "pipeline": return <CrmPipelinePage onNavigate={onNavigate} onOpen={onOpen} />;
     case "leads": return <LeadsPage focusId={focusId} />;
     case "calllogs": return <CallLogsPage />;
@@ -411,7 +411,7 @@ function Page({ k, role, userName, onNavigate, onOpen, focusId }: { k: string; r
     case "suppliers": return <SuppliersPage focusId={focusId} />;
     case "incoming": return <IncomingInvoicesPage />;
     case "procurement": return <ProcurementPage />;
-    case "reorder": return <ReorderPage />;
+    case "reorder": return <ReorderPage onOpen={onOpen} />;
     case "wareneingang": return <WareneingangPage />;
     case "samples": return <SampleLoansPage onOpen={onOpen} />;
     case "products": return <ProductsPage focusId={focusId} />;
@@ -440,7 +440,7 @@ function Page({ k, role, userName, onNavigate, onOpen, focusId }: { k: string; r
     case "guv": return <GuVReportPage />;
     case "gutscheine": return <GutscheinePage />;
     case "nachkalkfin": return <NachkalkulationPage />;
-    case "subproduction": return <SubproductionPage />;
+    case "subproduction": return <SubproductionPage onOpen={onOpen} />;
     case "prodreport": return <ProductionReportingPage />;
     case "shipments": return <ShipmentsPage onOpen={onOpen} />;
     case "dunning": return <DunningPage />;

@@ -3,7 +3,7 @@
 // Bereiche mit wenig Code anbindbar sind. Interaktive Aktionen (Versand bestätigen,
 // Mahnlauf, Reorder→Bestellungen) sind je Seite ergänzt.
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Alert, Badge, Box, Button, Card, Checkbox, Group, Loader, Modal, NumberInput, Paper, PasswordInput, SegmentedControl, Select, SimpleGrid, Stack, Switch, Table, Tabs, Text, Textarea, TextInput, Title } from "@mantine/core";
+import { Alert, Anchor, Badge, Box, Button, Card, Checkbox, Group, Loader, Modal, NumberInput, Paper, PasswordInput, SegmentedControl, Select, SimpleGrid, Stack, Switch, Table, Tabs, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { validateVatId } from "@texma/shared/vat";
 import { resolveMarkupFactor, DEFAULT_MARKUP_CONFIG, type MarkupConfig } from "@texma/shared/markup";
@@ -504,7 +504,8 @@ export const IncomingInvoicesPage = (): JSX.Element => (
     load={() => trpc.incomingInvoices.list.query({ limit: 100 }) as Promise<Row[]>} />
 );
 
-export function ReorderPage(): JSX.Element {
+export function ReorderPage({ onOpen }: { onOpen?: (k: string, id: string) => void } = {}): JSX.Element {
+  const supplierNames = useSupplierNames();
   const [proposals, setProposals] = useState<Row[]>([]);
   const [demand, setDemand] = useState<Awaited<ReturnType<typeof trpc.reorder.demandProposals.query>>>([]);
   const [grouped, setGrouped] = useState<Awaited<ReturnType<typeof trpc.reorder.demandGrouped.query>>>([]);
@@ -545,7 +546,7 @@ export function ReorderPage(): JSX.Element {
                 <Table.Td ta="right">{d.requiredQty}</Table.Td>
                 <Table.Td ta="right">{d.stockQty}</Table.Td>
                 <Table.Td ta="right"><b>{d.orderQty}</b></Table.Td>
-                <Table.Td>{d.supplierId ?? <Text span c="red" size="xs">kein Hauptlieferant</Text>}</Table.Td>
+                <Table.Td><SupplierRef id={d.supplierId} names={supplierNames} onOpen={onOpen} /></Table.Td>
                 <Table.Td><Text size="xs" c="dimmed">{d.sources.map((s) => `${s.source === "ORDER" ? "Auftrag" : "Leihe"} ${s.ref}: ${s.qty}`).join(" · ")}</Text></Table.Td>
               </Table.Tr>
             ))}
@@ -578,7 +579,7 @@ export function ReorderPage(): JSX.Element {
                     <Table.Td ta="right">{d.requiredQty}</Table.Td>
                     <Table.Td ta="right">{d.stockQty}</Table.Td>
                     <Table.Td ta="right"><b>{d.orderQty}</b></Table.Td>
-                    <Table.Td>{d.supplierId ?? <Text span c="red" size="xs">kein Hauptlieferant</Text>}</Table.Td>
+                    <Table.Td><SupplierRef id={d.supplierId} names={supplierNames} onOpen={onOpen} /></Table.Td>
                   </Table.Tr>
                 </Fragment>
               );
@@ -1722,6 +1723,26 @@ export function CompanyPicker({ value, onChange, label = "Kunde", w = 240, allow
 }
 
 // Lieferanten-Picker: durchsuchbare Auswahl aus dem Lieferantenstamm; kein Treffer → inline anlegen.
+// Lieferanten-Namensauflösung (id → Name) für anklickbare Verknüpfungen. Lädt den
+// Lieferantenstamm einmal und cached die Zuordnung je Komponente.
+export function useSupplierNames(): Map<string, string> {
+  const [map, setMap] = useState<Map<string, string>>(new Map());
+  useEffect(() => { void (async () => {
+    try { const ls = await trpc.suppliers.listAll.query(); setMap(new Map(ls.map((s) => [s.id, s.name]))); }
+    catch { /* leer */ }
+  })(); }, []);
+  return map;
+}
+
+// Anklickbarer Lieferanten-Verweis: zeigt den Namen (Fallback: roh-ID) und öffnet bei
+// Klick den Lieferantenstamm (onOpen). Ohne onOpen reiner Text — kein toter Roh-ID-String.
+export function SupplierRef({ id, names, onOpen }: { id: string | null | undefined; names: Map<string, string>; onOpen?: (k: string, id: string) => void }): JSX.Element {
+  if (!id) return <Text span c="red" size="xs">kein Hauptlieferant</Text>;
+  const name = names.get(id) ?? id;
+  if (!onOpen) return <Text span size="sm">{name}</Text>;
+  return <Anchor size="sm" onClick={() => onOpen("suppliers", id)} title="Lieferant öffnen">{name} ↗</Anchor>;
+}
+
 export function SupplierPicker({ value, onChange, label, w = 200 }: { value: string; onChange: (id: string) => void; label?: string; w?: number }): JSX.Element {
   const [suppliers, setSuppliers] = useState<Awaited<ReturnType<typeof trpc.suppliers.listAll.query>>>([]);
   const [search, setSearch] = useState("");
@@ -3576,7 +3597,7 @@ function CompanyStammdaten({ company, onSaved }: { company: CompanyDetail; onSav
 
 // Kunden-Detail + Historie (klickbar im Kundenstamm): Stammdaten, offene Summe und
 // die verknüpften Belege (Aufträge, Angebote, Rechnungen, Muster-Leihgut).
-function CompanyDetailPanel({ companyId, companies = [], onNavigate }: { companyId: string; companies?: Array<{ id: string; name: string }>; onNavigate?: (k: string) => void }): JSX.Element {
+function CompanyDetailPanel({ companyId, companies = [], onNavigate, onOpen }: { companyId: string; companies?: Array<{ id: string; name: string }>; onNavigate?: (k: string) => void; onOpen?: (k: string, id: string) => void }): JSX.Element {
   const [ov, setOv] = useState<Awaited<ReturnType<typeof trpc.companies.overview.query>> | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const reload = useCallback(() => { void trpc.companies.overview.query({ companyId }).then(setOv).catch((e) => setErr(errMsg(e))); }, [companyId]);
@@ -3584,14 +3605,21 @@ function CompanyDetailPanel({ companyId, companies = [], onNavigate }: { company
   if (err) return <Alert color="red" mt="md">{err}</Alert>;
   if (!ov) return <Text size="sm" c="dimmed" mt="md">lädt…</Text>;
   const d = (x: string | Date): string => new Date(x).toLocaleDateString("de-DE");
-  const histGroup = (title: string, navKey: string, items: { id: string; label: string; sub?: string }[]): JSX.Element => (
+  // Verknüpft jeden Historieneintrag: mit onOpen wird der konkrete Beleg geöffnet
+  // (Deep-Link), sonst — falls möglich — die zugehörige Liste. `deeplink=false` für
+  // Belegarten ohne Detail-Seite (z. B. Rechnungen): nur Listen-Navigation.
+  const histGroup = (title: string, navKey: string, items: { id: string; label: string; sub?: string }[], deeplink = true): JSX.Element => (
     <Box miw={230}>
       <Text size="xs" fw={700} tt="uppercase" c="dimmed" mb={4}>{title} ({items.length})</Text>
-      {items.length === 0 ? <Text size="sm" c="dimmed">—</Text> : items.slice(0, 8).map((i) => (
-        <Group key={i.id} gap={6} mb={2} wrap="nowrap" style={{ cursor: onNavigate ? "pointer" : undefined }} onClick={() => onNavigate?.(navKey)}>
-          <Text size="sm">{i.label}</Text>{i.sub ? <Text size="xs" c="dimmed">· {i.sub}</Text> : null}
-        </Group>
-      ))}
+      {items.length === 0 ? <Text size="sm" c="dimmed">—</Text> : items.slice(0, 8).map((i) => {
+        const go = onOpen && deeplink ? () => onOpen(navKey, i.id) : onNavigate ? () => onNavigate(navKey) : undefined;
+        return (
+          <Group key={i.id} gap={6} mb={2} wrap="nowrap">
+            {go ? <Anchor size="sm" onClick={go} title="Öffnen">{i.label} ↗</Anchor> : <Text size="sm">{i.label}</Text>}
+            {i.sub ? <Text size="xs" c="dimmed">· {i.sub}</Text> : null}
+          </Group>
+        );
+      })}
     </Box>
   );
   return (
@@ -3662,7 +3690,7 @@ function CompanyDetailPanel({ companyId, companies = [], onNavigate }: { company
           <Group align="flex-start" gap="lg" wrap="wrap">
             {histGroup("Aufträge", "orders", ov.orders.map((o) => ({ id: o.id, label: o.number, sub: o.status })))}
             {histGroup("Angebote", "quotes", ov.quotes.map((q) => ({ id: q.id, label: q.number, sub: q.status })))}
-            {histGroup("Rechnungen", "dunning", ov.invoices.map((i) => ({ id: i.id, label: i.number, sub: euro(i.grossCents) })))}
+            {histGroup("Rechnungen", "dunning", ov.invoices.map((i) => ({ id: i.id, label: i.number, sub: euro(i.grossCents) })), false)}
             {histGroup("Muster-Leihgut", "samples", ov.sampleLoans.map((s) => ({ id: s.id, label: d(s.ausgegebenAm), sub: s.status })))}
           </Group>
         </Tabs.Panel>
@@ -3889,7 +3917,7 @@ function CompanyAddressesPanel({ companyId }: { companyId: string }): JSX.Elemen
   );
 }
 
-export function CompaniesPage({ focusId }: { focusId?: string } = {}): JSX.Element {
+export function CompaniesPage({ focusId, onNavigate, onOpen }: { focusId?: string; onNavigate?: (k: string) => void; onOpen?: (k: string, id: string) => void } = {}): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [name, setName] = useState("");
   const [branche, setBranche] = useState("");
@@ -3940,7 +3968,7 @@ export function CompaniesPage({ focusId }: { focusId?: string } = {}): JSX.Eleme
           }}>Löschen</Button>
         </Group>
       )} />
-      {openCompany && <CompanyDetailPanel companyId={openCompany} companies={rows.map((r) => ({ id: String(r.id), name: String(r.name ?? r.id) }))} />}
+      {openCompany && <CompanyDetailPanel companyId={openCompany} companies={rows.map((r) => ({ id: String(r.id), name: String(r.name ?? r.id) }))} onNavigate={onNavigate} onOpen={onOpen} />}
     </>
   );
 }
@@ -5061,7 +5089,8 @@ interface SubPlan {
   totalScrap: number; totalLohnCents: number; progressPercent: number; yieldPercent: number | null; allReturned: boolean;
 }
 
-export function SubproductionPage(): JSX.Element {
+export function SubproductionPage({ onOpen }: { onOpen?: (k: string, id: string) => void } = {}): JSX.Element {
+  const supplierNames = useSupplierNames();
   const [productionId, setProductionId] = useState("pa-1");
   const [applied, setApplied] = useState("pa-1");
   const [stages, setStages] = useState<SubStage[]>([]);
@@ -5139,7 +5168,7 @@ export function SubproductionPage(): JSX.Element {
               {stages.map((s) => (
                 <Table.Tr key={s.id}>
                   <Table.Td>#{s.sequence}</Table.Td>
-                  <Table.Td>{s.supplierId}</Table.Td>
+                  <Table.Td><SupplierRef id={s.supplierId} names={supplierNames} onOpen={onOpen} /></Table.Td>
                   <Table.Td><StatusBadge status={s.status} /></Table.Td>
                   <Table.Td style={numTd}>{s.beistellMenge ?? "—"}</Table.Td>
                   <Table.Td style={numTd}>{s.ruecklaufMenge ?? "—"}</Table.Td>
