@@ -143,7 +143,11 @@ export class ProductionService {
     }
 
     await this.repo.releaseOrder(orderId);
-    await this.audit.append(buildEntry({ entity: "Order", entityId: orderId, action: "UPDATE", after: { freigegeben: true, freigegebenVon: opts.role ?? null } }));
+    // Freigabe koppelt den Auftragsstatus: der freigegebene Auftrag geht in Produktion
+    // (sichtbar in Liste/Status, nicht erst bei PA-Anlage). Guard im Repo schaltet nur
+    // aus frühen Status (ANGELEGT/IN_BEARBEITUNG) — spätere Status bleiben unberührt.
+    await this.repo.setOrderInProduction(orderId);
+    await this.audit.append(buildEntry({ entity: "Order", entityId: orderId, action: "UPDATE", after: { freigegeben: true, status: "IN_PRODUKTION", freigegebenVon: opts.role ?? null } }));
   }
 
   /** Baut die Fertigungsstückliste aus den Auftragspositionen (Set → Komponenten × Menge). */

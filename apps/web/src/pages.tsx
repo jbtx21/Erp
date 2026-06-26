@@ -2912,7 +2912,7 @@ function ConnectionsPanel({ orderId, role, onChanged }: { orderId: string; role:
           {canProd && prod && !prod.productionId && !prod.freigegeben && (
             <Button size="compact-xs" variant="light" color="orange" onClick={async () => {
               setErr(null); setMsg(null);
-              try { await trpc.production.release.mutate({ orderId }); setMsg("Auftrag für die Produktion freigegeben."); await load(); }
+              try { await trpc.production.release.mutate({ orderId }); setMsg("Auftrag freigegeben — Status: In Produktion."); await load(); onChanged(); }
               catch (e) { setErr(errMsg(e)); }
             }}>Freigeben</Button>
           )}

@@ -153,13 +153,16 @@ describe("ProductionService — Auftrag → Produktionsauftrag (Kap. 5.2)", () =
     await expect(svc.createFromOrder("ord_1")).rejects.toBeInstanceOf(ProductionError);
   });
 
-  it("release gibt den Auftrag frei (idempotent + auditiert)", async () => {
+  it("release gibt den Auftrag frei, koppelt IN_PRODUKTION (idempotent + auditiert)", async () => {
     const { svc, repo, audit } = svcFor(baseOrder({ freigegeben: false }));
     await svc.release("ord_1");
     expect(repo.released).toContain("ord_1");
-    expect(audit.entries.at(-1)).toMatchObject({ entity: "Order", after: { freigegeben: true } });
+    // Freigabe koppelt den Auftragsstatus auf IN_PRODUKTION.
+    expect(repo.inProduction).toContain("ord_1");
+    expect(audit.entries.at(-1)).toMatchObject({ entity: "Order", after: { freigegeben: true, status: "IN_PRODUKTION" } });
     await svc.release("ord_1"); // idempotent: kein zweiter releaseOrder-Call
     expect(repo.released).toHaveLength(1);
+    expect(repo.inProduction).toHaveLength(1);
   });
 
   it("Freigabe-Gate (K-10): BÜRO darf über der Rabattgrenze NICHT freigeben", async () => {
