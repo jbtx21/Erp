@@ -2339,7 +2339,10 @@ export function QuotesPage({ focusId }: { focusId?: string } = {}): JSX.Element 
             <Title order={5} mt="lg">Artikel</Title>
             <LinesEditor lines={lines} onChange={(l) => { setLines(l); setDirty(true); }} quoteMode companyId={companyId || undefined} taxRate={exempt ? 0 : globalTaxRate} />
             <Collapsible title="Stickerei-Mengenstaffeln je Logo (Referenz)">
-              <StickereiStaffelnSection />
+              <StickereiStaffelnSection
+                companyId={companyId || undefined}
+                initialMenge={lines.reduce((m, l) => Math.max(m, lineHasContent(l) ? l.qty : 0), 0) || undefined}
+              />
             </Collapsible>
             <Title order={5} mt="lg">Steuern und Gebühren</Title>
             <Checkbox mt="xs" label="Kunde ist von der Umsatzsteuer befreit (innergemeinschaftlich / Reverse-Charge)" checked={exempt}
@@ -3249,7 +3252,10 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
                 <LinesEditor lines={newLines} onChange={(l) => { setNewLines(l); setDirty(true); }} companyId={newCompany || undefined} taxRate={globalTaxRate} />
               </Tabs.Panel>
               <Tabs.Panel value="stickerei" pt="md">
-                <StickereiStaffelnSection />
+                <StickereiStaffelnSection
+                  companyId={newCompany || undefined}
+                  initialMenge={newLines.reduce((m, l) => Math.max(m, lineHasContent(l) ? l.qty : 0), 0) || undefined}
+                />
               </Tabs.Panel>
               {editOrderId && (
                 <Tabs.Panel value="belege" pt="md">

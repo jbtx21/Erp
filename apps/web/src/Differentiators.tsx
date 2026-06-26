@@ -99,7 +99,7 @@ export function LogosStickereiSection(): JSX.Element {
 }
 
 /** Stickerei-Mengenstaffeln je Logo (→ Angebot-/Auftrags-Erfassung). */
-export function StickereiStaffelnSection(): JSX.Element {
+export function StickereiStaffelnSection({ companyId, initialMenge }: { companyId?: string; initialMenge?: number } = {}): JSX.Element {
   const [config, setConfig] = useState<MarkupConfig | null>(null);
   const [logos, setLogos] = useState<LogoOption[]>([]);
   useEffect(() => {
@@ -109,7 +109,21 @@ export function StickereiStaffelnSection(): JSX.Element {
       try { setLogos(await trpc.stickerei.logos.list.query()); } catch { /* leer */ }
     })();
   }, []);
-  return <StickereiStaffeln config={config} logos={logos} />;
+  // Im Auftrags-/Angebotskontext: nur die Logos der Auftragsfirma zeigen (nicht das
+  // erste/beliebige), Bestellmenge aus den Auftragspositionen vorbelegen.
+  const shown = companyId ? logos.filter((l) => l.companyId === companyId) : logos;
+  return (
+    <>
+      {companyId && (
+        <Text size="xs" c="dimmed" mb="xs">
+          {shown.length > 0
+            ? `Logos dieser Firma (${shown.length}) — Bestellmenge aus den Positionen vorbelegt.`
+            : "Für diese Firma sind noch keine Logo-Versionen hinterlegt (Lager / Veredelung → Logos & Stickerei)."}
+        </Text>
+      )}
+      <StickereiStaffeln config={config} logos={shown} initialMenge={initialMenge} />
+    </>
+  );
 }
 
 /** Ausschreibung je Logo an Stickerei-Partner (→ Beschaffung). */
@@ -650,12 +664,12 @@ const DEFAULT_STAFFEL_ROWS: StaffelRow[] = [
 const toStaffeln = (rows: ReadonlyArray<StaffelRow>): StickereiStaffel[] =>
   rows.map((r) => ({ minMenge: Math.round(r.minMenge), ekCents: Math.round(r.ekEuro * 100) }));
 
-function StickereiStaffeln({ config, logos }: { config: MarkupConfig | null; logos: LogoOption[] }): JSX.Element {
+function StickereiStaffeln({ config, logos, initialMenge }: { config: MarkupConfig | null; logos: LogoOption[]; initialMenge?: number }): JSX.Element {
   const [logoVersionId, setLogoVersionId] = useState("");
   const [rows, setRows] = useState<StaffelRow[]>(DEFAULT_STAFFEL_ROWS);
   const [logoOverride, setLogoOverride] = useState<number | null>(null);
   const [priceGroupId, setPriceGroupId] = useState<string | undefined>(undefined);
-  const [menge, setMenge] = useState(75);
+  const [menge, setMenge] = useState(initialMenge && initialMenge > 0 ? initialMenge : 75);
   const [err, setErr] = useState("");
   const [status, setStatus] = useState("");
 
@@ -694,15 +708,20 @@ function StickereiStaffeln({ config, logos }: { config: MarkupConfig | null; log
     }
   }, []);
 
-  // Einmalig die erste verfügbare Logo-Version wählen und laden, sobald die Liste da ist.
-  const didInit = useRef(false);
+  // Erste verfügbare Logo-Version wählen und laden; bei gefilterter Liste (Firmenkontext)
+  // neu wählen, sobald die aktuelle Auswahl nicht mehr enthalten ist.
   useEffect(() => {
-    if (didInit.current || logos.length === 0) return;
-    didInit.current = true;
+    if (logos.length === 0) return;
+    if (logoVersionId && logos.some((l) => l.id === logoVersionId)) return;
     const initial = logos[0]!.id;
     setLogoVersionId(initial);
     void load(initial);
-  }, [logos, load]);
+  }, [logos, logoVersionId, load]);
+
+  // Bestellmenge aus den Auftragspositionen nachführen (Referenztab im Auftrag/Angebot).
+  useEffect(() => {
+    if (initialMenge && initialMenge > 0) setMenge(initialMenge);
+  }, [initialMenge]);
 
   const save = useCallback(async () => {
     setErr("");
