@@ -34,7 +34,7 @@ function svcFor(order: OrderForProduction | null): { svc: ProductionService; rep
 }
 
 const baseOrder = (over: Partial<OrderForProduction> = {}): OrderForProduction => ({
-  id: "ord_1", number: "AB-2026-0001", freigegeben: true, deliveryDate: null, existingProductionId: null, existingProductionNumber: null,
+  id: "ord_1", number: "AB-2026-0001", freigegeben: true, deliveryDate: null, procurementLeadDays: null, existingProductionId: null, existingProductionNumber: null,
   lines: [{ description: "240 Polos", qty: 240, variantId: "v_polo", isBundle: false, components: [], veredlerId: null }],
   ...over,
 });
@@ -77,6 +77,19 @@ describe("ProductionService — Auftrag → Produktionsauftrag (Kap. 5.2)", () =
     const extern = await svc.previewSchedule("ord_1", "EXTERN_STICK_SIEBDRUCK");
     expect(extern.leadWorkingDays).toBe(10);
     expect(extern.external).toBe(true);
+  });
+
+  it("leitet das späteste Bestelldatum aus der Beschaffungs-Lieferzeit ab (Procure-to-Order)", async () => {
+    const delivery = new Date(Date.UTC(2026, 5, 30)); // Di 30.06.2026
+    const { svc } = svcFor(baseOrder({ deliveryDate: delivery, procurementLeadDays: 8 }));
+    const p = await svc.previewSchedule("ord_1", "INHOUSE_OHNE_TRANSFER");
+    expect(p.procurementLeadDays).toBe(8);
+    // Produktionsstart 23.06. − 8 Werktage → spätestes Bestelldatum beim Lieferanten.
+    expect(p.proposedOrderDate).toEqual(new Date(Date.UTC(2026, 5, 11))); // Do 11.06.2026
+    // Ohne Beschaffungs-Lieferzeit kein Bestelldatum.
+    const none = await (svcFor(baseOrder({ deliveryDate: delivery })).svc).previewSchedule("ord_1", "INHOUSE_OHNE_TRANSFER");
+    expect(none.procurementLeadDays).toBeNull();
+    expect(none.proposedOrderDate).toBeNull();
   });
 
   it("übernimmt den manuell bestätigten Produktionstermin + Veredelungsweg", async () => {

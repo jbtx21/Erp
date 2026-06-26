@@ -2012,6 +2012,9 @@ export function LinesEditor({ lines, onChange, quoteMode = false, companyId, tax
           {db !== null && <Badge color={db >= 0 ? "teal" : "red"} variant="light" size="sm" title="Deckungsbeitrag (VK nach Rabatt − EK) × Menge">DB {euro(db)}{margePct !== null ? ` · ${(margePct * 100).toFixed(0)}%` : ""}</Badge>}
           {l.isBundle && <Badge color="grape" variant="light" size="sm" title="Set/Bundle — löst sich in eine Stückliste auf">Set</Badge>}
           {quoteMode && l.articleId && !l.variantId && <Badge color="orange" variant="light" size="sm" title="Farbe & Größe werden beim Wandeln in den Auftrag abgefragt">Variante offen</Badge>}
+          {(l.kind === "TEXTIL" || l.kind === "VEREDELUNG") && !l.variantId && !l.articleId && l.description.trim() !== "" && (
+            <Badge color="gray" variant="light" size="sm" title="Freiposition ohne Katalogbezug — erzeugt KEINEN Lieferantenbedarf (Procure-to-Order). Für Beschaffung einen Katalogartikel/Variante wählen.">ohne Artikelbezug</Badge>
+          )}
           {l.variantId && <Button size="compact-xs" variant={l.isBundle ? "light" : "subtle"} color="grape" onClick={() => { if (l.isBundle) setShown((s) => ({ ...s, [i]: !s[i] })); else setBundleFor(i); }} title="Stückliste anzeigen/bearbeiten">⊟ Stückliste</Button>}
           {quoteMode && <Switch size="xs" label="Alt." checked={!!l.isAlternative} onChange={(e) => set(i, { isAlternative: e.currentTarget.checked })} title="Alternativposition — wird beim Wandeln in den Auftrag nicht übernommen" />}
           <Button size="compact-sm" variant="subtle" color="red" disabled={lines.length === 1} onClick={() => onChange(lines.filter((_, j) => j !== i))}>✕</Button>
@@ -2797,6 +2800,16 @@ function ProductionCreateDialog({ orderId, onClose, onDone }: { orderId: string;
         </Box>
         <TextInput label="Produktionstermin (Vorschlag, anpassbar)" type="date" value={dueDate} onChange={(e) => { setDueDate(e.currentTarget.value); setEdited(true); }} w={200} />
       </Group>
+      {preview?.procurementLeadDays != null && (
+        <Alert color="blue" variant="light" mt="md">
+          <Text size="sm">
+            <b>Procure-to-Order:</b> Beschaffungs-Lieferzeit {preview.procurementLeadDays} Werktage (Hauptlieferant).
+            Spätestes Bestelldatum beim Lieferanten:{" "}
+            <b>{preview.proposedOrderDate ? new Date(preview.proposedOrderDate).toLocaleDateString("de-DE") : "—"}</b>
+            {" "}— erst beschaffen, dann veredeln.
+          </Text>
+        </Alert>
+      )}
       <Alert color="yellow" variant="light" mt="md">
         Der Termin ist ein Werktage-Vorschlag aus der Rückwärtsterminierung. Die tatsächliche Dauer ist <b>stückzahlabhängig</b> — bitte vor der Bestätigung manuell prüfen.
       </Alert>

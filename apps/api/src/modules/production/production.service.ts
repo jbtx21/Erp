@@ -10,6 +10,7 @@ import {
   explodeComponents,
   FINISHING_LEAD_PROFILES,
   proposeProductionDueDate,
+  subtractWorkingDays,
   type ApprovalThresholds,
   type FinishingLeadProfile,
   type VariantComponentDef,
@@ -41,6 +42,9 @@ export interface OrderForProduction {
   freigegeben: boolean;
   /** Zugesagter Liefertermin (Basis der Rückwärtsterminierung); null = kein Termin. */
   deliveryDate: Date | null;
+  /** Längste Beschaffungs-Lieferzeit (Werktage) der Hauptlieferanten nicht bestandsgeführter
+   *  Positionen (Procure-to-Order); null = nichts zu beschaffen / keine Lieferzeit gepflegt. */
+  procurementLeadDays: number | null;
   existingProductionId: string | null;
   existingProductionNumber: string | null;
   lines: ProductionOrderLine[];
@@ -55,6 +59,11 @@ export interface SchedulePreview {
   external: boolean;
   /** Vorgeschlagene Produktions-Fälligkeit (null ohne Liefertermin). */
   proposedDueDate: Date | null;
+  /** Beschaffungs-Lieferzeit der Hauptlieferanten (Werktage); null = nichts zu beschaffen. */
+  procurementLeadDays: number | null;
+  /** Spätestes Bestelldatum beim Lieferanten = Produktionsstart − Beschaffungs-Lieferzeit
+   *  (Procure-to-Order: erst beschaffen, dann veredeln). Null ohne Liefertermin/Lieferzeit. */
+  proposedOrderDate: Date | null;
 }
 
 /** Eine Fertigungsstücklisten-Position des Produktionsauftrags. */
@@ -160,13 +169,20 @@ export class ProductionService {
     const order = await this.repo.loadOrderForProduction(orderId);
     if (!order) throw new ProductionError("Auftrag nicht gefunden.");
     const def = FINISHING_LEAD_PROFILES[profile];
+    const proposedDueDate = order.deliveryDate ? proposeProductionDueDate(order.deliveryDate, def.leadWorkingDays) : null;
+    // Procure-to-Order: das Material muss VOR dem Produktionsstart da sein → spätestes
+    // Bestelldatum = Produktionsstart − Beschaffungs-Lieferzeit (Werktage).
+    const lead = order.procurementLeadDays;
+    const proposedOrderDate = proposedDueDate && lead != null ? subtractWorkingDays(proposedDueDate, lead) : null;
     return {
       deliveryDate: order.deliveryDate,
       profile,
       profileLabel: def.label,
       leadWorkingDays: def.leadWorkingDays,
       external: def.external,
-      proposedDueDate: order.deliveryDate ? proposeProductionDueDate(order.deliveryDate, def.leadWorkingDays) : null,
+      proposedDueDate,
+      procurementLeadDays: lead,
+      proposedOrderDate,
     };
   }
 

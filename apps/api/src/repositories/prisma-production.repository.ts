@@ -31,15 +31,29 @@ export class PrismaProductionRepository implements ProductionRepository {
           where: { id: { in: variantIds } },
           select: {
             id: true, isBundle: true,
-            article: { select: { veredlerId: true } },
+            article: { select: { veredlerId: true, bestandsgefuehrt: true } },
+            bestandsgefuehrtOverride: true,
+            // Hauptlieferant (niedrigste priority) für die Beschaffungs-Lieferzeit (Procure-to-Order).
+            supplierItems: { orderBy: { priority: "asc" }, take: 1, select: { supplier: { select: { lieferzeitTage: true } } } },
             bundleComponents: { orderBy: { position: "asc" }, select: { description: true, qty: true, componentVariantId: true } },
           },
         })
       : [];
     const byId = new Map(variants.map((v) => [v.id, v]));
 
+    // Beschaffungs-Lieferzeit (Procure-to-Order): längste Lieferzeit der Hauptlieferanten
+    // über alle NICHT bestandsgeführten Positionen (bestandsgeführte sind bereits am Lager).
+    let procurementLeadDays: number | null = null;
+    for (const v of variants) {
+      const managed = v.bestandsgefuehrtOverride ?? v.article.bestandsgefuehrt;
+      if (managed) continue;
+      const lt = v.supplierItems[0]?.supplier.lieferzeitTage ?? null;
+      if (lt != null) procurementLeadDays = Math.max(procurementLeadDays ?? 0, lt);
+    }
+
     return {
       id: o.id, number: o.number, freigegeben: o.freigegeben, deliveryDate: o.zugesagterLiefertermin,
+      procurementLeadDays,
       existingProductionId: o.production?.id ?? null,
       existingProductionNumber: o.production?.number ?? null,
       lines: o.lines.map((l) => {
