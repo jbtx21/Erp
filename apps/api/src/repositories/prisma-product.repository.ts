@@ -86,6 +86,40 @@ export class PrismaProductRepository implements ProductRepository {
     });
   }
 
+  async searchCatalog(query: string, limit: number): Promise<CatalogEntry[]> {
+    // Treffer über Varianten-SKU, Artikelname/-SKU/-Beschreibung (case-insensitive); nur
+    // echte Lagerartikel (STOCK), wie catalog(). Begrenzt auf `limit` für skalierbare Picker.
+    const where = {
+      article: { type: "STOCK" as const },
+      ...(query
+        ? {
+            OR: [
+              { sku: { contains: query, mode: "insensitive" as const } },
+              { article: { is: { name: { contains: query, mode: "insensitive" as const } } } },
+              { article: { is: { sku: { contains: query, mode: "insensitive" as const } } } },
+              { article: { is: { description: { contains: query, mode: "insensitive" as const } } } },
+            ],
+          }
+        : {}),
+    };
+    const rows = await prisma.variant.findMany({
+      where,
+      orderBy: [{ article: { sku: "asc" } }, { sku: "asc" }],
+      take: limit,
+      select: {
+        id: true, sku: true, articleId: true, isBundle: true,
+        article: { select: { name: true, description: true } },
+        attributes: { select: { name: true, value: true } },
+        prices: { where: { priceGroup: { kind: "STANDARD" } }, select: { netCents: true }, take: 1 },
+      },
+    });
+    return rows.map((v) => {
+      const attrs = v.attributes.map((a) => a.value).join(" / ");
+      const label = `${v.article.name}${attrs ? ` — ${attrs}` : ""} (${v.sku})`;
+      return { variantId: v.id, articleId: v.articleId, articleName: v.article.name, sku: v.sku, description: v.article.description ?? "", label, unitNetCents: v.prices[0]?.netCents ?? 0, isBundle: v.isBundle };
+    });
+  }
+
   async createVariant(input: CreateVariantInput): Promise<{ id: string }> {
     return prisma.variant.create({
       data: {

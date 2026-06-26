@@ -1167,6 +1167,10 @@ export const appRouter = router({
     listArticles: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.products.listArticles()),
     /** Flacher Artikel-/Varianten-Katalog für den Picker in Angebot/Auftrag/Leihgut. */
     catalog: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.products.catalog()),
+    /** Serverseitige, begrenzte Katalogsuche (skalierbarer Picker bei vielen Varianten). */
+    searchCatalog: roleProcedure(...supplierRoles)
+      .input(z.object({ query: z.string().default(""), limit: z.number().int().positive().max(200).optional() }))
+      .query(({ input, ctx }) => ctx.products.searchCatalog(input.query, input.limit ?? 50)),
     listVariants: roleProcedure(...supplierRoles)
       .input(z.object({ articleId: z.string().min(1) }))
       .query(({ input, ctx }) => ctx.products.listVariants(input.articleId)),

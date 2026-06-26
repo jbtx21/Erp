@@ -1411,14 +1411,15 @@ export function ArticlePicker({ onPick }: { onPick: (e: { label: string; unitNet
   const [farbe, setFarbe] = useState("");
   const [groesse, setGroesse] = useState("");
   const [err, setErr] = useState<string | null>(null);
-  const reload = useCallback(async () => { try { setCatalog(await trpc.products.catalog.query()); } catch { /* ignore */ } }, []);
-  useEffect(() => { void reload(); }, [reload]);
-  const q = search.trim().toLowerCase();
-  // Artikelnummer, -name UND -beschreibung sind eigene Suchfelder — Treffer über alle drei.
+  // Serverseitige, begrenzte Suche statt Voll-Katalog-Load: skaliert auf sechsstellige
+  // Variantenzahlen (10–20 Lieferanten × ~250 Artikel × Farbe×Größe).
+  const reload = useCallback(async () => {
+    try { setCatalog(await trpc.products.searchCatalog.query({ query: search.trim(), limit: 50 })); } catch { /* ignore */ }
+  }, [search]);
+  // Debounce: erst nach kurzer Tipp-Pause suchen.
+  useEffect(() => { const t = setTimeout(() => { void reload(); }, 200); return () => clearTimeout(t); }, [reload]);
   const byId = new Map(catalog.map((c) => [c.variantId, c]));
-  const matches = (c: (typeof catalog)[number], needle: string): boolean =>
-    c.sku.toLowerCase().includes(needle) || c.articleName.toLowerCase().includes(needle) || c.description.toLowerCase().includes(needle) || c.label.toLowerCase().includes(needle);
-  const hasMatch = catalog.some((c) => matches(c, q));
+  const hasMatch = catalog.length > 0;
   const reset = (): void => { setCreating(false); setSku(""); setBeschreibung(""); setFarbe(""); setGroesse(""); setErr(null); };
   return (
     <Box>
@@ -1427,14 +1428,7 @@ export function ArticlePicker({ onPick }: { onPick: (e: { label: string; unitNet
         nothingFoundMessage="Kein Treffer — unten anlegen"
         maxDropdownHeight={320}
         data={catalog.map((c) => ({ value: c.variantId, label: c.label }))}
-        filter={({ options, search: s }) => {
-          const needle = s.trim().toLowerCase();
-          if (!needle) return options;
-          return (options as { value: string; label: string }[]).filter((o) => {
-            const e = byId.get(o.value);
-            return e ? matches(e, needle) : o.label.toLowerCase().includes(needle);
-          });
-        }}
+        filter={({ options }) => options}
         renderOption={({ option }) => {
           const e = byId.get(option.value);
           if (!e) return <Text size="xs">{option.label}</Text>;

@@ -75,6 +75,27 @@ describe("ProductService — PIM-Vollständigkeit + Bearbeitung", () => {
   });
 });
 
+describe("ProductService — Katalogsuche (skalierbarer Picker)", () => {
+  it("filtert serverseitig nach SKU/Name und begrenzt die Treffer", async () => {
+    const { svc } = await setup();
+    await svc.quickCreateCatalogEntry({ sku: "POLO-NAVY-M", name: "Premium Polo", attributes: [{ name: "Farbe", value: "Navy" }, { name: "Größe", value: "M" }] });
+    await svc.quickCreateCatalogEntry({ sku: "POLO-NAVY-L", name: "Premium Polo", attributes: [{ name: "Farbe", value: "Navy" }, { name: "Größe", value: "L" }] });
+    await svc.quickCreateCatalogEntry({ sku: "CAP-RED", name: "Basecap", attributes: [{ name: "Farbe", value: "Rot" }] });
+
+    const polo = await svc.searchCatalog("polo", 50);
+    expect(polo).toHaveLength(2);
+    expect(polo.every((c) => c.articleName === "Premium Polo")).toBe(true);
+
+    const byName = await svc.searchCatalog("basecap", 50);
+    expect(byName.map((c) => c.sku)).toEqual(["CAP-RED-Rot"]);
+
+    // Limit begrenzt die Treffermenge.
+    expect(await svc.searchCatalog("polo", 1)).toHaveLength(1);
+    // Leere Anfrage liefert (begrenzt) den Anfang des Katalogs.
+    expect((await svc.searchCatalog("", 2)).length).toBe(2);
+  });
+});
+
 describe("ProductService — Set/Bundle-Stückliste (Kap. 5.1)", () => {
   it("setzt Komponenten, markiert die Variante als Set und löst Labels auf", async () => {
     const { svc } = await setup();

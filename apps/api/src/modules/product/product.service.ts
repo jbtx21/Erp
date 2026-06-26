@@ -118,6 +118,8 @@ export interface ProductRepository {
   listVariants(articleId: string): Promise<VariantRow[]>;
   /** Flacher Varianten-Katalog (Artikelname + Merkmale + Standardpreis) für Picker. */
   catalog(): Promise<CatalogEntry[]>;
+  /** Serverseitige, begrenzte Katalogsuche (SKU/Name/Beschreibung) für skalierbare Picker. */
+  searchCatalog(query: string, limit: number): Promise<CatalogEntry[]>;
   createVariant(input: CreateVariantInput): Promise<{ id: string }>;
   /** Erzeugt das Farbe×Größe-Raster eines Artikels; vorhandene Kombis werden übersprungen. */
   generateMatrixVariants(articleId: string, combos: ReadonlyArray<{ farbe: string; groesse: string }>): Promise<{ created: number; skipped: number; createdSkus: string[] }>;
@@ -191,6 +193,16 @@ export class ProductService {
   /** Flacher Artikel-/Varianten-Katalog für die Positionserfassung (Picker). */
   catalog(): Promise<CatalogEntry[]> {
     return this.repo.catalog();
+  }
+
+  /**
+   * Serverseitige Katalogsuche für skalierbare Picker (10–20 Lieferanten × ~250 Artikel ×
+   * Farbe×Größe → sechsstellige Variantenzahl): liefert nur die ersten `limit` Treffer,
+   * statt den ganzen Katalog in den Browser zu laden. Leere Anfrage → erste `limit` Einträge.
+   */
+  searchCatalog(query: string, limit = 50): Promise<CatalogEntry[]> {
+    const n = Math.min(Math.max(limit, 1), 200);
+    return this.repo.searchCatalog(query.trim(), n);
   }
 
   async createVariant(input: CreateVariantInput): Promise<{ id: string }> {

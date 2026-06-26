@@ -98,6 +98,15 @@ export class InMemoryProductRepository implements ProductRepository {
     return { created: createdSkus.length, skipped: combos.length - toCreate.length, createdSkus };
   }
 
+  async searchCatalog(query: string, limit: number): Promise<import("../modules/product/product.service.js").CatalogEntry[]> {
+    const all = await this.catalog();
+    const q = query.trim().toLowerCase();
+    const hits = q
+      ? all.filter((c) => c.sku.toLowerCase().includes(q) || c.articleName.toLowerCase().includes(q) || c.description.toLowerCase().includes(q) || c.label.toLowerCase().includes(q))
+      : all;
+    return hits.slice(0, limit);
+  }
+
   async catalog(): Promise<import("../modules/product/product.service.js").CatalogEntry[]> {
     return [...this.variants.values()].map((v) => {
       const a = this.articles.get(v.articleId);
