@@ -14,6 +14,9 @@ export interface OrderListItem {
   employeeNote: string | null; // Kundendaten — für PRODUKTION redigiert (RBAC)
   totalNetCents: number | null; // Auftragswert — für PRODUKTION redigiert (RBAC)
   fastLane: boolean; // Eilauftrag-Priorisierung (Xentral „Fast-Lane")
+  /** Sendungsnummer + Carrier (T-06) — Basis des klickbaren Tracking-Links; operativ, nicht redigiert. */
+  trackingNumber: string | null;
+  carrier: string | null;
   /** Server-berechnete erlaubte Status-Übergänge (Single Source of Truth, OrderStatus-Maschine). */
   allowedTransitions: string[];
   createdAt: Date;

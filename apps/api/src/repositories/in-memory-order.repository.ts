@@ -23,6 +23,8 @@ interface StoredOrder {
   employeeNote: string;
   totalNetCents: number;
   fastLane?: boolean;
+  trackingNumber?: string | null;
+  carrier?: string | null;
   createdAt: Date;
 }
 
@@ -126,6 +128,8 @@ export class InMemoryOrderRepository
         employeeNote: o.employeeNote,
         totalNetCents: o.totalNetCents,
         fastLane: o.fastLane ?? false,
+        trackingNumber: o.trackingNumber ?? null,
+        carrier: o.carrier ?? null,
         allowedTransitions: [...orderStatusMachine.next(o.status as OrderStatus)],
         createdAt: o.createdAt,
       }));

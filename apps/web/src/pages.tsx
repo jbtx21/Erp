@@ -6,6 +6,7 @@ import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } fr
 import { Alert, Anchor, Badge, Box, Button, Card, Checkbox, Group, Loader, Modal, NumberInput, Paper, PasswordInput, SegmentedControl, Select, SimpleGrid, Stack, Switch, Table, Tabs, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { validateVatId } from "@texma/shared/vat";
+import { buildTrackingUrl, type Carrier } from "@texma/shared/tracking";
 import { resolveMarkupFactor, DEFAULT_MARKUP_CONFIG, type MarkupConfig } from "@texma/shared/markup";
 import { konto, kontenliste, KONTENRAHMEN_LABEL, type Kontenrahmen } from "@texma/shared/kontenrahmen";
 import { trpc } from "./trpc.js";
@@ -506,10 +507,14 @@ export function SuppliersPage({ focusId }: { focusId?: string } = {}): JSX.Eleme
   );
 }
 
-export const IncomingInvoicesPage = (): JSX.Element => (
-  <ListPage module="Einkauf / Eingangsrechnungen" title="Eingangsrechnungen" hint="Erfasste Kreditorenrechnungen (3-Wege-Match, Kap. 9)."
-    load={() => trpc.incomingInvoices.list.query({ limit: 100 }) as Promise<Row[]>} />
-);
+export function IncomingInvoicesPage({ onOpen }: { onOpen?: (k: string, id: string) => void } = {}): JSX.Element {
+  const supplierNames = useSupplierNames();
+  return (
+    <ListPage module="Einkauf / Eingangsrechnungen" title="Eingangsrechnungen" hint="Erfasste Kreditorenrechnungen (3-Wege-Match, Kap. 9)."
+      load={() => trpc.incomingInvoices.list.query({ limit: 100 }) as Promise<Row[]>}
+      cellRender={(c, v) => c === "supplierId" ? <SupplierRef id={v ? String(v) : null} names={supplierNames} onOpen={onOpen} /> : undefined} />
+  );
+}
 
 export function ReorderPage({ onOpen }: { onOpen?: (k: string, id: string) => void } = {}): JSX.Element {
   const supplierNames = useSupplierNames();
@@ -3321,10 +3326,19 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
           <Tabs.Tab value="ampel">Ampel</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="liste" pt="md">
-      <AutoTable rows={rows} hide={["rawPayload", "companyId", "fastLane", "allowedTransitions"]}
-        cellRender={(c, v, r) => c === "companyName" && v && r.companyId
-          ? <Anchor size="sm" onClick={(e) => { e.stopPropagation(); onOpen?.("companies", String(r.companyId)); }} title="Kunde öffnen">{String(v)} ↗</Anchor>
-          : undefined}
+      <AutoTable rows={rows} hide={["rawPayload", "companyId", "fastLane", "allowedTransitions", "carrier"]}
+        cellRender={(c, v, r) => {
+          if (c === "companyName" && v && r.companyId)
+            return <Anchor size="sm" onClick={(e) => { e.stopPropagation(); onOpen?.("companies", String(r.companyId)); }} title="Kunde öffnen">{String(v)} ↗</Anchor>;
+          // Sendungsnummer als klickbarer Tracking-Link (carrier-spezifisch); ohne Vorlage nur Text.
+          if (c === "trackingNumber" && v) {
+            const url = buildTrackingUrl((r.carrier as Carrier | null) ?? null, String(v));
+            return url
+              ? <Anchor size="sm" href={url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} title="Sendungsverfolgung öffnen">{String(v)} ↗</Anchor>
+              : <Text size="sm">{String(v)}</Text>;
+          }
+          return undefined;
+        }}
         bulkActions={[{
           label: "CSV-Export der Auswahl",
           run: (selected) => {
@@ -5662,7 +5676,7 @@ const BUCKET_LABEL: Record<string, string> = {
   FAELLIG_61_90: "61–90 Tage", FAELLIG_90_PLUS: "> 90 Tage",
 };
 
-export function ZahlungsabgleichOverview(): JSX.Element {
+export function ZahlungsabgleichOverview({ onOpen }: { onOpen?: (k: string, id: string) => void } = {}): JSX.Element {
   const [data, setData] = useState<Awaited<ReturnType<typeof trpc.reconciliation.overview.query>> | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const load = useCallback(async () => {
@@ -5710,7 +5724,19 @@ export function ZahlungsabgleichOverview(): JSX.Element {
               <Table.Td ta="right" style={numTd}>{euro(m.amountCents)}</Table.Td>
               <Table.Td ta="right" style={numTd}>{euro(m.allocatedCents)}</Table.Td>
               <Table.Td><StatusDot color={`var(--mantine-color-${statusMantineColor[m.status] ?? "gray"}-6)`} label={prettyStatus(m.status)} /></Table.Td>
-              <Table.Td>{m.allocations.length === 0 ? <Text size="xs" c="dimmed">—</Text> : m.allocations.map((a) => `${a.invoiceNumber} (${euro(a.amountCents)})`).join(", ")}</Table.Td>
+              <Table.Td>{m.allocations.length === 0 ? <Text size="xs" c="dimmed">—</Text> : (
+                <Group gap={4} wrap="wrap">
+                  {m.allocations.map((a, ai) => (
+                    <Text span size="sm" key={a.openItemId}>
+                      {ai > 0 ? ", " : ""}
+                      {onOpen && a.orderId
+                        ? <Anchor size="sm" onClick={() => onOpen("orders", a.orderId!)} title="Auftrag öffnen">{a.invoiceNumber} ↗</Anchor>
+                        : a.invoiceNumber}
+                      {" "}({euro(a.amountCents)})
+                    </Text>
+                  ))}
+                </Group>
+              )}</Table.Td>
             </Table.Tr>
           ))}
           {matches.length === 0 && <Table.Tr><Table.Td colSpan={6}><Text size="sm" c="dimmed">Keine Zahlungseingänge.</Text></Table.Td></Table.Tr>}

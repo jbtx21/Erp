@@ -10,7 +10,7 @@ import { EmptyState, DocListHeader } from "./doc-layout.js";
 
 /** Konsolidierter Zahlungsabgleich (IA): Kontoumsatz → OP-Zuordnung → manuelle Zahlung
  *  als EIN Tab-Workflow statt drei getrennter Top-Level-Module (#banking/#finance/#zahlungen). */
-function ZahlungsabgleichPage({ role }: { role: string }): ReactNode {
+function ZahlungsabgleichPage({ role, onOpen }: { role: string; onOpen?: (k: string, id: string) => void }): ReactNode {
   return (
     <>
       <DocListHeader module="Buchhaltung" title="Zahlungsabgleich"
@@ -22,7 +22,7 @@ function ZahlungsabgleichPage({ role }: { role: string }): ReactNode {
           <Tabs.Tab value="op">Offene Posten (OP-Aging)</Tabs.Tab>
           <Tabs.Tab value="erfassen">Zahlung erfassen</Tabs.Tab>
         </Tabs.List>
-        <Tabs.Panel value="overview" pt="md"><ZahlungsabgleichOverview /></Tabs.Panel>
+        <Tabs.Panel value="overview" pt="md"><ZahlungsabgleichOverview onOpen={onOpen} /></Tabs.Panel>
         <Tabs.Panel value="banking" pt="md"><Banking role={role} /></Tabs.Panel>
         <Tabs.Panel value="op" pt="md"><FinanceReportingPage /></Tabs.Panel>
         <Tabs.Panel value="erfassen" pt="md"><ZahlungenPage /></Tabs.Panel>
@@ -409,7 +409,7 @@ function Page({ k, role, userName, onNavigate, onOpen, focusId }: { k: string; r
     case "quotes": return <QuotesPage focusId={focusId} onOpen={onOpen} />;
     case "reklamation": return <ReklamationPage />;
     case "suppliers": return <SuppliersPage focusId={focusId} />;
-    case "incoming": return <IncomingInvoicesPage />;
+    case "incoming": return <IncomingInvoicesPage onOpen={onOpen} />;
     case "procurement": return <ProcurementPage />;
     case "reorder": return <ReorderPage onOpen={onOpen} />;
     case "wareneingang": return <WareneingangPage />;
@@ -444,7 +444,7 @@ function Page({ k, role, userName, onNavigate, onOpen, focusId }: { k: string; r
     case "prodreport": return <ProductionReportingPage />;
     case "shipments": return <ShipmentsPage onOpen={onOpen} />;
     case "dunning": return <DunningPage />;
-    case "zahlungsabgleich": return <ZahlungsabgleichPage role={role} />;
+    case "zahlungsabgleich": return <ZahlungsabgleichPage role={role} onOpen={onOpen} />;
     case "banking": return <Banking role={role} />;
     case "zahlungen": return <ZahlungenPage />;
     case "costcenters": return <CostCentersPage />;

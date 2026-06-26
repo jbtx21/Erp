@@ -11,9 +11,9 @@ describe("ReconciliationService (vereinheitlichter Abgleich)", () => {
   it("leitet Herkunft + Abgleich-Status je Zahlung ab", async () => {
     const svc = new ReconciliationService(repo([
       { id: "p1", source: "CAMT", externalRef: "ref1", reference: "RE-1", amountCents: 10000, bookedAt: asOf(),
-        allocations: [{ openItemId: "oi1", invoiceNumber: "RE-1", companyName: "Müller", amountCents: 10000 }] },
+        allocations: [{ openItemId: "oi1", invoiceNumber: "RE-1", companyName: "Müller", orderId: "ord1", amountCents: 10000 }] },
       { id: "p2", source: "MANUAL", externalRef: null, reference: null, amountCents: 5000, bookedAt: asOf(),
-        allocations: [{ openItemId: "oi2", invoiceNumber: "RE-2", companyName: "Meier", amountCents: 3000 }] },
+        allocations: [{ openItemId: "oi2", invoiceNumber: "RE-2", companyName: "Meier", orderId: null, amountCents: 3000 }] },
       { id: "p3", source: "PROVIDER", externalRef: "ref3", reference: "?", amountCents: 2000, bookedAt: asOf(), allocations: [] },
     ], []), asOf);
     const { matches, summary } = await svc.overview();

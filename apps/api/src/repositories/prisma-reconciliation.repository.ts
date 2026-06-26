@@ -17,7 +17,7 @@ export class PrismaReconciliationRepository implements ReconciliationRepository 
         allocations: {
           select: {
             amountCents: true, openItemId: true,
-            openItem: { select: { invoice: { select: { number: true, company: { select: { name: true } } } } } },
+            openItem: { select: { invoice: { select: { number: true, orderId: true, company: { select: { name: true } } } } } },
           },
         },
       },
@@ -29,6 +29,7 @@ export class PrismaReconciliationRepository implements ReconciliationRepository 
         openItemId: a.openItemId,
         invoiceNumber: a.openItem.invoice.number,
         companyName: a.openItem.invoice.company.name,
+        orderId: a.openItem.invoice.orderId,
         amountCents: a.amountCents,
       })),
     }));

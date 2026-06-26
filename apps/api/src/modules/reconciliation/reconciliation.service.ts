@@ -13,6 +13,8 @@ export interface ReconAllocation {
   openItemId: string;
   invoiceNumber: string;
   companyName: string;
+  /** Auftrag der zugeordneten Rechnung (für den Beleg-Link Zahlung→Auftrag); null wenn ohne Auftrag. */
+  orderId: string | null;
   amountCents: number;
 }
 

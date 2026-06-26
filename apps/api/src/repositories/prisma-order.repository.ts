@@ -96,6 +96,8 @@ export class PrismaOrderRepository
         externalNumber: true,
         employeeNote: true,
         fastLane: true,
+        trackingNumber: true,
+        carrier: true,
         createdAt: true,
         lines: { select: { qty: true, unitNetCents: true } },
       },
@@ -113,6 +115,8 @@ export class PrismaOrderRepository
       employeeNote: r.employeeNote,
       totalNetCents: r.lines.reduce((sum, l) => sum + l.qty * l.unitNetCents, 0),
       fastLane: r.fastLane,
+      trackingNumber: r.trackingNumber,
+      carrier: r.carrier,
       allowedTransitions: [...orderStatusMachine.next(r.status as OrderStatus)],
       createdAt: r.createdAt,
     }));
