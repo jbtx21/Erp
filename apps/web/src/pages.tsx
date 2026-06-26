@@ -5115,7 +5115,7 @@ export function SubproductionPage(): JSX.Element {
       </Group>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
 
-      {plan && (
+      {plan && stages.length > 0 && (
         <Group mt="md" gap="lg" wrap="wrap">
           <PlanStat label="Fortschritt" value={`${plan.progressPercent} %`} />
           <PlanStat label="Ausbeute" value={plan.yieldPercent == null ? "—" : `${plan.yieldPercent} %`} color={plan.yieldPercent != null && plan.yieldPercent < 100 ? "amber.7" : undefined} />
@@ -5125,7 +5125,7 @@ export function SubproductionPage(): JSX.Element {
           <PlanStat label="Überfällig" value={String(plan.overdue.length)} color={plan.overdue.length ? "red.7" : undefined} />
         </Group>
       )}
-      {plan?.allReturned && <Alert color="teal" variant="light" mt="sm" title="Fremdvergabe komplett">Alle Stufen zurück — interne Weiterverarbeitung freigegeben.</Alert>}
+      {plan?.allReturned && stages.length > 0 && <Alert color="teal" variant="light" mt="sm" title="Fremdvergabe komplett">Alle Stufen zurück — interne Weiterverarbeitung freigegeben.</Alert>}
 
       {loading ? <Group mt="sm" gap="xs"><Loader size="sm" /><Text size="sm">lädt…</Text></Group> : (
         stages.length === 0 ? <Text c="dimmed" mt="sm">Keine Fremdvergabe-Stufen zu „{applied}".</Text> : (

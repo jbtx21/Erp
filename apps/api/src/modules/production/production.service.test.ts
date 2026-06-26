@@ -123,9 +123,19 @@ describe("ProductionService — Auftrag → Produktionsauftrag (Kap. 5.2)", () =
     expect(subs[0]?.number).toMatch(/-a$/);
   });
 
-  it("legt bei internem PA keine Fremdvergabe an", async () => {
+  it("plant zugewiesene Veredler auch bei internem Weg als Fremdvergabe (verloren-gegangen-Fix, AB-2026-0006)", async () => {
     const { svc, repo } = svcFor(baseOrder({
       lines: [{ description: "Logo Stick", qty: 240, variantId: "v_logo", isBundle: false, components: [], veredlerId: "sup_stick" }],
+    }));
+    const res = await svc.createFromOrder("ord_1", { profile: "INHOUSE_OHNE_TRANSFER" });
+    // Eine Position mit hinterlegtem Veredler ist eine Lohnveredelung — Stufe wird trotz „inhouse" geplant.
+    expect(res.subOrderCount).toBe(1);
+    expect(repo.created[0]?.subOrders?.[0]).toMatchObject({ sequence: 1, supplierId: "sup_stick" });
+  });
+
+  it("legt ohne zugewiesene Veredler keine Fremdvergabe an", async () => {
+    const { svc, repo } = svcFor(baseOrder({
+      lines: [{ description: "240 Polos", qty: 240, variantId: "v_polo", isBundle: false, components: [], veredlerId: null }],
     }));
     const res = await svc.createFromOrder("ord_1", { profile: "INHOUSE_OHNE_TRANSFER" });
     expect(res.subOrderCount).toBe(0);

@@ -206,9 +206,14 @@ export class ProductionService {
     return { rebuilt: true, bomItemCount: bomItems.length };
   }
 
-  /** Auto-Fremdvergabe (T-04): bei externem PA je distinktem Veredler der Positionen eine Stufe. */
-  static buildSubOrders(paNumber: string, profile: FinishingLeadProfile | null, lines: ProductionOrderLine[]): SubOrderInput[] {
-    if (!profile || !FINISHING_LEAD_PROFILES[profile].external) return [];
+  /**
+   * Auto-Fremdvergabe (T-04): je distinktem zugewiesenem Veredler der Positionen eine Stufe.
+   * Eine Position mit hinterlegtem Veredler IST eine Lohnveredelung (wir stellen dem Veredler
+   * Material bei) — unabhängig vom gewählten Veredelungsweg, der nur die interne Terminierung
+   * steuert. So gehen externe Veredelungen nie verloren, auch wenn der Innendienst einen
+   * „inhouse"-Weg gewählt hat (verifiziert an AB-2026-0006).
+   */
+  static buildSubOrders(paNumber: string, _profile: FinishingLeadProfile | null, lines: ProductionOrderLine[]): SubOrderInput[] {
     const veredler = [...new Set(lines.map((l) => l.veredlerId).filter((x): x is string => !!x))];
     return veredler.map((supplierId, i) => ({ number: `${paNumber}-${String.fromCharCode(97 + i)}`, sequence: i + 1, supplierId }));
   }
