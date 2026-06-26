@@ -2023,8 +2023,13 @@ model CalendarEvent {
   allDay     Boolean           @default(false)
   note       String?
   providerRef String? // externe Kalender-ID (Sync)
+  // Verknüpfung zu einem Quell-Datensatz (z. B. Aufgabe): sourceEntity="task", sourceId=Task.id.
+  // Aufgaben-Fälligkeiten erscheinen so im Kalender und bleiben zweiseitig synchron.
+  sourceEntity String?
+  sourceId     String?
   createdAt  DateTime          @default(now())
 
+  @@unique([sourceEntity, sourceId])
   @@index([ownerEmail])
   @@index([start])
 }
@@ -2034,6 +2039,7 @@ enum CalendarEventKind {
   URLAUB
   ABWESENHEIT
   SONSTIGES
+  AUFGABE
 }
 
 // Mitarbeiter-Nachrichtenportal: interne Nachrichten zwischen Mitarbeitern.

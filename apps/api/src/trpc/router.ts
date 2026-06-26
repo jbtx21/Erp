@@ -75,6 +75,24 @@ async function autoArchive(
   }
 }
 
+/** Hält den Kalender mit einer Aufgabe synchron (Anf. 2): offene Aufgabe mit Fälligkeit →
+ *  Ganztags-Termin (Art AUFGABE) beim Zuständigen; erledigt/ohne Fälligkeit → Termin entfernt.
+ *  Idempotent über (sourceEntity="task", sourceId). Best-effort — Aufgabe bleibt gültig. */
+async function syncTaskCalendar(ctx: Context, taskId: string): Promise<void> {
+  try {
+    const t = await ctx.tasks.load(taskId);
+    if (t && t.status === "OFFEN" && t.dueDate) {
+      const d = new Date(t.dueDate);
+      const start = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+      await ctx.calendar.syncSource("task", taskId, { title: `Aufgabe: ${t.title}`, ownerEmail: t.assigneeEmail, start, end: start, allDay: true });
+    } else {
+      await ctx.calendar.syncSource("task", taskId, null);
+    }
+  } catch (e) {
+    console.warn(`[task-calendar-sync] task/${taskId}: ${(e as Error).message}`);
+  }
+}
+
 export const appRouter = router({
   auth: router({
     /** Schritt 1: Passwort. Setzt das Session-Cookie (auch bei offener 2FA). */
@@ -1789,7 +1807,18 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         const { id, start, end, ...rest } = input;
         const patch = { ...rest, ...(start !== undefined ? { start: new Date(start) } : {}), ...(end !== undefined ? { end: new Date(end) } : {}) };
-        try { await ctx.calendar.update(id, ctx.user.email, patch); return { ok: true as const }; }
+        try {
+          await ctx.calendar.update(id, ctx.user.email, patch);
+          // Zwei-Wege-Sync: ist der Termin an eine Aufgabe gebunden und wurde verschoben,
+          // die Fälligkeit der Aufgabe zurückschreiben (Aufgabe ist die Quelle der Wahrheit).
+          if (start !== undefined) {
+            const ev = await ctx.calendar.loadById(id);
+            if (ev?.sourceEntity === "task" && ev.sourceId) {
+              await ctx.tasks.update(ev.sourceId, { dueDate: new Date(start) }, ctx.user.id);
+            }
+          }
+          return { ok: true as const };
+        }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
     remove: protectedProcedure
@@ -2444,6 +2473,15 @@ export const appRouter = router({
       .input(z.object({ includeDone: z.boolean().optional() }).optional())
       .query(({ input, ctx }) => ctx.tasks.listForUser(ctx.user.email, input?.includeDone ?? false)),
 
+    /** Von mir angelegte/delegierte Aufgaben — damit der Ersteller zugewiesene weiter sieht. */
+    assignedByMe: protectedProcedure
+      .input(z.object({ includeDone: z.boolean().optional() }).optional())
+      .query(({ input, ctx }) => ctx.tasks.listAssignedBy(ctx.user.id, input?.includeDone ?? false)),
+
+    /** Zuweisbare Mitarbeiter (aktive Benutzer) für das Empfänger-Dropdown. */
+    assignees: protectedProcedure.query(async ({ ctx }) =>
+      (await ctx.auth.listUsers()).filter((u) => u.active).map((u) => ({ email: u.email, name: u.name }))),
+
     /** Zähler für das Badge im Header. */
     openCount: protectedProcedure.query(({ ctx }) => ctx.tasks.openCount(ctx.user.email)),
 
@@ -2463,22 +2501,26 @@ export const appRouter = router({
         dueDate: z.string().datetime().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
-        try { return await ctx.tasks.create({ ...input, dueDate: input.dueDate ? new Date(input.dueDate) : null, createdBy: ctx.user.id }); }
+        try {
+          const res = await ctx.tasks.create({ ...input, dueDate: input.dueDate ? new Date(input.dueDate) : null, createdBy: ctx.user.id });
+          await syncTaskCalendar(ctx, res.id); // Fälligkeit → Kalendereintrag beim Zuständigen
+          return res;
+        }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
 
     complete: protectedProcedure
       .input(z.object({ id: z.string().min(1) }))
-      .mutation(async ({ input, ctx }) => { await ctx.tasks.complete(input.id, ctx.user.id); return { ok: true as const }; }),
+      .mutation(async ({ input, ctx }) => { await ctx.tasks.complete(input.id, ctx.user.id); await syncTaskCalendar(ctx, input.id); return { ok: true as const }; }),
 
     reopen: protectedProcedure
       .input(z.object({ id: z.string().min(1) }))
-      .mutation(async ({ input, ctx }) => { await ctx.tasks.reopen(input.id, ctx.user.id); return { ok: true as const }; }),
+      .mutation(async ({ input, ctx }) => { await ctx.tasks.reopen(input.id, ctx.user.id); await syncTaskCalendar(ctx, input.id); return { ok: true as const }; }),
 
     reassign: roleProcedure(...allRoles)
       .input(z.object({ id: z.string().min(1), assigneeEmail: z.string().email() }))
       .mutation(async ({ input, ctx }) => {
-        try { await ctx.tasks.reassign(input.id, input.assigneeEmail, ctx.user.id); return { ok: true as const }; }
+        try { await ctx.tasks.reassign(input.id, input.assigneeEmail, ctx.user.id); await syncTaskCalendar(ctx, input.id); return { ok: true as const }; }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
 
@@ -2489,11 +2531,18 @@ export const appRouter = router({
         description: z.string().nullable().optional(),
         dueDate: z.string().datetime().nullable().optional(),
         navKey: z.string().nullable().optional(),
-      }))
+        // Umverteilung auch über update — wird echt verarbeitet (kein stiller {ok:true}).
+        assigneeEmail: z.string().email().optional(),
+      }).strict())
       .mutation(async ({ input, ctx }) => {
-        const { id, dueDate, ...rest } = input;
+        const { id, dueDate, assigneeEmail, ...rest } = input;
         const patch = { ...rest, ...(dueDate !== undefined ? { dueDate: dueDate ? new Date(dueDate) : null } : {}) };
-        try { await ctx.tasks.update(id, patch, ctx.user.id); return { ok: true as const }; }
+        try {
+          await ctx.tasks.update(id, patch, ctx.user.id);
+          if (assigneeEmail) await ctx.tasks.reassign(id, assigneeEmail, ctx.user.id);
+          await syncTaskCalendar(ctx, id); // Fälligkeit/Empfänger → Kalender nachziehen
+          return { ok: true as const };
+        }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
   }),

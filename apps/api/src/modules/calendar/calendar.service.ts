@@ -13,6 +13,18 @@ export interface CalendarEventRow {
   end: Date;
   allDay: boolean;
   note: string | null;
+  /** Quell-Verknüpfung (z. B. Aufgabe): sourceEntity="task", sourceId=Task.id; sonst null. */
+  sourceEntity: string | null;
+  sourceId: string | null;
+}
+
+/** Daten eines quellen-gebundenen Termins (z. B. aus einer Aufgabe abgeleitet). */
+export interface SourceEventData {
+  title: string;
+  ownerEmail: string | null;
+  start: Date;
+  end: Date;
+  allDay: boolean;
 }
 
 /** Bearbeitbare Felder eines Kalendereintrags. */
@@ -32,6 +44,10 @@ export interface CalendarRepository {
   loadById(id: string): Promise<CalendarEventRow | null>;
   update(id: string, ownerEmail: string, patch: UpdateCalendarInput): Promise<boolean>;
   remove(id: string, ownerEmail: string): Promise<boolean>;
+  /** Idempotenter Upsert über (sourceEntity, sourceId): legt an oder aktualisiert. */
+  upsertForSource(sourceEntity: string, sourceId: string, data: SourceEventData): Promise<void>;
+  /** Entfernt den quellen-gebundenen Termin (falls vorhanden). */
+  removeBySource(sourceEntity: string, sourceId: string): Promise<void>;
 }
 
 export class CalendarError extends Error {}
@@ -43,6 +59,11 @@ export class CalendarService {
     return this.repo.listForUser(ownerEmail, from, to);
   }
 
+  /** Einzelnen Termin laden (z. B. um eine Aufgaben-Verknüpfung zu prüfen). */
+  loadById(id: string): Promise<CalendarEventRow | null> {
+    return this.repo.loadById(id);
+  }
+
   async create(input: { title: string; ownerEmail: string; shared: boolean; kind: CalendarEventKind; start: Date; end: Date; allDay: boolean; note?: string | null }): Promise<{ id: string }> {
     if (!input.title.trim()) throw new CalendarError("Titel ist Pflicht.");
     try { assertEventRange(input.start, input.end); }
@@ -51,6 +72,7 @@ export class CalendarService {
       title: input.title.trim(),
       ownerEmail: input.shared ? null : input.ownerEmail,
       kind: input.kind, start: input.start, end: input.end, allDay: input.allDay, note: input.note ?? null,
+      sourceEntity: null, sourceId: null,
     });
     await this.audit.append(buildEntry({ entity: "CalendarEvent", entityId: res.id, action: "CREATE", after: { title: input.title, kind: input.kind } }));
     return res;
@@ -81,5 +103,16 @@ export class CalendarService {
   async remove(id: string, ownerEmail: string): Promise<void> {
     const ok = await this.repo.remove(id, ownerEmail);
     if (!ok) throw new CalendarError("Eintrag nicht gefunden oder keine Berechtigung.");
+  }
+
+  /** Synchronisiert einen quellen-gebundenen Termin (z. B. aus einer Aufgabe): `data`
+   *  vorhanden → anlegen/aktualisieren (Art AUFGABE); `null` → entfernen. Idempotent. */
+  async syncSource(sourceEntity: string, sourceId: string, data: SourceEventData | null): Promise<void> {
+    if (data) {
+      if (!data.title.trim()) throw new CalendarError("Titel ist Pflicht.");
+      await this.repo.upsertForSource(sourceEntity, sourceId, { ...data, title: data.title.trim() });
+    } else {
+      await this.repo.removeBySource(sourceEntity, sourceId);
+    }
   }
 }

@@ -1,14 +1,19 @@
 // Büro-Kalender (Terminmanagement): reine Hilfslogik. Validierung des Zeitraums und
 // Überschneidung mit einem Anzeigefenster. IO-frei.
 
-export type CalendarEventKind = "TERMIN" | "URLAUB" | "ABWESENHEIT" | "SONSTIGES";
+export type CalendarEventKind = "TERMIN" | "URLAUB" | "ABWESENHEIT" | "SONSTIGES" | "AUFGABE";
 
+// Vom Nutzer manuell wählbare Arten (AUFGABE wird nur aus Aufgaben-Fälligkeiten abgeleitet).
 export const CALENDAR_KINDS: ReadonlyArray<{ value: CalendarEventKind; label: string }> = [
   { value: "TERMIN", label: "Termin" },
   { value: "URLAUB", label: "Urlaub" },
   { value: "ABWESENHEIT", label: "Abwesenheit" },
   { value: "SONSTIGES", label: "Sonstiges" },
 ];
+
+export const CALENDAR_KIND_LABEL: Record<CalendarEventKind, string> = {
+  TERMIN: "Termin", URLAUB: "Urlaub", ABWESENHEIT: "Abwesenheit", SONSTIGES: "Sonstiges", AUFGABE: "Aufgabe",
+};
 
 export class CalendarRangeError extends Error {}
 

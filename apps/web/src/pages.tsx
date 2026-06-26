@@ -3,7 +3,7 @@
 // Bereiche mit wenig Code anbindbar sind. Interaktive Aktionen (Versand bestätigen,
 // Mahnlauf, Reorder→Bestellungen) sind je Seite ergänzt.
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Alert, Badge, Box, Button, Card, Checkbox, Group, Loader, Modal, NumberInput, Paper, PasswordInput, Select, SimpleGrid, Stack, Switch, Table, Tabs, Text, Textarea, TextInput, Title } from "@mantine/core";
+import { Alert, Badge, Box, Button, Card, Checkbox, Group, Loader, Modal, NumberInput, Paper, PasswordInput, SegmentedControl, Select, SimpleGrid, Stack, Switch, Table, Tabs, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { validateVatId } from "@texma/shared/vat";
 import { resolveMarkupFactor, DEFAULT_MARKUP_CONFIG, type MarkupConfig } from "@texma/shared/markup";
@@ -5953,7 +5953,8 @@ export function CalendarPage(): JSX.Element {
     const d = d0(day);
     return s.getTime() <= d.getTime() && d.getTime() <= en.getTime();
   });
-  const colorOf = (k: unknown): string => CAL_KINDS.find((x) => x.value === String(k))?.color ?? "gray";
+  // AUFGABE-Termine (aus Aufgaben-Fälligkeiten abgeleitet) violett; manuelle Arten via CAL_KINDS.
+  const colorOf = (k: unknown): string => (String(k) === "AUFGABE" ? "grape" : CAL_KINDS.find((x) => x.value === String(k))?.color ?? "gray");
   const monthLabel = cursor.toLocaleDateString("de-DE", { month: "long", year: "numeric" });
   const shiftMonth = (n: number): void => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + n, 1));
   const upcoming = [...items].filter((e) => new Date(String(e.end)) >= d0(today)).sort((a, b) => new Date(String(a.start)).getTime() - new Date(String(b.start)).getTime());
@@ -7146,16 +7147,18 @@ export function AutomationPage(): JSX.Element {
 // Meine Aufgaben (Arbeitsliste, ERPNext „Assigned To/ToDo"): offene Aufgaben der
 // angemeldeten Person, Erledigen/Neuzuweisen, Sprung zum verknüpften Beleg.
 type TaskMineRow = Awaited<ReturnType<typeof trpc.tasks.mine.query>>[number];
-function TaskEditModal({ task, onClose, onSaved }: { task: TaskMineRow | null; onClose: () => void; onSaved: () => void }): JSX.Element {
+type Assignee = { email: string; name: string };
+function TaskEditModal({ task, assignees, onClose, onSaved }: { task: TaskMineRow | null; assignees: Assignee[]; onClose: () => void; onSaved: () => void }): JSX.Element {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [due, setDue] = useState("");
+  const [assignee, setAssignee] = useState<string>("");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (!task) return;
     setTitle(task.title ?? ""); setDescription(task.description ?? "");
-    setDue(task.dueDate ? String(task.dueDate).slice(0, 10) : ""); setErr(null);
+    setDue(task.dueDate ? String(task.dueDate).slice(0, 10) : ""); setAssignee(task.assigneeEmail ?? ""); setErr(null);
   }, [task]);
   const save = async () => {
     if (!task) return;
@@ -7165,17 +7168,24 @@ function TaskEditModal({ task, onClose, onSaved }: { task: TaskMineRow | null; o
         id: task.id, title: title.trim(),
         description: description.trim() || null,
         dueDate: due ? new Date(due).toISOString() : null,
+        // Umverteilung über update (wird echt verarbeitet); nur senden, wenn geändert.
+        ...(assignee && assignee !== task.assigneeEmail ? { assigneeEmail: assignee } : {}),
       });
       onSaved(); onClose();
     } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
   };
+  const assigneeData = assignees.map((a) => ({ value: a.email, label: `${a.name} (${a.email})` }));
+  if (task && assignee && !assignees.some((a) => a.email === assignee)) assigneeData.unshift({ value: assignee, label: assignee });
   return (
     <Modal opened={!!task} onClose={onClose} title="Aufgabe bearbeiten" size="lg">
       {err && <Alert color="red" mb="sm">{err}</Alert>}
       <Stack gap="sm">
         <TextInput label="Titel" value={title} onChange={(e) => setTitle(e.currentTarget.value)} required />
         <Textarea label="Beschreibung" value={description} onChange={(e) => setDescription(e.currentTarget.value)} autosize minRows={2} />
-        <TextInput label="Fällig" type="date" value={due} onChange={(e) => setDue(e.currentTarget.value)} w={180} />
+        <Group grow>
+          <TextInput label="Fällig" type="date" value={due} onChange={(e) => setDue(e.currentTarget.value)} />
+          <Select label="Zugewiesen an" data={assigneeData} value={assignee || null} searchable onChange={(v) => setAssignee(v ?? "")} />
+        </Group>
         <Group justify="flex-end" mt="xs">
           <Button variant="default" onClick={onClose}>Abbrechen</Button>
           <Button loading={busy} disabled={!title.trim()} onClick={() => void save()}>Speichern</Button>
@@ -7189,58 +7199,71 @@ export function TasksPage({ onNavigate }: { onNavigate?: (k: string) => void } =
   const [tasks, setTasks] = useState<Awaited<ReturnType<typeof trpc.tasks.mine.query>>>([]);
   const [editTask, setEditTask] = useState<TaskMineRow | null>(null);
   const [showDone, setShowDone] = useState(false);
+  const [view, setView] = useState<"mine" | "byme">("mine"); // mir zugewiesen / von mir delegiert
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [myEmail, setMyEmail] = useState<string | null>(null);
-  // Anlege-Formular: eigene To-do (assigneeEmail = eingeloggter Nutzer).
+  const [assignees, setAssignees] = useState<Assignee[]>([]);
+  // Anlage: Titel + Empfänger (Default = eigener Nutzer) + Fälligkeit.
   const [title, setTitle] = useState("");
   const [due, setDue] = useState("");
+  const [assignee, setAssignee] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const load = useCallback(async () => {
-    try { setTasks(await trpc.tasks.mine.query({ includeDone: showDone })); setErr(null); }
+    try { setTasks(await (view === "mine" ? trpc.tasks.mine.query({ includeDone: showDone }) : trpc.tasks.assignedByMe.query({ includeDone: showDone }))); setErr(null); }
     catch (e) { setErr(errMsg(e)); }
-  }, [showDone]);
+  }, [showDone, view]);
   useEffect(() => { void load(); }, [load]);
-  useEffect(() => { void trpc.auth.me.query().then((u) => setMyEmail(u.email)).catch(() => {}); }, []);
+  useEffect(() => { void trpc.auth.me.query().then((u) => { setMyEmail(u.email); setAssignee((a) => a || u.email); }).catch(() => {}); }, []);
+  useEffect(() => { void trpc.tasks.assignees.query().then(setAssignees).catch(() => {}); }, []);
 
   const create = async (): Promise<void> => {
-    if (!title.trim() || !myEmail) return;
+    const to = assignee || myEmail;
+    if (!title.trim() || !to) return;
     setBusy(true); setErr(null); setMsg(null);
     try {
-      await trpc.tasks.create.mutate({ title: title.trim(), assigneeEmail: myEmail, dueDate: due ? new Date(due).toISOString() : undefined });
-      setMsg("Aufgabe angelegt."); setTitle(""); setDue(""); await load();
+      await trpc.tasks.create.mutate({ title: title.trim(), assigneeEmail: to, dueDate: due ? new Date(due).toISOString() : undefined });
+      setMsg(to === myEmail ? "Aufgabe angelegt." : `Aufgabe an ${to} zugewiesen.`); setTitle(""); setDue(""); await load();
     } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
   };
+  const assigneeData = assignees.map((a) => ({ value: a.email, label: `${a.name} (${a.email})` }));
+  if (myEmail && !assignees.some((a) => a.email === myEmail)) assigneeData.unshift({ value: myEmail, label: `${myEmail} (ich)` });
 
   return (
     <>
       <DocListHeader module="Start" title="Meine Aufgaben" />
-      <Text size="sm" c="dimmed" mt={4}>Persönliche Arbeitsliste — zugewiesene Vorgänge, optional an einen Beleg gekoppelt.</Text>
+      <Text size="sm" c="dimmed" mt={4}>Persönliche Arbeitsliste — zugewiesene Vorgänge, optional an einen Beleg gekoppelt. Aufgaben mit Fälligkeit erscheinen im Kalender.</Text>
       {err && <Alert color="red" mt="sm" withCloseButton onClose={() => setErr(null)}>{err}</Alert>}
       {msg && <Alert color="green" mt="sm" withCloseButton onClose={() => setMsg(null)}>{msg}</Alert>}
 
-      {/* Aufgabe anlegen (tasks.create) — self-assigned. */}
+      {/* Aufgabe anlegen (tasks.create) — Empfänger wählbar (Zuweisung an andere). */}
       <Group gap="xs" align="end" mt="sm" wrap="wrap">
-        <TextInput label="Neue Aufgabe" placeholder="z. B. Angebot AN-2026-0003 nachfassen" w={320} value={title}
+        <TextInput label="Neue Aufgabe" placeholder="z. B. Angebot AN-2026-0003 nachfassen" w={300} value={title}
           onChange={(e) => setTitle(e.currentTarget.value)} onKeyDown={(e) => { if (e.key === "Enter") void create(); }} />
+        <Select label="Zuweisen an" w={230} searchable data={assigneeData} value={assignee || null} onChange={(v) => setAssignee(v ?? "")} />
         <TextInput label="Fällig (optional)" type="date" w={170} value={due} onChange={(e) => setDue(e.currentTarget.value)} />
-        <Button loading={busy} disabled={!title.trim() || !myEmail} onClick={() => void create()}>+ Aufgabe</Button>
+        <Button loading={busy} disabled={!title.trim() || !(assignee || myEmail)} onClick={() => void create()}>+ Aufgabe</Button>
       </Group>
 
-      <Switch mt="md" label="Erledigte anzeigen" checked={showDone} onChange={(e) => setShowDone(e.currentTarget.checked)} />
+      <Group mt="md" gap="lg">
+        <SegmentedControl size="xs" value={view} onChange={(v) => setView(v as "mine" | "byme")}
+          data={[{ value: "mine", label: "Mir zugewiesen" }, { value: "byme", label: "Von mir zugewiesen" }]} />
+        <Switch label="Erledigte anzeigen" checked={showDone} onChange={(e) => setShowDone(e.currentTarget.checked)} />
+      </Group>
       {tasks.length === 0 ? (
         <EmptyState icon="✅" title="Keine Aufgaben"
-          hint="Lege oben deine erste Aufgabe an — optional mit Fälligkeitsdatum. Aufgaben aus Belegen (Auftrag, Reklamation …) erscheinen hier ebenfalls." />
+          hint="Lege oben eine Aufgabe an — optional mit Empfänger und Fälligkeit. Aufgaben aus Belegen (Auftrag, Reklamation …) erscheinen hier ebenfalls." />
       ) : (
       <Table mt="xs" striped withTableBorder>
         <Table.Thead><Table.Tr>
-          <Table.Th>Status</Table.Th><Table.Th>Titel</Table.Th><Table.Th>Beleg</Table.Th><Table.Th>Fällig</Table.Th><Table.Th></Table.Th>
+          <Table.Th>Status</Table.Th><Table.Th>Titel</Table.Th><Table.Th>Zugewiesen an</Table.Th><Table.Th>Beleg</Table.Th><Table.Th>Fällig</Table.Th><Table.Th></Table.Th>
         </Table.Tr></Table.Thead>
         <Table.Tbody>
           {tasks.map((t) => (
             <Table.Tr key={t.id}>
               <Table.Td><Badge size="xs" color={t.status === "ERLEDIGT" ? "gray" : "blue"} variant="light">{t.status}</Badge></Table.Td>
               <Table.Td>{t.title}{t.description ? <Text size="xs" c="dimmed">{t.description}</Text> : null}</Table.Td>
+              <Table.Td><Text size="xs" c={t.assigneeEmail === myEmail ? "dimmed" : undefined}>{t.assigneeEmail === myEmail ? "ich" : t.assigneeEmail}</Text></Table.Td>
               <Table.Td>{t.entity ? <Button size="compact-xs" variant="subtle" disabled={!t.navKey || !onNavigate} onClick={() => t.navKey && onNavigate?.(t.navKey)}>{t.entity} {t.entityId?.slice(0, 8)}</Button> : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
               <Table.Td><Text size="xs" c="dimmed">{t.dueDate ? new Date(t.dueDate).toLocaleDateString("de-DE") : "—"}</Text></Table.Td>
               <Table.Td>
@@ -7256,7 +7279,7 @@ export function TasksPage({ onNavigate }: { onNavigate?: (k: string) => void } =
         </Table.Tbody>
       </Table>
       )}
-      <TaskEditModal task={editTask} onClose={() => setEditTask(null)} onSaved={() => void load()} />
+      <TaskEditModal task={editTask} assignees={assignees} onClose={() => setEditTask(null)} onSaved={() => void load()} />
     </>
   );
 }

@@ -1,7 +1,7 @@
 // In-Memory-Kalender für Tests.
 
 import { overlapsWindow } from "@texma/shared";
-import type { CalendarEventRow, CalendarRepository, UpdateCalendarInput } from "../modules/calendar/calendar.service.js";
+import type { CalendarEventRow, CalendarRepository, SourceEventData, UpdateCalendarInput } from "../modules/calendar/calendar.service.js";
 
 export class InMemoryCalendarRepository implements CalendarRepository {
   public items: CalendarEventRow[] = [];
@@ -36,5 +36,13 @@ export class InMemoryCalendarRepository implements CalendarRepository {
     if (!e || (e.ownerEmail !== null && e.ownerEmail !== ownerEmail)) return false;
     this.items = this.items.filter((x) => x.id !== id);
     return true;
+  }
+  async upsertForSource(sourceEntity: string, sourceId: string, data: SourceEventData): Promise<void> {
+    const e = this.items.find((x) => x.sourceEntity === sourceEntity && x.sourceId === sourceId);
+    if (e) { e.title = data.title; e.ownerEmail = data.ownerEmail; e.start = data.start; e.end = data.end; e.allDay = data.allDay; }
+    else this.items.push({ id: `cal_${String(++this.seq)}`, kind: "AUFGABE", note: null, sourceEntity, sourceId, ...data });
+  }
+  async removeBySource(sourceEntity: string, sourceId: string): Promise<void> {
+    this.items = this.items.filter((x) => !(x.sourceEntity === sourceEntity && x.sourceId === sourceId));
   }
 }

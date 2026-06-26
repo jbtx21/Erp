@@ -42,6 +42,8 @@ export interface UpdateTaskInput {
 export interface TaskRepository {
   create(input: CreateTaskInput): Promise<{ id: string }>;
   listForUser(email: string, includeDone: boolean): Promise<TaskRow[]>;
+  /** Von mir (createdBy) angelegte/zugewiesene Aufgaben — damit der Ersteller delegierte sieht. */
+  listAssignedBy(createdBy: string, includeDone: boolean): Promise<TaskRow[]>;
   listForEntity(entity: string, entityId: string): Promise<TaskRow[]>;
   openCount(email: string): Promise<number>;
   load(id: string): Promise<TaskRow | null>;
@@ -62,6 +64,10 @@ export class TaskService {
   }
 
   listForUser(email: string, includeDone = false): Promise<TaskRow[]> { return this.repo.listForUser(email, includeDone); }
+  /** Aufgaben, die ich (createdBy) angelegt habe — Überblick über delegierte Aufgaben. */
+  listAssignedBy(createdBy: string, includeDone = false): Promise<TaskRow[]> { return this.repo.listAssignedBy(createdBy, includeDone); }
+  /** Aufgabe laden (für Kalender-Sync im Router). */
+  load(id: string): Promise<TaskRow | null> { return this.repo.load(id); }
   listForEntity(entity: string, entityId: string): Promise<TaskRow[]> { return this.repo.listForEntity(entity, entityId); }
   openCount(email: string): Promise<number> { return this.repo.openCount(email); }
 

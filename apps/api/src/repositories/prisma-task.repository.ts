@@ -28,6 +28,13 @@ export class PrismaTaskRepository implements TaskRepository {
     });
     return rows.map(map);
   }
+  async listAssignedBy(createdBy: string, includeDone: boolean): Promise<TaskRow[]> {
+    const rows = await prisma.task.findMany({
+      where: { createdBy, ...(includeDone ? {} : { status: "OFFEN" }) },
+      orderBy: { createdAt: "desc" },
+    });
+    return rows.map(map);
+  }
   async listForEntity(entity: string, entityId: string): Promise<TaskRow[]> {
     return (await prisma.task.findMany({ where: { entity, entityId }, orderBy: { createdAt: "desc" } })).map(map);
   }

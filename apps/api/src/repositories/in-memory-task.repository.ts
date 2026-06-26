@@ -19,6 +19,10 @@ export class InMemoryTaskRepository implements TaskRepository {
     return this.tasks.filter((t) => t.assigneeEmail === email && (includeDone || t.status === "OFFEN"))
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
+  async listAssignedBy(createdBy: string, includeDone: boolean): Promise<TaskRow[]> {
+    return this.tasks.filter((t) => t.createdBy === createdBy && (includeDone || t.status === "OFFEN"))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
   async listForEntity(entity: string, entityId: string): Promise<TaskRow[]> {
     return this.tasks.filter((t) => t.entity === entity && t.entityId === entityId);
   }
