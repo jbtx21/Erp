@@ -34,4 +34,7 @@ export class InMemoryArchiveRepository implements ArchiveRepository {
     const d = this.docs.find((x) => x.id === id);
     if (d) d.legalHold = hold;
   }
+  async archivedSourceKeys(): Promise<string[]> {
+    return [...new Set(this.docs.map((d) => `${d.sourceEntity}|${d.sourceId}`))];
+  }
 }

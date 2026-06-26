@@ -2603,6 +2603,20 @@ export const appRouter = router({
       return { invoices, quotes, deliveryNotes, total: invoices + quotes + deliveryNotes };
     }),
 
+    /**
+     * Vollständigkeits-Report (P2): finalisierte Belege ohne Archiveintrag. Nach Auto-
+     * Archivierung + Backfill sollte `missing` leer sein (Compliance-Kachel).
+     */
+    missing: roleProcedure("ADMIN", "BUCHHALTUNG").query(async ({ ctx }) => {
+      const expected: { type: string; sourceEntity: string; sourceId: string; label: string }[] = [];
+      for (const i of await ctx.invoices.listRecent(500)) expected.push({ type: "RECHNUNG", sourceEntity: "Invoice", sourceId: i.id, label: i.number });
+      const DECIDED = new Set(["VERSENDET", "NACHFASSEN", "ANGENOMMEN", "ABGELEHNT"]);
+      for (const q of await ctx.quotes.list()) if (DECIDED.has(q.status)) expected.push({ type: "ANGEBOT", sourceEntity: "Quote", sourceId: q.id, label: q.number });
+      for (const o of await ctx.orders.listRecent(500)) for (const dn of await ctx.deliveries.listDeliveryNotes(String(o.id))) expected.push({ type: "LIEFERSCHEIN", sourceEntity: "DeliveryNote", sourceId: dn.id, label: dn.number });
+      const missing = await ctx.archive.missingFrom(expected);
+      return { expectedCount: expected.length, missingCount: missing.length, missing };
+    }),
+
     /** Beleg unveränderbar archivieren (Datei base64-kodiert). */
     archive: roleProcedure(...supplierRoles)
       .input(z.object({

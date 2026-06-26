@@ -36,6 +36,16 @@ export interface ArchiveRepository {
   list(limit: number): Promise<ArchivedDocMeta[]>;
   listForExport(range: { from?: Date; to?: Date }): Promise<ArchivedDocMeta[]>;
   setLegalHold(id: string, hold: boolean): Promise<void>;
+  /** Alle archivierten fachlichen Schlüssel (`sourceEntity|sourceId`) — Vollständigkeits-Report. */
+  archivedSourceKeys(): Promise<string[]>;
+}
+
+/** Erwarteter finaler Beleg (für den Vollständigkeits-Report). */
+export interface ExpectedFinalDoc {
+  type: string;
+  sourceEntity: string;
+  sourceId: string;
+  label: string;
 }
 
 export interface GobdExport {
@@ -102,6 +112,15 @@ export class ArchiveService {
 
   list(limit = 50): Promise<ArchivedDocMeta[]> {
     return this.repo.list(limit);
+  }
+
+  /**
+   * Vollständigkeits-Report (P2): liefert aus den erwarteten finalen Belegen jene, für die
+   * KEIN Archiveintrag existiert. Sollte nach Auto-Archivierung + Backfill leer sein.
+   */
+  async missingFrom(expected: ExpectedFinalDoc[]): Promise<ExpectedFinalDoc[]> {
+    const keys = new Set(await this.repo.archivedSourceKeys());
+    return expected.filter((e) => !keys.has(`${e.sourceEntity}|${e.sourceId}`));
   }
 
   /** Legal Hold setzen/aufheben (sperrt über die normale Frist hinaus). */

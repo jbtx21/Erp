@@ -70,4 +70,8 @@ export class PrismaArchiveRepository implements ArchiveRepository {
   async setLegalHold(id: string, hold: boolean): Promise<void> {
     await prisma.archivedDocument.update({ where: { id }, data: { legalHold: hold } });
   }
+  async archivedSourceKeys(): Promise<string[]> {
+    const rows = await prisma.archivedDocument.findMany({ select: { sourceEntity: true, sourceId: true }, distinct: ["sourceEntity", "sourceId"] });
+    return rows.map((r) => `${r.sourceEntity}|${r.sourceId}`);
+  }
 }

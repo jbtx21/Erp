@@ -6391,9 +6391,17 @@ export function ArchivePage({ role }: { role?: string } = {}): JSX.Element {
     try {
       const r = await trpc.archive.backfill.mutate();
       setMsg(`Backfill abgeschlossen: ${r.invoices} Rechnung(en), ${r.quotes} Angebot(e), ${r.deliveryNotes} Lieferschein(e) im Archiv (idempotent, ohne Dubletten).`);
-      await refresh();
+      await refresh(); await loadMissing();
     } catch (e) { setErr(errMsg(e)); } finally { setBackfilling(false); }
   };
+
+  // Vollständigkeits-Report: finalisierte Belege ohne Archiveintrag (sollte 0 sein).
+  const [missing, setMissing] = useState<Awaited<ReturnType<typeof trpc.archive.missing.query>> | null>(null);
+  const loadMissing = useCallback(async () => {
+    if (!canExport) return;
+    try { setMissing(await trpc.archive.missing.query()); } catch { /* still: Report optional */ }
+  }, [canExport]);
+  useEffect(() => { void loadMissing(); }, [loadMissing]);
 
   const fmtDate = (d: string | Date): string => new Date(d).toLocaleDateString("de-DE");
 
@@ -6403,6 +6411,19 @@ export function ArchivePage({ role }: { role?: string } = {}): JSX.Element {
       <Text size="sm" c="dimmed" mt={4}>Unveränderbare (WORM) Ablage finalisierter Belege — inhaltsadressiert (SHA-256), mit gesetzlicher Aufbewahrungsfrist (6/10 Jahre) und GDPdU-„Z3"-Export für die Betriebsprüfung (Kap. 10). <b>Rechnungen, versendete Angebote, Auftragsbestätigungen und Lieferscheine werden beim Finalisieren automatisch archiviert</b> — das Formular unten ist nur für Sonderfälle/Nachträge.</Text>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
       {msg && <Alert color="green" mt="sm">{msg}</Alert>}
+
+      {/* Compliance-Kachel: Vollständigkeit der Auto-Archivierung (P2). */}
+      {canExport && missing && (
+        <Alert mt="md" color={missing.missingCount === 0 ? "green" : "red"} title={missing.missingCount === 0 ? "Archiv vollständig ✓" : `${missing.missingCount} finale Belege NICHT archiviert`}>
+          {missing.missingCount === 0
+            ? <Text size="sm">Alle {missing.expectedCount} finalen Belege (Rechnungen, versendete Angebote, Lieferscheine) sind im WORM-Archiv.</Text>
+            : <Box>
+                <Text size="sm" mb={4}>Bitte „Backfill (Bestandsbelege)" ausführen. Fehlend:</Text>
+                {missing.missing.slice(0, 12).map((m, i) => <Text key={i} size="xs">{m.type} · {m.label}</Text>)}
+                {missing.missing.length > 12 && <Text size="xs" c="dimmed">… {missing.missing.length - 12} weitere</Text>}
+              </Box>}
+        </Alert>
+      )}
 
       <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, maxWidth: 640 }}>
         <Text fw={600}>Beleg archivieren</Text>
