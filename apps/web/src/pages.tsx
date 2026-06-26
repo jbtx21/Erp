@@ -3253,6 +3253,7 @@ interface SDForm {
   street: string; zip: string; city: string; country: string; vatId: string; taxNumber: string;
   taxRule: string; iban: string; bic: string; bankName: string; sepaMandateRef: string; sepaMandateDate: string;
   skontoPercent: string; skontoDays: string; paymentMethod: string; lieferbedingung: string; kreditEuro: string; notiz: string;
+  liefersperre: boolean; liefersperreGrund: string; debitorenkonto: string; belegsprache: string; waehrung: string; betreuer: string;
 }
 const TAX_RULE_LABEL: Record<string, string> = {
   INLAND: "Inland", EU_B2B: "EU (innergem. B2B, §13b)", DRITTLAND: "Drittland (Ausfuhr)", KLEINUNTERNEHMER: "Kleinunternehmer §19",
@@ -3269,6 +3270,8 @@ function CompanyStammdaten({ company, onSaved }: { company: CompanyDetail; onSav
     skontoPercent: company.skontoPercent?.toString() ?? "", skontoDays: company.skontoDays?.toString() ?? "",
     paymentMethod: company.paymentMethod ?? "", lieferbedingung: company.lieferbedingung ?? "",
     kreditEuro: company.kreditlimitCents != null ? (company.kreditlimitCents / 100).toString() : "", notiz: company.notiz ?? "",
+    liefersperre: company.liefersperre ?? false, liefersperreGrund: company.liefersperreGrund ?? "",
+    debitorenkonto: company.debitorenkonto ?? "", belegsprache: company.belegsprache ?? "DE", waehrung: company.waehrung ?? "EUR", betreuer: company.betreuer ?? "",
   });
   const [f, setF] = useState<SDForm>(init);
   const set = (k: keyof SDForm) => (v: string): void => setF((s) => ({ ...s, [k]: v }));
@@ -3289,6 +3292,10 @@ function CompanyStammdaten({ company, onSaved }: { company: CompanyDetail; onSav
         lieferbedingung: f.lieferbedingung.trim() || null,
         kreditlimitCents: f.kreditEuro.trim() === "" ? null : Math.round(Number(f.kreditEuro) * 100),
         notiz: f.notiz.trim() || null,
+        liefersperre: f.liefersperre, liefersperreGrund: f.liefersperreGrund.trim() || null,
+        debitorenkonto: f.debitorenkonto.trim() || null,
+        belegsprache: (f.belegsprache || "DE") as "DE" | "EN", waehrung: f.waehrung.trim() || null,
+        betreuer: f.betreuer.trim() || null,
       });
       setEdit(false); onSaved();
     } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
@@ -3312,6 +3319,10 @@ function CompanyStammdaten({ company, onSaved }: { company: CompanyDetail; onSav
           <Text size="sm">Zahlart: <b>{company.paymentMethod || "—"}</b></Text>
           <Text size="sm">Lieferbedingung: <b>{company.lieferbedingung || "—"}</b></Text>
           <Text size="sm">Kreditlimit: <b>{company.kreditlimitCents != null ? euro(company.kreditlimitCents) : "—"}</b></Text>
+          <Text size="sm">Liefersperre: <b>{company.liefersperre ? `ja${company.liefersperreGrund ? ` (${company.liefersperreGrund})` : ""}` : "nein"}</b></Text>
+          <Text size="sm">Debitor: <b>{company.debitorenkonto || "—"}</b></Text>
+          <Text size="sm">Beleg: <b>{(company.belegsprache ?? "DE")} · {(company.waehrung ?? "EUR")}</b></Text>
+          <Text size="sm">Betreuer: <b>{company.betreuer || "—"}</b></Text>
         </Group>
         {company.notiz ? <Text size="sm" mt={4}>Notiz: {company.notiz}</Text> : null}
       </Box>
@@ -3354,6 +3365,15 @@ function CompanyStammdaten({ company, onSaved }: { company: CompanyDetail; onSav
         <NumberInput size="xs" label="Kreditlimit (€)" w={140} min={0} value={f.kreditEuro === "" ? "" : Number(f.kreditEuro)} onChange={(v) => set("kreditEuro")(v === "" ? "" : String(v))} />
         <TextInput size="xs" label="Notiz" w={280} value={f.notiz} onChange={(e) => set("notiz")(e.currentTarget.value)} />
       </Group>
+      <Text size="xs" fw={700} tt="uppercase" c="dimmed" mt="sm" mb={4}>Sperren &amp; Zuordnung</Text>
+      <Group gap="xs" align="end" wrap="wrap">
+        <Switch label="Liefersperre" checked={f.liefersperre} onChange={(e) => setF((s) => ({ ...s, liefersperre: e.currentTarget.checked }))} mb={6} />
+        <TextInput size="xs" label="Sperrgrund" w={220} value={f.liefersperreGrund} disabled={!f.liefersperre} onChange={(e) => set("liefersperreGrund")(e.currentTarget.value)} />
+        <TextInput size="xs" label="Debitorenkonto" w={140} value={f.debitorenkonto} onChange={(e) => set("debitorenkonto")(e.currentTarget.value)} />
+        <Select size="xs" label="Belegsprache" w={110} data={["DE", "EN"]} value={f.belegsprache || "DE"} onChange={(v) => set("belegsprache")(v ?? "DE")} />
+        <TextInput size="xs" label="Währung" w={90} value={f.waehrung} onChange={(e) => set("waehrung")(e.currentTarget.value)} />
+        <TextInput size="xs" label="Betreuer" w={160} value={f.betreuer} onChange={(e) => set("betreuer")(e.currentTarget.value)} />
+      </Group>
       <Group gap="xs" mt="sm">
         <Button size="compact-xs" loading={busy} onClick={() => void save()}>Speichern</Button>
         <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setEdit(false)}>Abbrechen</Button>
@@ -3395,6 +3415,7 @@ function CompanyDetailPanel({ companyId, companies = [], onNavigate }: { company
           <Badge size="xs" variant="light" color="gray">Zahlungsziel {ov.company.zahlungszielTage} T</Badge>
           {ov.openCents > 0 ? <Badge size="xs" color="orange">offen {euro(ov.openCents)}</Badge> : <Badge size="xs" color="teal">keine offenen Posten</Badge>}
           {ov.company.mahnsperre ? <Badge size="xs" color="red">Mahnsperre</Badge> : null}
+          {ov.company.liefersperre ? <Badge size="xs" color="red">Liefersperre</Badge> : null}
         </>}
       >
       <Text size="xs" c="dimmed" mt={2}>{ov.company.branche ?? "—"} · {ov.contactsCount} Kontakt(e)</Text>

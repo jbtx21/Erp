@@ -102,6 +102,15 @@ model Company {
   anonymisiertAm DateTime?   // DSGVO-Anonymisierung (B12)
   zahlungszielTage Int        @default(14)
   mahnsperre   Boolean       @default(false) // Kap. 9.5
+  // Liefersperre (Xentral-Benchmark): blockt den Versand (gesperrte Kunden erscheinen
+  // nicht in der Versandliste). Grund optional zur Nachvollziehbarkeit.
+  liefersperre      Boolean @default(false)
+  liefersperreGrund String?
+  // Zuordnung/Buchhaltung: Debitorenkonto (DATEV/SKR), Belegsprache, Währung, Betreuer (Innendienst).
+  debitorenkonto String?
+  belegsprache   String? @default("DE") // DE | EN
+  waehrung       String? @default("EUR")
+  betreuer       String? // Vertriebs-/Innendienstbetreuer (frei)
   // Rechnungsadresse (Pflicht auf Rechnung, § 14 UStG) + Steuerangaben (Paket 1)
   street       String?
   zip          String?

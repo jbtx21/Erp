@@ -45,6 +45,14 @@ export interface CompanyStammdaten {
   lieferbedingung: string | null;
   notiz: string | null;
   kreditlimitCents: number | null;
+  /** Liefersperre (blockt Versand) + Grund (Xentral-Benchmark). */
+  liefersperre: boolean;
+  liefersperreGrund: string | null;
+  /** Zuordnung/Buchhaltung. */
+  debitorenkonto: string | null;
+  belegsprache: string | null;
+  waehrung: string | null;
+  betreuer: string | null;
 }
 
 export interface UpdateCompanyInput extends Partial<CompanyStammdaten> {

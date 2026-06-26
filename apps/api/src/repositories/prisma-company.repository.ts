@@ -85,6 +85,8 @@ export class PrismaCompanyRepository implements CompanyRepository {
         ...pick("iban"), ...pick("bic"), ...pick("bankName"), ...pick("sepaMandateRef"), ...pick("sepaMandateDate"),
         ...pick("skontoPercent"), ...pick("skontoDays"), ...pick("paymentMethod"),
         ...pick("lieferbedingung"), ...pick("notiz"), ...pick("kreditlimitCents"),
+        ...pick("liefersperre"), ...pick("liefersperreGrund"), ...pick("debitorenkonto"),
+        ...pick("belegsprache"), ...pick("waehrung"), ...pick("betreuer"),
       },
     });
   }
@@ -97,6 +99,7 @@ export class PrismaCompanyRepository implements CompanyRepository {
         street: true, zip: true, city: true, country: true, vatId: true, taxNumber: true, taxRule: true,
         iban: true, bic: true, bankName: true, sepaMandateRef: true, sepaMandateDate: true,
         skontoPercent: true, skontoDays: true, paymentMethod: true, lieferbedingung: true, notiz: true, kreditlimitCents: true,
+        liefersperre: true, liefersperreGrund: true, debitorenkonto: true, belegsprache: true, waehrung: true, betreuer: true,
         priceGroup: { select: { kind: true } },
         lead: { select: { id: true } },
         _count: { select: { contacts: true } },
@@ -123,6 +126,8 @@ export class PrismaCompanyRepository implements CompanyRepository {
         iban: c.iban, bic: c.bic, bankName: c.bankName, sepaMandateRef: c.sepaMandateRef, sepaMandateDate: c.sepaMandateDate,
         skontoPercent: c.skontoPercent, skontoDays: c.skontoDays, paymentMethod: c.paymentMethod,
         lieferbedingung: c.lieferbedingung, notiz: c.notiz, kreditlimitCents: c.kreditlimitCents,
+        liefersperre: c.liefersperre, liefersperreGrund: c.liefersperreGrund, debitorenkonto: c.debitorenkonto,
+        belegsprache: c.belegsprache, waehrung: c.waehrung, betreuer: c.betreuer,
       },
       contactsCount: c._count.contacts,
       orders: c.orders.map((o) => ({ id: o.id, number: o.number, status: o.status, createdAt: o.createdAt })),

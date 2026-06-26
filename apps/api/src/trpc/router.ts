@@ -2116,6 +2116,13 @@ export const appRouter = router({
         lieferbedingung: z.string().nullable().optional(),
         notiz: z.string().nullable().optional(),
         kreditlimitCents: z.number().int().min(0).nullable().optional(),
+        // Sperren + Zuordnung (Xentral-Benchmark).
+        liefersperre: z.boolean().optional(),
+        liefersperreGrund: z.string().nullable().optional(),
+        debitorenkonto: z.string().nullable().optional(),
+        belegsprache: z.enum(["DE", "EN"]).nullable().optional(),
+        waehrung: z.string().nullable().optional(),
+        betreuer: z.string().nullable().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         try { await ctx.companies.update(input); return { ok: true as const }; } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }

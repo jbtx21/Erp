@@ -17,7 +17,8 @@ const DEFAULT_WEIGHT_GRAMS = 1000;
 export class PrismaShipmentRepository implements ShipmentRepository {
   async listShippable(limit: number): Promise<ShippableOrder[]> {
     const rows = await prisma.order.findMany({
-      where: { status: "VERSANDBEREIT", deliveryAddressId: { not: null } },
+      // Liefersperre (Xentral-Benchmark): gesperrte Kunden erscheinen nicht in der Versandliste.
+      where: { status: "VERSANDBEREIT", deliveryAddressId: { not: null }, company: { is: { liefersperre: false } } },
       orderBy: { createdAt: "asc" },
       take: limit,
       select: {

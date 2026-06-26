@@ -9,11 +9,11 @@ import type {
   UpdateCompanyInput,
 } from "../modules/company/company.service.js";
 
-const STAMMDATEN_KEYS = ["street", "zip", "city", "country", "vatId", "taxNumber", "taxRule", "iban", "bic", "bankName", "sepaMandateRef", "sepaMandateDate", "skontoPercent", "skontoDays", "paymentMethod", "lieferbedingung", "notiz", "kreditlimitCents"] as const;
+const STAMMDATEN_KEYS = ["street", "zip", "city", "country", "vatId", "taxNumber", "taxRule", "iban", "bic", "bankName", "sepaMandateRef", "sepaMandateDate", "skontoPercent", "skontoDays", "paymentMethod", "lieferbedingung", "notiz", "kreditlimitCents", "liefersperre", "liefersperreGrund", "debitorenkonto", "belegsprache", "waehrung", "betreuer"] as const;
 
 export class InMemoryCompanyRepository implements CompanyRepository {
   private readonly companies = new Map<string, CompanyRow>();
-  private readonly stammdaten = new Map<string, string | number | null>();
+  private readonly stammdaten = new Map<string, string | number | boolean | null>();
   private seq = 0;
 
   async list(): Promise<CompanyRow[]> {
@@ -43,7 +43,7 @@ export class InMemoryCompanyRepository implements CompanyRepository {
     if (input.zahlungszielTage !== undefined) c.zahlungszielTage = input.zahlungszielTage;
     if (input.mahnsperre !== undefined) c.mahnsperre = input.mahnsperre;
     for (const k of STAMMDATEN_KEYS) {
-      if (input[k] !== undefined) this.stammdaten.set(`${input.id}:${k}`, input[k] as string | number | null);
+      if (input[k] !== undefined) this.stammdaten.set(`${input.id}:${k}`, input[k] as string | number | boolean | null);
     }
   }
 
@@ -73,6 +73,8 @@ export class InMemoryCompanyRepository implements CompanyRepository {
         iban: sd("iban", null), bic: sd("bic", null), bankName: sd("bankName", null), sepaMandateRef: sd("sepaMandateRef", null), sepaMandateDate: sd("sepaMandateDate", null),
         skontoPercent: sd("skontoPercent", null), skontoDays: sd("skontoDays", null), paymentMethod: sd("paymentMethod", null),
         lieferbedingung: sd("lieferbedingung", null), notiz: sd("notiz", null), kreditlimitCents: sd("kreditlimitCents", null),
+        liefersperre: sd("liefersperre", false), liefersperreGrund: sd("liefersperreGrund", null), debitorenkonto: sd("debitorenkonto", null),
+        belegsprache: sd("belegsprache", "DE"), waehrung: sd("waehrung", "EUR"), betreuer: sd("betreuer", null),
       },
       contactsCount: 0, orders: [], quotes: [], invoices: [], sampleLoans: [], openCents: 0,
       metrics: { revenueNetCents: 0, revenueGrossCents: 0, revenueYtdGrossCents: 0, invoiceCount: 0, orderCount: 0, avgInvoiceGrossCents: 0 },
