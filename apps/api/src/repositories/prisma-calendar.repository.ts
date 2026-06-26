@@ -18,6 +18,11 @@ export class PrismaCalendarRepository implements CalendarRepository {
       select: { id: true },
     });
   }
+  async loadById(id: string): Promise<CalendarEventRow | null> {
+    const e = await prisma.calendarEvent.findUnique({ where: { id } });
+    if (!e) return null;
+    return { id: e.id, title: e.title, ownerEmail: e.ownerEmail, kind: e.kind as CalendarEventKind, start: e.start, end: e.end, allDay: e.allDay, note: e.note };
+  }
   async update(id: string, ownerEmail: string, patch: UpdateCalendarInput): Promise<boolean> {
     const res = await prisma.calendarEvent.updateMany({
       where: { id, OR: [{ ownerEmail }, { ownerEmail: null }] },

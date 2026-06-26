@@ -34,6 +34,10 @@ export class PrismaTaskRepository implements TaskRepository {
   async openCount(email: string): Promise<number> {
     return prisma.task.count({ where: { assigneeEmail: email, status: "OFFEN" } });
   }
+  async load(id: string): Promise<TaskRow | null> {
+    const r = await prisma.task.findUnique({ where: { id } });
+    return r ? map(r) : null;
+  }
   async update(id: string, patch: UpdateTaskInput): Promise<void> {
     await prisma.task.update({
       where: { id },

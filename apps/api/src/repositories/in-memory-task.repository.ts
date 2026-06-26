@@ -25,6 +25,10 @@ export class InMemoryTaskRepository implements TaskRepository {
   async openCount(email: string): Promise<number> {
     return this.tasks.filter((t) => t.assigneeEmail === email && t.status === "OFFEN").length;
   }
+  async load(id: string): Promise<TaskRow | null> {
+    const t = this.tasks.find((x) => x.id === id);
+    return t ? { ...t } : null;
+  }
   async update(id: string, patch: UpdateTaskInput): Promise<void> {
     const t = this.tasks.find((x) => x.id === id);
     if (!t) return;

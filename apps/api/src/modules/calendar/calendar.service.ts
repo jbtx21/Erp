@@ -29,6 +29,7 @@ export interface CalendarRepository {
   /** Einträge im Fenster [from,to], sichtbar für ownerEmail (eigene + geteilte). */
   listForUser(ownerEmail: string, from: Date, to: Date): Promise<CalendarEventRow[]>;
   create(input: Omit<CalendarEventRow, "id">): Promise<{ id: string }>;
+  loadById(id: string): Promise<CalendarEventRow | null>;
   update(id: string, ownerEmail: string, patch: UpdateCalendarInput): Promise<boolean>;
   remove(id: string, ownerEmail: string): Promise<boolean>;
 }
@@ -69,9 +70,12 @@ export class CalendarService {
     }
     const clean: UpdateCalendarInput = { ...patch };
     if (clean.title !== undefined) clean.title = clean.title.trim();
+    const prev = await this.repo.loadById(id);
     const ok = await this.repo.update(id, ownerEmail, clean);
     if (!ok) throw new CalendarError("Eintrag nicht gefunden oder keine Berechtigung.");
-    await this.audit.append(buildEntry({ entity: "CalendarEvent", entityId: id, action: "UPDATE", after: { ...clean } }));
+    const before: Record<string, unknown> = {};
+    if (prev) { const p = prev as unknown as Record<string, unknown>; for (const k of Object.keys(clean)) before[k] = p[k]; }
+    await this.audit.append(buildEntry({ entity: "CalendarEvent", entityId: id, action: "UPDATE", before: prev ? before : undefined, after: { ...clean } }));
   }
 
   async remove(id: string, ownerEmail: string): Promise<void> {

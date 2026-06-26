@@ -55,6 +55,7 @@ export interface UpdateComplaintInput {
 export interface ReklamationRepository {
   create(input: ComplaintInput & { costBearer: CostBearer }): Promise<{ id: string }>;
   update(id: string, input: UpdateComplaintInput & { costBearer: CostBearer }): Promise<void>;
+  load(id: string): Promise<ComplaintListItem | null>;
   listByOrder(orderId: string, limit: number): Promise<ComplaintListItem[]>;
   /** Folgevorgang-relevante Daten der Reklamation (inkl. Rechnung des Auftrags). */
   loadFollowUp(complaintId: string): Promise<ComplaintFollowUpData | null>;
@@ -143,9 +144,14 @@ export class ReklamationService {
     const problems = validateFollowUp({ orderId: "", orderLineId: "", cause: input.cause, followUp: input.followUp, costCents: input.costCents });
     if (problems.length > 0) throw new ReklamationValidationError(problems.join(" "));
     const bearer = costBearer(input.cause);
+    const prev = await this.repo.load(id);
     await this.repo.update(id, { ...input, costBearer: bearer });
     await this.audit.append(
-      buildEntry({ entity: "Complaint", entityId: id, action: "UPDATE", after: { cause: input.cause, followUp: input.followUp, costCents: input.costCents, costBearer: bearer } })
+      buildEntry({
+        entity: "Complaint", entityId: id, action: "UPDATE",
+        before: prev ? { cause: prev.cause, followUp: prev.followUp, costCents: prev.costCents, costBearer: prev.costBearer } : undefined,
+        after: { cause: input.cause, followUp: input.followUp, costCents: input.costCents, costBearer: bearer },
+      })
     );
     return { costBearer: bearer };
   }

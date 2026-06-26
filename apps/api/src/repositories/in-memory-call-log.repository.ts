@@ -48,6 +48,12 @@ export class InMemoryCallLogRepository implements CallLogRepository {
       .map((c) => ({ ...c, companyName: c.companyId ? (this.companyNames[c.companyId] ?? null) : null }));
   }
 
+  async load(id: string): Promise<CallLogRow | null> {
+    const c = this.calls.get(id);
+    if (!c) return null;
+    return { ...c, companyName: c.companyId ? (this.companyNames[c.companyId] ?? null) : null };
+  }
+
   async update(id: string, patch: UpdateCallLogInput): Promise<void> {
     const c = this.calls.get(id);
     if (!c) return;

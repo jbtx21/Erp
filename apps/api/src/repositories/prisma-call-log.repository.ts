@@ -56,6 +56,16 @@ export class PrismaCallLogRepository implements CallLogRepository {
     }));
   }
 
+  async load(id: string): Promise<CallLogRow | null> {
+    const r = await prisma.callLog.findUnique({ where: { id }, include: { company: { select: { name: true } } } });
+    if (!r) return null;
+    return {
+      id: r.id, richtung: r.richtung as CallDirection, telefonnummer: r.telefonnummer, kontaktName: r.kontaktName,
+      companyId: r.companyId, companyName: r.company?.name ?? null, bearbeiter: r.bearbeiter, zeitpunkt: r.zeitpunkt,
+      dauerSek: r.dauerSek, grund: r.grund, ergebnis: r.ergebnis, status: r.status as CallStatus, createdAt: r.createdAt,
+    };
+  }
+
   async update(id: string, patch: UpdateCallLogInput): Promise<void> {
     await prisma.callLog.update({
       where: { id },

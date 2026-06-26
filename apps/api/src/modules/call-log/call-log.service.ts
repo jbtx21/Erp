@@ -57,6 +57,7 @@ export interface UpdateCallLogInput {
 export interface CallLogRepository {
   create(input: CreateCallLogInput): Promise<{ id: string }>;
   list(filter?: CallLogFilter): Promise<CallLogRow[]>;
+  load(id: string): Promise<CallLogRow | null>;
   update(id: string, patch: UpdateCallLogInput): Promise<void>;
   setStatus(id: string, status: CallStatus): Promise<void>;
   /** Anzahl offener Rückrufe (für ein Badge/Arbeitsliste). */
@@ -103,7 +104,7 @@ export class CallLogService {
     return this.repo.list(filter);
   }
 
-  /** Bearbeitet einen Anrufeintrag (GoBD-auditiert). */
+  /** Bearbeitet einen Anrufeintrag (GoBD-auditiert, Vorher/Nachher der geänderten Felder). */
   async update(id: string, patch: UpdateCallLogInput): Promise<void> {
     if (patch.telefonnummer !== undefined && !patch.telefonnummer.trim()) throw new CallLogError("Telefonnummer ist Pflicht.");
     if (patch.grund !== undefined && !patch.grund.trim()) throw new CallLogError("Grund/Anliegen ist Pflicht.");
@@ -111,8 +112,11 @@ export class CallLogService {
     const clean: UpdateCallLogInput = { ...patch };
     if (clean.telefonnummer !== undefined) clean.telefonnummer = clean.telefonnummer.trim();
     if (clean.grund !== undefined) clean.grund = clean.grund.trim();
+    const prev = await this.repo.load(id);
     await this.repo.update(id, clean);
-    await this.audit.append(buildEntry({ entity: "CallLog", entityId: id, action: "UPDATE", after: { ...clean } }));
+    const before: Record<string, unknown> = {};
+    if (prev) { const p = prev as unknown as Record<string, unknown>; for (const k of Object.keys(clean)) before[k] = p[k]; }
+    await this.audit.append(buildEntry({ entity: "CallLog", entityId: id, action: "UPDATE", before: prev ? before : undefined, after: { ...clean } }));
   }
 
   /** Setzt den Status (z. B. offenen Rückruf auf ERLEDIGT). */

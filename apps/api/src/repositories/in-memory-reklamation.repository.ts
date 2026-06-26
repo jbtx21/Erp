@@ -47,6 +47,10 @@ export class InMemoryReklamationRepository implements ReklamationRepository {
     c.cause = input.cause; c.followUp = input.followUp; c.costCents = input.costCents; c.costBearer = input.costBearer;
   }
 
+  async load(id: string): Promise<ComplaintListItem | null> {
+    return this.complaints.find((c) => c.id === id) ?? null;
+  }
+
   async listByOrder(orderId: string, limit: number): Promise<ComplaintListItem[]> {
     return this.complaints
       .filter((c) => this.orderByComplaint.get(c.id) === orderId)

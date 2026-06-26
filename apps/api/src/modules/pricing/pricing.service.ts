@@ -103,11 +103,16 @@ export class PricingService {
     );
   }
 
-  /** Entfernt eine Preisgruppen-Staffelstufe (Stammdaten-Pflege, auditiert). */
+  /** Entfernt eine Preisgruppen-Staffelstufe (Stammdaten-Pflege, auditiert mit Vorher-Wert). */
   async removeGroupTier(companyId: string, variantId: string, minMenge: number): Promise<void> {
+    const before = (await this.repo.listTiers(companyId, variantId)).groupTiers.find((t) => t.minMenge === minMenge);
     await this.repo.removeGroupTier(companyId, variantId, minMenge);
     await this.audit.append(
-      buildEntry({ entity: "PriceGroupPriceTier", entityId: `${variantId}:${String(minMenge)}`, action: "UPDATE", after: { companyId, variantId, minMenge, deleted: true } })
+      buildEntry({
+        entity: "PriceGroupPriceTier", entityId: `${variantId}:${String(minMenge)}`, action: "UPDATE",
+        before: before ? { companyId, variantId, minMenge, netCents: before.netCents } : undefined,
+        after: { companyId, variantId, minMenge, deleted: true },
+      })
     );
   }
 }

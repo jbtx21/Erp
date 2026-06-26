@@ -44,6 +44,7 @@ export interface TaskRepository {
   listForUser(email: string, includeDone: boolean): Promise<TaskRow[]>;
   listForEntity(entity: string, entityId: string): Promise<TaskRow[]>;
   openCount(email: string): Promise<number>;
+  load(id: string): Promise<TaskRow | null>;
   update(id: string, patch: UpdateTaskInput): Promise<void>;
   setStatus(id: string, status: "OFFEN" | "ERLEDIGT", completedAt: Date | null): Promise<void>;
   reassign(id: string, email: string): Promise<void>;
@@ -74,13 +75,16 @@ export class TaskService {
     await this.audit.append(buildEntry({ userId, entity: "Task", entityId: id, action: "UPDATE", after: { status: "OFFEN" } }));
   }
 
-  /** Bearbeitet Titel/Beschreibung/Fälligkeit einer Aufgabe (GoBD-auditiert). */
+  /** Bearbeitet Titel/Beschreibung/Fälligkeit einer Aufgabe (GoBD-auditiert, Vorher/Nachher). */
   async update(id: string, patch: UpdateTaskInput, userId?: string): Promise<void> {
     if (patch.title !== undefined && !patch.title.trim()) throw new TaskError("Titel ist Pflicht.");
     const clean: UpdateTaskInput = { ...patch };
     if (clean.title !== undefined) clean.title = clean.title.trim();
+    const prev = await this.repo.load(id);
     await this.repo.update(id, clean);
-    await this.audit.append(buildEntry({ userId, entity: "Task", entityId: id, action: "UPDATE", after: { ...clean } }));
+    const before: Record<string, unknown> = {};
+    if (prev) { const p = prev as unknown as Record<string, unknown>; for (const k of Object.keys(clean)) before[k] = p[k]; }
+    await this.audit.append(buildEntry({ userId, entity: "Task", entityId: id, action: "UPDATE", before: prev ? before : undefined, after: { ...clean } }));
   }
 
   async reassign(id: string, email: string, userId?: string): Promise<void> {

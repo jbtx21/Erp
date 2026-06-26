@@ -36,6 +36,13 @@ export class PrismaReklamationRepository implements ReklamationRepository {
     });
   }
 
+  async load(id: string): Promise<ComplaintListItem | null> {
+    return prisma.complaint.findUnique({
+      where: { id },
+      select: { id: true, orderLineId: true, cause: true, followUp: true, costCents: true, costBearer: true, createdAt: true },
+    });
+  }
+
   async listByOrder(orderId: string, limit: number): Promise<ComplaintListItem[]> {
     return prisma.complaint.findMany({
       where: { orderId },

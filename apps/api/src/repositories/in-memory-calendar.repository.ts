@@ -16,6 +16,10 @@ export class InMemoryCalendarRepository implements CalendarRepository {
     this.items.push({ id, ...input });
     return { id };
   }
+  async loadById(id: string): Promise<CalendarEventRow | null> {
+    const e = this.items.find((x) => x.id === id);
+    return e ? { ...e } : null;
+  }
   async update(id: string, ownerEmail: string, patch: UpdateCalendarInput): Promise<boolean> {
     const e = this.items.find((x) => x.id === id);
     if (!e || (e.ownerEmail !== null && e.ownerEmail !== ownerEmail)) return false;

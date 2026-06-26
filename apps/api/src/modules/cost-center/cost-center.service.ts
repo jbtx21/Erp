@@ -35,11 +35,16 @@ export class CostCenterService {
     return cc;
   }
 
-  /** Bearbeitet Nummer/Bezeichnung einer Kostenstelle (GoBD-auditiert). */
+  /** Bearbeitet Nummer/Bezeichnung einer Kostenstelle (GoBD-auditiert, Vorher/Nachher). */
   async update(id: string, nummer: string, name: string): Promise<void> {
     if (!nummer.trim() || !name.trim()) throw new Error("Nummer und Bezeichnung sind Pflicht.");
+    const before = (await this.repo.list()).find((c) => c.id === id);
     await this.repo.update(id, nummer.trim(), name.trim());
-    await this.audit.append(buildEntry({ entity: "CostCenter", entityId: id, action: "UPDATE", after: { nummer: nummer.trim(), name: name.trim() } }));
+    await this.audit.append(buildEntry({
+      entity: "CostCenter", entityId: id, action: "UPDATE",
+      before: before ? { nummer: before.nummer, name: before.name } : undefined,
+      after: { nummer: nummer.trim(), name: name.trim() },
+    }));
   }
 
   /** Alle Kostenstellen (Stammdaten). */
