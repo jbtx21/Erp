@@ -2112,6 +2112,12 @@ export function QuotesPage({ focusId }: { focusId?: string } = {}): JSX.Element 
       void startEdit(focusId);
     }
   }, [focusId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Beleg-Direktanlage aus der Kundenmaske: vorbelegte Firma + direkt in die Anlage springen.
+  useEffect(() => {
+    if (typeof sessionStorage === "undefined") return;
+    const pre = sessionStorage.getItem("texma:newQuoteCompany");
+    if (pre) { sessionStorage.removeItem("texma:newQuoteCompany"); resetForm(); setCompanyId(pre); setView("create"); }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const saveQuote = async (): Promise<void> => {
     setBusy(true); setErr(null);
     try {
@@ -2998,6 +3004,12 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
   useEffect(() => { void load(); }, [load]);
   // Direkter Sprung aus der globalen Suche: das Detail-/Belegketten-Panel des Auftrags öffnen.
   useEffect(() => { if (focusId) setTermOrder(focusId); }, [focusId]);
+  // Beleg-Direktanlage aus der Kundenmaske: vorbelegte Firma + Anlageformular öffnen.
+  useEffect(() => {
+    if (typeof sessionStorage === "undefined") return;
+    const pre = sessionStorage.getItem("texma:newOrderCompany");
+    if (pre) { sessionStorage.removeItem("texma:newOrderCompany"); setNewCompany(pre); setEditOrderId(null); setShowCreate(true); }
+  }, []);
   const resetOrderForm = (): void => { setNewLines([{ description: "", qty: 10, euro: 12.9, kind: "TEXTIL" }]); setEditOrderId(null); setShowCreate(false); setDirty(false); };
   const startEditOrder = async (id: string): Promise<void> => {
     setErr(null);
@@ -3416,6 +3428,14 @@ function CompanyDetailPanel({ companyId, companies = [], onNavigate }: { company
           {ov.openCents > 0 ? <Badge size="xs" color="orange">offen {euro(ov.openCents)}</Badge> : <Badge size="xs" color="teal">keine offenen Posten</Badge>}
           {ov.company.mahnsperre ? <Badge size="xs" color="red">Mahnsperre</Badge> : null}
           {ov.company.liefersperre ? <Badge size="xs" color="red">Liefersperre</Badge> : null}
+          <Button size="compact-xs" variant="light" color="blue" onClick={() => {
+            if (typeof sessionStorage !== "undefined") sessionStorage.setItem("texma:newQuoteCompany", companyId);
+            if (typeof location !== "undefined") location.hash = "quotes";
+          }}>+ Angebot</Button>
+          <Button size="compact-xs" variant="light" color="blue" onClick={() => {
+            if (typeof sessionStorage !== "undefined") sessionStorage.setItem("texma:newOrderCompany", companyId);
+            if (typeof location !== "undefined") location.hash = "orders";
+          }}>+ Auftrag</Button>
           <Button size="compact-xs" variant="default" onClick={async () => {
             try { const r = await trpc.print.customerDataSheet.query({ companyId }); downloadBase64(r.filename, r.base64, "application/pdf"); }
             catch (e) { setErr(errMsg(e)); }
