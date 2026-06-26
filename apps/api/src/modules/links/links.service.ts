@@ -4,6 +4,9 @@
 // Belegkette (vorhandene FKs), keine Denormalisierung. Finanzbelege (Rechnung/Barverkauf)
 // werden für Rollen ohne Finanzsicht ausgeblendet (RBAC, Kap. 12).
 
+/** PDF-Generator-Kennung für den Direkt-Download eines Belegs (UI → print.*). */
+export type DocPdfKind = "invoice" | "quote" | "auftragsbestaetigung" | "deliveryNote" | "creditNote";
+
 export interface LinkRef {
   /** Belegtyp (Anzeigename), z. B. "Angebot", "Rechnung". */
   type: string;
@@ -13,6 +16,12 @@ export interface LinkRef {
   navKey: string | null;
   /** Finanzbeleg → für Rollen ohne Finanzsicht (PRODUKTION) ausblenden. */
   financial: boolean;
+  /** Interne Beleg-ID (für Deep-Link/PDF/Archiv-Abgleich), falls vorhanden. */
+  id?: string;
+  /** PDF-Generator für den Direkt-Download (print.*), falls druckbar. */
+  pdfKind?: DocPdfKind;
+  /** Archiv-Quelle (sourceEntity) für den „Archiviert ✓"-Abgleich, falls archiviert. */
+  sourceEntity?: string;
 }
 
 export interface OrderLinks {

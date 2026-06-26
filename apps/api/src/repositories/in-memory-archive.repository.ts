@@ -37,4 +37,7 @@ export class InMemoryArchiveRepository implements ArchiveRepository {
   async archivedSourceKeys(): Promise<string[]> {
     return [...new Set(this.docs.map((d) => `${d.sourceEntity}|${d.sourceId}`))];
   }
+  async findLatestBySource(sourceEntity: string, sourceId: string): Promise<ArchivedDocMeta | null> {
+    return this.docs.filter((d) => d.sourceEntity === sourceEntity && d.sourceId === sourceId).sort((a, b) => b.version - a.version)[0] ?? null;
+  }
 }

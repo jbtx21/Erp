@@ -1979,6 +1979,24 @@ export const appRouter = router({
       }),
   }),
 
+  // Einheitliche Beleg-/Dokumentliste zu einem Auftrag: {type, label, id, pdfKind, navKey}
+  // + GoBD-Archivstatus (archived/archiveId) — speist die Belegkette mit PDF + „Archiviert ✓".
+  documents: router({
+    forOrder: roleProcedure(...allRoles)
+      .input(z.object({ orderId: z.string().min(1) }))
+      .query(async ({ input, ctx }) => {
+        try {
+          const ol = await ctx.links.forOrder(input.orderId, canViewFinancials(ctx.user.role));
+          const docs = await Promise.all(ol.links.map(async (l) => {
+            const arch = l.id && l.sourceEntity ? await ctx.archive.findLatestBySource(l.sourceEntity, l.id) : null;
+            return { type: l.type, label: l.label, id: l.id ?? null, pdfKind: l.pdfKind ?? null, navKey: l.navKey, financial: l.financial, archived: !!arch, archiveId: arch?.id ?? null };
+          }));
+          return { orderNumber: ol.orderNumber, documents: docs };
+        }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
+      }),
+  }),
+
   // Benachrichtigungen (ERP-Grundfunktion / G-5): In-App-Feed je angemeldete:r Nutzer:in.
   notifications: router({
     list: protectedProcedure

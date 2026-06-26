@@ -74,4 +74,8 @@ export class PrismaArchiveRepository implements ArchiveRepository {
     const rows = await prisma.archivedDocument.findMany({ select: { sourceEntity: true, sourceId: true }, distinct: ["sourceEntity", "sourceId"] });
     return rows.map((r) => `${r.sourceEntity}|${r.sourceId}`);
   }
+  async findLatestBySource(sourceEntity: string, sourceId: string): Promise<ArchivedDocMeta | null> {
+    const r = await prisma.archivedDocument.findFirst({ where: { sourceEntity, sourceId }, orderBy: { version: "desc" } });
+    return r ? map(r) : null;
+  }
 }

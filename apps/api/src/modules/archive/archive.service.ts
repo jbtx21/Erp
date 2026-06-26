@@ -38,6 +38,8 @@ export interface ArchiveRepository {
   setLegalHold(id: string, hold: boolean): Promise<void>;
   /** Alle archivierten fachlichen Schlüssel (`sourceEntity|sourceId`) — Vollständigkeits-Report. */
   archivedSourceKeys(): Promise<string[]>;
+  /** Jüngster Archiveintrag zu einer Quelle (für „Archiviert ✓"-Verlinkung). */
+  findLatestBySource(sourceEntity: string, sourceId: string): Promise<ArchivedDocMeta | null>;
 }
 
 /** Erwarteter finaler Beleg (für den Vollständigkeits-Report). */
@@ -121,6 +123,11 @@ export class ArchiveService {
   async missingFrom(expected: ExpectedFinalDoc[]): Promise<ExpectedFinalDoc[]> {
     const keys = new Set(await this.repo.archivedSourceKeys());
     return expected.filter((e) => !keys.has(`${e.sourceEntity}|${e.sourceId}`));
+  }
+
+  /** Jüngster Archiveintrag zu einer Quelle (id + sha) oder null — für „Archiviert ✓". */
+  findLatestBySource(sourceEntity: string, sourceId: string): Promise<ArchivedDocMeta | null> {
+    return this.repo.findLatestBySource(sourceEntity, sourceId);
   }
 
   /** Legal Hold setzen/aufheben (sperrt über die normale Frist hinaus). */

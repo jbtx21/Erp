@@ -2905,6 +2905,57 @@ function OrderAbschlaege({ orderId }: { orderId: string }): JSX.Element {
   );
 }
 
+// Belegkette eines Auftrags (Connections): Angebot/AB/Lieferschein/Rechnung/Gutschrift mit
+// PDF-Download und GoBD-Archivstatus („Archiviert ✓"). Schließt die UX-Lücken (Rechnungs-PDF
+// war nicht anbindbar) und macht die Verknüpfungen klickbar.
+function OrderDocumentsTab({ orderId }: { orderId: string }): JSX.Element {
+  const [data, setData] = useState<Awaited<ReturnType<typeof trpc.documents.forOrder.query>> | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    try { setData(await trpc.documents.forOrder.query({ orderId })); setErr(null); } catch (e) { setErr(errMsg(e)); }
+  }, [orderId]);
+  useEffect(() => { void load(); }, [load]);
+
+  const printDoc = async (kind: string, id: string): Promise<void> => {
+    setErr(null);
+    try {
+      const r =
+        kind === "invoice" ? await trpc.print.invoice.query({ invoiceId: id })
+        : kind === "quote" ? await trpc.print.quote.query({ quoteId: id })
+        : kind === "auftragsbestaetigung" ? await trpc.print.auftragsbestaetigung.query({ orderId: id })
+        : kind === "deliveryNote" ? await trpc.print.deliveryNote.query({ deliveryNoteId: id })
+        : await trpc.print.creditNote.query({ creditNoteId: id });
+      downloadBase64(r.filename, r.base64, "application/pdf");
+    } catch (e) { setErr(errMsg(e)); }
+  };
+
+  return (
+    <Box>
+      {err && <Alert color="red" mb="sm">{err}</Alert>}
+      <Table withTableBorder>
+        <Table.Thead><Table.Tr><Table.Th>Beleg</Table.Th><Table.Th>Nummer/Status</Table.Th><Table.Th>Archiv (GoBD)</Table.Th><Table.Th></Table.Th></Table.Tr></Table.Thead>
+        <Table.Tbody>
+          {(data?.documents ?? []).map((d, i) => (
+            <Table.Tr key={i}>
+              <Table.Td><Text size="sm" fw={500}>{d.type}</Text></Table.Td>
+              <Table.Td><Text size="sm">{d.label}</Text></Table.Td>
+              <Table.Td>
+                {d.pdfKind
+                  ? (d.archived ? <Badge size="sm" color="green" variant="light" title={d.archiveId ?? undefined}>Archiviert ✓</Badge> : <Badge size="sm" color="gray" variant="light">nicht archiviert</Badge>)
+                  : <Text size="xs" c="dimmed">—</Text>}
+              </Table.Td>
+              <Table.Td ta="right">
+                {d.pdfKind && d.id && <Button size="compact-xs" variant="subtle" onClick={() => void printDoc(d.pdfKind!, d.id!)}>PDF</Button>}
+              </Table.Td>
+            </Table.Tr>
+          ))}
+          {data && data.documents.length === 0 && <Table.Tr><Table.Td colSpan={4}><Text size="sm" c="dimmed">Noch keine Belege zu diesem Auftrag.</Text></Table.Td></Table.Tr>}
+        </Table.Tbody>
+      </Table>
+    </Box>
+  );
+}
+
 export function OrdersPage({ role, focusId }: { role: string; focusId?: string }): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -3006,6 +3057,7 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
               <Tabs.List>
                 <Tabs.Tab value="details">Details</Tabs.Tab>
                 <Tabs.Tab value="stickerei">Stickerei-Referenz</Tabs.Tab>
+                {editOrderId && <Tabs.Tab value="belege">Belege</Tabs.Tab>}
                 {editOrderId && <Tabs.Tab value="ampel">Auftragsampel</Tabs.Tab>}
                 {editOrderId && <Tabs.Tab value="abschlag">Abschläge</Tabs.Tab>}
               </Tabs.List>
@@ -3016,6 +3068,11 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
               <Tabs.Panel value="stickerei" pt="md">
                 <StickereiStaffelnSection />
               </Tabs.Panel>
+              {editOrderId && (
+                <Tabs.Panel value="belege" pt="md">
+                  <OrderDocumentsTab orderId={editOrderId} />
+                </Tabs.Panel>
+              )}
               {editOrderId && (
                 <Tabs.Panel value="ampel" pt="md">
                   <OrderAmpelDetail orderId={editOrderId} />
