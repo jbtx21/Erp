@@ -33,6 +33,10 @@
     "./kontenrahmen": {
       "types": "./dist/kontenrahmen.d.ts",
       "import": "./dist/kontenrahmen.js"
+    },
+    "./import-mapping": {
+      "types": "./dist/import-mapping.d.ts",
+      "import": "./dist/import-mapping.js"
     }
   },
   "scripts": {

@@ -38,6 +38,7 @@ import {
   ProductsPage, MatrixStammPage, PricingPage, EmailTemplatesPage, DashboardsPage, DataIoPage, EanImportPage, FinanceReportingPage, WareneingangPage, ZahlungenPage, ZahlungsabgleichOverview, NewsletterPage, OpportunitiesPage, CalendarPage, MessagesPage, AdminPage, ArchivePage, AuditLogPage, AutomationPage, TasksPage, HomePage, LagerPage, HrPage, IntegrationsPage, SecurityPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
   LogosPage, AufschlagPage, AusschreibungenPage, NachkalkulationPage, GuVReportPage, GutscheinePage,
 } from "./pages.js";
+import { ImportMapperPage } from "./import-mapper.js";
 import { trpc } from "./trpc.js";
 
 interface AuthUser { id: string; email: string; name: string; role: string; totpEnabled: boolean; }
@@ -55,7 +56,8 @@ const NAV: ReadonlyArray<{ group: string; icon: NavIconName; items: ReadonlyArra
   ] },
   { group: "Lager", icon: "lager", items: [
     { key: "products", label: "Artikel/Varianten" }, { key: "matrixstamm", label: "Matrix-Stamm" }, { key: "lager", label: "Lager & Inventur" },
-    { key: "wareneingang", label: "Wareneingang" }, { key: "samples", label: "Muster-Leihgut" }, { key: "shipments", label: "Versand" }, { key: "eanimport", label: "EAN-Listen-Import" },
+    { key: "wareneingang", label: "Wareneingang" }, { key: "samples", label: "Muster-Leihgut" }, { key: "shipments", label: "Versand" },
+    { key: "importmapper", label: "Import-Mapper" }, { key: "eanimport", label: "EAN-Listen-Import" },
   ] },
   // Veredelungs-Strang gebündelt (IA): Logo-Stammdaten → Ausschreibung an Veredler →
   // Fremdvergabe-Ausführung → Reporting → Aufschlagsfaktoren je Veredelungsart.
@@ -412,6 +414,7 @@ function Page({ k, role, userName, onNavigate, onOpen, focusId }: { k: string; r
     case "samples": return <SampleLoansPage onOpen={onOpen} />;
     case "products": return <ProductsPage focusId={focusId} />;
     case "matrixstamm": return <MatrixStammPage />;
+    case "importmapper": return <ImportMapperPage />;
     case "pricing": return <PricingPage />;
     case "emailtemplates": return <EmailTemplatesPage />;
     case "dataio": return <DataIoPage />;

@@ -17,6 +17,7 @@ export default defineConfig({
       "@texma/shared/order": src("order.ts"),
       "@texma/shared/vat": src("vat.ts"),
       "@texma/shared/kontenrahmen": src("kontenrahmen.ts"),
+      "@texma/shared/import-mapping": src("import-mapping.ts"),
       "@texma/shared": src("index.ts"),
     },
   },
