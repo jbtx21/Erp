@@ -34,18 +34,9 @@ function errMsg(err: unknown): string {
 // Stickerei-Weg → Stammdaten, Stickerei-Staffeln → Angebot/Auftrag, Ausschreibung →
 // Beschaffung, Nachkalkulation → Produktion-Reporting + Finanzen, Termin-Ampel → Übersicht.
 // Es verbleibt nur die mehrstufige Fremdvergabe (Einordnung noch in Klärung).
-export function Differentiators({ role }: { role: string }): JSX.Element {
-  return (
-    <>
-      <Title order={2}>Mehrstufige Fremdvergabe</Title>
-      <Text size="sm" c="dimmed">
-        Plan + Aktionen je Produktionsauftrag (T-04). Hinweis: Diese Funktion gibt es auch
-        unter Produktion → Fremdvergabe — die Zusammenführung ist noch in Abstimmung.
-      </Text>
-      <SubproductionPlan role={role} />
-    </>
-  );
-}
+// (Entfernt) Die Sammel-Komponente `Differentiators` war ein toter Export — sie wurde
+// nirgends mehr gerendert; ihre einzige Funktion (mehrstufige Fremdvergabe) liegt unter
+// Produktion → Fremdvergabe (SubproductionPage). Dadurch entfällt auch SubproductionPlan.
 
 // ── Preis-Werkzeuge (preis-sensibel): Aufschlagsfaktoren + Logos + Stickerei-Staffeln ──
 // Aufschlags-Konfiguration + Logo-Liste werden einmal geladen und geteilt, damit die

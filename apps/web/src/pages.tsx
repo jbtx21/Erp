@@ -453,14 +453,21 @@ export function SuppliersPage({ focusId }: { focusId?: string } = {}): JSX.Eleme
   const [name, setName] = useState("");
   const [vatId, setVatId] = useState("");
   const [iban, setIban] = useState("");
-  const [applied, setApplied] = useState("sup-fhb");
-  const [sid, setSid] = useState("sup-fhb");
+  const [applied, setApplied] = useState("");
+  const [sid, setSid] = useState("");
   const [openSupplier, setOpenSupplier] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    try { setRows((await trpc.suppliers.listAll.query()) as Row[]); setErr(null); }
+    try {
+      const list = (await trpc.suppliers.listAll.query()) as Row[];
+      setRows(list);
+      // Katalog-Tab auf den ersten echten Lieferanten vorbelegen (statt hartkodierter Demo-ID).
+      setApplied((cur) => cur || (list[0] ? String(list[0].id) : ""));
+      setSid((cur) => cur || (list[0] ? String(list[0].id) : ""));
+      setErr(null);
+    }
     catch (e) { setErr(errMsg(e)); }
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -786,14 +793,14 @@ export const ProductionReportingPage = (): JSX.Element => {
 
 export function SampleLoansPage({ onOpen }: { onOpen?: (navKey: string, id: string) => void } = {}): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
-  const [companyId, setCompanyId] = useState("co-muster");
-  const [variantId, setVariantId] = useState("var-polo-navy-l");
+  const [companyId, setCompanyId] = useState("");
+  const [variantId, setVariantId] = useState("");
   const [menge, setMenge] = useState(3);
   const [err, setErr] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // Mehrartikel-Leihe (mehrere Lieferanten)
-  const [multiCompany, setMultiCompany] = useState("co-muster");
+  const [multiCompany, setMultiCompany] = useState("");
   const [multiZweck, setMultiZweck] = useState("Anprobe");
   const [multiQuote, setMultiQuote] = useState("");
   const [multiLines, setMultiLines] = useState<{ description: string; variantId: string; supplierId: string; menge: number }[]>([{ description: "", variantId: "", supplierId: "", menge: 1 }]);
@@ -3192,7 +3199,7 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
   // Manuelle Auftragserstellung (ADMIN/BUERO).
   const [showCreate, setShowCreate] = useState(false);
   const [editOrderId, setEditOrderId] = useState<string | null>(null); // gesetzt = Auftrag bearbeiten
-  const [newCompany, setNewCompany] = useState("co-muster");
+  const [newCompany, setNewCompany] = useState("");
   const [newLines, setNewLines] = useState<EditorLine[]>([{ description: "", qty: 10, euro: 0, kind: "TEXTIL" }]);
   const [dirty, setDirty] = useState(false); // ungespeicherte Änderungen im Auftrags-Editor
   useUnsavedGuard(showCreate && dirty);
@@ -4206,7 +4213,7 @@ export function InquiriesPage(): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [text, setText] = useState("");
   const [quelle, setQuelle] = useState("WEB");
-  const [companyId, setCompanyId] = useState("co-muster");
+  const [companyId, setCompanyId] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -5129,14 +5136,16 @@ interface SubPlan {
 
 export function SubproductionPage({ onOpen, focusId }: { onOpen?: (k: string, id: string) => void; focusId?: string } = {}): JSX.Element {
   const supplierNames = useSupplierNames();
-  const [productionId, setProductionId] = useState(focusId ?? "pa-1");
-  const [applied, setApplied] = useState(focusId ?? "pa-1");
+  const [productionId, setProductionId] = useState(focusId ?? "");
+  const [applied, setApplied] = useState(focusId ?? "");
   const [stages, setStages] = useState<SubStage[]>([]);
   const [plan, setPlan] = useState<SubPlan | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async (pid: string) => {
+    // Ohne Produktions-ID nichts laden (kein 404 gegen eine leere/Demo-ID).
+    if (!pid.trim()) { setStages([]); setPlan(null); return; }
     setLoading(true); setErr(null);
     try {
       const [st, pl] = await Promise.all([

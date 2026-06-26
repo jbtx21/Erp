@@ -82,7 +82,10 @@ export class OpportunityService {
 
   async setProbability(id: string, probability: number): Promise<void> {
     await this.requireOpen(id);
-    await this.repo.update(id, { probability: Math.max(0, Math.min(100, probability)) });
+    const prob = Math.max(0, Math.min(100, probability));
+    await this.repo.update(id, { probability: prob });
+    // GoBD (Kap. 10): jede Mutation auditieren — fehlte bisher (stille Änderung).
+    await this.audit.append(buildEntry({ entity: "Opportunity", entityId: id, action: "UPDATE", after: { probability: prob } }));
   }
 
   async markWon(id: string): Promise<void> {
