@@ -109,6 +109,15 @@ model Company {
   country      String        @default("DE")
   vatId        String? // USt-IdNr. (B2B/innergemeinschaftlich)
   taxNumber    String? // Steuernummer
+  // Steuerregel je Kunde (zentral, Xentral-Benchmark): steuert die USt-Behandlung der Belege.
+  // INLAND | EU_B2B (innergemeinschaftlich, Reverse-Charge §13b) | DRITTLAND (Ausfuhr) | KLEINUNTERNEHMER
+  taxRule      String? @default("INLAND")
+  // Bankverbindung + SEPA-Lastschriftmandat (für Lastschriftverfahren, Kap. 9)
+  iban           String?
+  bic            String?
+  bankName       String?
+  sepaMandateRef  String? // Mandatsreferenz
+  sepaMandateDate String? // Mandatsdatum (ISO YYYY-MM-DD)
   // Zahlungsbedingungen
   skontoPercent Int? // Skonto-% (z. B. 2)
   skontoDays    Int? // Skonto-Frist (Tage)

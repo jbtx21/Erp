@@ -81,7 +81,8 @@ export class PrismaCompanyRepository implements CompanyRepository {
       data: {
         ...pick("name"), ...pick("branche"), ...pick("zahlungszielTage"), ...pick("mahnsperre"),
         ...pick("street"), ...pick("zip"), ...pick("city"), ...pick("country"),
-        ...pick("vatId"), ...pick("taxNumber"),
+        ...pick("vatId"), ...pick("taxNumber"), ...pick("taxRule"),
+        ...pick("iban"), ...pick("bic"), ...pick("bankName"), ...pick("sepaMandateRef"), ...pick("sepaMandateDate"),
         ...pick("skontoPercent"), ...pick("skontoDays"), ...pick("paymentMethod"),
         ...pick("lieferbedingung"), ...pick("notiz"), ...pick("kreditlimitCents"),
       },
@@ -93,7 +94,8 @@ export class PrismaCompanyRepository implements CompanyRepository {
       where: { id: companyId },
       select: {
         id: true, customerNumber: true, name: true, branche: true, zahlungszielTage: true, mahnsperre: true, gesperrtAm: true,
-        street: true, zip: true, city: true, country: true, vatId: true, taxNumber: true,
+        street: true, zip: true, city: true, country: true, vatId: true, taxNumber: true, taxRule: true,
+        iban: true, bic: true, bankName: true, sepaMandateRef: true, sepaMandateDate: true,
         skontoPercent: true, skontoDays: true, paymentMethod: true, lieferbedingung: true, notiz: true, kreditlimitCents: true,
         priceGroup: { select: { kind: true } },
         lead: { select: { id: true } },
@@ -117,7 +119,8 @@ export class PrismaCompanyRepository implements CompanyRepository {
       company: {
         id: c.id, customerNumber: c.customerNumber, name: c.name, branche: c.branche, zahlungszielTage: c.zahlungszielTage, mahnsperre: c.mahnsperre,
         priceGroupKind: c.priceGroup.kind as PriceGroupKind, gesperrt: c.gesperrtAm !== null, fromLead: c.lead !== null,
-        street: c.street, zip: c.zip, city: c.city, country: c.country, vatId: c.vatId, taxNumber: c.taxNumber,
+        street: c.street, zip: c.zip, city: c.city, country: c.country, vatId: c.vatId, taxNumber: c.taxNumber, taxRule: c.taxRule,
+        iban: c.iban, bic: c.bic, bankName: c.bankName, sepaMandateRef: c.sepaMandateRef, sepaMandateDate: c.sepaMandateDate,
         skontoPercent: c.skontoPercent, skontoDays: c.skontoDays, paymentMethod: c.paymentMethod,
         lieferbedingung: c.lieferbedingung, notiz: c.notiz, kreditlimitCents: c.kreditlimitCents,
       },

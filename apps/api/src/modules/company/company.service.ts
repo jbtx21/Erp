@@ -24,7 +24,7 @@ export interface CreateCompanyInput {
   priceGroupKind: PriceGroupKind;
 }
 
-/** Erweiterte Stammdaten (Rechnungsadresse, Steuer, Zahlungs-/Lieferbedingungen) — Paket 1. */
+/** Erweiterte Stammdaten (Rechnungsadresse, Steuer, Bank, Zahlungs-/Lieferbedingungen). */
 export interface CompanyStammdaten {
   street: string | null;
   zip: string | null;
@@ -32,6 +32,13 @@ export interface CompanyStammdaten {
   country: string | null;
   vatId: string | null;
   taxNumber: string | null;
+  /** Zentrale Steuerregel: INLAND | EU_B2B | DRITTLAND | KLEINUNTERNEHMER (Xentral-Benchmark). */
+  taxRule: string | null;
+  iban: string | null;
+  bic: string | null;
+  bankName: string | null;
+  sepaMandateRef: string | null;
+  sepaMandateDate: string | null;
   skontoPercent: number | null;
   skontoDays: number | null;
   paymentMethod: string | null;

@@ -3251,8 +3251,12 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
 type CompanyDetail = NonNullable<Awaited<ReturnType<typeof trpc.companies.overview.query>>>["company"];
 interface SDForm {
   street: string; zip: string; city: string; country: string; vatId: string; taxNumber: string;
+  taxRule: string; iban: string; bic: string; bankName: string; sepaMandateRef: string; sepaMandateDate: string;
   skontoPercent: string; skontoDays: string; paymentMethod: string; lieferbedingung: string; kreditEuro: string; notiz: string;
 }
+const TAX_RULE_LABEL: Record<string, string> = {
+  INLAND: "Inland", EU_B2B: "EU (innergem. B2B, §13b)", DRITTLAND: "Drittland (Ausfuhr)", KLEINUNTERNEHMER: "Kleinunternehmer §19",
+};
 function CompanyStammdaten({ company, onSaved }: { company: CompanyDetail; onSaved: () => void }): JSX.Element {
   const [edit, setEdit] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -3260,6 +3264,8 @@ function CompanyStammdaten({ company, onSaved }: { company: CompanyDetail; onSav
   const init = (): SDForm => ({
     street: company.street ?? "", zip: company.zip ?? "", city: company.city ?? "", country: company.country ?? "DE",
     vatId: company.vatId ?? "", taxNumber: company.taxNumber ?? "",
+    taxRule: company.taxRule ?? "INLAND", iban: company.iban ?? "", bic: company.bic ?? "", bankName: company.bankName ?? "",
+    sepaMandateRef: company.sepaMandateRef ?? "", sepaMandateDate: company.sepaMandateDate ?? "",
     skontoPercent: company.skontoPercent?.toString() ?? "", skontoDays: company.skontoDays?.toString() ?? "",
     paymentMethod: company.paymentMethod ?? "", lieferbedingung: company.lieferbedingung ?? "",
     kreditEuro: company.kreditlimitCents != null ? (company.kreditlimitCents / 100).toString() : "", notiz: company.notiz ?? "",
@@ -3275,6 +3281,9 @@ function CompanyStammdaten({ company, onSaved }: { company: CompanyDetail; onSav
         id: company.id,
         street: f.street.trim() || null, zip: f.zip.trim() || null, city: f.city.trim() || null, country: f.country.trim() || "DE",
         vatId: f.vatId.trim() || null, taxNumber: f.taxNumber.trim() || null,
+        taxRule: (f.taxRule || "INLAND") as "INLAND" | "EU_B2B" | "DRITTLAND" | "KLEINUNTERNEHMER",
+        iban: f.iban.trim() || null, bic: f.bic.trim() || null, bankName: f.bankName.trim() || null,
+        sepaMandateRef: f.sepaMandateRef.trim() || null, sepaMandateDate: f.sepaMandateDate.trim() || null,
         skontoPercent: numOrNull(f.skontoPercent), skontoDays: numOrNull(f.skontoDays),
         paymentMethod: (f.paymentMethod || null) as "UEBERWEISUNG" | "LASTSCHRIFT" | "BAR" | null,
         lieferbedingung: f.lieferbedingung.trim() || null,
@@ -3296,6 +3305,9 @@ function CompanyStammdaten({ company, onSaved }: { company: CompanyDetail; onSav
           <Text size="sm">Rechnungsadresse: <b>{addr || "—"}</b></Text>
           <Text size="sm">USt-IdNr.: <b>{company.vatId || "—"}</b></Text>
           <Text size="sm">Steuernr.: <b>{company.taxNumber || "—"}</b></Text>
+          <Text size="sm">Steuerregel: <b>{TAX_RULE_LABEL[company.taxRule ?? "INLAND"] ?? company.taxRule}</b></Text>
+          <Text size="sm">Bank: <b>{company.iban ? `${company.iban}${company.bankName ? ` (${company.bankName})` : ""}` : "—"}</b></Text>
+          <Text size="sm">SEPA-Mandat: <b>{company.sepaMandateRef ? `${company.sepaMandateRef}${company.sepaMandateDate ? ` · ${company.sepaMandateDate}` : ""}` : "—"}</b></Text>
           <Text size="sm">Skonto: <b>{skonto}</b></Text>
           <Text size="sm">Zahlart: <b>{company.paymentMethod || "—"}</b></Text>
           <Text size="sm">Lieferbedingung: <b>{company.lieferbedingung || "—"}</b></Text>
@@ -3324,6 +3336,18 @@ function CompanyStammdaten({ company, onSaved }: { company: CompanyDetail; onSav
         <NumberInput size="xs" label="Skonto %" w={90} min={0} max={100} value={f.skontoPercent === "" ? "" : Number(f.skontoPercent)} onChange={(v) => set("skontoPercent")(v === "" ? "" : String(v))} />
         <NumberInput size="xs" label="Skonto-Tage" w={100} min={0} max={180} value={f.skontoDays === "" ? "" : Number(f.skontoDays)} onChange={(v) => set("skontoDays")(v === "" ? "" : String(v))} />
         <Select size="xs" label="Zahlart" w={150} clearable data={["UEBERWEISUNG", "LASTSCHRIFT", "BAR"]} value={f.paymentMethod || null} onChange={(v) => set("paymentMethod")(v ?? "")} />
+      </Group>
+      <Group gap="xs" align="end" wrap="wrap" mt={6}>
+        <Select size="xs" label="Steuerregel" w={220} value={f.taxRule || "INLAND"}
+          data={Object.entries(TAX_RULE_LABEL).map(([value, label]) => ({ value, label }))}
+          onChange={(v) => set("taxRule")(v ?? "INLAND")} />
+        <TextInput size="xs" label="IBAN" w={240} value={f.iban} onChange={(e) => set("iban")(e.currentTarget.value)} />
+        <TextInput size="xs" label="BIC" w={130} value={f.bic} onChange={(e) => set("bic")(e.currentTarget.value)} />
+        <TextInput size="xs" label="Bank" w={160} value={f.bankName} onChange={(e) => set("bankName")(e.currentTarget.value)} />
+      </Group>
+      <Group gap="xs" align="end" wrap="wrap" mt={6}>
+        <TextInput size="xs" label="SEPA-Mandatsref." w={200} value={f.sepaMandateRef} onChange={(e) => set("sepaMandateRef")(e.currentTarget.value)} />
+        <TextInput size="xs" type="date" label="SEPA-Mandatsdatum" w={170} value={f.sepaMandateDate} onChange={(e) => set("sepaMandateDate")(e.currentTarget.value)} />
       </Group>
       <Group gap="xs" align="end" wrap="wrap" mt={6}>
         <TextInput size="xs" label="Lieferbedingung" w={220} value={f.lieferbedingung} onChange={(e) => set("lieferbedingung")(e.currentTarget.value)} />

@@ -9,7 +9,7 @@ import type {
   UpdateCompanyInput,
 } from "../modules/company/company.service.js";
 
-const STAMMDATEN_KEYS = ["street", "zip", "city", "country", "vatId", "taxNumber", "skontoPercent", "skontoDays", "paymentMethod", "lieferbedingung", "notiz", "kreditlimitCents"] as const;
+const STAMMDATEN_KEYS = ["street", "zip", "city", "country", "vatId", "taxNumber", "taxRule", "iban", "bic", "bankName", "sepaMandateRef", "sepaMandateDate", "skontoPercent", "skontoDays", "paymentMethod", "lieferbedingung", "notiz", "kreditlimitCents"] as const;
 
 export class InMemoryCompanyRepository implements CompanyRepository {
   private readonly companies = new Map<string, CompanyRow>();
@@ -69,7 +69,8 @@ export class InMemoryCompanyRepository implements CompanyRepository {
       company: {
         ...c, fromLead: false,
         street: sd("street", null), zip: sd("zip", null), city: sd("city", null), country: sd("country", "DE"),
-        vatId: sd("vatId", null), taxNumber: sd("taxNumber", null),
+        vatId: sd("vatId", null), taxNumber: sd("taxNumber", null), taxRule: sd("taxRule", "INLAND"),
+        iban: sd("iban", null), bic: sd("bic", null), bankName: sd("bankName", null), sepaMandateRef: sd("sepaMandateRef", null), sepaMandateDate: sd("sepaMandateDate", null),
         skontoPercent: sd("skontoPercent", null), skontoDays: sd("skontoDays", null), paymentMethod: sd("paymentMethod", null),
         lieferbedingung: sd("lieferbedingung", null), notiz: sd("notiz", null), kreditlimitCents: sd("kreditlimitCents", null),
       },
