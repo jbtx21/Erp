@@ -107,7 +107,7 @@ function fmtCell(key: string, v: unknown): ReactNode {
 // Bulk-/Stapelaktion (Xentral „Stapelverarbeitung"): wirkt auf die markierten Zeilen.
 export interface BulkAction { label: string; color?: string; run: (selected: Row[]) => void | Promise<void> }
 
-export function AutoTable({ rows, hide = [], action, onRowClick, highlightId, bulkActions }: { rows: Row[]; hide?: string[]; action?: (r: Row) => ReactNode; onRowClick?: (r: Row) => void; highlightId?: string; bulkActions?: BulkAction[] }): JSX.Element {
+export function AutoTable({ rows, hide = [], action, onRowClick, highlightId, bulkActions, cellRender }: { rows: Row[]; hide?: string[]; action?: (r: Row) => ReactNode; onRowClick?: (r: Row) => void; highlightId?: string; bulkActions?: BulkAction[]; cellRender?: (col: string, value: unknown, row: Row) => ReactNode | undefined }): JSX.Element {
   const hlRef = useRef<HTMLTableRowElement | null>(null);
   // Mehrfachauswahl (nur wenn bulkActions gesetzt): markierte Zeilen-Keys.
   const [sel, setSel] = useState<Set<string>>(new Set());
@@ -157,7 +157,13 @@ export function AutoTable({ rows, hide = [], action, onRowClick, highlightId, bu
                 <Table.Tr key={i} ref={hit ? hlRef : undefined}
                   style={{ ...(onRowClick ? { cursor: "pointer" } : {}), ...(hit ? { background: "var(--mantine-color-yellow-1)" } : {}) }}>
                   {selectable && <Table.Td><Checkbox aria-label="Zeile auswählen" checked={sel.has(k)} onChange={() => toggleOne(k)} /></Table.Td>}
-                  {cols.map((c) => <Table.Td key={c} onClick={onRowClick ? () => onRowClick(r) : undefined}>{fmtCell(c, r[c])}</Table.Td>)}
+                  {cols.map((c) => {
+                    const custom = cellRender?.(c, r[c], r);
+                    // Zellen mit eigenem (klickbaren) Inhalt nicht zusätzlich die Zeilenaktion auslösen lassen.
+                    return custom !== undefined
+                      ? <Table.Td key={c}>{custom}</Table.Td>
+                      : <Table.Td key={c} onClick={onRowClick ? () => onRowClick(r) : undefined}>{fmtCell(c, r[c])}</Table.Td>;
+                  })}
                   {action && <Table.Td style={{ whiteSpace: "nowrap" }}>{action(r)}</Table.Td>}
                 </Table.Tr>
               );
@@ -171,10 +177,11 @@ export function AutoTable({ rows, hide = [], action, onRowClick, highlightId, bu
 
 /** Standard-Seitenrahmen: Titel, Hinweis, Aktualisieren, Lade-/Fehlerzustand. */
 export function ListPage({
-  title, hint, load, hide, action, toolbar, module,
+  title, hint, load, hide, action, toolbar, module, cellRender,
 }: {
   title: string; hint?: string; load: () => Promise<Row[]>; hide?: string[]; module?: string;
   action?: (r: Row, reload: () => Promise<void>) => ReactNode; toolbar?: (reload: () => Promise<void>) => ReactNode;
+  cellRender?: (col: string, value: unknown, row: Row) => ReactNode | undefined;
 }): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -195,7 +202,7 @@ export function ListPage({
       </>} />
       {error && <Alert color="red" mt="sm" title="Fehler">{error}</Alert>}
       {loading ? <Group mt="sm" gap="xs"><Loader size="sm" /><Text size="sm">lädt…</Text></Group>
-        : <AutoTable rows={rows} action={action ? (r) => action(r, reload) : undefined} />}
+        : <AutoTable rows={rows} hide={hide ?? []} cellRender={cellRender} action={action ? (r) => action(r, reload) : undefined} />}
     </>
   );
 }
@@ -2198,7 +2205,7 @@ function ConvertQuoteDialog({ quoteId, onDone, onClose }: { quoteId: string; onD
   );
 }
 
-export function QuotesPage({ focusId }: { focusId?: string } = {}): JSX.Element {
+export function QuotesPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k: string, id: string) => void } = {}): JSX.Element {
   type QuoteListRow = Awaited<ReturnType<typeof trpc.quotes.list.query>>[number];
   const [rows, setRows] = useState<QuoteListRow[]>([]);
   const [view, setView] = useState<"list" | "create">("list");
@@ -2461,7 +2468,7 @@ export function QuotesPage({ focusId }: { focusId?: string } = {}): JSX.Element 
               <Table.Tr key={r.id}>
                 <Table.Td><Text size="sm" fw={600} c="blue" style={{ cursor: "pointer" }} onClick={() => void startEdit(r.id)} title="Angebot öffnen/bearbeiten">{r.number}</Text></Table.Td>
                 <Table.Td>{QUOTATION_TO_LABEL[r.quotationTo] ?? r.quotationTo}</Table.Td>
-                <Table.Td>{r.companyName}</Table.Td>
+                <Table.Td>{onOpen && r.companyId ? <Anchor size="sm" onClick={() => onOpen("companies", r.companyId)} title="Kunde öffnen">{r.companyName} ↗</Anchor> : r.companyName}</Table.Td>
                 <Table.Td>{new Date(r.createdAt).toLocaleDateString("de-DE")}</Table.Td>
                 <Table.Td>{ORDER_TYPE_LABEL[r.orderType] ?? r.orderType}</Table.Td>
                 <Table.Td><StatusDot color={`var(--mantine-color-${QUOTE_STATUS_COLOR[r.status] ?? "gray"}-6)`} label={QUOTE_STATUS_LABEL[r.status] ?? r.status} /></Table.Td>
@@ -2898,7 +2905,15 @@ function NachkalkulationModal({ productionId, onClose }: { productionId: string;
 
 // Belegkette/Connections (ERPNext-Muster): phasen-gruppierter Belegbaum eines Auftrags
 // + „Create"-Folgebeleg-Aktionen (Rechnung erzeugen / Storno per Gutschrift / Produktion).
-function ConnectionsPanel({ orderId, role, onChanged }: { orderId: string; role: string; onChanged: () => void }): JSX.Element {
+// Belegketten-Knoten, die eine eigene Zielseite haben → anklickbar (Deep-Link). Knoten
+// ohne dedizierte Detailseite (Lieferschein/Rechnung/Gutschrift/OP/Zahlung) bleiben Badge.
+const BELEGKETTE_NAV: Record<string, string> = {
+  Quote: "quotes",
+  ProductionOrder: "subproduction", // n.id = PA-Id → öffnet die Fremdvergabe-Sicht der PA
+  Complaint: "reklamation",
+};
+
+function ConnectionsPanel({ orderId, role, onChanged, onOpen }: { orderId: string; role: string; onChanged: () => void; onOpen?: (k: string, id: string) => void }): JSX.Element {
   const [graph, setGraph] = useState<Awaited<ReturnType<typeof trpc.shopOrders.connections.query>> | null>(null);
   const [prod, setProd] = useState<Awaited<ReturnType<typeof trpc.production.status.query>> | null>(null);
   const [laufzettelFor, setLaufzettelFor] = useState<string | null>(null);
@@ -2985,13 +3000,16 @@ function ConnectionsPanel({ orderId, role, onChanged }: { orderId: string; role:
           {graph.groups.map((g) => (
             <Box key={g.phase} miw={180}>
               <Text size="xs" fw={700} tt="uppercase" c="dimmed" mb={4}>{g.phase} ({g.nodes.length})</Text>
-              {g.nodes.map((n) => (
-                <Group key={n.id} gap={6} mb={3} wrap="nowrap">
-                  <Badge size="xs" color={phaseColor[g.phase] ?? "gray"} variant="light">{n.entity}</Badge>
-                  <Text size="sm">{n.label}</Text>
-                  {n.status ? <Text size="xs" c="dimmed">· {n.status}</Text> : null}
-                </Group>
-              ))}
+              {g.nodes.map((n) => {
+                const nav = onOpen ? BELEGKETTE_NAV[n.entity] : undefined;
+                return (
+                  <Group key={n.id} gap={6} mb={3} wrap="nowrap">
+                    <Badge size="xs" color={phaseColor[g.phase] ?? "gray"} variant="light">{n.entity}</Badge>
+                    {nav ? <Anchor size="sm" onClick={() => onOpen!(nav, n.id)} title="Öffnen">{n.label} ↗</Anchor> : <Text size="sm">{n.label}</Text>}
+                    {n.status ? <Text size="xs" c="dimmed">· {n.status}</Text> : null}
+                  </Group>
+                );
+              })}
             </Box>
           ))}
         </Group>
@@ -3157,7 +3175,7 @@ function OrderDocumentsTab({ orderId }: { orderId: string }): JSX.Element {
   );
 }
 
-export function OrdersPage({ role, focusId }: { role: string; focusId?: string }): JSX.Element {
+export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: string; onOpen?: (k: string, id: string) => void }): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -3304,6 +3322,9 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
         </Tabs.List>
         <Tabs.Panel value="liste" pt="md">
       <AutoTable rows={rows} hide={["rawPayload", "companyId", "fastLane", "allowedTransitions"]}
+        cellRender={(c, v, r) => c === "companyName" && v && r.companyId
+          ? <Anchor size="sm" onClick={(e) => { e.stopPropagation(); onOpen?.("companies", String(r.companyId)); }} title="Kunde öffnen">{String(v)} ↗</Anchor>
+          : undefined}
         bulkActions={[{
           label: "CSV-Export der Auswahl",
           run: (selected) => {
@@ -3443,7 +3464,7 @@ export function OrdersPage({ role, focusId }: { role: string; focusId?: string }
                 <Tabs.Tab value="lieferung">Lieferung &amp; Druckdaten</Tabs.Tab>
                 <Tabs.Tab value="notizen">Notizen &amp; Dateien</Tabs.Tab>
               </Tabs.List>
-              <Tabs.Panel value="belegkette"><ConnectionsPanel orderId={termOrder} role={role} onChanged={() => void load()} /></Tabs.Panel>
+              <Tabs.Panel value="belegkette"><ConnectionsPanel orderId={termOrder} role={role} onChanged={() => void load()} onOpen={onOpen} /></Tabs.Panel>
               <Tabs.Panel value="aufgaben"><AssignTaskBox entity="Order" entityId={termOrder} navKey="orders" /></Tabs.Panel>
               <Tabs.Panel value="workflow"><WorkflowPanel orderId={termOrder} /></Tabs.Panel>
               <Tabs.Panel value="lieferung"><LinksPanel orderId={termOrder} /><DeliveryPanel orderId={termOrder} onChanged={() => void load()} /></Tabs.Panel>
@@ -4225,7 +4246,7 @@ export function InquiriesPage(): JSX.Element {
   );
 }
 
-export function LeadsPage({ focusId }: { focusId?: string } = {}): JSX.Element {
+export function LeadsPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k: string, id: string) => void } = {}): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [name, setName] = useState("");
   const [firma, setFirma] = useState("");
@@ -4258,6 +4279,9 @@ export function LeadsPage({ focusId }: { focusId?: string } = {}): JSX.Element {
             const grund = typeof window !== "undefined" ? window.prompt("Verwerfen — Grund?") : null;
             if (grund) void act(() => trpc.leads.discard.mutate({ id, grund }));
           }}>Verwerfen</Button>
+        )}
+        {status === "KONVERTIERT" && !!r.convertedCompanyId && (
+          <Button size="compact-xs" variant="subtle" onClick={() => onOpen?.("companies", String(r.convertedCompanyId))} title="Zum erzeugten Kundenstamm">↗ Kunde</Button>
         )}
       </Group>
     );
@@ -5089,10 +5113,10 @@ interface SubPlan {
   totalScrap: number; totalLohnCents: number; progressPercent: number; yieldPercent: number | null; allReturned: boolean;
 }
 
-export function SubproductionPage({ onOpen }: { onOpen?: (k: string, id: string) => void } = {}): JSX.Element {
+export function SubproductionPage({ onOpen, focusId }: { onOpen?: (k: string, id: string) => void; focusId?: string } = {}): JSX.Element {
   const supplierNames = useSupplierNames();
-  const [productionId, setProductionId] = useState("pa-1");
-  const [applied, setApplied] = useState("pa-1");
+  const [productionId, setProductionId] = useState(focusId ?? "pa-1");
+  const [applied, setApplied] = useState(focusId ?? "pa-1");
   const [stages, setStages] = useState<SubStage[]>([]);
   const [plan, setPlan] = useState<SubPlan | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -5109,6 +5133,8 @@ export function SubproductionPage({ onOpen }: { onOpen?: (k: string, id: string)
     } catch (e) { setErr(errMsg(e)); setStages([]); setPlan(null); } finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(applied); }, [load, applied]);
+  // Deep-Link aus der Belegkette (ProductionOrder ↗): die PA-Fremdvergabe direkt laden.
+  useEffect(() => { if (focusId) { setProductionId(focusId); setApplied(focusId); } }, [focusId]);
 
   // Mengenfluss: beim Versand Beistellmenge, beim Rücklauf Rücklaufmenge abfragen (T-04).
   const advance = async (sub: SubStage, to: "BEISTELLUNG_VERSANDT" | "RUECKLAUF_ERHALTEN" | "ABGESCHLOSSEN") => {
