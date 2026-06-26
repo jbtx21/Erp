@@ -3364,7 +3364,7 @@ function CompanyStammdaten({ company, onSaved }: { company: CompanyDetail; onSav
 
 // Kunden-Detail + Historie (klickbar im Kundenstamm): Stammdaten, offene Summe und
 // die verknüpften Belege (Aufträge, Angebote, Rechnungen, Muster-Leihgut).
-function CompanyDetailPanel({ companyId, onNavigate }: { companyId: string; onNavigate?: (k: string) => void }): JSX.Element {
+function CompanyDetailPanel({ companyId, companies = [], onNavigate }: { companyId: string; companies?: Array<{ id: string; name: string }>; onNavigate?: (k: string) => void }): JSX.Element {
   const [ov, setOv] = useState<Awaited<ReturnType<typeof trpc.companies.overview.query>> | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const reload = useCallback(() => { void trpc.companies.overview.query({ companyId }).then(setOv).catch((e) => setErr(errMsg(e))); }, [companyId]);
@@ -3412,13 +3412,32 @@ function CompanyDetailPanel({ companyId, onNavigate }: { companyId: string; onNa
           <Text size="xs" c="dimmed" fw={700} tt="uppercase">Aufträge / Rechnungen</Text><Text fz={20} fw={700}>{ov.metrics.orderCount} / {ov.metrics.invoiceCount}</Text>
         </Box>
       </Group>
-      <CompanyStammdaten company={ov.company} onSaved={reload} />
-      <Group align="flex-start" gap="lg" mt="sm" wrap="wrap">
-        {histGroup("Aufträge", "orders", ov.orders.map((o) => ({ id: o.id, label: o.number, sub: o.status })))}
-        {histGroup("Angebote", "quotes", ov.quotes.map((q) => ({ id: q.id, label: q.number, sub: q.status })))}
-        {histGroup("Rechnungen", "dunning", ov.invoices.map((i) => ({ id: i.id, label: i.number, sub: euro(i.grossCents) })))}
-        {histGroup("Muster-Leihgut", "samples", ov.sampleLoans.map((s) => ({ id: s.id, label: d(s.ausgegebenAm), sub: s.status })))}
-      </Group>
+      {/* Getabbte Stammdaten-Maske (Xentral-Benchmark): Stammdaten / Adressen / Kontakte / Historie. */}
+      <Tabs defaultValue="stammdaten" mt="md" keepMounted={false}>
+        <Tabs.List>
+          <Tabs.Tab value="stammdaten">Stammdaten</Tabs.Tab>
+          <Tabs.Tab value="adressen">Lieferadressen</Tabs.Tab>
+          <Tabs.Tab value="kontakte">Kontakte ({ov.contactsCount})</Tabs.Tab>
+          <Tabs.Tab value="historie">Historie</Tabs.Tab>
+        </Tabs.List>
+        <Tabs.Panel value="stammdaten" pt="sm">
+          <CompanyStammdaten company={ov.company} onSaved={reload} />
+        </Tabs.Panel>
+        <Tabs.Panel value="adressen" pt="sm">
+          <CompanyAddressesPanel companyId={companyId} />
+        </Tabs.Panel>
+        <Tabs.Panel value="kontakte" pt="sm">
+          <CompanyContactsPanel companyId={companyId} companies={companies} />
+        </Tabs.Panel>
+        <Tabs.Panel value="historie" pt="sm">
+          <Group align="flex-start" gap="lg" wrap="wrap">
+            {histGroup("Aufträge", "orders", ov.orders.map((o) => ({ id: o.id, label: o.number, sub: o.status })))}
+            {histGroup("Angebote", "quotes", ov.quotes.map((q) => ({ id: q.id, label: q.number, sub: q.status })))}
+            {histGroup("Rechnungen", "dunning", ov.invoices.map((i) => ({ id: i.id, label: i.number, sub: euro(i.grossCents) })))}
+            {histGroup("Muster-Leihgut", "samples", ov.sampleLoans.map((s) => ({ id: s.id, label: d(s.ausgegebenAm), sub: s.status })))}
+          </Group>
+        </Tabs.Panel>
+      </Tabs>
       </DocFormShell>
     </Box>
   );
@@ -3632,9 +3651,7 @@ export function CompaniesPage({ focusId }: { focusId?: string } = {}): JSX.Eleme
           }}>Löschen</Button>
         </Group>
       )} />
-      {openCompany && <CompanyDetailPanel companyId={openCompany} />}
-      {openCompany && <CompanyAddressesPanel companyId={openCompany} />}
-      {openCompany && <CompanyContactsPanel companyId={openCompany} companies={rows.map((r) => ({ id: String(r.id), name: String(r.name ?? r.id) }))} />}
+      {openCompany && <CompanyDetailPanel companyId={openCompany} companies={rows.map((r) => ({ id: String(r.id), name: String(r.name ?? r.id) }))} />}
     </>
   );
 }
