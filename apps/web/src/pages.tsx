@@ -2129,9 +2129,12 @@ export const lineHasContent = (l: EditorLine): boolean =>
 // Beschreibung mit Fallback (Server verlangt eine nicht-leere Beschreibung je Position).
 const lineDesc = (l: EditorLine): string => l.description.trim() || l.articleName?.trim() || l.articleNumber?.trim() || "Position";
 
-export const toApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; kind: PositionKind; variantId?: string; dbCents?: number }[] =>
+export const toApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; variantId?: string; dbCents?: number }[] =>
   lines.filter(lineHasContent).map((l) => ({
     description: lineDesc(l), qty: l.qty, kind: l.kind, ...lineMoney(l), ...(l.variantId ? { variantId: l.variantId } : {}),
+    // USt-Satz der Position mitschicken (eingefroren); so bleibt die Steuerbefreiung (0 %)
+    // aus dem Angebot beim Auftrag erhalten und fließt korrekt in die Rechnung.
+    ...(l.taxRatePct != null ? { taxRatePct: l.taxRatePct } : {}),
   }));
 
 // Wie toApiLines, aber inkl. Artikel-/Varianten-Referenz und Alternativ-Kennzeichen (Angebot).

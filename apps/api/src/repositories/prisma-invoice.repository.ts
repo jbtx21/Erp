@@ -17,7 +17,9 @@ export class PrismaInvoiceRepository implements InvoiceRepository {
       companyId: o.companyId,
       zahlungszielTage: o.company.zahlungszielTage,
       alreadyInvoicedId: o.invoice?.id ?? null,
-      lines: o.lines.map((l) => ({ description: l.description, qty: l.qty, unitNetCents: l.unitNetCents })),
+      // USt-Satz je Position aus dem Auftrag übernehmen (eingefroren); 0 = steuerbefreit.
+      // Fehlt die Spalte (Alt-Daten), greift der Default 19 % über buildInvoiceTotals.
+      lines: o.lines.map((l) => ({ description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, vatRate: l.taxRatePct / 100 })),
     };
   }
 

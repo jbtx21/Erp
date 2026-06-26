@@ -12,6 +12,7 @@ export interface SalesLine {
   unitNetCents: number; // effektiver Netto-Einzelpreis NACH Positionsrabatt
   listNetCents?: number | null; // VK-Listenpreis je Stück VOR Rabatt (Anzeige/Beleg)
   rabattPct?: number | null; // artikelbezogener Positionsrabatt in Prozent (0..100)
+  taxRatePct?: number | null; // USt-Satz der Position (eingefroren); 0 = steuerbefreit. Default 19.
   kind?: PositionKind;
   variantId?: string;
   dbCents?: number | null; // Deckungsbeitrag je Stück (VK − EK), Kap. 4.4
@@ -36,6 +37,7 @@ export interface ConversionPlanLine {
   unitNetCents: number;
   listNetCents: number | null;
   rabattPct: number | null;
+  taxRatePct: number; // USt-Satz aus dem Angebot (für die Auftragswandlung übernommen)
   kind: PositionKind;
   articleId: string | null;
   articleName: string | null;
@@ -60,6 +62,7 @@ export interface OrderEditLine {
   unitNetCents: number;
   listNetCents: number | null;
   rabattPct: number | null;
+  taxRatePct: number; // USt-Satz der Position (Round-Trip bei Bearbeitung)
   dbCents: number | null;
   variantId: string | null;
 }
@@ -153,7 +156,7 @@ export class SalesOrderService {
         // → beim Wandeln immer als fester Artikel anlegen. SONSTIGE bleibt freie Position.
         const materialize = !variantId && !l.articleId && (l.kind === "TEXTIL" || l.kind === "VEREDELUNG");
         return {
-          description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents, rabattPct: l.rabattPct, kind: l.kind, variantId, dbCents: l.dbCents,
+          description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents, rabattPct: l.rabattPct, taxRatePct: l.taxRatePct, kind: l.kind, variantId, dbCents: l.dbCents,
           ...(materialize ? { materializeArticle: { sku: `${number}-P${l.position}`, name: l.description.trim(), isVeredelung: l.kind === "VEREDELUNG" } } : {}),
         };
       });

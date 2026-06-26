@@ -990,6 +990,7 @@ model OrderLine {
   unitNetCents Int // effektiver Netto-Einzelpreis NACH Positionsrabatt
   listNetCents Int? // VK-Listenpreis je Stück VOR Rabatt (Anzeige/Beleg); null = unitNetCents
   rabattPct   Int? // artikelbezogener Positionsrabatt in Prozent (0..100)
+  taxRatePct  Int  @default(19) // USt-Satz der Position zum Auftragszeitpunkt (eingefroren, GoBD); 0 = steuerbefreit
   dbCents     Int? // Deckungsbeitrag je Stück (VK − EK) zum Auftragszeitpunkt (Kap. 4.4)
   kind        PositionKind @default(TEXTIL) // Textil- vs. Veredelungsposition (Kap. 4.4/11)
   variantId   String? // optionale Artikel-/Variantenverknüpfung (Bedarfsermittlung)

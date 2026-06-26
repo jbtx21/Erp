@@ -1924,7 +1924,7 @@ export const appRouter = router({
     createOrder: roleProcedure("ADMIN", "BUERO")
       .input(z.object({
         companyId: z.string().min(1),
-        lines: z.array(z.object({ description: z.string().min(1), qty: z.number().int().positive(), unitNetCents: z.number().int().min(0), listNetCents: z.number().int().min(0).optional(), rabattPct: z.number().int().min(0).max(100).optional(), kind: z.enum(["TEXTIL", "VEREDELUNG", "SONSTIGE"]).optional(), variantId: z.string().optional(), dbCents: z.number().int().optional() })).min(1),
+        lines: z.array(z.object({ description: z.string().min(1), qty: z.number().int().positive(), unitNetCents: z.number().int().min(0), listNetCents: z.number().int().min(0).optional(), rabattPct: z.number().int().min(0).max(100).optional(), taxRatePct: z.number().int().min(0).max(100).optional(), kind: z.enum(["TEXTIL", "VEREDELUNG", "SONSTIGE"]).optional(), variantId: z.string().optional(), dbCents: z.number().int().optional() })).min(1),
       }))
       .mutation(async ({ input, ctx }) => {
         try { return await ctx.salesOrders.createManual(input.companyId, input.lines); }
@@ -1942,7 +1942,7 @@ export const appRouter = router({
       .input(z.object({
         orderId: z.string().min(1),
         companyId: z.string().min(1),
-        lines: z.array(z.object({ description: z.string().min(1), qty: z.number().int().positive(), unitNetCents: z.number().int().min(0), listNetCents: z.number().int().min(0).optional(), rabattPct: z.number().int().min(0).max(100).optional(), kind: z.enum(["TEXTIL", "VEREDELUNG", "SONSTIGE"]).optional(), variantId: z.string().optional(), dbCents: z.number().int().optional() })).min(1),
+        lines: z.array(z.object({ description: z.string().min(1), qty: z.number().int().positive(), unitNetCents: z.number().int().min(0), listNetCents: z.number().int().min(0).optional(), rabattPct: z.number().int().min(0).max(100).optional(), taxRatePct: z.number().int().min(0).max(100).optional(), kind: z.enum(["TEXTIL", "VEREDELUNG", "SONSTIGE"]).optional(), variantId: z.string().optional(), dbCents: z.number().int().optional() })).min(1),
       }))
       .mutation(async ({ input, ctx }) => {
         try {

@@ -39,6 +39,14 @@ describe("SalesOrderService (Auftragserstellung)", () => {
     expect(repo.quotes[0]?.accepted).toBe(true);
   });
 
+  it("übernimmt den USt-Satz des Angebots in den Auftrag (Steuerbefreiung bleibt erhalten)", async () => {
+    const { svc, repo } = setup();
+    // Steuerbefreites Angebot (taxRatePct=0) → der Auftrag muss 0 % tragen, nicht 19 %.
+    repo.addQuote({ id: "q-1", companyId: "co-1", accepted: false, lines: [{ description: "EU-B2B", qty: 5, unitNetCents: 1000, taxRatePct: 0 }] });
+    await svc.convertQuote("q-1");
+    expect(repo.orders[0]?.lines[0]?.taxRatePct).toBe(0);
+  });
+
   it("verhindert doppelte Umwandlung desselben Angebots", async () => {
     const { svc, repo } = setup();
     repo.addQuote({ id: "q-1", companyId: "co-1", accepted: false, lines: [{ description: "Cap", qty: 3, unitNetCents: 900 }] });

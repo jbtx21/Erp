@@ -12,6 +12,7 @@ export interface MemQuoteLine {
   unitNetCents: number;
   listNetCents?: number | null;
   rabattPct?: number | null;
+  taxRatePct?: number | null;
   kind?: PositionKind;
   articleId?: string | null;
   articleName?: string | null;
@@ -51,7 +52,7 @@ export class InMemorySalesOrderRepository implements SalesOrderRepository {
     return {
       id: o.id, number: o.number, companyId: o.companyId, status: lock.status ?? "ANGELEGT",
       invoiced: !!lock.invoiced, inProduction: !!lock.inProduction, delivered: !!lock.delivered || delivered,
-      lines: o.lines.map((l) => ({ description: l.description, qty: l.qty, kind: l.kind ?? "TEXTIL", unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, dbCents: l.dbCents ?? null, variantId: l.variantId ?? null })),
+      lines: o.lines.map((l) => ({ description: l.description, qty: l.qty, kind: l.kind ?? "TEXTIL", unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, taxRatePct: l.taxRatePct ?? 19, dbCents: l.dbCents ?? null, variantId: l.variantId ?? null })),
     };
   }
   async updateOrder(orderId: string, companyId: string, lines: SalesLine[]): Promise<void> {
@@ -81,6 +82,7 @@ export class InMemorySalesOrderRepository implements SalesOrderRepository {
         unitNetCents: l.unitNetCents,
         listNetCents: l.listNetCents ?? null,
         rabattPct: l.rabattPct ?? null,
+        taxRatePct: l.taxRatePct ?? 19,
         kind: l.kind ?? "TEXTIL",
         articleId: l.articleId ?? null,
         articleName: l.articleName ?? null,
