@@ -80,6 +80,28 @@ async function openVeredelungsauftragMail(subProductionId: string): Promise<void
     window.alert("Hinweis: Beim Veredler ist keine E-Mail hinterlegt. Bitte den Empfänger im Outlook-Entwurf ergänzen (oder die E-Mail in den Lieferantenstammdaten pflegen).");
 }
 
+// Beleg-PDF je Kind herunterladen (spiegelt belegPdf/buildDraft im Backend). Eine Quelle für
+// alle „PDF herunterladen"-Aktionen, damit jede Liste denselben Pfad nutzt (Konsistenz).
+async function printBeleg(kind: BelegMailKind, id: string): Promise<void> {
+  const r = kind === "QUOTE" ? await trpc.print.quote.query({ quoteId: id })
+    : kind === "INVOICE" ? await trpc.print.invoice.query({ invoiceId: id })
+    : kind === "AUFTRAGSBESTAETIGUNG" ? await trpc.print.auftragsbestaetigung.query({ orderId: id })
+    : kind === "LIEFERSCHEIN" ? await trpc.print.deliveryNote.query({ deliveryNoteId: id })
+    : kind === "GUTSCHRIFT" ? await trpc.print.creditNote.query({ creditNoteId: id })
+    : kind === "MAHNUNG" ? await trpc.print.mahnung.query({ noticeId: id })
+    : await trpc.print.sampleLoanLieferschein.query({ loanId: id });
+  downloadBase64(r.filename, r.base64, "application/pdf");
+}
+
+// Einheitliche Dokument-Aktionen (PDF herunterladen + In Outlook öffnen) als DocActionMenu-
+// Einträge — überall verwendbar, wo ein Beleg mit eigenem PDF in einer Zeile/im Menü hängt.
+function belegDocActions(kind: BelegMailKind, id: string, label: string, onErr: (m: string) => void): Array<{ label: string; onClick: () => void; group?: string }> {
+  return [
+    { label: `${label} – PDF`, group: "Dokumente", onClick: () => { void printBeleg(kind, id).catch((e) => onErr(errMsg(e))); } },
+    { label: `${label} – In Outlook`, group: "Dokumente", onClick: () => { void openBelegMail(kind, id).catch((e) => onErr(errMsg(e))); } },
+  ];
+}
+
 // Deutsche Spaltenbezeichnungen statt roher Feldnamen ("Don't ship the schema").
 const COL_LABELS: Record<string, string> = {
   id: "ID", number: "Nr.", customerNumber: "Kunden-Nr.", name: "Name", status: "Status", kind: "Art", quelle: "Quelle",
@@ -3786,6 +3808,10 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
             color: to === "STORNIERT" ? "red" : to === "FAKTURIERT" ? "green" : undefined,
             onClick: () => void runTransition(to)(),
           })),
+          // Dokumente direkt aus der Zeile: Auftragsbestätigung (sobald in Bearbeitung) und
+          // Rechnung (sobald fakturiert) als PDF + Outlook-Entwurf — Konsistenz mit Angeboten.
+          ...(String(r.status) !== "ANGELEGT" ? belegDocActions("AUFTRAGSBESTAETIGUNG", String(r.id), "Auftragsbestätigung", setErr) : []),
+          ...(r.invoiceId ? belegDocActions("INVOICE", String(r.invoiceId), "Rechnung", setErr) : []),
         ];
         return (
           // Eil-Stern bleibt inline (Status-Signal: gefüllt = priorisiert); übrige Aktionen im Menü.
