@@ -79,6 +79,28 @@ describe("SalesOrderService (Auftragserstellung)", () => {
     expect(repo.orders[0]?.lines[0]?.variantId).toBe("var-rot-l");
   });
 
+  it("löst einen Größenlauf beim Wandeln in mehrere Größenzeilen auf (Varianten-Matrix)", async () => {
+    const { svc, repo } = setup();
+    repo.addQuote({
+      id: "q-1", companyId: "co-1", accepted: false,
+      lines: [
+        { position: 1, description: "T-Shirts Navy", qty: 200, unitNetCents: 500, articleId: "art-tshirt", articleName: "T-Shirt", kind: "TEXTIL" },
+        { position: 2, description: "Siebdruck", qty: 200, unitNetCents: 150, kind: "VEREDELUNG", bezugPosition: 1 },
+      ],
+    });
+    // Stückzahlen je Größe (Navy S/M/L) aus der Varianten-Matrix nach der Anprobe.
+    const res = await svc.convertQuote("q-1", { 1: [
+      { variantId: "v-navy-s", qty: 50 }, { variantId: "v-navy-m", qty: 80 }, { variantId: "v-navy-l", qty: 70 },
+    ] });
+    const order = repo.orders.find((o) => o.id === res.id)!;
+    // Position 1 wird in 3 Größenzeilen aufgeteilt, die Veredelung folgt nach.
+    expect(order.lines).toHaveLength(4);
+    expect(order.lines.slice(0, 3).map((l) => [l.variantId, l.qty])).toEqual([["v-navy-s", 50], ["v-navy-m", 80], ["v-navy-l", 70]]);
+    // Veredelungsbezug auf die NEUE Position der ersten Größenzeile ummappen (Pos. 1).
+    expect(order.lines[3]?.kind).toBe("VEREDELUNG");
+    expect(order.lines[3]?.bezugPosition).toBe(1);
+  });
+
   it("wandelt temporär erfasste Produktpositionen (TEXTIL/VEREDELUNG) in feste Artikel", async () => {
     const { svc, repo } = setup();
     repo.addQuote({

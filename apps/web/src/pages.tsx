@@ -2276,26 +2276,72 @@ export const fromStoredLines = (ls: StoredLine[]): EditorLine[] =>
     ...(l.bezugPosition != null ? { bezugPosition: l.bezugPosition } : {}),
   }));
 
-// Angebot → Auftrag: fragt für Hauptartikel ohne Variante (needsVariant) die genaue
-// Farbe×Größe ab und übergibt die Auflösung an convertQuote. Alternativen werden vom
-// Server weggelassen. Ohne offene Varianten wird direkt gewandelt (kein Dialog).
+// Auflösung einer offenen Position beim Wandeln: eine Variante (String) ODER ein Größenlauf
+// (Stückzahl je Größe aus der Varianten-Matrix). Spiegelt den convertQuote-Service.
+type ConvResolution = string | Array<{ variantId: string; qty: number }>;
+
+// Löst EINE offene Position auf: entweder Einzelvariante (Select) oder Größenlauf — Farbe
+// wählen, dann Menge je Größe aus dem Farbe×Größe-Raster des Artikels (Varianten-Matrix).
+function ConvertPositionResolver({ articleId, value, onChange }: { articleId: string; value: ConvResolution | undefined; onChange: (r: ConvResolution | undefined) => void }): JSX.Element {
+  const [mode, setMode] = useState<"single" | "run">("single");
+  const [variants, setVariants] = useState<Awaited<ReturnType<typeof trpc.products.listVariants.query>>>([]);
+  const [farbe, setFarbe] = useState<string>("");
+  useEffect(() => { void trpc.products.listVariants.query({ articleId }).then(setVariants).catch(() => undefined); }, [articleId]);
+  const farben = [...new Set(variants.map((v) => attrOf(v.attributes, /farbe|color/i)).filter(Boolean))];
+  const sizesForColor = variants.filter((v) => !farbe || attrOf(v.attributes, /farbe|color/i) === farbe);
+  const runQty: Record<string, number> = Array.isArray(value) ? Object.fromEntries(value.map((e) => [e.variantId, e.qty])) : {};
+  const total = Object.values(runQty).reduce((s, n) => s + (n || 0), 0);
+  const setQ = (variantId: string, qty: number): void => {
+    const next = { ...runQty, [variantId]: qty };
+    onChange(Object.entries(next).filter(([, q]) => q > 0).map(([vid, q]) => ({ variantId: vid, qty: q })));
+  };
+  const vLabel = (v: typeof variants[number]): string => [attrOf(v.attributes, /farbe|color/i), attrOf(v.attributes, /gr(ö|oe)ße|size/i)].filter(Boolean).join(" ") || v.sku;
+  return (
+    <Box mb={8}>
+      <SegmentedControl size="xs" value={mode} onChange={(m) => { setMode(m as "single" | "run"); onChange(undefined); }}
+        data={[{ value: "single", label: "Einzelvariante" }, { value: "run", label: "Größenlauf" }]} mb={6} />
+      {mode === "single" ? (
+        <Select size="xs" searchable placeholder="Variante (Farbe × Größe)…" w={320}
+          value={typeof value === "string" ? value : null}
+          data={variants.map((v) => ({ value: v.id, label: vLabel(v) + ` (${v.sku})` }))}
+          onChange={(v) => onChange(v ?? undefined)} />
+      ) : (
+        <Box>
+          <Group gap="xs" mb={4} align="end">
+            <Select size="xs" label="Farbe" w={160} placeholder="Farbe wählen" value={farbe || null}
+              data={farben.map((f) => ({ value: f, label: f }))} onChange={(f) => setFarbe(f ?? "")} />
+            <Text size="xs" c="dimmed">Stückzahl je Größe eintragen — jede befüllte Größe wird eine Auftragszeile. Summe: {total}</Text>
+          </Group>
+          <Group gap={6}>
+            {sizesForColor.map((v) => (
+              <NumberInput key={v.id} size="xs" w={84} min={0} placeholder="0"
+                label={attrOf(v.attributes, /gr(ö|oe)ße|size/i) || v.sku}
+                value={runQty[v.id] ?? ""} onChange={(n) => setQ(v.id, Number(n) || 0)} />
+            ))}
+          </Group>
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+// Angebot → Auftrag: fragt für Hauptartikel ohne Variante (needsVariant) die genaue Farbe×Größe
+// ab — als Einzelvariante oder als Größenlauf (Stückzahl je Größe, Varianten-Matrix) — und
+// übergibt die Auflösung an convertQuote. Alternativen werden vom Server weggelassen.
 function ConvertQuoteDialog({ quoteId, onDone, onClose }: { quoteId: string; onDone: (orderNo: string) => void; onClose: () => void }): JSX.Element {
   type Plan = Awaited<ReturnType<typeof trpc.sales.conversionPlan.query>>;
   const [plan, setPlan] = useState<Plan | null>(null);
-  const [catalog, setCatalog] = useState<Awaited<ReturnType<typeof trpc.products.catalog.query>>>([]);
-  const [picks, setPicks] = useState<Record<number, string>>({});
+  const [picks, setPicks] = useState<Record<number, ConvResolution>>({});
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => { void (async () => {
-    try {
-      const [p, c] = await Promise.all([trpc.sales.conversionPlan.query({ quoteId }), trpc.products.catalog.query()]);
-      setPlan(p); setCatalog(c);
-    } catch (e) { setErr(errMsg(e)); }
+    try { setPlan(await trpc.sales.conversionPlan.query({ quoteId })); } catch (e) { setErr(errMsg(e)); }
   })(); }, [quoteId]);
 
   const open = plan ? plan.lines.filter((l) => l.needsVariant) : [];
-  const allResolved = open.every((l) => picks[l.position]);
+  const isResolved = (pos: number): boolean => { const r = picks[pos]; return typeof r === "string" ? !!r : Array.isArray(r) && r.some((e) => e.qty > 0); };
+  const allResolved = open.every((l) => isResolved(l.position));
   const convert = async (): Promise<void> => {
     setBusy(true); setErr(null);
     try {
@@ -2314,19 +2360,13 @@ function ConvertQuoteDialog({ quoteId, onDone, onClose }: { quoteId: string; onD
             <Alert color="gray" variant="light" mb="sm">Alternativpositionen werden nicht in den Auftrag übernommen.</Alert>
           )}
           {open.length === 0 && <Text size="sm" mb="sm">Alle Positionen sind eindeutig — der Auftrag kann direkt angelegt werden.</Text>}
-          {open.length > 0 && <Text size="sm" mb="sm">Für folgende Hauptartikel bitte Farbe &amp; Größe wählen:</Text>}
-          {open.map((l) => {
-            const variants = catalog.filter((c) => c.articleId === l.articleId);
-            return (
-              <Group key={l.position} gap="xs" mb={6} align="end">
-                <Text size="sm" w={220} truncate>Pos. {l.position}: {l.articleName ?? l.description}</Text>
-                <Select size="xs" searchable placeholder="Variante (Farbe × Größe)…" w={300}
-                  value={picks[l.position] ?? null}
-                  data={variants.map((v) => ({ value: v.variantId, label: v.label }))}
-                  onChange={(v) => setPicks((p) => ({ ...p, [l.position]: v ?? "" }))} />
-              </Group>
-            );
-          })}
+          {open.length > 0 && <Text size="sm" mb="sm">Für folgende Hauptartikel die Variante wählen — als Einzelvariante oder Größenlauf (Stückzahl je Größe nach Muster-Anprobe):</Text>}
+          {open.map((l) => l.articleId ? (
+            <Box key={l.position} mb={10}>
+              <Text size="sm" fw={500} mb={2}>Pos. {l.position}: {l.articleName ?? l.description}</Text>
+              <ConvertPositionResolver articleId={l.articleId} value={picks[l.position]} onChange={(r) => setPicks((p) => ({ ...p, [l.position]: r ?? "" }))} />
+            </Box>
+          ) : null)}
           <Group justify="flex-end" mt="md">
             <Button variant="default" onClick={onClose}>Abbrechen</Button>
             <Button loading={busy} disabled={!allResolved} onClick={() => void convert()}>Auftrag anlegen</Button>

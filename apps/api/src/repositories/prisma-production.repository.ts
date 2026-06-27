@@ -30,7 +30,7 @@ export class PrismaProductionRepository implements ProductionRepository {
       ? await prisma.variant.findMany({
           where: { id: { in: variantIds } },
           select: {
-            id: true, isBundle: true,
+            id: true, isBundle: true, articleId: true,
             article: { select: { veredlerId: true, bestandsgefuehrt: true } },
             bestandsgefuehrtOverride: true,
             // Hauptlieferant (niedrigste priority) für die Beschaffungs-Lieferzeit (Procure-to-Order).
@@ -60,6 +60,7 @@ export class PrismaProductionRepository implements ProductionRepository {
         const v = l.variantId ? byId.get(l.variantId) : undefined;
         return {
           position: l.position, description: l.description, qty: l.qty, variantId: l.variantId,
+          articleId: v?.articleId ?? null,
           isBundle: v?.isBundle ?? false,
           components: (v?.bundleComponents ?? []).map((c) => ({ description: c.description, qty: c.qty, componentVariantId: c.componentVariantId })),
           veredlerId: v?.article.veredlerId ?? null,

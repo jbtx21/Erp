@@ -24,6 +24,8 @@ export interface ProductionOrderLine {
   description: string;
   qty: number;
   variantId: string | null;
+  /** Artikel der Variante — Basis der Beistell-Aggregation über alle Größenzeilen (Größenlauf). */
+  articleId: string | null;
   isBundle: boolean;
   /** Stückliste der Set-Variante (leer, wenn keine Set-Position). */
   components: VariantComponentDef[];
@@ -239,12 +241,18 @@ export class ProductionService {
       const g = groups.get(l.veredlerId) ?? { positionen: new Set<number>(), menge: 0, info: [] };
       const textil = l.bezugPosition != null ? byPosition.get(l.bezugPosition) : undefined;
       if (textil) {
-        // Jedes referenzierte Textil nur einmal je Veredler beistellen (mehrere Platzierungen am
-        // selben Textil zählen die Menge nicht doppelt).
-        if (!g.positionen.has(textil.position)) {
-          g.positionen.add(textil.position);
-          g.menge += textil.qty;
-          g.info.push(`${textil.qty}× ${textil.description} (Pos. ${textil.position})`);
+        // Beistellung über ALLE Größenzeilen desselben Artikels aggregieren (Größenlauf →
+        // mehrere Größenzeilen). So umfasst die Beistellung das ganze Textil, nicht nur eine
+        // Größe. Jede Position nur einmal je Veredler zählen (mehrere Platzierungen am selben
+        // Textil verdoppeln die Menge nicht).
+        const geschwister = textil.articleId
+          ? lines.filter((x) => x.articleId === textil.articleId)
+          : [textil];
+        for (const t of geschwister) {
+          if (g.positionen.has(t.position)) continue;
+          g.positionen.add(t.position);
+          g.menge += t.qty;
+          g.info.push(`${t.qty}× ${t.description} (Pos. ${t.position})`);
         }
       } else if (!g.positionen.has(l.position)) {
         // Kein Bezug hinterlegt → Beistellung = Menge der Veredelungsposition (bestmögliche Annahme).

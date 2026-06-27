@@ -1967,8 +1967,12 @@ export const appRouter = router({
     convertQuote: roleProcedure("ADMIN", "BUERO")
       .input(z.object({
         quoteId: z.string().min(1),
-        // Position → gewählte Variante für Hauptartikel ohne vorgegebene Variante.
-        resolutions: z.record(z.string(), z.string()).optional(),
+        // Position → gewählte Variante (String) ODER Größenlauf [{variantId, qty}] aus der
+        // Varianten-Matrix (Farbe×Größe + Stückzahl je Größe nach Muster-Anprobe).
+        resolutions: z.record(
+          z.string(),
+          z.union([z.string(), z.array(z.object({ variantId: z.string().min(1), qty: z.number().int().positive() }))])
+        ).optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         try {
