@@ -747,8 +747,36 @@ function ConfirmShipBtn({ orderId, reload }: { orderId: string; reload: () => Pr
 export const DunningPage = (): JSX.Element => (
   <ListPage module="Finanzen / Mahnwesen" title="Mahnwesen" hint="Offene Posten / Mahnstufen (Gebühr + Historie, Kap. 9.5)."
     load={() => trpc.dunning.list.query({ limit: 100 }) as Promise<Row[]>}
-    toolbar={(reload) => <RunDunningBtn reload={reload} />} />
+    hide={["latestNoticeId"]}
+    toolbar={(reload) => <RunDunningBtn reload={reload} />}
+    action={(r) => <DunningRowActions noticeId={r.latestNoticeId ? String(r.latestNoticeId) : null} />} />
 );
+
+// Mahnung je Posten: Download (PDF) und Mailversand — verfügbar, sobald ein Mahnbeleg
+// existiert (nach dem Mahnlauf). Empfänger über Prompt (Kundenadresse).
+function DunningRowActions({ noticeId }: { noticeId: string | null }): JSX.Element {
+  const [err, setErr] = useState<string | null>(null);
+  if (!noticeId) return <Text size="xs" c="dimmed">noch keine Mahnung</Text>;
+  return (
+    <Group gap={4} justify="flex-end" wrap="nowrap">
+      <Button size="compact-xs" variant="subtle" onClick={async () => {
+        setErr(null);
+        try { const pdf = await trpc.print.mahnung.query({ noticeId }); downloadBase64(pdf.filename, pdf.base64, "application/pdf"); }
+        catch (e) { setErr(errMsg(e)); }
+      }}>PDF</Button>
+      <Button size="compact-xs" variant="subtle" color="blue" onClick={async () => {
+        setErr(null);
+        try {
+          const to = typeof window !== "undefined" ? window.prompt("Mahnung per E-Mail senden an:") : null;
+          if (!to) return;
+          const res = await trpc.mail.sendBeleg.mutate({ kind: "MAHNUNG", id: noticeId, to });
+          if (typeof window !== "undefined") window.alert(`„${res.filename}" an ${to} gesendet.`);
+        } catch (e) { setErr(errMsg(e)); }
+      }}>Mail</Button>
+      {err && <Text size="xs" c="red" title={err}>!</Text>}
+    </Group>
+  );
+}
 
 function RunDunningBtn({ reload }: { reload: () => Promise<void> }): JSX.Element {
   const [busy, setBusy] = useState(false);

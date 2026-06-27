@@ -25,11 +25,15 @@ export class InMemoryDunningRepository implements DunningRepository, DunningQuer
   }
 
   private seq = 0;
+  /** Jüngster erzeugter Mahnbeleg je Posten (für die Listen-PDF/Mail). */
+  private readonly latestNotice = new Map<string, string>();
   async applyDunningStep(notice: DunningNoticeDraft): Promise<{ noticeId: string | null }> {
     const it = this.items.find((x) => x.id === notice.itemId);
     if (it) it.dunningLevel = notice.stufe;
     this.notices.push(notice);
-    return { noticeId: `dn_${++this.seq}` };
+    const noticeId = `dn_${++this.seq}`;
+    this.latestNotice.set(notice.itemId, noticeId);
+    return { noticeId };
   }
 
   async listDunning(limit: number): Promise<DunningOverviewItem[]> {
@@ -40,6 +44,7 @@ export class InMemoryDunningRepository implements DunningRepository, DunningQuer
       dueDate: i.dueDate,
       dunningLevel: i.dunningLevel,
       mahnsperre: i.mahnsperre,
+      latestNoticeId: this.latestNotice.get(i.id) ?? null,
     }));
   }
 }

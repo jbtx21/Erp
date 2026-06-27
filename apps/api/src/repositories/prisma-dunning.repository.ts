@@ -58,14 +58,23 @@ export class PrismaDunningRepository implements DunningRepository, DunningQueryR
   }
 
   async listDunning(limit: number): Promise<DunningOverviewItem[]> {
-    const rows = await this.load();
-    return rows.slice(0, limit).map((r) => ({
+    const rows = (await this.load()).slice(0, limit);
+    // Jüngsten Mahnbeleg je Posten auflösen (für PDF/Mail-Versand aus der Liste).
+    const notices = await prisma.dunningNotice.findMany({
+      where: { openItemId: { in: rows.map((r) => r.id) } },
+      orderBy: { erzeugtAm: "desc" },
+      select: { id: true, openItemId: true },
+    });
+    const latest = new Map<string, string>();
+    for (const n of notices) if (!latest.has(n.openItemId)) latest.set(n.openItemId, n.id);
+    return rows.map((r) => ({
       id: r.id,
       invoiceNumber: r.invoiceNumber,
       openCents: r.openCents,
       dueDate: r.dueDate,
       dunningLevel: r.dunningLevel,
       mahnsperre: r.mahnsperre,
+      latestNoticeId: latest.get(r.id) ?? null,
     }));
   }
 }

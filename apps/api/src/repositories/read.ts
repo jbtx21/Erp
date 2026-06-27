@@ -187,6 +187,8 @@ export interface DunningOverviewItem {
   dueDate: Date;
   dunningLevel: number;
   mahnsperre: boolean;
+  /** Jüngster Mahnbeleg (DunningNotice) zum Posten — für PDF/Mail; null = noch keiner. */
+  latestNoticeId: string | null;
 }
 
 export interface DunningQueryRepository {
