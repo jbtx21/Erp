@@ -1330,6 +1330,8 @@ export const appRouter = router({
         placements: z.array(z.string()).optional(),
         // Optional: leer = inhouse-Veredelung (keine Fremdvergabe).
         veredlerId: z.string().optional(),
+        // Material-Dienstleister bei Inhouse (z. B. Transfer-Lieferant) → Beschaffungsbedarf.
+        materialLieferantId: z.string().optional(),
         ekCents: z.number().int().nonnegative().optional(),
         tiers: z.array(z.object({ minMenge: z.number().int().positive(), vkCents: z.number().int().nonnegative() })).optional(),
       }))

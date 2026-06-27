@@ -144,17 +144,17 @@ export class InMemoryProductRepository implements ProductRepository {
 
   // Veredler (Lieferanten) für Tests registrierbar.
   readonly suppliers = new Set<string>();
-  readonly veredelungArticles = new Map<string, { veredlerId: string | null; ekCents: number | null; tiers: VeredelungTier[]; placements: string[] }>();
+  readonly veredelungArticles = new Map<string, { veredlerId: string | null; materialSupplierId: string | null; ekCents: number | null; tiers: VeredelungTier[]; placements: string[] }>();
   addSupplier(id: string): void { this.suppliers.add(id); }
 
   async supplierExists(id: string): Promise<boolean> { return this.suppliers.has(id); }
 
-  async createVeredelungArticle(input: { name: string; sku: string; method: "STICK" | "DRUCK" | "DRUCK_DIGITAL" | "TRANSFER"; placements: string[]; veredlerId: string | null; ekCents: number | null; tiers: VeredelungTier[] }): Promise<CatalogEntry> {
+  async createVeredelungArticle(input: { name: string; sku: string; method: "STICK" | "DRUCK" | "DRUCK_DIGITAL" | "TRANSFER"; placements: string[]; veredlerId: string | null; materialSupplierId: string | null; ekCents: number | null; tiers: VeredelungTier[] }): Promise<CatalogEntry> {
     const articleId = `art_${++this.seq}`;
     this.articles.set(articleId, { id: articleId, sku: input.sku, name: input.name, ...emptyPim });
     const variantId = `var_${++this.seq}`;
     this.variants.set(variantId, { id: variantId, articleId, sku: input.sku, attributes: [], isBundle: false, bestandsgefuehrtOverride: null });
-    this.veredelungArticles.set(articleId, { veredlerId: input.veredlerId, ekCents: input.ekCents, tiers: input.tiers, placements: input.placements });
+    this.veredelungArticles.set(articleId, { veredlerId: input.veredlerId, materialSupplierId: input.materialSupplierId, ekCents: input.ekCents, tiers: input.tiers, placements: input.placements });
     return { variantId, articleId, articleName: input.name, sku: input.sku, description: "", label: `${input.name} (${input.sku})`, unitNetCents: input.tiers[0]?.vkCents ?? 0, isBundle: false };
   }
 }

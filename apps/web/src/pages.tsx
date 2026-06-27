@@ -1891,6 +1891,9 @@ function LogoArticleDialog({ onClose, onCreated }: { onClose: () => void; onCrea
   // Inhouse-Veredelung (z. B. 2-farbiger Transferdruck im Haus): kein externer Veredler →
   // keine Fremdvergabe-Stufe in der Produktion.
   const [inhouse, setInhouse] = useState(false);
+  // Material-Dienstleister bei Inhouse (z. B. Transfer-Lieferant): liefert das Material, das
+  // über die Beschaffung bestellt wird; die Applikation läuft inhouse.
+  const [materialLieferantId, setMaterialLieferantId] = useState("");
   const [ek, setEk] = useState<number | "">("");
   const [tiers, setTiers] = useState<TierRow[]>([{ minMenge: 1, euro: 0 }]);
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
@@ -1915,7 +1918,9 @@ function LogoArticleDialog({ onClose, onCreated }: { onClose: () => void; onCrea
       const cleanTiers = tiers.filter((t) => t.minMenge > 0).map((t) => ({ minMenge: t.minMenge, vkCents: Math.round(t.euro * 100) }));
       const e = await trpc.products.createVeredelung.mutate({
         name: name.trim(), sku: sku.trim(), method, ...(placements.length > 0 ? { placements } : {}),
-        ...(inhouse || !veredlerId ? {} : { veredlerId }), ...(ek !== "" ? { ekCents: Math.round(Number(ek) * 100) } : {}), tiers: cleanTiers,
+        ...(inhouse || !veredlerId ? {} : { veredlerId }),
+        ...(inhouse && materialLieferantId ? { materialLieferantId } : {}),
+        ...(ek !== "" ? { ekCents: Math.round(Number(ek) * 100) } : {}), tiers: cleanTiers,
       });
       onCreated({ label: e.label, variantId: e.variantId, unitNetCents: e.unitNetCents });
     } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
@@ -1936,7 +1941,8 @@ function LogoArticleDialog({ onClose, onCreated }: { onClose: () => void; onCrea
         <Switch label="Inhouse (kein Veredler)" checked={inhouse} onChange={(e) => setInhouse(e.currentTarget.checked)} mb={6}
           description="z. B. 2-farbiger Transferdruck im Haus — erzeugt keine Fremdvergabe" />
         {!inhouse && <SupplierPicker label={method === "DRUCK" ? "Siebdruck-Lieferant" : "Veredler"} value={veredlerId} onChange={setVeredlerId} w={240} />}
-        <NumberInput label={inhouse ? "EK/Kosten je Stück (€)" : "EK beim Veredler (€)"} value={ek} onChange={(v) => { const n = typeof v === "number" ? v : ""; setEk(n); if (typeof n === "number") setTiers((ts) => prefillTiers(n, ts)); }} min={0} decimalScale={2} w={170} placeholder="je Logo abweichend" title="VK je Staffelstufe wird automatisch über den Aufschlagsfaktor vorbelegt (überschreibbar)" />
+        {inhouse && <SupplierPicker label="Material-Dienstleister (optional)" value={materialLieferantId} onChange={setMaterialLieferantId} w={240} />}
+        <NumberInput label={inhouse ? (materialLieferantId ? "EK Material je Stück (€)" : "EK/Kosten je Stück (€)") : "EK beim Veredler (€)"} value={ek} onChange={(v) => { const n = typeof v === "number" ? v : ""; setEk(n); if (typeof n === "number") setTiers((ts) => prefillTiers(n, ts)); }} min={0} decimalScale={2} w={170} placeholder="je Logo abweichend" title="VK je Staffelstufe wird automatisch über den Aufschlagsfaktor vorbelegt (überschreibbar)" />
       </Group>
       <Title order={6} mt="md">Mengenstaffel (VK je Stück)</Title>
       {tiers.map((t, i) => (

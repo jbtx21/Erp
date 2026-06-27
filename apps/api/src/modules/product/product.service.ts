@@ -114,7 +114,13 @@ export interface CreateVeredelungInput {
   placements?: string[];
   /** Zugewiesener externer Veredler; null/leer = inhouse-Veredelung (keine Fremdvergabe). */
   veredlerId?: string | null;
-  /** Einkaufspreis des Logos beim Veredler (Cent); je Logo abweichend. */
+  /**
+   * Material-Dienstleister bei Inhouse-Veredelung (z. B. Transferdruck-Lieferant): liefert das
+   * Material (Transfers), die Applikation läuft inhouse. Erzeugt einen Einkaufs-/Bestellbedarf
+   * über die Beschaffung — getrennt vom (fehlenden) Veredler. Bei externem Veredler ungenutzt.
+   */
+  materialLieferantId?: string | null;
+  /** Einkaufspreis (Cent) beim Veredler bzw. Material-Dienstleister; je Logo abweichend. */
   ekCents?: number;
   /** Eigene Mengenstaffel (VK je Stück ab Menge) — pro Logo unterschiedlich. */
   tiers?: VeredelungTier[];
@@ -144,7 +150,7 @@ export interface ProductRepository {
   /** Prüft, ob ein Lieferant (Veredler) existiert. */
   supplierExists(id: string): Promise<boolean>;
   /** Legt einen Veredelungs-/Logo-Artikel mit (optionalem) Veredler, EK und Mengenstaffel an. */
-  createVeredelungArticle(input: Required<Pick<CreateVeredelungInput, "name" | "sku" | "method">> & { veredlerId: string | null; placements: string[]; ekCents: number | null; tiers: VeredelungTier[] }): Promise<CatalogEntry>;
+  createVeredelungArticle(input: Required<Pick<CreateVeredelungInput, "name" | "sku" | "method">> & { veredlerId: string | null; materialSupplierId: string | null; placements: string[]; ekCents: number | null; tiers: VeredelungTier[] }): Promise<CatalogEntry>;
 }
 
 export class ProductError extends Error {}
@@ -294,6 +300,13 @@ export class ProductService {
     // Haus) → erzeugt KEINE Fremdvergabe-Stufe. Mit Veredler = externe Lohnveredelung.
     const veredlerId = input.veredlerId?.trim() || null;
     if (veredlerId && !(await this.repo.supplierExists(veredlerId))) throw new ProductError("Unbekannter Veredler.");
+    // Material-Dienstleister (Inhouse, z. B. Transfer-Lieferant): liefert das Material, die
+    // Applikation bleibt inhouse. Nur bei Inhouse relevant; bei externem Veredler ist der
+    // Veredler selbst die EK-Quelle (kein separater Materiallieferant).
+    const materialLieferantId = input.materialLieferantId?.trim() || null;
+    if (materialLieferantId && !(await this.repo.supplierExists(materialLieferantId))) throw new ProductError("Unbekannter Material-Dienstleister.");
+    // EK-/Bestell-Quelle der Beschaffung: externer Veredler, sonst der Material-Dienstleister.
+    const materialSupplierId = veredlerId ?? materialLieferantId;
     if (input.ekCents !== undefined && input.ekCents < 0) throw new ProductError("EK darf nicht negativ sein.");
     const tiers = (input.tiers ?? []).filter((t) => t.minMenge > 0 && t.vkCents >= 0).sort((a, b) => a.minMenge - b.minMenge);
     for (const t of tiers) if (t.vkCents < 0) throw new ProductError("Staffelpreis darf nicht negativ sein.");
@@ -306,12 +319,12 @@ export class ProductService {
 
     const entry = await this.repo.createVeredelungArticle({
       name: input.name.trim(), sku: input.sku.trim(), method: input.method,
-      placements: finalPlacements, veredlerId,
+      placements: finalPlacements, veredlerId, materialSupplierId,
       ekCents: input.ekCents ?? null, tiers,
     });
     await this.audit.append(buildEntry({
       entity: "Article", entityId: entry.articleId, action: "CREATE",
-      after: { veredelung: input.method, veredlerId, inhouse: veredlerId === null, ekCents: input.ekCents ?? null, staffeln: tiers.length, platzierungen: finalPlacements.filter(Boolean).length },
+      after: { veredelung: input.method, veredlerId, inhouse: veredlerId === null, materialLieferantId, ekCents: input.ekCents ?? null, staffeln: tiers.length, platzierungen: finalPlacements.filter(Boolean).length },
     }));
     return entry;
   }

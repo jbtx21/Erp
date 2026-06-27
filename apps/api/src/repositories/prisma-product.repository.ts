@@ -208,7 +208,7 @@ export class PrismaProductRepository implements ProductRepository {
     return (await prisma.supplier.count({ where: { id } })) > 0;
   }
 
-  async createVeredelungArticle(input: { name: string; sku: string; method: "STICK" | "DRUCK" | "DRUCK_DIGITAL" | "TRANSFER"; placements: string[]; veredlerId: string | null; ekCents: number | null; tiers: VeredelungTier[] }): Promise<CatalogEntry> {
+  async createVeredelungArticle(input: { name: string; sku: string; method: "STICK" | "DRUCK" | "DRUCK_DIGITAL" | "TRANSFER"; placements: string[]; veredlerId: string | null; materialSupplierId: string | null; ekCents: number | null; tiers: VeredelungTier[] }): Promise<CatalogEntry> {
     // VK-Staffel des Logos liegt unter der Basis-Preisgruppe STANDARD (Preisgruppe ≠ Mengenstaffel).
     const standard = input.tiers.length > 0 ? await prisma.priceGroup.findFirst({ where: { kind: "STANDARD" }, select: { id: true } }) : null;
     if (input.tiers.length > 0 && !standard) throw new Error("Keine Preisgruppe STANDARD vorhanden — Staffel kann nicht angelegt werden.");
@@ -224,10 +224,11 @@ export class PrismaProductRepository implements ProductRepository {
         select: { id: true, name: true, variants: { select: { id: true } } },
       });
       const variantId = article.variants[0]!.id;
-      // EK als Lieferanten-Artikel nur bei externem Veredler; inhouse hat keinen Lieferanten
-      // (die internen Kosten stecken in der VK-Staffel/Nachkalkulation).
-      if (input.ekCents !== null && input.veredlerId) {
-        await tx.supplierItem.create({ data: { supplierId: input.veredlerId, variantId, ekCents: input.ekCents, priority: 1 } });
+      // EK als Lieferanten-Artikel beim externen Veredler ODER beim Material-Dienstleister
+      // (Inhouse-Transfer: Material extern bestellen, Applikation inhouse). Ohne beides hat die
+      // Inhouse-Veredelung keinen Lieferanten (interne Kosten stecken in der VK-Staffel).
+      if (input.ekCents !== null && input.materialSupplierId) {
+        await tx.supplierItem.create({ data: { supplierId: input.materialSupplierId, variantId, ekCents: input.ekCents, priority: 1 } });
       }
       if (standard && input.tiers.length > 0) {
         await tx.priceGroupPriceTier.createMany({

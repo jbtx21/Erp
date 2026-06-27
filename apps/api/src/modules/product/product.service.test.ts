@@ -159,6 +159,25 @@ describe("ProductService — Veredelungs-/Logo-Artikel (Kap. 5.4/11)", () => {
     expect(repo.veredelungArticles.get(entry.articleId)?.placements).toEqual(["Brust vorne", "Rücken"]);
   });
 
+  it("legt bei Inhouse-Veredelung mit Material-Dienstleister einen Beschaffungs-Lieferanten an (Transfers)", async () => {
+    const { svc, repo } = await setup();
+    repo.addSupplier("sup_transfer"); // Transfer-Dienstleister
+    const entry = await svc.createVeredelungArticle({
+      name: "Transfer 2-farbig", sku: "TRANS-2C", method: "TRANSFER",
+      veredlerId: null, materialLieferantId: "sup_transfer", ekCents: 120,
+    });
+    const v = repo.veredelungArticles.get(entry.articleId);
+    // Applikation inhouse (kein Veredler), Material wird beim Dienstleister bestellt.
+    expect(v?.veredlerId).toBeNull();
+    expect(v?.materialSupplierId).toBe("sup_transfer");
+  });
+
+  it("reine Inhouse-Veredelung ohne Material-Dienstleister hat keinen Beschaffungs-Lieferanten", async () => {
+    const { svc, repo } = await setup();
+    const entry = await svc.createVeredelungArticle({ name: "Transfer", sku: "T-INH", method: "TRANSFER", veredlerId: null });
+    expect(repo.veredelungArticles.get(entry.articleId)?.materialSupplierId).toBeNull();
+  });
+
   it("weist einen unbekannten Veredler ab", async () => {
     const { svc } = await setup();
     await expect(svc.createVeredelungArticle({ name: "Logo", sku: "L-2", method: "STICK", veredlerId: "sup_unknown" }))
