@@ -740,6 +740,9 @@ export const appRouter = router({
       .input(z.object({ productionId: z.string().min(1) }))
       .query(async ({ input, ctx }) => ctx.subproduction.productionSubStatus(input.productionId)),
 
+    /** Browsbare Gesamtübersicht: alle offenen Fremdvergabe-Stufen über alle PAs (Xentral-„Overview"). */
+    listOpen: protectedProcedure.query(({ ctx }) => ctx.subproduction.listOpen()),
+
     /** Fremdvergabe-Plan je PA: nächste/blockierte/überfällige Stufe, Schwund, Yield (T-04). */
     plan: protectedProcedure
       .input(z.object({ productionId: z.string().min(1), now: z.string().datetime().optional() }))
@@ -820,6 +823,11 @@ export const appRouter = router({
     listByOrder: roleProcedure(...supplierRoles)
       .input(z.object({ orderId: z.string().min(1), limit: z.number().int().positive().max(200).optional() }))
       .query(async ({ input, ctx }) => ctx.reklamation.listByOrder(input.orderId, input.limit ?? 50)),
+
+    /** Browsbare Gesamtübersicht: alle Reklamationen über alle Aufträge (Xentral-„Overview"). */
+    list: roleProcedure(...supplierRoles)
+      .input(z.object({ limit: z.number().int().positive().max(200).optional() }).optional())
+      .query(async ({ input, ctx }) => ctx.reklamation.listRecent(input?.limit ?? 100)),
 
     /** Folgevorgang auslösen (B11): Gutschrift bzw. Nachproduktions-Auftrag. Nur ADMIN/Büro. */
     executeFollowUp: roleProcedure("ADMIN", "BUERO")

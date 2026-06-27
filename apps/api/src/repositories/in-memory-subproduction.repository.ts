@@ -1,6 +1,7 @@
 // In-Memory-Implementierung des Fremdvergabe-Repositories — für Tests/lokale Durchstiche.
 
 import type {
+  OpenSubOrderRow,
   StageUpdate,
   StoredStage,
   SubProductionRepository,
@@ -32,6 +33,23 @@ export class InMemorySubProductionRepository implements SubProductionRepository 
         lohnCents: s.lohnCents ?? null,
         beistellPositionen: s.beistellPositionen ?? [],
         beistellInfo: s.beistellInfo ?? null,
+      }));
+  }
+
+  async listOpenStages(): Promise<OpenSubOrderRow[]> {
+    return this.stages
+      .filter((s) => s.status !== "ABGESCHLOSSEN")
+      .map((s) => ({
+        productionId: s.productionId,
+        productionNumber: s.productionId,
+        orderId: s.productionId,
+        orderNumber: s.productionId,
+        subNumber: s.id,
+        sequence: s.sequence,
+        supplierName: s.supplierId,
+        inhouse: s.inhouse ?? false,
+        status: s.status,
+        dueDate: s.dueDate ?? null,
       }));
   }
 

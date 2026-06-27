@@ -30,10 +30,26 @@ export type StageUpdate = Pick<
   "status" | "beistellungVersandtAm" | "ruecklaufErhaltenAm" | "beistellMenge" | "ruecklaufMenge"
 >;
 
+/** Zeile der Fremdvergabe-Gesamtübersicht (alle offenen Stufen über alle PAs, Xentral-„Overview"). */
+export interface OpenSubOrderRow {
+  productionId: string;
+  productionNumber: string;
+  orderId: string;
+  orderNumber: string;
+  subNumber: string;
+  sequence: number;
+  supplierName: string | null;
+  inhouse: boolean;
+  status: SubProductionStatus;
+  dueDate: Date | null;
+}
+
 export interface SubProductionRepository {
   getStage(subProductionId: string): Promise<StoredStage | null>;
   /** Alle Stufen einer PA (mit id, für Aktionen + sequenzielle Gate-Prüfung + Übersicht). */
   listStages(productionId: string): Promise<StoredStage[]>;
+  /** Alle offenen Fremdvergabe-Stufen (nicht abgeschlossen) über alle PAs — browsbare Übersicht. */
+  listOpenStages(): Promise<OpenSubOrderRow[]>;
   updateStage(subProductionId: string, data: StageUpdate): Promise<void>;
 }
 
@@ -159,6 +175,11 @@ export class SubProductionService {
   async productionSubStatus(productionId: string): Promise<ProductionSubStatus> {
     const stages = await this.repo.listStages(productionId);
     return { productionId, stages, allReturned: allStagesReturned(stages) };
+  }
+
+  /** Alle offenen Fremdvergabe-Stufen über alle PAs (browsbare Übersicht statt ID-Picker). */
+  async listOpen(): Promise<OpenSubOrderRow[]> {
+    return this.repo.listOpenStages();
   }
 
   /** Verdichteter Fremdvergabe-Plan (nächste/blockierte/überfällige Stufe, Schwund, Yield). */

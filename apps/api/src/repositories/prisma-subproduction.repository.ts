@@ -3,6 +3,7 @@
 import { prisma } from "@texma/db";
 import type { SubProductionStatus } from "@texma/shared";
 import type {
+  OpenSubOrderRow,
   StageUpdate,
   StoredStage,
   SubProductionRepository,
@@ -50,6 +51,30 @@ export class PrismaSubProductionRepository implements SubProductionRepository {
       lohnCents: s.lohnCents,
       beistellPositionen: s.beistellPositionen,
       beistellInfo: s.beistellInfo,
+    }));
+  }
+
+  async listOpenStages(): Promise<OpenSubOrderRow[]> {
+    const rows = await prisma.subProductionOrder.findMany({
+      where: { status: { not: "ABGESCHLOSSEN" } },
+      orderBy: [{ dueDate: "asc" }, { sequence: "asc" }],
+      select: {
+        productionId: true, number: true, sequence: true, inhouse: true, status: true, dueDate: true,
+        supplier: { select: { name: true } },
+        production: { select: { number: true, orderId: true, order: { select: { number: true } } } },
+      },
+    });
+    return rows.map((s) => ({
+      productionId: s.productionId,
+      productionNumber: s.production.number,
+      orderId: s.production.orderId,
+      orderNumber: s.production.order.number,
+      subNumber: s.number,
+      sequence: s.sequence,
+      supplierName: s.supplier?.name ?? null,
+      inhouse: s.inhouse,
+      status: s.status as SubProductionStatus,
+      dueDate: s.dueDate,
     }));
   }
 

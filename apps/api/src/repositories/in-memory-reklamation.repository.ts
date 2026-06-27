@@ -57,6 +57,13 @@ export class InMemoryReklamationRepository implements ReklamationRepository {
       .slice(0, limit);
   }
 
+  async listRecent(limit: number) {
+    return this.complaints.slice(0, limit).map((c) => ({
+      id: c.id, orderId: this.orderByComplaint.get(c.id) ?? "", orderNumber: this.orderByComplaint.get(c.id) ?? "",
+      companyName: "", cause: c.cause, followUp: c.followUp, costCents: c.costCents, costBearer: c.costBearer, createdAt: c.createdAt,
+    }));
+  }
+
   async loadFollowUp(complaintId: string): Promise<ComplaintFollowUpData | null> {
     const c = this.complaints.find((x) => x.id === complaintId);
     const orderId = this.orderByComplaint.get(complaintId);

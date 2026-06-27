@@ -60,6 +60,21 @@ export class PrismaReklamationRepository implements ReklamationRepository {
     });
   }
 
+  async listRecent(limit: number) {
+    const rows = await prisma.complaint.findMany({
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      select: {
+        id: true, orderId: true, cause: true, followUp: true, costCents: true, costBearer: true, createdAt: true,
+        order: { select: { number: true, company: { select: { name: true } } } },
+      },
+    });
+    return rows.map((c) => ({
+      id: c.id, orderId: c.orderId, orderNumber: c.order.number, companyName: c.order.company.name,
+      cause: c.cause, followUp: c.followUp, costCents: c.costCents, costBearer: c.costBearer, createdAt: c.createdAt,
+    }));
+  }
+
   async loadFollowUp(complaintId: string) {
     const c = await prisma.complaint.findUnique({
       where: { id: complaintId },

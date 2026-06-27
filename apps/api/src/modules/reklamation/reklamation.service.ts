@@ -32,6 +32,19 @@ export interface ComplaintListItem {
   createdAt: Date;
 }
 
+/** Zeile der Reklamations-Gesamtübersicht (alle Reklamationen, browsbar — Xentral-„Overview"). */
+export interface ComplaintOverviewItem {
+  id: string;
+  orderId: string;
+  orderNumber: string;
+  companyName: string;
+  cause: string;
+  followUp: string;
+  costCents: number;
+  costBearer: string;
+  createdAt: Date;
+}
+
 export interface ComplaintFollowUpData {
   orderId: string;
   companyId: string;
@@ -57,6 +70,8 @@ export interface ReklamationRepository {
   update(id: string, input: UpdateComplaintInput & { costBearer: CostBearer }): Promise<void>;
   load(id: string): Promise<ComplaintListItem | null>;
   listByOrder(orderId: string, limit: number): Promise<ComplaintListItem[]>;
+  /** Alle Reklamationen (browsbare Übersicht über alle Aufträge). */
+  listRecent(limit: number): Promise<ComplaintOverviewItem[]>;
   /** Folgevorgang-relevante Daten der Reklamation (inkl. Rechnung des Auftrags). */
   loadFollowUp(complaintId: string): Promise<ComplaintFollowUpData | null>;
   createCreditNote(input: { invoiceId: string; number: string; amountCents: number; reason: string }): Promise<{ id: string }>;
@@ -137,6 +152,10 @@ export class ReklamationService {
 
   listByOrder(orderId: string, limit: number): Promise<ComplaintListItem[]> {
     return this.repo.listByOrder(orderId, limit);
+  }
+
+  listRecent(limit: number): Promise<ComplaintOverviewItem[]> {
+    return this.repo.listRecent(limit);
   }
 
   /** Bearbeitet Ursache/Folgevorgang/Kosten einer Reklamation; Kostenträger wird neu abgeleitet. GoBD-auditiert. */

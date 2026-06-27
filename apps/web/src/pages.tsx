@@ -5350,6 +5350,17 @@ export const ReklamationPage = (): JSX.Element => {
   const [err, setErr] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
+  // Browsbare Gesamtübersicht (Xentral-„Overview"): alle Reklamationen, statt leerer ID-Picker-Seite.
+  const [overview, setOverview] = useState<Row[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+
+  const loadOverview = useCallback(async () => {
+    try { setOverview((await trpc.reklamation.list.query({})) as Row[]); }
+    catch (e) { setErr(errMsg(e)); }
+    finally { setLoaded(true); }
+  }, []);
+  useEffect(() => { void loadOverview(); }, [loadOverview, reload]);
 
   const loadLines = useCallback(async () => {
     setErr(null); setLineId("");
@@ -5362,8 +5373,19 @@ export const ReklamationPage = (): JSX.Element => {
 
   return (
     <>
-      <DocListHeader module="Vertrieb" title="Reklamation" />
-      <Text size="sm" c="dimmed" mt={4}>Reklamation je Auftragsposition → Folgevorgang (Gutschrift/Nachproduktion, Kap. 20).</Text>
+      <DocListHeader module="Vertrieb" title="Reklamation"
+        hint="Alle Reklamationen im Überblick — Zeile öffnet den Auftrag; oben rechts eine neue erfassen (Kap. 20)."
+        action={<Button size="xs" onClick={() => setShowCreate((s) => !s)}>{showCreate ? "Erfassung schließen" : "+ Reklamation erfassen"}</Button>} />
+      {err && <Alert color="red" mt="sm" withCloseButton onClose={() => setErr(null)}>{err}</Alert>}
+
+      {!loaded ? <Group justify="center" py="xl"><Loader size="sm" /></Group> : overview.length === 0 && !showCreate
+        ? <EmptyState title="Noch keine Reklamationen" hint="Reklamationen je Auftragsposition lösen Folgevorgänge aus (Gutschrift/Nachproduktion)." actionLabel="+ Reklamation erfassen" onAction={() => setShowCreate(true)} />
+        : <AutoTable rows={overview} hide={["orderId"]}
+            cellRender={(c, v) => (c === "cause" || c === "followUp" || c === "costBearer") && typeof v === "string" ? prettyStatus(v) : undefined}
+            onRowClick={(r) => { setOrderId(String(r.orderId)); setShowCreate(true); setTimeout(() => void loadLines(), 0); }} />}
+
+      {showCreate && (<>
+      <Text size="sm" c="dimmed" mt="md">Reklamation je Auftragsposition → Folgevorgang (Gutschrift/Nachproduktion, Kap. 20).</Text>
       <Group mt="sm" gap="xs" align="end">
         <OrderPicker value={orderId} onChange={setOrderId} />
         <Button variant="default" disabled={!orderId} onClick={() => void loadLines()}>Positionen laden</Button>
@@ -5394,8 +5416,8 @@ export const ReklamationPage = (): JSX.Element => {
         </Group>
       )}
       {status && <Text size="sm" mt="xs" c="dimmed">{status}</Text>}
-      {err && <Alert color="red" mt="sm">{err}</Alert>}
       {orderId && <ComplaintsPanel orderId={orderId} reloadKey={reload} />}
+      </>)}
     </>
   );
 };
@@ -5524,6 +5546,15 @@ export function SubproductionPage({ onOpen, focusId }: { onOpen?: (k: string, id
   const [plan, setPlan] = useState<SubPlan | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Browsbare Gesamtübersicht (Xentral-„Overview"): alle offenen Fremdvergabe-Stufen, statt ID-Picker.
+  const [openRows, setOpenRows] = useState<Row[]>([]);
+  const [listLoaded, setListLoaded] = useState(false);
+  const loadOpen = useCallback(async () => {
+    try { setOpenRows((await trpc.subproduction.listOpen.query()) as Row[]); }
+    catch (e) { setErr(errMsg(e)); }
+    finally { setListLoaded(true); }
+  }, []);
+  useEffect(() => { void loadOpen(); }, [loadOpen]);
 
   const load = useCallback(async (pid: string) => {
     // Ohne Produktions-ID nichts laden (kein 404 gegen eine leere/Demo-ID).
@@ -5551,14 +5582,14 @@ export function SubproductionPage({ onOpen, focusId }: { onOpen?: (k: string, id
       if (ans === null) return;
       menge = Number(ans) || 0;
     }
-    try { await trpc.subproduction.advance.mutate({ subProductionId: sub.id, to, menge }); await load(applied); }
+    try { await trpc.subproduction.advance.mutate({ subProductionId: sub.id, to, menge }); await load(applied); await loadOpen(); }
     catch (e) { setErr(errMsg(e)); }
   };
 
   // Inhouse-Veredelung (z. B. Transferdruck im Haus): keine Beistellung/Rücklauf, nur erledigen.
   const completeInhouse = async (sub: SubStage): Promise<void> => {
     setErr(null);
-    try { await trpc.subproduction.completeInhouse.mutate({ subProductionId: sub.id }); await load(applied); }
+    try { await trpc.subproduction.completeInhouse.mutate({ subProductionId: sub.id }); await load(applied); await loadOpen(); }
     catch (e) { setErr(errMsg(e)); }
   };
 
@@ -5594,13 +5625,21 @@ export function SubproductionPage({ onOpen, focusId }: { onOpen?: (k: string, id
 
   return (
     <>
-      <DocListHeader module="Fertigung" title="Fremdvergabe (Lohnveredelung)" />
-      <Text size="sm" c="dimmed" mt={4}>Mehrstufig &amp; sequenziell: Stufe n+1 startet erst, wenn der Rücklauf von Stufe n da ist (T-04, Kap. 5.3).</Text>
-      <Group mt="sm" gap="xs" align="end">
-        <TextInput label="Produktions-ID" value={productionId} onChange={(e) => setProductionId(e.currentTarget.value)} w={160} />
+      <DocListHeader module="Fertigung" title="Fremdvergabe (Lohnveredelung)"
+        hint="Offene Veredler-Stufen über alle Produktionsaufträge — Zeile öffnet die Stufenansicht (T-04, Kap. 5.3)." />
+      {err && <Alert color="red" mt="sm" withCloseButton onClose={() => setErr(null)}>{err}</Alert>}
+
+      {/* Browsbare Übersicht: alle offenen Stufen; Klick lädt die Detail-/Aktionsansicht der PA. */}
+      {!listLoaded ? <Group justify="center" py="xl"><Loader size="sm" /></Group> : openRows.length === 0
+        ? <EmptyState title="Keine offenen Fremdvergabe-Stufen" hint="Sobald ein Produktionsauftrag externe Veredler-Stufen plant, erscheinen sie hier." />
+        : <AutoTable rows={openRows} hide={["productionId", "orderId", "subNumber", "sequence"]} highlightId={applied}
+            cellRender={(c, v) => c === "supplierName" ? (v == null ? "Inhouse" : String(v)) : c === "inhouse" ? (v ? "Inhouse" : "Extern") : undefined}
+            onRowClick={(r) => { setProductionId(String(r.productionId)); setApplied(String(r.productionId)); }} />}
+
+      <Group mt="md" gap="xs" align="end">
+        <TextInput label="Produktions-ID (manuell)" value={productionId} onChange={(e) => setProductionId(e.currentTarget.value)} w={180} />
         <Button variant="default" onClick={() => setApplied(productionId)}>Anzeigen</Button>
       </Group>
-      {err && <Alert color="red" mt="sm">{err}</Alert>}
 
       {plan && stages.length > 0 && (
         <Group mt="md" gap="lg" wrap="wrap">
