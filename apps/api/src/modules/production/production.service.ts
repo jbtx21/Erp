@@ -31,6 +31,8 @@ export interface ProductionOrderLine {
   components: VariantComponentDef[];
   /** Zugewiesener Veredler des (Veredelungs-)Artikels — Quelle der Fremdvergabe (T-04). */
   veredlerId: string | null;
+  /** true = Veredelungsartikel (FINISHING). Ohne Veredler = Inhouse-Veredelungsschritt. */
+  isVeredelung: boolean;
   /** Veredelungsbezug (Kap. 5.4/11): Positionsnummer der zu veredelnden Textilposition. */
   bezugPosition: number | null;
 }
@@ -39,8 +41,11 @@ export interface ProductionOrderLine {
 export interface SubOrderInput {
   number: string;
   sequence: number;
-  supplierId: string;
-  /** Beizustellende Menge (Summe der referenzierten Textilpositionen); null = unbekannt. */
+  /** Externer Veredler; null = Inhouse-Veredelungsschritt. */
+  supplierId: string | null;
+  /** true = Inhouse-Veredelung (kein externer Veredler), läuft nach dem externen Rücklauf. */
+  inhouse: boolean;
+  /** Beizustellende Menge (Summe der referenzierten Textilpositionen); null = unbekannt/inhouse. */
   beistellMenge: number | null;
   /** Lesbare Beschreibung der Beistellung (z. B. „200× T-Shirt (Pos. 1)"). */
   beistellInfo: string | null;
@@ -262,14 +267,41 @@ export class ProductionService {
       }
       groups.set(l.veredlerId, g);
     }
-    return [...groups.entries()].map(([supplierId, g], i) => ({
+    const stages: SubOrderInput[] = [...groups.entries()].map(([supplierId, g], i) => ({
       number: `${paNumber}-${String.fromCharCode(97 + i)}`,
       sequence: i + 1,
       supplierId,
+      inhouse: false,
       beistellMenge: g.menge > 0 ? g.menge : null,
       beistellInfo: g.info.length > 0 ? g.info.join("; ") : null,
       beistellPositionen: [...g.positionen].sort((a, b) => a - b),
     }));
+
+    // Inhouse-Veredelungsschritte (Veredelungsartikel OHNE Veredler, z. B. 2-farbiger
+    // Transferdruck im Haus): je referenziertem Textil eine Stufe, NACH den externen Stufen
+    // (höhere sequence → das Positions-Gate sperrt sie, bis die externen am selben Textil
+    // zurück sind). Keine Beistellung/Rücklauf — nur OFFEN → ABGESCHLOSSEN (Kap. 5.4/11).
+    const inhouseSeen = new Set<number>(); // referenzierte Textil-Erstposition (Dedup je Textil)
+    for (const l of lines) {
+      if (l.veredlerId || !l.isVeredelung) continue;
+      const textil = l.bezugPosition != null ? byPosition.get(l.bezugPosition) : undefined;
+      const positionen = textil?.articleId
+        ? lines.filter((x) => x.articleId === textil.articleId).map((x) => x.position)
+        : textil ? [textil.position] : [l.position];
+      const key = positionen[0]!;
+      if (inhouseSeen.has(key)) continue;
+      inhouseSeen.add(key);
+      stages.push({
+        number: `${paNumber}-${String.fromCharCode(97 + stages.length)}`,
+        sequence: stages.length + 1,
+        supplierId: null,
+        inhouse: true,
+        beistellMenge: null,
+        beistellInfo: `Inhouse: ${l.description}`,
+        beistellPositionen: [...new Set(positionen)].sort((a, b) => a - b),
+      });
+    }
+    return stages;
   }
 
   async createFromOrder(orderId: string, opts: { dueDate?: Date | null; profile?: FinishingLeadProfile } = {}): Promise<{ id: string; number: string; bomItemCount: number; subOrderCount: number; dueDate: Date | null }> {

@@ -31,7 +31,7 @@ export class PrismaProductionRepository implements ProductionRepository {
           where: { id: { in: variantIds } },
           select: {
             id: true, isBundle: true, articleId: true,
-            article: { select: { veredlerId: true, bestandsgefuehrt: true } },
+            article: { select: { veredlerId: true, bestandsgefuehrt: true, isVeredelung: true } },
             bestandsgefuehrtOverride: true,
             // Hauptlieferant (niedrigste priority) für die Beschaffungs-Lieferzeit (Procure-to-Order).
             supplierItems: { orderBy: { priority: "asc" }, take: 1, select: { supplier: { select: { lieferzeitTage: true } } } },
@@ -64,6 +64,7 @@ export class PrismaProductionRepository implements ProductionRepository {
           isBundle: v?.isBundle ?? false,
           components: (v?.bundleComponents ?? []).map((c) => ({ description: c.description, qty: c.qty, componentVariantId: c.componentVariantId })),
           veredlerId: v?.article.veredlerId ?? null,
+          isVeredelung: v?.article.isVeredelung ?? false,
           bezugPosition: l.bezugPosition ?? null,
         };
       }),
@@ -78,7 +79,7 @@ export class PrismaProductionRepository implements ProductionRepository {
         dueDate: input.dueDate,
         finishingProfile: input.finishingProfile,
         bomItems: { create: input.bomItems.map((b) => ({ description: b.description, qty: b.qty, variantId: b.variantId ?? null })) },
-        subOrders: { create: input.subOrders.map((s) => ({ number: s.number, sequence: s.sequence, supplier: { connect: { id: s.supplierId } }, beistellMenge: s.beistellMenge, beistellInfo: s.beistellInfo, beistellPositionen: s.beistellPositionen })) },
+        subOrders: { create: input.subOrders.map((s) => ({ number: s.number, sequence: s.sequence, inhouse: s.inhouse, ...(s.supplierId ? { supplier: { connect: { id: s.supplierId } } } : {}), beistellMenge: s.beistellMenge, beistellInfo: s.beistellInfo, beistellPositionen: s.beistellPositionen })) },
       },
       select: { id: true },
     });

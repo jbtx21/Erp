@@ -662,6 +662,18 @@ export const appRouter = router({
         }
       }),
 
+    /** Schließt einen Inhouse-Veredelungsschritt ab (nach externem Rücklauf am selben Textil). */
+    completeInhouse: roleProcedure("ADMIN", "BUERO", "PRODUKTION")
+      .input(z.object({ subProductionId: z.string().min(1), at: z.string().datetime().optional() }))
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await ctx.subproduction.completeInhouse(input.subProductionId, input.at ? new Date(input.at) : new Date());
+        } catch (err) {
+          if (err instanceof SubProductionTransitionError) throw new TRPCError({ code: "CONFLICT", message: err.message });
+          throw err;
+        }
+      }),
+
     /** Fremdvergabe-Übersicht je PA: Stufen + allReturned (operativ). */
     list: protectedProcedure
       .input(z.object({ productionId: z.string().min(1) }))

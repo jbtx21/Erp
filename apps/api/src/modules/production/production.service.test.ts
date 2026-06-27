@@ -6,12 +6,12 @@ import { InMemoryNumberingRepository } from "../../repositories/in-memory-number
 class MemAudit { entries: unknown[] = []; async append(e: unknown): Promise<void> { this.entries.push(e); } }
 
 class FakeRepo implements ProductionRepository {
-  created: { number: string; orderId: string; dueDate: Date | null; finishingProfile: string | null; bomItems: { description: string; qty: number; variantId: string | null }[]; subOrders: { number: string; sequence: number; supplierId: string; beistellMenge: number | null; beistellInfo: string | null; beistellPositionen: number[] }[] }[] = [];
+  created: { number: string; orderId: string; dueDate: Date | null; finishingProfile: string | null; bomItems: { description: string; qty: number; variantId: string | null }[]; subOrders: { number: string; sequence: number; supplierId: string | null; inhouse: boolean; beistellMenge: number | null; beistellInfo: string | null; beistellPositionen: number[] }[] }[] = [];
   inProduction: string[] = [];
   released: string[] = [];
   constructor(private order: OrderForProduction | null) {}
   async loadOrderForProduction(): Promise<OrderForProduction | null> { return this.order; }
-  async createProductionOrder(input: { number: string; orderId: string; dueDate: Date | null; finishingProfile: string | null; bomItems: { description: string; qty: number; variantId: string | null }[]; subOrders: { number: string; sequence: number; supplierId: string; beistellMenge: number | null; beistellInfo: string | null; beistellPositionen: number[] }[] }): Promise<{ id: string }> {
+  async createProductionOrder(input: { number: string; orderId: string; dueDate: Date | null; finishingProfile: string | null; bomItems: { description: string; qty: number; variantId: string | null }[]; subOrders: { number: string; sequence: number; supplierId: string | null; inhouse: boolean; beistellMenge: number | null; beistellInfo: string | null; beistellPositionen: number[] }[] }): Promise<{ id: string }> {
     this.created.push({ number: input.number, orderId: input.orderId, dueDate: input.dueDate, finishingProfile: input.finishingProfile, bomItems: input.bomItems, subOrders: input.subOrders });
     if (this.order) this.order = { ...this.order, existingProductionId: "pa_1", existingProductionNumber: input.number };
     return { id: "pa_1" };
@@ -35,7 +35,7 @@ function svcFor(order: OrderForProduction | null): { svc: ProductionService; rep
 
 const baseOrder = (over: Partial<OrderForProduction> = {}): OrderForProduction => ({
   id: "ord_1", number: "AB-2026-0001", freigegeben: true, deliveryDate: null, procurementLeadDays: null, existingProductionId: null, existingProductionNumber: null,
-  lines: [{ position: 1, description: "240 Polos", qty: 240, variantId: "v_polo", articleId: null, isBundle: false, components: [], veredlerId: null, bezugPosition: null }],
+  lines: [{ position: 1, description: "240 Polos", qty: 240, variantId: "v_polo", articleId: null, isBundle: false, components: [], veredlerId: null, isVeredelung: false, bezugPosition: null }],
   ...over,
 });
 
@@ -53,7 +53,7 @@ describe("ProductionService — Auftrag → Produktionsauftrag (Kap. 5.2)", () =
   it("expandiert Set-Positionen über die Komponenten-Stückliste × Menge", async () => {
     const { svc, repo } = svcFor(baseOrder({
       lines: [{
-        position: 1, description: "Vereins-Set", qty: 50, variantId: "v_set", articleId: null, isBundle: true, veredlerId: null, bezugPosition: null,
+        position: 1, description: "Vereins-Set", qty: 50, variantId: "v_set", articleId: null, isBundle: true, veredlerId: null, isVeredelung: false, bezugPosition: null,
         components: [
           { description: "Polo rot M", qty: 1, componentVariantId: "v_polo" },
           { description: "Stick Brust links", qty: 1, componentVariantId: null },
@@ -112,8 +112,8 @@ describe("ProductionService — Auftrag → Produktionsauftrag (Kap. 5.2)", () =
   it("legt bei externem PA je Veredler eine Fremdvergabe-Stufe an (T-04)", async () => {
     const { svc, repo } = svcFor(baseOrder({
       lines: [
-        { position: 1, description: "240 Polos", qty: 240, variantId: "v_polo", articleId: null, isBundle: false, components: [], veredlerId: null, bezugPosition: null },
-        { position: 2, description: "Logo Stick", qty: 240, variantId: "v_logo", articleId: null, isBundle: false, components: [], veredlerId: "sup_stick", bezugPosition: 1 },
+        { position: 1, description: "240 Polos", qty: 240, variantId: "v_polo", articleId: null, isBundle: false, components: [], veredlerId: null, isVeredelung: false, bezugPosition: null },
+        { position: 2, description: "Logo Stick", qty: 240, variantId: "v_logo", articleId: null, isBundle: false, components: [], veredlerId: "sup_stick", isVeredelung: true, bezugPosition: 1 },
       ],
     }));
     const res = await svc.createFromOrder("ord_1", { profile: "EXTERN_STICK_SIEBDRUCK" });
@@ -128,10 +128,10 @@ describe("ProductionService — Auftrag → Produktionsauftrag (Kap. 5.2)", () =
   it("plant getrennte Veredler an verschiedenen Textilien parallel (disjunkte Beistellung)", async () => {
     const { svc, repo } = svcFor(baseOrder({
       lines: [
-        { position: 1, description: "200 T-Shirts", qty: 200, variantId: "v_tshirt", articleId: "art_tshirt", isBundle: false, components: [], veredlerId: null, bezugPosition: null },
-        { position: 2, description: "50 Polos", qty: 50, variantId: "v_polo", articleId: "art_polo", isBundle: false, components: [], veredlerId: null, bezugPosition: null },
-        { position: 3, description: "Siebdruck vorne+hinten", qty: 200, variantId: "v_sd", articleId: null, isBundle: false, components: [], veredlerId: "sup_hi5", bezugPosition: 1 },
-        { position: 4, description: "Stick Brust", qty: 50, variantId: "v_stick", articleId: null, isBundle: false, components: [], veredlerId: "sup_stick", bezugPosition: 2 },
+        { position: 1, description: "200 T-Shirts", qty: 200, variantId: "v_tshirt", articleId: "art_tshirt", isBundle: false, components: [], veredlerId: null, isVeredelung: false, bezugPosition: null },
+        { position: 2, description: "50 Polos", qty: 50, variantId: "v_polo", articleId: "art_polo", isBundle: false, components: [], veredlerId: null, isVeredelung: false, bezugPosition: null },
+        { position: 3, description: "Siebdruck vorne+hinten", qty: 200, variantId: "v_sd", articleId: null, isBundle: false, components: [], veredlerId: "sup_hi5", isVeredelung: true, bezugPosition: 1 },
+        { position: 4, description: "Stick Brust", qty: 50, variantId: "v_stick", articleId: null, isBundle: false, components: [], veredlerId: "sup_stick", isVeredelung: true, bezugPosition: 2 },
       ],
     }));
     const res = await svc.createFromOrder("ord_1", { profile: "EXTERN_STICK_SIEBDRUCK" });
@@ -146,11 +146,11 @@ describe("ProductionService — Auftrag → Produktionsauftrag (Kap. 5.2)", () =
     const { svc, repo } = svcFor(baseOrder({
       lines: [
         // T-Shirt-Größenlauf als 3 Größenzeilen desselben Artikels (Navy S/M/L).
-        { position: 1, description: "T-Shirt Navy S", qty: 50, variantId: "v_s", articleId: "art_tshirt", isBundle: false, components: [], veredlerId: null, bezugPosition: null },
-        { position: 2, description: "T-Shirt Navy M", qty: 80, variantId: "v_m", articleId: "art_tshirt", isBundle: false, components: [], veredlerId: null, bezugPosition: null },
-        { position: 3, description: "T-Shirt Navy L", qty: 70, variantId: "v_l", articleId: "art_tshirt", isBundle: false, components: [], veredlerId: null, bezugPosition: null },
+        { position: 1, description: "T-Shirt Navy S", qty: 50, variantId: "v_s", articleId: "art_tshirt", isBundle: false, components: [], veredlerId: null, isVeredelung: false, bezugPosition: null },
+        { position: 2, description: "T-Shirt Navy M", qty: 80, variantId: "v_m", articleId: "art_tshirt", isBundle: false, components: [], veredlerId: null, isVeredelung: false, bezugPosition: null },
+        { position: 3, description: "T-Shirt Navy L", qty: 70, variantId: "v_l", articleId: "art_tshirt", isBundle: false, components: [], veredlerId: null, isVeredelung: false, bezugPosition: null },
         // Siebdruck referenziert die erste Größenzeile, gilt aber für den ganzen Artikel.
-        { position: 4, description: "Siebdruck", qty: 200, variantId: "v_sd", articleId: null, isBundle: false, components: [], veredlerId: "sup_hi5", bezugPosition: 1 },
+        { position: 4, description: "Siebdruck", qty: 200, variantId: "v_sd", articleId: null, isBundle: false, components: [], veredlerId: "sup_hi5", isVeredelung: true, bezugPosition: 1 },
       ],
     }));
     await svc.createFromOrder("ord_1", { profile: "EXTERN_STICK_SIEBDRUCK" });
@@ -159,9 +159,29 @@ describe("ProductionService — Auftrag → Produktionsauftrag (Kap. 5.2)", () =
     expect(sub).toMatchObject({ beistellMenge: 200, beistellPositionen: [1, 2, 3] });
   });
 
+  it("plant Inhouse-Veredelung als eigene Stufe nach der externen am selben Textil", async () => {
+    const { svc, repo } = svcFor(baseOrder({
+      lines: [
+        { position: 1, description: "30 Sweatshirts", qty: 30, variantId: "v_sweat", articleId: "art_sweat", isBundle: false, components: [], veredlerId: null, isVeredelung: false, bezugPosition: null },
+        // Externe Stickerei + inhouse Transferdruck am SELBEN Textil (Pos. 1).
+        { position: 2, description: "Stick Brust", qty: 30, variantId: "v_stick", articleId: null, isBundle: false, components: [], veredlerId: "sup_stick", isVeredelung: true, bezugPosition: 1 },
+        { position: 3, description: "Transfer 2-farbig", qty: 30, variantId: "v_trans", articleId: null, isBundle: false, components: [], veredlerId: null, isVeredelung: true, bezugPosition: 1 },
+      ],
+    }));
+    const res = await svc.createFromOrder("ord_1", { profile: "EXTERN_UND_INTERN" });
+    expect(res.subOrderCount).toBe(2);
+    const subs = repo.created[0]?.subOrders ?? [];
+    const extern = subs.find((s) => s.supplierId === "sup_stick");
+    const inhouse = subs.find((s) => s.inhouse);
+    expect(extern).toMatchObject({ inhouse: false, beistellMenge: 30 });
+    // Inhouse-Stufe: kein Veredler, höhere sequence (nach extern), selbe Textilposition fürs Gate.
+    expect(inhouse).toMatchObject({ supplierId: null, inhouse: true, beistellPositionen: [1] });
+    expect(inhouse!.sequence).toBeGreaterThan(extern!.sequence);
+  });
+
   it("plant zugewiesene Veredler auch bei internem Weg als Fremdvergabe (verloren-gegangen-Fix, AB-2026-0006)", async () => {
     const { svc, repo } = svcFor(baseOrder({
-      lines: [{ position: 1, description: "Logo Stick", qty: 240, variantId: "v_logo", articleId: null, isBundle: false, components: [], veredlerId: "sup_stick", bezugPosition: null }],
+      lines: [{ position: 1, description: "Logo Stick", qty: 240, variantId: "v_logo", articleId: null, isBundle: false, components: [], veredlerId: "sup_stick", isVeredelung: true, bezugPosition: null }],
     }));
     const res = await svc.createFromOrder("ord_1", { profile: "INHOUSE_OHNE_TRANSFER" });
     // Eine Position mit hinterlegtem Veredler ist eine Lohnveredelung — Stufe wird trotz „inhouse" geplant.
@@ -172,7 +192,7 @@ describe("ProductionService — Auftrag → Produktionsauftrag (Kap. 5.2)", () =
 
   it("legt ohne zugewiesene Veredler keine Fremdvergabe an", async () => {
     const { svc, repo } = svcFor(baseOrder({
-      lines: [{ position: 1, description: "240 Polos", qty: 240, variantId: "v_polo", articleId: null, isBundle: false, components: [], veredlerId: null, bezugPosition: null }],
+      lines: [{ position: 1, description: "240 Polos", qty: 240, variantId: "v_polo", articleId: null, isBundle: false, components: [], veredlerId: null, isVeredelung: false, bezugPosition: null }],
     }));
     const res = await svc.createFromOrder("ord_1", { profile: "INHOUSE_OHNE_TRANSFER" });
     expect(res.subOrderCount).toBe(0);
@@ -227,7 +247,7 @@ describe("ProductionService — Auftrag → Produktionsauftrag (Kap. 5.2)", () =
 
   it("rebuildBomForOrder: baut die Stückliste neu, wenn ein PA existiert", async () => {
     const { svc, repo } = svcFor(baseOrder({ existingProductionId: "pa_1", lines: [
-      { position: 1, description: "240 Polos", qty: 240, variantId: "v_polo", articleId: null, isBundle: false, components: [], veredlerId: null, bezugPosition: null },
+      { position: 1, description: "240 Polos", qty: 240, variantId: "v_polo", articleId: null, isBundle: false, components: [], veredlerId: null, isVeredelung: false, bezugPosition: null },
     ] }));
     const res = await svc.rebuildBomForOrder("ord_1");
     expect(res).toEqual({ rebuilt: true, bomItemCount: 1 });

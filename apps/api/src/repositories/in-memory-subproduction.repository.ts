@@ -22,6 +22,7 @@ export class InMemorySubProductionRepository implements SubProductionRepository 
         productionId: s.productionId,
         sequence: s.sequence,
         supplierId: s.supplierId,
+        inhouse: s.inhouse ?? false,
         status: s.status,
         beistellungVersandtAm: s.beistellungVersandtAm ?? null,
         ruecklaufErhaltenAm: s.ruecklaufErhaltenAm ?? null,

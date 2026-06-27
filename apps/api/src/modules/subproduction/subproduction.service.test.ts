@@ -86,3 +86,31 @@ describe("SubProductionService.advanceStage (T-04)", () => {
     expect(plan.allReturned).toBe(false);
   });
 });
+
+describe("SubProductionService.completeInhouse (Inhouse-Veredelung, Kap. 5.4/11)", () => {
+  // Externe Stick-Stufe (s1) + inhouse Transfer (s2) am selben Textil (Position 1).
+  const inhouseSetup = () => {
+    const repo = new InMemorySubProductionRepository([
+      { id: "s1", productionId: "pa", sequence: 1, supplierId: "sup_stick", inhouse: false, status: "BEISTELLUNG_VERSANDT", beistellungVersandtAm: null, ruecklaufErhaltenAm: null, beistellPositionen: [1] },
+      { id: "s2", productionId: "pa", sequence: 2, supplierId: null, inhouse: true, status: "OFFEN", beistellungVersandtAm: null, ruecklaufErhaltenAm: null, beistellPositionen: [1] },
+    ]);
+    return { repo, service: new SubProductionService(repo, new MemoryAuditSink()) };
+  };
+
+  it("blockiert den Inhouse-Abschluss, solange die externe Veredelung am selben Textil nicht zurück ist", async () => {
+    const { service } = inhouseSetup();
+    await expect(service.completeInhouse("s2")).rejects.toBeInstanceOf(SubProductionTransitionError);
+  });
+
+  it("schließt die Inhouse-Stufe nach dem externen Rücklauf ab", async () => {
+    const { service } = inhouseSetup();
+    await service.advanceStage("s1", "RUECKLAUF_ERHALTEN", new Date(), { menge: 30 });
+    const done = await service.completeInhouse("s2");
+    expect(done.status).toBe("ABGESCHLOSSEN");
+  });
+
+  it("verweigert Beistellung/Rücklauf auf einer Inhouse-Stufe", async () => {
+    const { service } = inhouseSetup();
+    await expect(service.advanceStage("s2", "BEISTELLUNG_VERSANDT")).rejects.toBeInstanceOf(SubProductionTransitionError);
+  });
+});

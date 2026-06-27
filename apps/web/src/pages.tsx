@@ -5328,7 +5328,7 @@ function ComplaintsPanel({ orderId, reloadKey }: { orderId: string; reloadKey: n
 
 // ── Fertigung: mehrstufige Fremdvergabe / Lohnveredelung (T-04, Kap. 5.3) ─────
 type SubStatus = "OFFEN" | "BEISTELLUNG_VERSANDT" | "RUECKLAUF_ERHALTEN" | "ABGESCHLOSSEN";
-interface SubStage { id: string; sequence: number; supplierId: string; status: SubStatus; beistellMenge: number | null; ruecklaufMenge: number | null; dueDate: string | null; lohnCents: number | null; beistellInfo?: string | null; }
+interface SubStage { id: string; sequence: number; supplierId: string | null; inhouse?: boolean; status: SubStatus; beistellMenge: number | null; ruecklaufMenge: number | null; dueDate: string | null; lohnCents: number | null; beistellInfo?: string | null; }
 interface SubPlan {
   nextActionable: SubStage | null; blocked: SubStage[]; overdue: SubStage[];
   totalScrap: number; totalLohnCents: number; progressPercent: number; yieldPercent: number | null; allReturned: boolean;
@@ -5373,8 +5373,21 @@ export function SubproductionPage({ onOpen, focusId }: { onOpen?: (k: string, id
     catch (e) { setErr(errMsg(e)); }
   };
 
+  // Inhouse-Veredelung (z. B. Transferdruck im Haus): keine Beistellung/Rücklauf, nur erledigen.
+  const completeInhouse = async (sub: SubStage): Promise<void> => {
+    setErr(null);
+    try { await trpc.subproduction.completeInhouse.mutate({ subProductionId: sub.id }); await load(applied); }
+    catch (e) { setErr(errMsg(e)); }
+  };
+
   const actionsFor = (s: SubStage): ReactNode => {
     const blocked = plan?.blocked.some((b) => b.sequence === s.sequence) ?? false;
+    if (s.inhouse) {
+      if (s.status === "ABGESCHLOSSEN") return <Text size="xs" c="dimmed">—</Text>;
+      return blocked
+        ? <Text size="xs" c="dimmed">wartet auf externe Veredelung</Text>
+        : <Button size="compact-xs" color="grape" variant="light" onClick={() => void completeInhouse(s)}>Inhouse erledigt</Button>;
+    }
     if (s.status === "OFFEN") return blocked
       ? <Text size="xs" c="dimmed">wartet auf Vorstufe</Text>
       : <Button size="compact-xs" variant="default" onClick={() => void advance(s, "BEISTELLUNG_VERSANDT")}>Beistellung versenden</Button>;
@@ -5417,7 +5430,7 @@ export function SubproductionPage({ onOpen, focusId }: { onOpen?: (k: string, id
               {stages.map((s) => (
                 <Table.Tr key={s.id}>
                   <Table.Td>#{s.sequence}</Table.Td>
-                  <Table.Td><SupplierRef id={s.supplierId} names={supplierNames} onOpen={onOpen} /></Table.Td>
+                  <Table.Td>{s.inhouse ? <Badge color="grape" variant="light" size="sm">Inhouse</Badge> : <SupplierRef id={s.supplierId} names={supplierNames} onOpen={onOpen} />}</Table.Td>
                   <Table.Td><StatusBadge status={s.status} /></Table.Td>
                   <Table.Td style={numTd} title={s.beistellInfo ?? undefined}>
                     {s.beistellMenge ?? "—"}

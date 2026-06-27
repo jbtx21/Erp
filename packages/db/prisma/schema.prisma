@@ -1076,8 +1076,11 @@ model SubProductionOrder {
   productionId  String
   production    ProductionOrder @relation(fields: [productionId], references: [id])
   sequence      Int      @default(1) // Reihenfolge der Fremdvergabe-Stufe (T-04)
-  supplierId    String // Veredler
-  supplier      Supplier @relation(fields: [supplierId], references: [id])
+  supplierId    String? // Veredler (null = Inhouse-Veredelung, kein externer Lohnveredler)
+  supplier      Supplier? @relation(fields: [supplierId], references: [id])
+  // Inhouse-Veredelungsschritt (z. B. 2-farbiger Transferdruck im Haus): keine Beistellung/
+  // Rücklauf, läuft NACH dem externen Rücklauf am selben Textil (Gate, Kap. 5.4/11).
+  inhouse       Boolean  @default(false)
   beistellungVersandtAm DateTime? // Material an Veredler geschickt
   ruecklaufErhaltenAm   DateTime? // Rücklauf gebucht
   status        String   @default("OFFEN")

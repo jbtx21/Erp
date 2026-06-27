@@ -15,7 +15,10 @@ export type SubProductionStatus =
 export interface SubProductionStage {
   /** Reihenfolge der Stufe (1, 2, …). */
   sequence: number;
-  supplierId: string;
+  /** Externer Veredler; null = Inhouse-Veredelungsschritt (keine Beistellung/Rücklauf). */
+  supplierId: string | null;
+  /** true = Inhouse-Veredelung (z. B. Transferdruck im Haus) nach dem externen Rücklauf. */
+  inhouse?: boolean;
   status: SubProductionStatus;
   beistellungVersandtAm?: Date | null;
   ruecklaufErhaltenAm?: Date | null;

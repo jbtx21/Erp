@@ -67,6 +67,10 @@ export class SubProductionService {
     if (!stage) {
       throw new SubProductionTransitionError(`Unterauftrag ${subProductionId} nicht gefunden.`);
     }
+    // Inhouse-Stufen haben keine Beistellung/Rücklauf — sie werden über completeInhouse erledigt.
+    if (stage.inhouse) {
+      throw new SubProductionTransitionError("Inhouse-Veredelung wird über die Inhouse-Erledigung abgeschlossen (keine Beistellung/Rücklauf).");
+    }
 
     // Sequenzielles Gate: eine Stufe darf erst starten, wenn alle früheren zurück sind.
     if (to === "BEISTELLUNG_VERSANDT") {
@@ -121,6 +125,35 @@ export class SubProductionService {
     );
 
     return { ...next, beistellMenge, ruecklaufMenge };
+  }
+
+  /**
+   * Schließt einen Inhouse-Veredelungsschritt ab (z. B. 2-farbiger Transferdruck im Haus).
+   * Erst möglich, wenn alle früheren Stufen am SELBEN Textil zurück sind (gleiches Positions-
+   * Gate wie die externe Fremdvergabe) — die externe Veredelung kommt zuerst zurück, dann
+   * appliziert das Haus (Kap. 5.4/11).
+   */
+  async completeInhouse(subProductionId: string, at: Date = new Date()): Promise<SubProductionStage> {
+    const stage = await this.repo.getStage(subProductionId);
+    if (!stage) throw new SubProductionTransitionError(`Unterauftrag ${subProductionId} nicht gefunden.`);
+    if (!stage.inhouse) throw new SubProductionTransitionError("Nur Inhouse-Stufen werden so abgeschlossen.");
+    if (stage.status === "ABGESCHLOSSEN") return stage;
+    const stages = await this.repo.listStages(stage.productionId);
+    if (!canStartStage(stages, stage.sequence)) {
+      throw new SubProductionTransitionError("Inhouse-Veredelung erst nach Rücklauf der externen Veredelung am selben Textil (Kap. 5.4/11).");
+    }
+    await this.repo.updateStage(subProductionId, {
+      status: "ABGESCHLOSSEN",
+      beistellungVersandtAm: stage.beistellungVersandtAm ?? null,
+      ruecklaufErhaltenAm: at,
+      beistellMenge: stage.beistellMenge ?? null,
+      ruecklaufMenge: stage.ruecklaufMenge ?? null,
+    });
+    await this.audit.append(buildEntry({
+      entity: "SubProductionOrder", entityId: subProductionId, action: "UPDATE",
+      after: { status: "ABGESCHLOSSEN", inhouse: true, sequence: stage.sequence },
+    }));
+    return { ...stage, status: "ABGESCHLOSSEN", ruecklaufErhaltenAm: at };
   }
 
   async productionSubStatus(productionId: string): Promise<ProductionSubStatus> {
