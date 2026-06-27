@@ -1,8 +1,11 @@
 // In-Memory-Druckdaten für Tests.
 
+import { FIRMA_DEFAULT, type FirmenProfil } from "@texma/shared";
 import type { CompanyDataSheetData, CreditNotePrintData, DeliveryNotePrintData, InvoicePrintData, LaufzettelPrintData, MahnungPrintData, OrderConfirmationPrintData, PrintRepository, QuotePrintData, SupplierDataSheetData } from "../modules/print/print.service.js";
 
 export class InMemoryPrintRepository implements PrintRepository {
+  companyProfileValue: FirmenProfil = { ...FIRMA_DEFAULT };
+  companyLogoValue: string | null = null;
   deliveryNotes: Record<string, DeliveryNotePrintData> = {};
   invoices: Record<string, InvoicePrintData> = {};
   creditNotes: Record<string, CreditNotePrintData> = {};
@@ -24,4 +27,6 @@ export class InMemoryPrintRepository implements PrintRepository {
   async quoteForPrint(id: string): Promise<QuotePrintData | null> { return this.quotes[id] ?? null; }
   async orderConfirmationForPrint(orderId: string): Promise<OrderConfirmationPrintData | null> { return this.orderConfirmations[orderId] ?? null; }
   async briefkopf(): Promise<string[]> { return this.briefkopfLines; }
+  async companyProfile(): Promise<FirmenProfil> { return this.companyProfileValue; }
+  async companyLogo(): Promise<string | null> { return this.companyLogoValue; }
 }

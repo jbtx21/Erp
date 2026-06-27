@@ -13,6 +13,27 @@ export interface BelegPosition {
   rabatt?: string;
   /** Formatierter Zeilenbetrag (nur Rechnung). */
   gesamt?: string;
+  /** Artikelnummer (Variant-SKU) für die Art-Nr.-Spalte (TEXMA-Layout). */
+  artNr?: string;
+  /** Zusatzzeilen unter der Bezeichnung (Farbe, Material, Größe …). */
+  detail?: string[];
+  /** Alternativposition — mit „Alternativ :"-Label, zählt nicht zur Summe. */
+  alternativ?: boolean;
+}
+
+/** Ansprechpartner-Block (Innendienst) im Belegkopf. */
+export interface BelegAnsprechpartner {
+  name: string;
+  tel: string;
+  mail: string;
+}
+
+/** Meta-Zeile im Belegkopf (2-spaltig: Label/Wert links, optional rechts). */
+export interface BelegMetaZeile {
+  label: string;
+  value: string;
+  rLabel?: string;
+  rValue?: string;
 }
 
 export interface BelegSumme {
@@ -34,6 +55,21 @@ export interface BelegDokument {
   hinweise: string[];
   /** Steuert die Preis-Spalten im Renderer. */
   zeigePreise: boolean;
+  // ── TEXMA-Briefformat (optional; wenn `firma` gesetzt, rendert der TEXMA-Layout-Pfad) ──
+  /** Firmenprofil für Briefkopf-Wortmarke + Fußzeile (Bank/USt-IdNr./GF). */
+  firma?: FirmenProfil;
+  /** Firmenlogo (JPEG base64) für den Briefkopf; ohne = Wortmarke. */
+  logoB64?: string;
+  /** Ansprechpartner-Block (Innendienst). */
+  ansprechpartner?: BelegAnsprechpartner;
+  /** Kunden-Nr. + Kommissions-Nr. (Belegkopf). */
+  kundenNr?: string;
+  kommissionsNr?: string;
+  /** Zusatz-Meta-Zeilen (Bestell-/Anfrage-Nr./-Datum …). */
+  metaExtra?: BelegMetaZeile[];
+  /** Brief-Anrede + Einleitungssatz. */
+  anrede?: string;
+  einleitung?: string;
 }
 
 /**
@@ -85,11 +121,11 @@ function formatDatum(d: Date): string {
   return d.toLocaleDateString("de-DE", { year: "numeric", month: "2-digit", day: "2-digit" });
 }
 
-export interface LieferscheinInput {
+export interface LieferscheinInput extends BelegBriefFelder {
   nummer: string;
   datum: Date;
   empfaenger: string[];
-  positionen: { menge: number; bezeichnung: string }[];
+  positionen: { menge: number; bezeichnung: string; artNr?: string; detail?: string[] }[];
   hinweise?: string[];
   /** Briefkopf (Admin-Portal); Default: ABSENDER_TEXMA. */
   absender?: string[];
@@ -105,10 +141,15 @@ export function lieferscheinDokument(input: LieferscheinInput): BelegDokument {
     absender: input.absender && input.absender.length > 0 ? input.absender : [...ABSENDER_TEXMA],
     empfaenger: input.empfaenger,
     // Kundenseitiger Lieferschein: Bezugsquelle (intern/extern/Veredler) ausblenden.
-    positionen: input.positionen.map((p) => ({ menge: p.menge, bezeichnung: redactKundenbezeichnung(p.bezeichnung) })),
+    positionen: input.positionen.map((p) => ({
+      menge: p.menge, bezeichnung: redactKundenbezeichnung(p.bezeichnung),
+      ...(p.artNr ? { artNr: p.artNr } : {}),
+      ...(p.detail && p.detail.length > 0 ? { detail: p.detail.map(redactKundenbezeichnung) } : {}),
+    })),
     summen: [],
     hinweise: input.hinweise ?? ["Bitte prüfen Sie die Lieferung auf Vollständigkeit und Unversehrtheit."],
     zeigePreise: false,
+    ...briefFelder(input),
   };
 }
 
@@ -139,7 +180,7 @@ export function laufzettelDokument(input: LaufzettelInput): BelegDokument {
   };
 }
 
-export interface RechnungInput {
+export interface RechnungInput extends BelegBriefFelder {
   nummer: string;
   datum: Date;
   empfaenger: string[];
@@ -152,11 +193,43 @@ export interface RechnungInput {
   absender?: string[];
 }
 
+/** Gemeinsame Brief-Kopf-/Fußfelder (TEXMA-Layout) für Angebot/AB/Rechnung/Lieferschein. */
+export interface BelegBriefFelder {
+  firma?: FirmenProfil;
+  logoB64?: string;
+  ansprechpartner?: BelegAnsprechpartner;
+  kundenNr?: string;
+  kommissionsNr?: string;
+  metaExtra?: BelegMetaZeile[];
+  anrede?: string;
+  einleitung?: string;
+}
+
+/** Übernimmt die optionalen Brief-Felder 1:1 in das Belegdokument. */
+function briefFelder(i: BelegBriefFelder): BelegBriefFelder {
+  return {
+    ...(i.firma ? { firma: i.firma } : {}),
+    ...(i.logoB64 ? { logoB64: i.logoB64 } : {}),
+    ...(i.ansprechpartner ? { ansprechpartner: i.ansprechpartner } : {}),
+    ...(i.kundenNr ? { kundenNr: i.kundenNr } : {}),
+    ...(i.kommissionsNr ? { kommissionsNr: i.kommissionsNr } : {}),
+    ...(i.metaExtra ? { metaExtra: i.metaExtra } : {}),
+    ...(i.anrede ? { anrede: i.anrede } : {}),
+    ...(i.einleitung ? { einleitung: i.einleitung } : {}),
+  };
+}
+
 /** Preis-Position für Rechnung/Angebot/AB. einzelpreisCents = effektiver Netto NACH Rabatt. */
 export interface PreisPosition {
   menge: number;
   bezeichnung: string;
   einzelpreisCents: Cents;
+  /** Artikelnummer (Variant-SKU) für die Art-Nr.-Spalte. */
+  artNr?: string;
+  /** Zusatzzeilen (Farbe, Material, Größe …). */
+  detail?: string[];
+  /** Alternativposition (Label „Alternativ :", nicht in der Summe). */
+  alternativ?: boolean;
   /** VK-Listenpreis je Stück VOR Rabatt (Anzeige in der Einzel-Spalte, wenn Rabatt gewährt). */
   listenpreisCents?: Cents | null;
   /** Positionsrabatt in Prozent (0..100); nur gesetzt, wenn gewährt. */
@@ -193,6 +266,9 @@ function preisPositionen(ps: PreisPosition[]): BelegPosition[] {
     einzelpreis: formatEur(p.listenpreisCents ?? p.einzelpreisCents),
     ...(p.rabattPct ? { rabatt: `${p.rabattPct} %` } : {}),
     gesamt: formatEur(lineNet(p.menge, p.einzelpreisCents)),
+    ...(p.artNr ? { artNr: p.artNr } : {}),
+    ...(p.detail && p.detail.length > 0 ? { detail: p.detail.map(redactKundenbezeichnung) } : {}),
+    ...(p.alternativ ? { alternativ: true } : {}),
   }));
 }
 
@@ -222,10 +298,11 @@ export function rechnungDokument(input: RechnungInput): BelegDokument {
     summen: preisSummen(input.netCents, input.taxCents, input.grossCents),
     hinweise: input.hinweise ?? ["Zahlbar ohne Abzug gemäß vereinbartem Zahlungsziel."],
     zeigePreise: true,
+    ...briefFelder(input),
   };
 }
 
-export interface AngebotInput {
+export interface AngebotInput extends BelegBriefFelder {
   nummer: string;
   datum: Date;
   empfaenger: string[];
@@ -255,10 +332,11 @@ export function angebotDokument(input: AngebotInput): BelegDokument {
       "Freibleibendes Angebot. Es gelten unsere Allgemeinen Geschäftsbedingungen.",
     ],
     zeigePreise: true,
+    ...briefFelder(input),
   };
 }
 
-export interface AuftragsbestaetigungInput {
+export interface AuftragsbestaetigungInput extends BelegBriefFelder {
   nummer: string;
   datum: Date;
   empfaenger: string[];
@@ -291,6 +369,7 @@ export function auftragsbestaetigungDokument(input: AuftragsbestaetigungInput): 
       "Wir bestätigen Ihren Auftrag zu den genannten Konditionen.",
     ],
     zeigePreise: true,
+    ...briefFelder(input),
   };
 }
 

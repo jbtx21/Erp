@@ -2,17 +2,27 @@
 // Belegen. Die Datenform wird vom Repository geliefert; das reine Inhaltsmodell baut
 // @texma/shared, gerendert wird mit pdf-lib (beleg-pdf). Rückgabe = Dateiname + Base64.
 
-import { angebotDokument, auftragsbestaetigungDokument, gutschriftDokument, kundenStammblatt, laufzettelDokument, lieferantenStammblatt, lieferscheinDokument, mahnungDokument, rechnungDokument, type KundenStammblattInput, type LieferantenStammblattInput, type PositionKind } from "@texma/shared";
+import { angebotDokument, auftragsbestaetigungDokument, gutschriftDokument, kundenStammblatt, laufzettelDokument, lieferantenStammblatt, lieferscheinDokument, mahnungDokument, rechnungDokument, type BelegAnsprechpartner, type BelegMetaZeile, type FirmenProfil, type KundenStammblattInput, type LieferantenStammblattInput, type PositionKind } from "@texma/shared";
 import { renderBelegPdf } from "../../pdf/beleg-pdf.js";
+import { TEXMA_LOGO_B64 } from "../../pdf/texma-logo.js";
 import { renderDataSheetPdf } from "../../pdf/datasheet-pdf.js";
 
-export interface PricePrintLine { menge: number; bezeichnung: string; einzelpreisCents: number; listenpreisCents?: number | null; rabattPct?: number | null }
+export interface PricePrintLine { menge: number; bezeichnung: string; einzelpreisCents: number; listenpreisCents?: number | null; rabattPct?: number | null; artNr?: string; detail?: string[]; alternativ?: boolean }
+
+/** Brief-Kopf-Metadaten (TEXMA-Layout): Kunden-Nr., Ansprechpartner, Zusatz-Meta-Zeilen, Anrede. */
+export interface LetterMeta {
+  kundenNr?: string;
+  ansprechpartner?: BelegAnsprechpartner;
+  metaExtra?: BelegMetaZeile[];
+  anrede?: string;
+}
 
 export interface DeliveryNotePrintData {
   number: string;
   createdAt: Date;
   empfaenger: string[];
-  positionen: { menge: number; bezeichnung: string }[];
+  positionen: { menge: number; bezeichnung: string; artNr?: string; detail?: string[] }[];
+  meta?: LetterMeta;
 }
 
 export interface InvoicePrintData {
@@ -23,6 +33,7 @@ export interface InvoicePrintData {
   netCents: number;
   taxCents: number;
   grossCents: number;
+  meta?: LetterMeta;
 }
 
 export interface LaufzettelPrintData {
@@ -42,6 +53,7 @@ export interface QuotePrintData {
   taxCents: number;
   grossCents: number;
   gueltigBis: Date | null;
+  meta?: LetterMeta;
 }
 
 export interface OrderConfirmationPrintData {
@@ -54,6 +66,7 @@ export interface OrderConfirmationPrintData {
   grossCents: number;
   liefertermin: Date | null;
   bestellreferenz: string | null;
+  meta?: LetterMeta;
 }
 
 export interface CreditNotePrintData {
@@ -99,6 +112,10 @@ export interface PrintRepository {
   orderConfirmationForPrint(orderId: string): Promise<OrderConfirmationPrintData | null>;
   /** Konfigurierter Briefkopf (Admin-Portal); leer = Renderer-Default. */
   briefkopf(): Promise<string[]>;
+  /** Firmenprofil (Belegkopf/-fuß) aus den Einstellungen. */
+  companyProfile(): Promise<FirmenProfil>;
+  /** Firmenlogo (JPEG base64) aus den Einstellungen; null = gebündelter Default. */
+  companyLogo(): Promise<string | null>;
 }
 
 export interface PdfResult {
@@ -111,12 +128,28 @@ export class PrintError extends Error {}
 export class PrintService {
   constructor(private readonly repo: PrintRepository) {}
 
+  /** TEXMA-Briefkopf-Felder (Firma/Logo + Kunden-Nr./Ansprechpartner/Anrede) zentral laden. */
+  private async briefFelder(number: string, meta: LetterMeta | undefined, anredeFallback = "Sehr geehrte Damen und Herren,"): Promise<{
+    firma: FirmenProfil; logoB64: string; kommissionsNr: string; kundenNr?: string;
+    ansprechpartner?: BelegAnsprechpartner; metaExtra?: BelegMetaZeile[]; anrede: string;
+  }> {
+    const [firma, logo] = await Promise.all([this.repo.companyProfile(), this.repo.companyLogo()]);
+    return {
+      firma, logoB64: logo ?? TEXMA_LOGO_B64, kommissionsNr: number,
+      ...(meta?.kundenNr ? { kundenNr: meta.kundenNr } : {}),
+      ...(meta?.ansprechpartner ? { ansprechpartner: meta.ansprechpartner } : {}),
+      ...(meta?.metaExtra ? { metaExtra: meta.metaExtra } : {}),
+      anrede: meta?.anrede ?? anredeFallback,
+    };
+  }
+
   async deliveryNotePdf(id: string): Promise<PdfResult> {
     const d = await this.repo.deliveryNoteForPrint(id);
     if (!d) throw new PrintError(`Lieferschein ${id} nicht gefunden.`);
-    const absender = await this.repo.briefkopf();
+    const brief = await this.briefFelder(d.number, d.meta);
     const bytes = await renderBelegPdf(lieferscheinDokument({
-      nummer: d.number, datum: d.createdAt, empfaenger: d.empfaenger, positionen: d.positionen, absender,
+      nummer: d.number, datum: d.createdAt, empfaenger: d.empfaenger, positionen: d.positionen,
+      ...brief, einleitung: "anbei erhalten Sie die nachstehend aufgeführte Ware:",
     }));
     return { filename: `Lieferschein-${d.number}.pdf`, base64: Buffer.from(bytes).toString("base64") };
   }
@@ -147,10 +180,11 @@ export class PrintService {
   async invoicePdf(id: string): Promise<PdfResult> {
     const i = await this.repo.invoiceForPrint(id);
     if (!i) throw new PrintError(`Rechnung ${id} nicht gefunden.`);
-    const absender = await this.repo.briefkopf();
+    const brief = await this.briefFelder(i.number, i.meta);
     const bytes = await renderBelegPdf(rechnungDokument({
       nummer: i.number, datum: i.issuedAt, empfaenger: i.empfaenger, positionen: i.positionen,
-      netCents: i.netCents, taxCents: i.taxCents, grossCents: i.grossCents, absender,
+      netCents: i.netCents, taxCents: i.taxCents, grossCents: i.grossCents,
+      ...brief, einleitung: "für die Ausführung Ihres Auftrages berechnen wir Ihnen die nachstehenden Leistungen:",
     }));
     return { filename: `Rechnung-${i.number}.pdf`, base64: Buffer.from(bytes).toString("base64") };
   }
@@ -183,11 +217,12 @@ export class PrintService {
   async quotePdf(id: string): Promise<PdfResult> {
     const q = await this.repo.quoteForPrint(id);
     if (!q) throw new PrintError(`Angebot ${id} nicht gefunden.`);
-    const absender = await this.repo.briefkopf();
+    const brief = await this.briefFelder(q.number, q.meta);
     const bytes = await renderBelegPdf(angebotDokument({
       nummer: q.number, datum: q.datum, empfaenger: q.empfaenger, positionen: q.positionen,
       netCents: q.netCents, taxCents: q.taxCents, grossCents: q.grossCents,
-      gueltigBis: q.gueltigBis ?? undefined, absender,
+      gueltigBis: q.gueltigBis ?? undefined,
+      ...brief, einleitung: "herzlichen Dank für Ihre Anfrage. Gerne unterbreiten wir Ihnen folgendes Angebot:",
     }));
     return { filename: `Angebot-${q.number}.pdf`, base64: Buffer.from(bytes).toString("base64") };
   }
@@ -196,11 +231,12 @@ export class PrintService {
   async auftragsbestaetigungPdf(orderId: string): Promise<PdfResult> {
     const o = await this.repo.orderConfirmationForPrint(orderId);
     if (!o) throw new PrintError(`Auftrag ${orderId} nicht gefunden.`);
-    const absender = await this.repo.briefkopf();
+    const brief = await this.briefFelder(o.number, o.meta);
     const bytes = await renderBelegPdf(auftragsbestaetigungDokument({
       nummer: o.number, datum: o.datum, empfaenger: o.empfaenger, positionen: o.positionen,
       netCents: o.netCents, taxCents: o.taxCents, grossCents: o.grossCents,
-      liefertermin: o.liefertermin ?? undefined, bestellreferenz: o.bestellreferenz ?? undefined, absender,
+      liefertermin: o.liefertermin ?? undefined, bestellreferenz: o.bestellreferenz ?? undefined,
+      ...brief, einleitung: "wir danken für Ihre Bestellung und bestätigen Ihnen diese wie folgt:",
     }));
     return { filename: `Auftragsbestaetigung-${o.number}.pdf`, base64: Buffer.from(bytes).toString("base64") };
   }

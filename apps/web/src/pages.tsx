@@ -3,7 +3,7 @@
 // Bereiche mit wenig Code anbindbar sind. Interaktive Aktionen (Versand bestätigen,
 // Mahnlauf, Reorder→Bestellungen) sind je Seite ergänzt.
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Alert, Anchor, Badge, Box, Button, Card, Checkbox, Group, Loader, Modal, NumberInput, Paper, PasswordInput, SegmentedControl, Select, SimpleGrid, Stack, Switch, Table, Tabs, TagsInput, Text, Textarea, TextInput, Title } from "@mantine/core";
+import { Alert, Anchor, Badge, Box, Button, Card, Checkbox, FileButton, Group, Image, Loader, Modal, NumberInput, Paper, PasswordInput, SegmentedControl, Select, SimpleGrid, Stack, Switch, Table, Tabs, TagsInput, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { validateVatId } from "@texma/shared/vat";
 import { buildTrackingUrl, type Carrier } from "@texma/shared/tracking";
@@ -6424,6 +6424,7 @@ export function AdminPage(): JSX.Element {
   const [taxRate, setTaxRate] = useState<number>(19);
   const [siebdruckVeredler, setSiebdruckVeredler] = useState("");
   const [firma, setFirma] = useState<Record<string, string>>({});
+  const [logoB64, setLogoB64] = useState<string | null>(null);
   const [testTo, setTestTo] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -6438,11 +6439,21 @@ export function AdminPage(): JSX.Element {
       setTaxRate(s.defaultTaxRatePct);
       setSiebdruckVeredler(s.siebdruckVeredlerId ?? "");
       setFirma(s.companyProfile as unknown as Record<string, string>);
+      setLogoB64(s.companyLogoB64 ?? null);
       setErr(null);
     } catch (e) { setErr(errMsg(e)); }
   }, []);
   const fF = (k: string): string => firma[k] ?? "";
   const setF = (k: string, v: string): void => setFirma((p) => ({ ...p, [k]: v }));
+  const onLogoPick = (file: File | null): void => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const res = String(reader.result ?? "");
+      setLogoB64(res.replace(/^data:image\/[a-z]+;base64,/i, ""));
+    };
+    reader.readAsDataURL(file);
+  };
   useEffect(() => { void load(); }, [load]);
 
   return (
@@ -6467,6 +6478,19 @@ export function AdminPage(): JSX.Element {
         <TextInput label="IBAN" value={fF("iban")} onChange={(e) => setF("iban", e.currentTarget.value)} />
         <TextInput label="BIC" value={fF("bic")} onChange={(e) => setF("bic", e.currentTarget.value)} />
       </SimpleGrid>
+
+      <Group gap="md" align="end" mt="md" wrap="wrap">
+        <Box>
+          <Text size="sm" fw={500} mb={4}>Firmenlogo (Belegkopf, JPEG/PNG)</Text>
+          {logoB64
+            ? <Image src={`data:image/jpeg;base64,${logoB64}`} alt="Firmenlogo" h={48} w="auto" fit="contain" />
+            : <Text size="xs" c="dimmed">Kein eigenes Logo — gebündeltes TEXMA-Logo wird verwendet.</Text>}
+        </Box>
+        <FileButton onChange={onLogoPick} accept="image/png,image/jpeg">
+          {(props) => <Button variant="default" {...props}>Logo wählen…</Button>}
+        </FileButton>
+        {logoB64 && <Button variant="subtle" color="gray" onClick={() => setLogoB64(null)}>Logo entfernen</Button>}
+      </Group>
 
       <Textarea label="Briefkopf-Override (optional, eine Zeile je Adresszeile)" value={briefkopf} onChange={(e) => setBriefkopf(e.currentTarget.value)} autosize minRows={2} mt="md" w={460}
         description="Leer = automatisch aus dem Firmenprofil" />
@@ -6494,6 +6518,7 @@ export function AdminPage(): JSX.Element {
             defaultTaxRatePct: taxRate,
             siebdruckVeredlerId: siebdruckVeredler || null,
             companyProfile: firma as unknown as Parameters<typeof trpc.settings.update.mutate>[0]["companyProfile"],
+            companyLogoB64: logoB64,
           });
           setMsg("Einstellungen gespeichert."); await load();
         } catch (e) { setErr(errMsg(e)); }

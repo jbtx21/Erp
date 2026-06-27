@@ -1797,6 +1797,8 @@ export const appRouter = router({
           ustId: z.string(), gf: z.string(),
           bankName: z.string(), iban: z.string(), bic: z.string(),
         }).partial().optional(),
+        // Firmenlogo (JPEG base64) für den Belegkopf; "" = Default-Logo.
+        companyLogoB64: z.string().nullable().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         try { await ctx.settings.update(input); return { ok: true as const }; }

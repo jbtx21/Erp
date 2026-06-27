@@ -8,6 +8,8 @@ import { FIRMA_DEFAULT, type FirmenProfil } from "@texma/shared";
 export const BRIEFKOPF_KEY = "briefkopf";
 /** Strukturiertes Firmenprofil (JSON) für Belegkopf/-fuß (Name/Anschrift/USt-IdNr/GF/Bank). */
 export const COMPANY_PROFILE_KEY = "company_profile";
+/** Firmenlogo (JPEG base64, ohne data:-Präfix) für den Belegkopf. */
+export const COMPANY_LOGO_KEY = "company_logo_b64";
 export const SIEBDRUCK_VEREDLER_KEY = "siebdruck_veredler";
 export const DEFAULT_TAX_RATE_KEY = "default_tax_rate_pct";
 /** Globaler USt-Satz, wenn nichts konfiguriert ist (Regelsteuersatz). */
@@ -27,6 +29,8 @@ export interface AppSettings {
   defaultTaxRatePct: number;
   /** Firmenprofil für Belegkopf/-fuß (Name/Anschrift/USt-IdNr/GF/Bank). */
   companyProfile: FirmenProfil;
+  /** Firmenlogo (JPEG base64) für den Belegkopf; null = gebündelter TEXMA-Default. */
+  companyLogoB64: string | null;
 }
 
 export interface SettingsRepository {
@@ -65,6 +69,12 @@ export class SettingsService {
     catch { return { ...FIRMA_DEFAULT }; }
   }
 
+  /** Firmenlogo (JPEG base64) für den Belegkopf; null = gebündelter Default. */
+  async companyLogoB64(): Promise<string | null> {
+    const raw = await this.repo.getSetting(COMPANY_LOGO_KEY);
+    return raw && raw.trim() ? raw.trim() : null;
+  }
+
   /** Globaler USt-Satz (auch operativ lesbar — Vorbelegung der Positionssummen). */
   async defaultTaxRatePct(): Promise<number> {
     const v = await this.repo.getSetting(DEFAULT_TAX_RATE_KEY);
@@ -73,8 +83,8 @@ export class SettingsService {
   }
 
   async get(): Promise<AppSettings> {
-    const [briefkopf, thr, markupFactor, siebdruckVeredlerId, defaultTaxRatePct, companyProfile] = await Promise.all([
-      this.briefkopf(), this.repo.getApprovalThreshold(), this.repo.getMarkupFactor(), this.siebdruckVeredlerId(), this.defaultTaxRatePct(), this.companyProfile(),
+    const [briefkopf, thr, markupFactor, siebdruckVeredlerId, defaultTaxRatePct, companyProfile, companyLogoB64] = await Promise.all([
+      this.briefkopf(), this.repo.getApprovalThreshold(), this.repo.getMarkupFactor(), this.siebdruckVeredlerId(), this.defaultTaxRatePct(), this.companyProfile(), this.companyLogoB64(),
     ]);
     return {
       briefkopf,
@@ -84,12 +94,18 @@ export class SettingsService {
       siebdruckVeredlerId,
       defaultTaxRatePct,
       companyProfile,
+      companyLogoB64,
     };
   }
 
-  async update(patch: Partial<{ briefkopf: string[]; maxDiscountPct: number | null; maxOrderValueEuro: number | null; markupFactor: number; siebdruckVeredlerId: string | null; defaultTaxRatePct: number; companyProfile: Partial<FirmenProfil> }>): Promise<void> {
+  async update(patch: Partial<{ briefkopf: string[]; maxDiscountPct: number | null; maxOrderValueEuro: number | null; markupFactor: number; siebdruckVeredlerId: string | null; defaultTaxRatePct: number; companyProfile: Partial<FirmenProfil>; companyLogoB64: string | null }>): Promise<void> {
     if (patch.briefkopf !== undefined) {
       await this.repo.setSetting(BRIEFKOPF_KEY, patch.briefkopf.join("\n"));
+    }
+    if (patch.companyLogoB64 !== undefined) {
+      // base64 ohne data:-Präfix speichern (leer = Default-Logo).
+      const clean = (patch.companyLogoB64 ?? "").replace(/^data:image\/[a-z]+;base64,/i, "").trim();
+      await this.repo.setSetting(COMPANY_LOGO_KEY, clean);
     }
     if (patch.companyProfile !== undefined) {
       // Bestehende Werte erhalten, nur übergebene Felder überschreiben (Teil-Update).

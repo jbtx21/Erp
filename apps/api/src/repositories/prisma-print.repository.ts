@@ -1,8 +1,41 @@
 // Prisma-Druckdaten: liest Lieferschein/Rechnung samt Positionen + Empfängeradresse.
 
 import { prisma } from "@texma/db";
-import { lineNet, taxOnNet, VAT_STANDARD, type PositionKind } from "@texma/shared";
-import type { CompanyDataSheetData, DeliveryNotePrintData, InvoicePrintData, LaufzettelPrintData, OrderConfirmationPrintData, PrintRepository, PricePrintLine, QuotePrintData, SupplierDataSheetData } from "../modules/print/print.service.js";
+import { FIRMA_DEFAULT, lineNet, taxOnNet, VAT_STANDARD, type FirmenProfil, type PositionKind } from "@texma/shared";
+import type { CompanyDataSheetData, DeliveryNotePrintData, InvoicePrintData, LaufzettelPrintData, LetterMeta, OrderConfirmationPrintData, PrintRepository, PricePrintLine, QuotePrintData, SupplierDataSheetData } from "../modules/print/print.service.js";
+
+/** Schlüssel im AppSetting-Speicher (gespiegelt aus settings.service). */
+const COMPANY_PROFILE_KEY = "company_profile";
+const COMPANY_LOGO_KEY = "company_logo_b64";
+
+/** Variantendetail (Art-Nr./Farbe/Größe/Material) für eine Beleg-Position. */
+type VariantDetail = { sku: string; attributes: { name: string; value: string }[]; article: { materialComposition: string | null } };
+type VariantDetailMap = Map<string, VariantDetail>;
+
+/** Lädt die Variantendetails (sku/attributes/material) zu den genutzten variantIds als Lookup. */
+async function loadVariantDetails(variantIds: (string | null)[]): Promise<VariantDetailMap> {
+  const ids = [...new Set(variantIds.filter((v): v is string => !!v))];
+  if (ids.length === 0) return new Map();
+  const rows = await prisma.variant.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, sku: true, attributes: { select: { name: true, value: true } }, article: { select: { materialComposition: true } } },
+  });
+  return new Map(rows.map((r) => [r.id, { sku: r.sku, attributes: r.attributes, article: r.article }]));
+}
+
+/** Variantenattribute → Detailzeilen (Farbe/Größe) + Material aus dem Hauptartikel. */
+function lineExtras(variantId: string | null, map: VariantDetailMap): { artNr?: string; detail?: string[] } {
+  const variant = variantId ? map.get(variantId) : undefined;
+  if (!variant) return {};
+  const attr = (name: string) => variant.attributes.find((a) => a.name === name)?.value;
+  const detail: string[] = [];
+  const farbe = attr("Farbe");
+  const groesse = attr("Größe");
+  if (farbe) detail.push(`Farbe: ${farbe}`);
+  if (variant.article.materialComposition) detail.push(`Material: ${variant.article.materialComposition}`);
+  if (groesse) detail.push(`Größe: ${groesse}`);
+  return { artNr: variant.sku, ...(detail.length ? { detail } : {}) };
+}
 
 /** Netto/USt/Brutto aus Preis-Positionen (Standard-USt) — für Angebot/AB ohne gespeicherte Steuer. */
 function totals(lines: PricePrintLine[]): { netCents: number; taxCents: number; grossCents: number } {
@@ -43,6 +76,29 @@ export class PrismaPrintRepository implements PrintRepository {
     return row ? row.value.split("\n").map((l) => l.trim()).filter(Boolean) : [];
   }
 
+  async companyProfile(): Promise<FirmenProfil> {
+    const row = await prisma.appSetting.findUnique({ where: { key: COMPANY_PROFILE_KEY } });
+    if (!row) return { ...FIRMA_DEFAULT };
+    try { return { ...FIRMA_DEFAULT, ...(JSON.parse(row.value) as Partial<FirmenProfil>) }; }
+    catch { return { ...FIRMA_DEFAULT }; }
+  }
+
+  async companyLogo(): Promise<string | null> {
+    const row = await prisma.appSetting.findUnique({ where: { key: COMPANY_LOGO_KEY } });
+    return row && row.value.trim() ? row.value.trim() : null;
+  }
+
+  /** Brief-Meta (Kunden-Nr. + Innendienst-Ansprechpartner) aus den Kundenstammdaten. */
+  private async buildMeta(company: { customerNumber: string | null; betreuer: string | null }): Promise<LetterMeta | undefined> {
+    const meta: LetterMeta = {};
+    if (company.customerNumber) meta.kundenNr = company.customerNumber;
+    if (company.betreuer) {
+      const f = await this.companyProfile();
+      meta.ansprechpartner = { name: company.betreuer, tel: f.tel, mail: f.mail };
+    }
+    return Object.keys(meta).length ? meta : undefined;
+  }
+
   async companyForDataSheet(companyId: string): Promise<CompanyDataSheetData | null> {
     const c = await prisma.company.findUnique({
       where: { id: companyId },
@@ -78,15 +134,17 @@ export class PrismaPrintRepository implements PrintRepository {
       where: { id },
       select: {
         number: true, createdAt: true,
-        lines: { select: { qty: true, orderLine: { select: { description: true } } } },
-        order: { select: { company: { select: { name: true } }, deliveryAddress: { select: { street: true, zip: true, city: true } } } },
+        lines: { select: { qty: true, orderLine: { select: { description: true, variantId: true } } } },
+        order: { select: { company: { select: { name: true, customerNumber: true, betreuer: true } }, deliveryAddress: { select: { street: true, zip: true, city: true } } } },
       },
     });
     if (!d) return null;
+    const vmap = await loadVariantDetails(d.lines.map((l) => l.orderLine.variantId));
     return {
       number: d.number, createdAt: d.createdAt,
       empfaenger: addressLines(d.order.company.name, d.order.deliveryAddress),
-      positionen: d.lines.map((l) => ({ menge: l.qty, bezeichnung: l.orderLine.description })),
+      positionen: d.lines.map((l) => ({ menge: l.qty, bezeichnung: l.orderLine.description, ...lineExtras(l.orderLine.variantId, vmap) })),
+      meta: await this.buildMeta(d.order.company),
     };
   }
 
@@ -173,16 +231,19 @@ export class PrismaPrintRepository implements PrintRepository {
       where: { id },
       select: {
         number: true, issuedAt: true, netCents: true, taxCents: true, grossCents: true,
-        company: { select: { name: true, street: true, zip: true, city: true, country: true, vatId: true } },
-        order: { select: { deliveryAddress: { select: { street: true, zip: true, city: true } }, lines: { orderBy: { position: "asc" }, select: { qty: true, description: true, unitNetCents: true, listNetCents: true, rabattPct: true } } } },
+        company: { select: { name: true, street: true, zip: true, city: true, country: true, vatId: true, customerNumber: true, betreuer: true } },
+        order: { select: { deliveryAddress: { select: { street: true, zip: true, city: true } }, lines: { orderBy: { position: "asc" }, select: { qty: true, description: true, unitNetCents: true, listNetCents: true, rabattPct: true, variantId: true } } } },
       },
     });
     if (!i) return null;
+    const lines = i.order?.lines ?? [];
+    const vmap = await loadVariantDetails(lines.map((l) => l.variantId));
     return {
       number: i.number, issuedAt: i.issuedAt,
       empfaenger: recipientLines(i.company, i.order?.deliveryAddress ?? null),
-      positionen: (i.order?.lines ?? []).map((l) => ({ menge: l.qty, bezeichnung: l.description, einzelpreisCents: l.unitNetCents, listenpreisCents: l.listNetCents, rabattPct: l.rabattPct })),
+      positionen: lines.map((l) => ({ menge: l.qty, bezeichnung: l.description, einzelpreisCents: l.unitNetCents, listenpreisCents: l.listNetCents, rabattPct: l.rabattPct, ...lineExtras(l.variantId, vmap) })),
       netCents: i.netCents, taxCents: i.taxCents, grossCents: i.grossCents,
+      meta: await this.buildMeta(i.company),
     };
   }
 
@@ -191,13 +252,14 @@ export class PrismaPrintRepository implements PrintRepository {
       where: { id },
       select: {
         number: true, createdAt: true, gueltigBisAm: true,
-        company: { select: { name: true, street: true, zip: true, city: true, country: true, vatId: true } },
-        lines: { orderBy: { position: "asc" }, select: { qty: true, description: true, unitNetCents: true, listNetCents: true, rabattPct: true } },
+        company: { select: { name: true, street: true, zip: true, city: true, country: true, vatId: true, customerNumber: true, betreuer: true } },
+        lines: { orderBy: { position: "asc" }, select: { qty: true, description: true, unitNetCents: true, listNetCents: true, rabattPct: true, variantId: true } },
       },
     });
     if (!q) return null;
-    const positionen: PricePrintLine[] = q.lines.map((l) => ({ menge: l.qty, bezeichnung: l.description, einzelpreisCents: l.unitNetCents, listenpreisCents: l.listNetCents, rabattPct: l.rabattPct }));
-    return { number: q.number, datum: q.createdAt, empfaenger: recipientLines(q.company, null), positionen, ...totals(positionen), gueltigBis: q.gueltigBisAm };
+    const vmap = await loadVariantDetails(q.lines.map((l) => l.variantId));
+    const positionen: PricePrintLine[] = q.lines.map((l) => ({ menge: l.qty, bezeichnung: l.description, einzelpreisCents: l.unitNetCents, listenpreisCents: l.listNetCents, rabattPct: l.rabattPct, ...lineExtras(l.variantId, vmap) }));
+    return { number: q.number, datum: q.createdAt, empfaenger: recipientLines(q.company, null), positionen, ...totals(positionen), gueltigBis: q.gueltigBisAm, meta: await this.buildMeta(q.company) };
   }
 
   async orderConfirmationForPrint(orderId: string): Promise<OrderConfirmationPrintData | null> {
@@ -205,16 +267,18 @@ export class PrismaPrintRepository implements PrintRepository {
       where: { id: orderId },
       select: {
         number: true, createdAt: true, zugesagterLiefertermin: true, externalNumber: true,
-        company: { select: { name: true, street: true, zip: true, city: true, country: true, vatId: true } },
+        company: { select: { name: true, street: true, zip: true, city: true, country: true, vatId: true, customerNumber: true, betreuer: true } },
         deliveryAddress: { select: { street: true, zip: true, city: true } },
-        lines: { orderBy: { position: "asc" }, select: { qty: true, description: true, unitNetCents: true, listNetCents: true, rabattPct: true } },
+        lines: { orderBy: { position: "asc" }, select: { qty: true, description: true, unitNetCents: true, listNetCents: true, rabattPct: true, variantId: true } },
       },
     });
     if (!o) return null;
-    const positionen: PricePrintLine[] = o.lines.map((l) => ({ menge: l.qty, bezeichnung: l.description, einzelpreisCents: l.unitNetCents, listenpreisCents: l.listNetCents, rabattPct: l.rabattPct }));
+    const vmap = await loadVariantDetails(o.lines.map((l) => l.variantId));
+    const positionen: PricePrintLine[] = o.lines.map((l) => ({ menge: l.qty, bezeichnung: l.description, einzelpreisCents: l.unitNetCents, listenpreisCents: l.listNetCents, rabattPct: l.rabattPct, ...lineExtras(l.variantId, vmap) }));
     return {
       number: o.number, datum: o.createdAt, empfaenger: recipientLines(o.company, o.deliveryAddress),
       positionen, ...totals(positionen), liefertermin: o.zugesagterLiefertermin, bestellreferenz: o.externalNumber,
+      meta: await this.buildMeta(o.company),
     };
   }
 }
