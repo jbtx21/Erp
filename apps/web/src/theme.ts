@@ -117,7 +117,9 @@ export const mantineTheme = createTheme({
     Alert: { defaultProps: { radius: "md", variant: "light" } },
     Tooltip: { defaultProps: { openDelay: 300, withArrow: true } },
     // Deutsche Zahleneingabe: Dezimaltrenner = Komma, Tausender = Punkt (z. B. 1.234,56).
-    NumberInput: { defaultProps: { decimalSeparator: ",", thousandSeparator: "." } },
+    // Punkt (Ziffernblock/Copy-Paste) wird ZUSÄTZLICH als Dezimaltrenner akzeptiert, damit
+    // „9.90" nicht fälschlich als 990 (Tausender) interpretiert wird — sonst 100× falsche Beträge.
+    NumberInput: { defaultProps: { decimalSeparator: ",", thousandSeparator: ".", allowedDecimalSeparators: [",", "."] } },
   },
 });
 

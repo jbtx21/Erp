@@ -46,8 +46,10 @@ export class PrismaSampleLoanRepository implements SampleLoanRepository {
   }
 
   async quoteForLoan(quoteId: string): Promise<{ companyId: string; lines: LoanLine[] } | null> {
-    const q = await prisma.quote.findUnique({
-      where: { id: quoteId },
+    // Auflösung über interne ID ODER die sichtbare Belegnummer (AN-…) — der Sachbearbeiter
+    // kennt nur die Belegnummer, nicht die CUID.
+    const q = await prisma.quote.findFirst({
+      where: { OR: [{ id: quoteId }, { number: quoteId }] },
       select: { companyId: true, lines: { orderBy: { position: "asc" }, select: { description: true, qty: true } } },
     });
     if (!q) return null;

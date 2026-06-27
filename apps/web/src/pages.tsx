@@ -2478,8 +2478,9 @@ export function QuotesPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k:
         <Button size="compact-xs" variant="subtle" onClick={() => void mailPdf(id)}>Mail</Button>
         {status !== "ANGENOMMEN" && status !== "ABGELEHNT" && <Button size="compact-xs" variant="subtle" onClick={() => void startEdit(id)}>Bearbeiten</Button>}
         {status === "ENTWURF" && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.quotes.transition.mutate({ id, to: "VERSENDET" }))}>→ Versendet</Button>}
-        {(status === "VERSENDET" || status === "NACHFASSEN") && <Button size="compact-xs" color="green" onClick={() => void act(() => trpc.quotes.transition.mutate({ id, to: "ANGENOMMEN" }))}>Angenommen</Button>}
-        {status === "ANGENOMMEN" && !r.converted && <Button size="compact-xs" variant="light" onClick={() => setConvertId(id)}>→ Auftrag</Button>}
+        {/* Annahme schließt direkt mit der Auftragswandlung ab — sonst bleibt der „→ Auftrag"-Schritt unentdeckt. */}
+        {(status === "VERSENDET" || status === "NACHFASSEN") && <Button size="compact-xs" color="green" onClick={() => void act(async () => { await trpc.quotes.transition.mutate({ id, to: "ANGENOMMEN" }); setConvertId(id); })}>Annehmen & in Auftrag wandeln</Button>}
+        {status === "ANGENOMMEN" && !r.converted && <Button size="compact-xs" color="green" onClick={() => setConvertId(id)}>→ Auftrag wandeln</Button>}
         {status === "ANGENOMMEN" && r.converted && <Badge size="sm" color="teal" variant="light">Auftrag erstellt</Badge>}
         {status !== "ANGENOMMEN" && status !== "ABGELEHNT" && (
           <Button size="compact-xs" color="red" variant="light" onClick={() => {
@@ -4060,7 +4061,7 @@ function CompanyDetailPanel({ companyId, companies = [], onNavigate, onOpen }: {
           <CompanyAddressesPanel companyId={companyId} />
         </Tabs.Panel>
         <Tabs.Panel value="kontakte" pt="sm">
-          <CompanyContactsPanel companyId={companyId} companies={companies} />
+          <CompanyContactsPanel companyId={companyId} companies={companies} onChanged={reload} />
         </Tabs.Panel>
         <Tabs.Panel value="dateien" pt="sm">
           <RecordFilesPanel entity="Company" entityId={companyId} />
@@ -4142,7 +4143,7 @@ function RecordFilesPanel({ entity, entityId }: { entity: string; entityId: stri
 // Personen & Verknüpfungen einer Firma (CRM-Dynamic-Link): zeigt Stammkontakte +
 // zusätzlich verknüpfte Personen; erlaubt das Verknüpfen einer Person mit einer
 // weiteren Firma (Person ↔ mehrere Parteien).
-function CompanyContactsPanel({ companyId, companies }: { companyId: string; companies: Array<{ id: string; name: string }> }): JSX.Element {
+function CompanyContactsPanel({ companyId, companies, onChanged }: { companyId: string; companies: Array<{ id: string; name: string }>; onChanged?: () => void }): JSX.Element {
   type Person = Awaited<ReturnType<typeof trpc.contacts.forEntity.query>>[number];
   const [people, setPeople] = useState<Person[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -4160,7 +4161,7 @@ function CompanyContactsPanel({ companyId, companies }: { companyId: string; com
 
   const run = async (fn: () => Promise<unknown>): Promise<void> => {
     setBusy(true); setErr(null);
-    try { await fn(); await load(); } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+    try { await fn(); await load(); onChanged?.(); } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
   };
 
   return (
