@@ -2444,7 +2444,7 @@ function ConvertPositionResolver({ articleId, value, onChange }: { articleId: st
 // Angebot → Auftrag: fragt für Hauptartikel ohne Variante (needsVariant) die genaue Farbe×Größe
 // ab — als Einzelvariante oder als Größenlauf (Stückzahl je Größe, Varianten-Matrix) — und
 // übergibt die Auflösung an convertQuote. Alternativen werden vom Server weggelassen.
-function ConvertQuoteDialog({ quoteId, onDone, onClose }: { quoteId: string; onDone: (orderNo: string) => void; onClose: () => void }): JSX.Element {
+function ConvertQuoteDialog({ quoteId, onDone, onClose }: { quoteId: string; onDone: (order: { id: string; number: string }) => void; onClose: () => void }): JSX.Element {
   type Plan = Awaited<ReturnType<typeof trpc.sales.conversionPlan.query>>;
   const [plan, setPlan] = useState<Plan | null>(null);
   const [picks, setPicks] = useState<Record<number, ConvResolution>>({});
@@ -2462,7 +2462,7 @@ function ConvertQuoteDialog({ quoteId, onDone, onClose }: { quoteId: string; onD
     setBusy(true); setErr(null);
     try {
       const o = await trpc.sales.convertQuote.mutate({ quoteId, resolutions: open.length ? Object.fromEntries(open.map((l) => [String(l.position), picks[l.position] ?? ""])) : undefined });
-      onDone(o.number);
+      onDone({ id: o.id, number: o.number });
     } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
   };
 
@@ -2716,7 +2716,8 @@ export function QuotesPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k:
 
   return (
     <>
-      {convertId && <ConvertQuoteDialog quoteId={convertId} onClose={() => setConvertId(null)} onDone={(no) => { setConvertId(null); window.alert(`Auftrag ${no} angelegt.`); void load(); }} />}
+      {/* AP1: nach der Wandlung direkt in den neuen Auftrag springen (verlustfreie Pipeline). */}
+      {convertId && <ConvertQuoteDialog quoteId={convertId} onClose={() => setConvertId(null)} onDone={({ id, number }) => { setConvertId(null); void load(); if (onOpen) onOpen("orders", id); else window.alert(`Auftrag ${number} angelegt.`); }} />}
       <DocListHeader
         module="⌂ Vertrieb"
         title="Angebote"
