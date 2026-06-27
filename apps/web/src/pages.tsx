@@ -5386,6 +5386,13 @@ export function SubproductionPage({ onOpen, focusId }: { onOpen?: (k: string, id
     catch (e) { setErr(errMsg(e)); }
   };
 
+  // Veredelungsauftrag/Werkstattblatt (Größen-Matrix + Veredelungspositionen) als PDF.
+  const veredelungsauftragPdf = async (sub: SubStage): Promise<void> => {
+    setErr(null);
+    try { const r = await trpc.print.veredelungsauftrag.query({ subProductionId: sub.id }); downloadBase64Pdf(r.filename, r.base64); }
+    catch (e) { setErr(errMsg(e)); }
+  };
+
   const actionsFor = (s: SubStage): ReactNode => {
     const blocked = plan?.blocked.some((b) => b.sequence === s.sequence) ?? false;
     if (s.inhouse) {
@@ -5445,7 +5452,12 @@ export function SubproductionPage({ onOpen, focusId }: { onOpen?: (k: string, id
                   <Table.Td style={numTd}>{s.ruecklaufMenge ?? "—"}</Table.Td>
                   <Table.Td style={numTd}>{euro(s.lohnCents)}</Table.Td>
                   <Table.Td>{s.dueDate ? new Date(s.dueDate).toLocaleDateString("de-DE") : "—"}</Table.Td>
-                  <Table.Td>{actionsFor(s)}</Table.Td>
+                  <Table.Td>
+                    <Group gap={6} wrap="nowrap">
+                      {actionsFor(s)}
+                      <Button size="compact-xs" variant="subtle" onClick={() => void veredelungsauftragPdf(s)} title="Werkstattblatt mit Größen-Matrix + Veredelungspositionen">Veredelungsauftrag</Button>
+                    </Group>
+                  </Table.Td>
                 </Table.Tr>
               ))}
             </Table.Tbody>

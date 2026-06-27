@@ -2,8 +2,9 @@
 // Belegen. Die Datenform wird vom Repository geliefert; das reine Inhaltsmodell baut
 // @texma/shared, gerendert wird mit pdf-lib (beleg-pdf). Rückgabe = Dateiname + Base64.
 
-import { angebotDokument, auftragsbestaetigungDokument, gutschriftDokument, kundenStammblatt, laufzettelDokument, lieferantenStammblatt, lieferscheinDokument, mahnungDokument, rechnungDokument, type BelegAnsprechpartner, type BelegMetaZeile, type FirmenProfil, type KundenStammblattInput, type LieferantenStammblattInput, type PositionKind } from "@texma/shared";
+import { angebotDokument, auftragsbestaetigungDokument, gutschriftDokument, kundenStammblatt, laufzettelDokument, lieferantenStammblatt, lieferscheinDokument, mahnungDokument, rechnungDokument, veredelungsauftragDokument, type BelegAnsprechpartner, type BelegMetaZeile, type FirmenProfil, type KundenStammblattInput, type LieferantenStammblattInput, type PositionKind, type VeredelungMotivLine, type VeredelungTextilLine } from "@texma/shared";
 import { renderBelegPdf } from "../../pdf/beleg-pdf.js";
+import { renderVeredelungsauftragPdf } from "../../pdf/veredelungsauftrag-pdf.js";
 import { TEXMA_LOGO_B64 } from "../../pdf/texma-logo.js";
 import { renderDataSheetPdf } from "../../pdf/datasheet-pdf.js";
 
@@ -89,6 +90,21 @@ export interface MahnungPrintData {
   faelligSeit: Date;
 }
 
+/** Veredelungsauftrag-Daten (Werkstattblatt) für eine Fremdvergabe-/Inhouse-Stufe. */
+export interface VeredelungsauftragPrintData {
+  nummer: string;
+  datum: Date;
+  /** Veredler-Name; null = Inhouse-Veredelung. */
+  veredler: string | null;
+  kunde: string;
+  kommission: string | null;
+  textilien: VeredelungTextilLine[];
+  motive: VeredelungMotivLine[];
+  anlieferung: Date | null;
+  fertigstellung: Date | null;
+  hinweise?: string[];
+}
+
 /** Kunden-Stammdaten fürs Datenblatt (alle Felder außer Datum/Absender — die ergänzt der Service). */
 export type CompanyDataSheetData = Omit<KundenStammblattInput, "datum" | "absender">;
 /** Lieferanten-Stammdaten fürs Datenblatt. */
@@ -110,6 +126,8 @@ export interface PrintRepository {
   laufzettelForPrint(orderId: string): Promise<LaufzettelPrintData | null>;
   quoteForPrint(id: string): Promise<QuotePrintData | null>;
   orderConfirmationForPrint(orderId: string): Promise<OrderConfirmationPrintData | null>;
+  /** Veredelungsauftrag (Werkstattblatt) einer Fremdvergabe-/Inhouse-Stufe; null, wenn unbekannt. */
+  veredelungsauftragForPrint(subProductionId: string): Promise<VeredelungsauftragPrintData | null>;
   /** Konfigurierter Briefkopf (Admin-Portal); leer = Renderer-Default. */
   briefkopf(): Promise<string[]>;
   /** Firmenprofil (Belegkopf/-fuß) aus den Einstellungen. */
@@ -239,6 +257,20 @@ export class PrintService {
       ...brief, einleitung: "wir danken für Ihre Bestellung und bestätigen Ihnen diese wie folgt:",
     }));
     return { filename: `Auftragsbestaetigung-${o.number}.pdf`, base64: Buffer.from(bytes).toString("base64") };
+  }
+
+  /** Veredelungsauftrag-PDF (Werkstattblatt mit Größen-Matrix + Veredelungspositionen). */
+  async veredelungsauftragPdf(subProductionId: string): Promise<PdfResult> {
+    const v = await this.repo.veredelungsauftragForPrint(subProductionId);
+    if (!v) throw new PrintError(`Veredelungsauftrag ${subProductionId} nicht gefunden.`);
+    const [firma, logo] = await Promise.all([this.repo.companyProfile(), this.repo.companyLogo()]);
+    const bytes = await renderVeredelungsauftragPdf(veredelungsauftragDokument({
+      nummer: v.nummer, datum: v.datum, veredler: v.veredler, kunde: v.kunde,
+      kommission: v.kommission ?? undefined, textilien: v.textilien, motive: v.motive,
+      anlieferung: v.anlieferung, fertigstellung: v.fertigstellung, hinweise: v.hinweise,
+      firma, logoB64: logo ?? TEXMA_LOGO_B64,
+    }));
+    return { filename: `Veredelungsauftrag-${v.nummer}.pdf`, base64: Buffer.from(bytes).toString("base64") };
   }
 
   /** Kunden-Stammdatenblatt (internes Datenblatt, kein Beleg). */

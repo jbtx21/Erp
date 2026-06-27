@@ -281,4 +281,63 @@ export class PrismaPrintRepository implements PrintRepository {
       meta: await this.buildMeta(o.company),
     };
   }
+
+  async veredelungsauftragForPrint(subProductionId: string): Promise<import("../modules/print/print.service.js").VeredelungsauftragPrintData | null> {
+    const sub = await prisma.subProductionOrder.findUnique({
+      where: { id: subProductionId },
+      select: {
+        number: true, beistellPositionen: true, beistellungVersandtAm: true, dueDate: true,
+        supplier: { select: { name: true } },
+        production: {
+          select: {
+            order: {
+              select: {
+                number: true, company: { select: { name: true } },
+                lines: { orderBy: { position: "asc" }, select: { position: true, description: true, qty: true, kind: true, bezugPosition: true, variantId: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!sub) return null;
+    const order = sub.production.order;
+    const scope = new Set(sub.beistellPositionen);
+    const inScope = (pos: number | null): boolean => scope.size === 0 || (pos != null && scope.has(pos));
+
+    // Textil-Beistellung (eine Größenzeile je Position) → Variantendetails (Art-Nr./Farbe/Größe/Bezeichnung).
+    const textilLines = order.lines.filter((l) => l.kind === "TEXTIL" && inScope(l.position));
+    const vrows = await prisma.variant.findMany({
+      where: { id: { in: [...new Set(textilLines.map((l) => l.variantId).filter((v): v is string => !!v))] } },
+      select: { id: true, sku: true, attributes: { select: { name: true, value: true } }, article: { select: { name: true } } },
+    });
+    const vmap = new Map(vrows.map((v) => [v.id, v]));
+    const textilien = textilLines.map((l) => {
+      const v = l.variantId ? vmap.get(l.variantId) : undefined;
+      const attr = (n: string) => v?.attributes.find((a) => a.name === n)?.value ?? "";
+      return {
+        position: l.position,
+        artNr: v?.sku ?? "",
+        bezeichnung: v?.article.name ?? l.description,
+        farbe: attr("Farbe"),
+        groesse: attr("Größe"),
+        menge: l.qty,
+      };
+    });
+
+    // Veredelungspositionen (Motive) mit Bezug auf die beigestellten Textilpositionen.
+    const motive = order.lines
+      .filter((l) => l.kind === "VEREDELUNG" && (scope.size === 0 || inScope(l.bezugPosition)))
+      .map((l) => ({ description: l.description, bezugPosition: l.bezugPosition }));
+
+    return {
+      nummer: sub.number, datum: new Date(),
+      veredler: sub.supplier?.name ?? null,
+      kunde: order.company.name,
+      kommission: order.number,
+      textilien, motive,
+      anlieferung: sub.beistellungVersandtAm ?? null,
+      fertigstellung: sub.dueDate ?? null,
+    };
+  }
 }

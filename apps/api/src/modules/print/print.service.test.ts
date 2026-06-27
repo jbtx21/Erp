@@ -63,6 +63,28 @@ describe("PrintService — Angebot / Auftragsbestätigung", () => {
   });
 });
 
+describe("PrintService.veredelungsauftragPdf", () => {
+  it("erzeugt ein Veredelungsauftrag-PDF (Größen-Matrix + Veredelungspositionen)", async () => {
+    const repo = new InMemoryPrintRepository();
+    repo.veredelungsauftraege["sub-1"] = {
+      nummer: "PA-2026-0001-a", datum: new Date("2026-06-22"), veredler: "Stickerei Müller GmbH", kunde: "Muster GmbH", kommission: "AB-2026-0007",
+      textilien: [
+        { position: 1, artNr: "816-RT", bezeichnung: "Poloshirt Mikralinar", farbe: "Rot", groesse: "M", menge: 10 },
+        { position: 2, artNr: "816-RT", bezeichnung: "Poloshirt Mikralinar", farbe: "Rot", groesse: "L", menge: 15 },
+      ],
+      motive: [{ description: "Logo Brust links, 2-farbig Stick", bezugPosition: 1 }],
+      anlieferung: new Date("2026-06-25"), fertigstellung: new Date("2026-06-30"),
+    };
+    const res = await new PrintService(repo).veredelungsauftragPdf("sub-1");
+    expect(res.filename).toBe("Veredelungsauftrag-PA-2026-0001-a.pdf");
+    expect(isPdf(res.base64)).toBe(true);
+  });
+
+  it("wirft bei unbekanntem Veredelungsauftrag", async () => {
+    await expect(new PrintService(new InMemoryPrintRepository()).veredelungsauftragPdf("nope")).rejects.toBeInstanceOf(PrintError);
+  });
+});
+
 describe("PrintService.laufzettelPdf", () => {
   it("erzeugt ein Laufzettel-PDF aus den Auftragspositionen", async () => {
     const { InMemoryPrintRepository } = await import("../../repositories/in-memory-print.repository.js");

@@ -1,7 +1,7 @@
 // In-Memory-Druckdaten für Tests.
 
 import { FIRMA_DEFAULT, type FirmenProfil } from "@texma/shared";
-import type { CompanyDataSheetData, CreditNotePrintData, DeliveryNotePrintData, InvoicePrintData, LaufzettelPrintData, MahnungPrintData, OrderConfirmationPrintData, PrintRepository, QuotePrintData, SupplierDataSheetData } from "../modules/print/print.service.js";
+import type { CompanyDataSheetData, CreditNotePrintData, DeliveryNotePrintData, InvoicePrintData, LaufzettelPrintData, MahnungPrintData, OrderConfirmationPrintData, PrintRepository, QuotePrintData, SupplierDataSheetData, VeredelungsauftragPrintData } from "../modules/print/print.service.js";
 
 export class InMemoryPrintRepository implements PrintRepository {
   companyProfileValue: FirmenProfil = { ...FIRMA_DEFAULT };
@@ -13,6 +13,7 @@ export class InMemoryPrintRepository implements PrintRepository {
   laufzettel: Record<string, LaufzettelPrintData> = {};
   quotes: Record<string, QuotePrintData> = {};
   orderConfirmations: Record<string, OrderConfirmationPrintData> = {};
+  veredelungsauftraege: Record<string, VeredelungsauftragPrintData> = {};
   companies: Record<string, CompanyDataSheetData> = {};
   suppliers: Record<string, SupplierDataSheetData> = {};
   briefkopfLines: string[] = [];
@@ -26,6 +27,7 @@ export class InMemoryPrintRepository implements PrintRepository {
   async laufzettelForPrint(orderId: string): Promise<LaufzettelPrintData | null> { return this.laufzettel[orderId] ?? null; }
   async quoteForPrint(id: string): Promise<QuotePrintData | null> { return this.quotes[id] ?? null; }
   async orderConfirmationForPrint(orderId: string): Promise<OrderConfirmationPrintData | null> { return this.orderConfirmations[orderId] ?? null; }
+  async veredelungsauftragForPrint(subProductionId: string): Promise<VeredelungsauftragPrintData | null> { return this.veredelungsauftraege[subProductionId] ?? null; }
   async briefkopf(): Promise<string[]> { return this.briefkopfLines; }
   async companyProfile(): Promise<FirmenProfil> { return this.companyProfileValue; }
   async companyLogo(): Promise<string | null> { return this.companyLogoValue; }

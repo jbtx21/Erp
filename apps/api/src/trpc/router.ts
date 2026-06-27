@@ -2074,6 +2074,14 @@ export const appRouter = router({
         try { return await ctx.print.laufzettelPdf(input.orderId); }
         catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
       }),
+    // Veredelungsauftrag/Werkstattblatt zur Fremdvergabe-/Inhouse-Stufe (Größen-Matrix +
+    // Veredelungspositionen; ohne Preise → allRoles inkl. PRODUKTION).
+    veredelungsauftrag: roleProcedure(...allRoles)
+      .input(z.object({ subProductionId: z.string().min(1) }))
+      .query(async ({ input, ctx }) => {
+        try { return await ctx.print.veredelungsauftragPdf(input.subProductionId); }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
+      }),
     // Angebots-PDF (mit Preisen → kein PRODUKTION).
     quote: roleProcedure(...supplierRoles)
       .input(z.object({ quoteId: z.string().min(1) }))
