@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { angebotDokument, auftragsbestaetigungDokument, gutschriftDokument, laufzettelDokument, lieferscheinDokument, mahnungDokument, rechnungDokument } from "./beleg.js";
+import { angebotDokument, auftragsbestaetigungDokument, gutschriftDokument, laufzettelDokument, lieferscheinDokument, mahnungDokument, rechnungDokument, redactKundenbezeichnung } from "./beleg.js";
 
 describe("Belegdokumente", () => {
   it("Lieferschein hat keine Preise", () => {
@@ -105,6 +105,24 @@ describe("Angebot / Auftragsbestätigung", () => {
     expect(d.typ).toBe("AUFTRAGSBESTAETIGUNG");
     expect(d.hinweise.some((h) => h.includes("WC-1234"))).toBe(true);
     expect(d.hinweise.some((h) => h.includes("Liefertermin"))).toBe(true);
+  });
+});
+
+describe("Kundenbeleg-Redaktion (Bezugsquelle ausblenden, Kap. 12)", () => {
+  it("entfernt intern/extern/inhouse/Veredler aus der Bezeichnung", () => {
+    expect(redactKundenbezeichnung("Siebdruck Vorder-/Rückseite (extern hi5)")).toBe("Siebdruck Vorder-/Rückseite");
+    expect(redactKundenbezeichnung("Stickerei Brust links, Logo (extern)")).toBe("Stickerei Brust links, Logo");
+    expect(redactKundenbezeichnung("Transferdruck 2-farbig, inhouse")).toBe("Transferdruck 2-farbig");
+    // Unverfängliche Klammerzusätze bleiben erhalten.
+    expect(redactKundenbezeichnung("T-Shirt Navy (Gr. L)")).toBe("T-Shirt Navy (Gr. L)");
+  });
+
+  it("greift in Angebot/AB/Rechnung/Lieferschein auf den Positionen", () => {
+    const ps = [{ menge: 200, bezeichnung: "Siebdruck V/R (extern hi5)", einzelpreisCents: 450 }];
+    const an = angebotDokument({ nummer: "AN-1", datum: new Date("2026-05-18"), empfaenger: ["X"], positionen: ps, netCents: 90000, taxCents: 17100, grossCents: 107100 });
+    expect(an.positionen[0]?.bezeichnung).toBe("Siebdruck V/R");
+    const ls = lieferscheinDokument({ nummer: "LS-1", datum: new Date("2026-05-18"), empfaenger: ["X"], positionen: [{ menge: 30, bezeichnung: "Sweatshirt — Transferdruck inhouse" }] });
+    expect(ls.positionen[0]?.bezeichnung).toBe("Sweatshirt — Transferdruck");
   });
 });
 

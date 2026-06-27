@@ -66,7 +66,8 @@ export function lieferscheinDokument(input: LieferscheinInput): BelegDokument {
     datum: formatDatum(input.datum),
     absender: input.absender && input.absender.length > 0 ? input.absender : [...ABSENDER_TEXMA],
     empfaenger: input.empfaenger,
-    positionen: input.positionen.map((p) => ({ menge: p.menge, bezeichnung: p.bezeichnung })),
+    // Kundenseitiger Lieferschein: Bezugsquelle (intern/extern/Veredler) ausblenden.
+    positionen: input.positionen.map((p) => ({ menge: p.menge, bezeichnung: redactKundenbezeichnung(p.bezeichnung) })),
     summen: [],
     hinweise: input.hinweise ?? ["Bitte prüfen Sie die Lieferung auf Vollständigkeit und Unversehrtheit."],
     zeigePreise: false,
@@ -124,11 +125,32 @@ export interface PreisPosition {
   rabattPct?: number | null;
 }
 
+/**
+ * Redaktion der Bezugsquelle für KUNDENseitige Belege (Angebot/AB/Rechnung/Lieferschein):
+ * der Kunde darf NICHT sehen, ob eine Veredelung intern/extern/inhouse erfolgt oder über welchen
+ * Veredler (Fremdvergabe). Entfernt Klammerzusätze mit internem Bezug komplett (inkl. Veredler-
+ * name darin) und neutralisiert verbliebene Einzelwörter. Interne Belege (Laufzettel/
+ * Veredelungsauftrag) bleiben unberührt.
+ */
+const INTERN_RE = /\b(extern|intern|inhouse|fremdvergabe|lohnveredelung|veredler)\b/i;
+export function redactKundenbezeichnung(text: string): string {
+  return text
+    // Klammerzusatz mit internem Bezug (z. B. „(extern hi5)") ganz entfernen.
+    .replace(/\s*\([^)]*\)/g, (m) => (INTERN_RE.test(m) ? "" : m))
+    // Verbliebene Einzelwörter entfernen.
+    .replace(new RegExp(INTERN_RE.source, "gi"), "")
+    // Aufräumen: doppelte Leerzeichen, Leerzeichen vor Satzzeichen, hängende Trenner.
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([,.;:])/g, "$1")
+    .replace(/[\s,;:–-]+$/u, "")
+    .trim();
+}
+
 /** Gemeinsame Preis-Positionen (Einzel-/Rabatt-/Zeilenpreis) für Rechnung/Angebot/AB. */
 function preisPositionen(ps: PreisPosition[]): BelegPosition[] {
   return ps.map((p) => ({
     menge: p.menge,
-    bezeichnung: p.bezeichnung,
+    bezeichnung: redactKundenbezeichnung(p.bezeichnung),
     // Einzelpreis = VK-Liste (vor Rabatt), sonst der effektive Netto; Zeilenbetrag = effektiver Netto × Menge.
     einzelpreis: formatEur(p.listenpreisCents ?? p.einzelpreisCents),
     ...(p.rabattPct ? { rabatt: `${p.rabattPct} %` } : {}),
