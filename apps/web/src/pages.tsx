@@ -1947,8 +1947,92 @@ function LogoArticleDialog({ onClose, onCreated }: { onClose: () => void; onCrea
       <Button size="compact-xs" variant="light" mt="xs" onClick={() => setTiers((ts) => prefillTiers(typeof ek === "number" ? ek : 0, [...ts, { minMenge: (ts.at(-1)?.minMenge ?? 0) + 10, euro: 0 }]))}>+ Staffelstufe</Button>
       <Group justify="flex-end" mt="lg">
         <Button variant="default" onClick={onClose}>Abbrechen</Button>
-        <Button loading={busy} disabled={!name.trim() || !sku.trim() || !veredlerId} onClick={() => void create()}>Anlegen &amp; übernehmen</Button>
+        <Button loading={busy} disabled={!name.trim() || !sku.trim() || (!inhouse && !veredlerId)} onClick={() => void create()}>Anlegen &amp; übernehmen</Button>
       </Group>
+    </Modal>
+  );
+}
+
+// Größenlauf/Matrix-Mengeneingabe: einen Hauptartikel wählen → alle Farbe×Größe-Varianten
+// als Raster mit Menge je Variante; „Übernehmen" hängt je befüllte Zelle eine Position an.
+// Löst das „200 T-Shirts, Sortierung wird später aufgeteilt"-Problem in EINEM Schritt.
+const attrOf = (attrs: Array<{ name: string; value: string }>, re: RegExp): string =>
+  attrs.find((a) => re.test(a.name))?.value ?? "";
+function MengenMatrixDialog({ onClose, onAdd }: { onClose: () => void; onAdd: (a: { articleId: string; articleName: string; baseEuro: number; rows: { variantId: string; label: string; sku?: string; qty: number }[] }) => void }): JSX.Element {
+  const [article, setArticle] = useState<{ articleId: string; articleName: string; baseEuro: number } | null>(null);
+  const [variants, setVariants] = useState<Awaited<ReturnType<typeof trpc.products.listVariants.query>>>([]);
+  const [qty, setQty] = useState<Record<string, number>>({});
+  const [err, setErr] = useState<string | null>(null);
+  const pick = (e: { articleId: string; articleName: string; unitNetCents: number }): void => {
+    setArticle({ articleId: e.articleId, articleName: e.articleName, baseEuro: e.unitNetCents / 100 });
+    setQty({}); setErr(null);
+    void trpc.products.listVariants.query({ articleId: e.articleId }).then(setVariants).catch((x) => setErr(errMsg(x)));
+  };
+  // Achsen aus den Varianten-Merkmalen ableiten (Farbe × Größe), Reihenfolge stabil.
+  const farben = [...new Set(variants.map((v) => attrOf(v.attributes, /farbe|color/i)).filter(Boolean))];
+  const groessen = [...new Set(variants.map((v) => attrOf(v.attributes, /gr(ö|oe)ße|size/i)).filter(Boolean))];
+  const byCombo = new Map(variants.map((v) => [`${attrOf(v.attributes, /farbe|color/i)}|||${attrOf(v.attributes, /gr(ö|oe)ße|size/i)}`, v]));
+  const total = Object.values(qty).reduce((s, n) => s + (n || 0), 0);
+  const hasMatrix = farben.length > 0 && groessen.length > 0;
+  const apply = (): void => {
+    if (!article) return;
+    const rows = variants
+      .map((v) => ({ variantId: v.id, sku: v.sku, label: `${article.articleName} ${[attrOf(v.attributes, /farbe|color/i), attrOf(v.attributes, /gr(ö|oe)ße|size/i)].filter(Boolean).join(" ")}`.trim(), qty: qty[v.id] ?? 0 }))
+      .filter((r) => r.qty > 0);
+    if (rows.length === 0) { setErr("Mindestens eine Menge eintragen."); return; }
+    onAdd({ articleId: article.articleId, articleName: article.articleName, baseEuro: article.baseEuro, rows });
+  };
+  return (
+    <Modal opened onClose={onClose} title="Größen/Mengen aufteilen (Größenlauf)" size="xl">
+      {err && <Alert color="red" mb="sm">{err}</Alert>}
+      <Text size="sm" c="dimmed" mb="xs">Hauptartikel wählen, dann Menge je Farbe×Größe eintragen. Jede befüllte Zelle wird eine Auftragsposition (Basis-VK je Variante, danach editierbar).</Text>
+      <HauptartikelPicker onPick={pick} />
+      {article && variants.length === 0 && <Text size="sm" c="dimmed" mt="sm">Keine Varianten zu diesem Artikel — bitte zuerst im Artikelstamm das Farbe×Größe-Raster anlegen.</Text>}
+      {article && variants.length > 0 && (
+        <>
+          {hasMatrix ? (
+            <Table withTableBorder withColumnBorders mt="md" verticalSpacing={4} fz="sm">
+              <Table.Thead><Table.Tr>
+                <Table.Th>Farbe \ Größe</Table.Th>
+                {groessen.map((g) => <Table.Th key={g} ta="center">{g}</Table.Th>)}
+              </Table.Tr></Table.Thead>
+              <Table.Tbody>
+                {farben.map((f) => (
+                  <Table.Tr key={f}>
+                    <Table.Td fw={600}>{f}</Table.Td>
+                    {groessen.map((g) => {
+                      const v = byCombo.get(`${f}|||${g}`);
+                      return <Table.Td key={g} style={numTd}>{v
+                        ? <NumberInput size="xs" w={64} hideControls min={0} value={qty[v.id] ?? ""} onChange={(val) => setQty((q) => ({ ...q, [v.id]: Number(val) || 0 }))} />
+                        : <Text size="xs" c="dimmed" ta="center">—</Text>}</Table.Td>;
+                    })}
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          ) : (
+            // Kein klares Farbe×Größe-Raster → flache Liste je Variante.
+            <Table withTableBorder mt="md" verticalSpacing={4} fz="sm">
+              <Table.Thead><Table.Tr><Table.Th>Variante</Table.Th><Table.Th ta="right">Menge</Table.Th></Table.Tr></Table.Thead>
+              <Table.Tbody>
+                {variants.map((v) => (
+                  <Table.Tr key={v.id}>
+                    <Table.Td>{v.sku} {v.attributes.map((a) => a.value).join(" · ")}</Table.Td>
+                    <Table.Td style={numTd}><NumberInput size="xs" w={80} hideControls min={0} value={qty[v.id] ?? ""} onChange={(val) => setQty((q) => ({ ...q, [v.id]: Number(val) || 0 }))} /></Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          )}
+          <Group justify="space-between" mt="md">
+            <Text size="sm">Gesamt: <b>{total}</b> Stück</Text>
+            <Group gap="xs">
+              <Button variant="default" onClick={onClose}>Abbrechen</Button>
+              <Button disabled={total === 0} onClick={apply}>Übernehmen ({Object.values(qty).filter((n) => n > 0).length} Positionen)</Button>
+            </Group>
+          </Group>
+        </>
+      )}
     </Modal>
   );
 }
@@ -1983,6 +2067,7 @@ export function LinesEditor({ lines, onChange, quoteMode = false, companyId, tax
   const [bundleFor, setBundleFor] = useState<number | null>(null); // Index der Zeile mit offenem Stücklisten-Editor
   const [shown, setShown] = useState<Record<number, boolean>>({}); // aufgeklappte Stücklisten-Vorschauen
   const [logoOpen, setLogoOpen] = useState(false); // Dialog „Logo/Veredelung anlegen"
+  const [mengenOpen, setMengenOpen] = useState(false); // Dialog „Größen/Mengen aufteilen"
   // Nur eine WIRKLICH leere Platzhalterzeile ersetzen (keine Beschreibung, kein Preis,
   // keine Artikel-/Variantenbindung), sonst anhängen — verhindert Datenverlust, wenn eine
   // gefüllte Position (z. B. 200× Textil) nur keine Beschreibung trägt. Gibt den Zielindex zurück.
@@ -2013,6 +2098,13 @@ export function LinesEditor({ lines, onChange, quoteMode = false, companyId, tax
   };
   const addHauptartikel = (e: { articleId: string; articleName: string; unitNetCents: number; sku?: string }): void =>
     void addLine({ description: e.articleName, qty: 1, euro: e.unitNetCents / 100, kind: "TEXTIL", articleId: e.articleId, articleNumber: e.sku, articleName: e.articleName });
+  // Größenlauf/Matrix: mehrere Farbe×Größe-Varianten EINES Hauptartikels mit Menge je
+  // Variante auf einmal als Positionen anhängen (Sortierung). Basis-VK je Variante; pro
+  // Zeile danach editierbar.
+  const addManyVariants = (articleId: string, articleName: string, baseEuro: number, picked: { variantId: string; label: string; sku?: string; qty: number }[]): void => {
+    const fresh = picked.filter((p) => p.qty > 0).map((p) => ({ description: p.label, qty: p.qty, euro: baseEuro, kind: "TEXTIL" as PositionKind, variantId: p.variantId, articleNumber: p.sku, articleName, articleId }));
+    if (fresh.length > 0) onChange([...lines, ...fresh]);
+  };
   // Inline-Variantenwahl: andere Farbe×Größe desselben Artikels wählen → Variante + Nr. + Preis übernehmen.
   const pickVariant = (i: number, l: EditorLine, variantId: string): void => {
     const v = catalog.find((c) => c.variantId === variantId);
@@ -2025,10 +2117,12 @@ export function LinesEditor({ lines, onChange, quoteMode = false, companyId, tax
       <Group gap="xs" mb={6}>
         <ArticlePicker onPick={addFromCatalog} />
         {quoteMode && <HauptartikelPicker onPick={addHauptartikel} />}
+        {quoteMode && <Button size="xs" variant="light" onClick={() => setMengenOpen(true)}>+ Größen/Mengen</Button>}
         {quoteMode && <Button size="xs" variant="light" color="grape" onClick={() => setLogoOpen(true)}>+ Logo/Veredelung</Button>}
-        <Text size="xs" c="dimmed">{quoteMode ? "Variante/Hauptartikel wählen, Logo anlegen oder unten frei erfassen" : "aus dem Artikelstamm wählen oder unten frei erfassen"}</Text>
+        <Text size="xs" c="dimmed">{quoteMode ? "Variante/Hauptartikel/Größenlauf wählen, Logo anlegen oder unten frei erfassen" : "aus dem Artikelstamm wählen oder unten frei erfassen"}</Text>
       </Group>
       {logoOpen && <LogoArticleDialog onClose={() => setLogoOpen(false)} onCreated={(e) => { appendVeredelung(e); setLogoOpen(false); }} />}
+      {mengenOpen && <MengenMatrixDialog onClose={() => setMengenOpen(false)} onAdd={(a) => { addManyVariants(a.articleId, a.articleName, a.baseEuro, a.rows); setMengenOpen(false); }} />}
       {lines.map((l, i) => {
         const db = lineDbCents(l);
         const effEuro = effUnitEuro(l);
