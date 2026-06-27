@@ -1,8 +1,8 @@
 // Wiederverwendbare ERPNext/Frappe-Layout-Primitive für das einheitliche
 // „List → Form"-Muster: Listenkopf (Titel + Aktion + Filterzeile), Formular-Hülle
 // (Breadcrumb + Titel + Statusabzeichen + Aktionsleiste) und Status-Indikator-Punkt.
-import { Badge, Box, Button, Group, Text, Title } from "@mantine/core";
-import { type ReactNode } from "react";
+import { Badge, Box, Button, Group, Menu, Text, Title } from "@mantine/core";
+import { Fragment, type ReactNode } from "react";
 import { statusMantineColor, prettyStatus } from "./theme.js";
 
 /**
@@ -22,6 +22,73 @@ export function StatusBadge({ status, size }: { status: string; size?: string })
  * Handlungsaufforderung. Ersetzt das nackte „Keine Daten" in Modulen ohne Datensätze
  * (P2.11), damit klar ist, was als Nächstes zu tun ist.
  */
+/**
+ * Eine Aktion im Beleg-Aktionsmenue. `group` fasst Items zu Abschnitten zusammen
+ * (gleiche Strings -> ein Abschnitt mit Menu.Label); Reihenfolge = Eingabereihenfolge.
+ * `color` fuer positive/destruktive Items (z. B. "green"/"red"); `disabled`+`title` fuer
+ * gesperrte Folgeaktionen samt Begruendung.
+ */
+export interface DocAction {
+  label: string;
+  onClick: () => void;
+  group?: string;
+  color?: string;
+  disabled?: boolean;
+  title?: string;
+  leftSection?: ReactNode;
+}
+
+/**
+ * Xentral-Stil "Aktionsmenue am Beleg" (Skill AM-1): EIN gruppiertes Dropdown statt einer
+ * ueberlaufenden Button-Reihe in Listenzeilen/Detailkoepfen. Aktionen werden nach `group`
+ * zu Abschnitten (Menu.Label + Divider) gebuendelt. Klicks stoppen die Event-Propagation,
+ * damit der Zeilen-Klick (Beleg oeffnen) nicht zusaetzlich ausloest. Leere Aktionsliste -> null.
+ */
+export function DocActionMenu({
+  actions,
+  label = "Aktionen",
+  size = "compact-xs",
+  variant = "default",
+}: {
+  actions: Array<DocAction | false | null | undefined>;
+  label?: string;
+  size?: string;
+  variant?: string;
+}): JSX.Element | null {
+  const visible = actions.filter((a): a is DocAction => Boolean(a));
+  if (visible.length === 0) return null;
+  // Gruppen in Eingabereihenfolge sammeln (stabile Abschnittsfolge).
+  const groups: string[] = [];
+  for (const a of visible) { const g = a.group ?? ""; if (!groups.includes(g)) groups.push(g); }
+  return (
+    <Menu shadow="md" width={250} position="bottom-end" withinPortal>
+      <Menu.Target>
+        <Button size={size} variant={variant} onClick={(e) => e.stopPropagation()}>{label} ▾</Button>
+      </Menu.Target>
+      <Menu.Dropdown onClick={(e) => e.stopPropagation()}>
+        {groups.map((g, gi) => (
+          <Fragment key={g || `g${gi}`}>
+            {gi > 0 && <Menu.Divider />}
+            {g && <Menu.Label>{g}</Menu.Label>}
+            {visible.filter((a) => (a.group ?? "") === g).map((a, i) => (
+              <Menu.Item
+                key={`${g}-${i}`}
+                color={a.color}
+                disabled={a.disabled}
+                title={a.title}
+                leftSection={a.leftSection}
+                onClick={(e) => { e.stopPropagation(); a.onClick(); }}
+              >
+                {a.label}
+              </Menu.Item>
+            ))}
+          </Fragment>
+        ))}
+      </Menu.Dropdown>
+    </Menu>
+  );
+}
+
 export function EmptyState({
   icon = "📭",
   title,

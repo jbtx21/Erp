@@ -3,7 +3,7 @@
 // Bereiche mit wenig Code anbindbar sind. Interaktive Aktionen (Versand bestätigen,
 // Mahnlauf, Reorder→Bestellungen) sind je Seite ergänzt.
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Alert, Anchor, Badge, Box, Button, Card, Checkbox, FileButton, Group, Image, Loader, Modal, NumberInput, Paper, PasswordInput, SegmentedControl, Select, SimpleGrid, Stack, Switch, Table, Tabs, TagsInput, Text, Textarea, TextInput, Title } from "@mantine/core";
+import { Alert, Anchor, Badge, Box, Button, Card, Checkbox, FileButton, Group, Image, Loader, Menu, Modal, NumberInput, Paper, PasswordInput, SegmentedControl, Select, SimpleGrid, Stack, Switch, Table, Tabs, TagsInput, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { validateVatId } from "@texma/shared/vat";
 import { buildTrackingUrl, type Carrier } from "@texma/shared/tracking";
@@ -13,7 +13,7 @@ import { trpc } from "./trpc.js";
 import { AufschlagsfaktorenSection, LogosStickereiSection, StickereiAusschreibungSection, StickereiStaffelnSection, Postcalc } from "./Differentiators.js";
 import { euro, numTd, statusMantineColor, prettyStatus } from "./theme.js";
 import { MultiLineChart, BarChart } from "./charts.js";
-import { DocFormShell, DocListHeader, StatusDot, StatusBadge, EmptyState } from "./doc-layout.js";
+import { DocActionMenu, DocFormShell, DocListHeader, StatusDot, StatusBadge, EmptyState, type DocAction } from "./doc-layout.js";
 import { OrderAmpelDetail, Auftragsampel } from "./StatusAmpel.js";
 import { useUnsavedGuard } from "./use-unsaved-guard.js";
 import { downloadCsv } from "./export.js";
@@ -2482,24 +2482,28 @@ export function QuotesPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k:
     catch (e) { setErr(errMsg(e)); }
   };
 
+  // Xentral-Stil „Aktionsmenü am Beleg": ein gruppiertes Dropdown statt einer überlaufenden
+  // Button-Reihe. „Auftrag erstellt" bleibt als inline Status-Badge sichtbar (kein Klick-Item).
   const rowActions = (r: QuoteListRow): JSX.Element => {
     const id = r.id; const status = r.status;
+    const editable = status !== "ANGENOMMEN" && status !== "ABGELEHNT";
+    const actions: Array<DocAction | false> = [
+      { label: "PDF herunterladen", group: "Allgemein", onClick: () => void printPdf(id) },
+      { label: "Per E-Mail senden", group: "Allgemein", onClick: () => void mailPdf(id) },
+      editable && { label: "Bearbeiten", group: "Allgemein", onClick: () => void startEdit(id) },
+      status === "ENTWURF" && { label: "→ Versendet", group: "Status & Folgeaktion", onClick: () => void act(() => trpc.quotes.transition.mutate({ id, to: "VERSENDET" })) },
+      // Annahme schließt direkt mit der Auftragswandlung ab — sonst bleibt der „→ Auftrag"-Schritt unentdeckt.
+      (status === "VERSENDET" || status === "NACHFASSEN") && { label: "Annehmen & in Auftrag wandeln", group: "Status & Folgeaktion", color: "green", onClick: () => void act(async () => { await trpc.quotes.transition.mutate({ id, to: "ANGENOMMEN" }); setConvertId(id); }) },
+      status === "ANGENOMMEN" && !r.converted && { label: "→ Auftrag wandeln", group: "Status & Folgeaktion", color: "green", onClick: () => setConvertId(id) },
+      editable && { label: "Ablehnen", group: "Status & Folgeaktion", color: "red", onClick: () => {
+        const grund = typeof window !== "undefined" ? window.prompt("Ablehnen — Verlustgrund?") : null;
+        if (grund) void act(() => trpc.quotes.reject.mutate({ id, verlustgrund: grund }));
+      } },
+    ];
     return (
-      <Group gap={4} justify="flex-end" wrap="nowrap" onClick={(e) => e.stopPropagation()}>
-        <Button size="compact-xs" variant="subtle" onClick={() => void printPdf(id)}>PDF</Button>
-        <Button size="compact-xs" variant="subtle" onClick={() => void mailPdf(id)}>Mail</Button>
-        {status !== "ANGENOMMEN" && status !== "ABGELEHNT" && <Button size="compact-xs" variant="subtle" onClick={() => void startEdit(id)}>Bearbeiten</Button>}
-        {status === "ENTWURF" && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.quotes.transition.mutate({ id, to: "VERSENDET" }))}>→ Versendet</Button>}
-        {/* Annahme schließt direkt mit der Auftragswandlung ab — sonst bleibt der „→ Auftrag"-Schritt unentdeckt. */}
-        {(status === "VERSENDET" || status === "NACHFASSEN") && <Button size="compact-xs" color="green" onClick={() => void act(async () => { await trpc.quotes.transition.mutate({ id, to: "ANGENOMMEN" }); setConvertId(id); })}>Annehmen & in Auftrag wandeln</Button>}
-        {status === "ANGENOMMEN" && !r.converted && <Button size="compact-xs" color="green" onClick={() => setConvertId(id)}>→ Auftrag wandeln</Button>}
+      <Group gap={6} justify="flex-end" wrap="nowrap" onClick={(e) => e.stopPropagation()}>
         {status === "ANGENOMMEN" && r.converted && <Badge size="sm" color="teal" variant="light">Auftrag erstellt</Badge>}
-        {status !== "ANGENOMMEN" && status !== "ABGELEHNT" && (
-          <Button size="compact-xs" color="red" variant="light" onClick={() => {
-            const grund = typeof window !== "undefined" ? window.prompt("Ablehnen — Verlustgrund?") : null;
-            if (grund) void act(() => trpc.quotes.reject.mutate({ id, verlustgrund: grund }));
-          }}>Ablehnen</Button>
-        )}
+        <DocActionMenu actions={actions} />
       </Group>
     );
   };
@@ -3708,8 +3712,34 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
         // Single Source of Truth: erlaubte Übergänge kommen vom Server (echter DB-Status),
         // Fallback auf die geteilte Maschine. So bietet die UI nie einen illegalen Übergang an.
         const next = (r.allowedTransitions as string[] | undefined) ?? orderStatusMachine.next(String(r.status) as OrderStatus);
+        const runTransition = (to: string) => async () => {
+          setErr(null); setMsg(null);
+          try {
+            if (to === "FAKTURIERT") {
+              // Faktura ist KEIN reiner Status-Schalter: erzeugt echte Rechnung (RE-Nr.,
+              // USt, offener Posten) und setzt status=FAKTURIERT in einer Transaktion.
+              const inv = await trpc.invoices.createFromOrder.mutate({ orderId: String(r.id) });
+              setMsg(`Rechnung ${inv.number} erzeugt (${euro(inv.grossCents)} brutto).`);
+            } else {
+              await trpc.shopOrders.transition.mutate({ orderId: String(r.id), to: to as Exclude<OrderStatus, "ANGELEGT"> });
+              setMsg(`Auftrag ${String(r.number ?? r.id)} → ${prettyStatus(to)}.`);
+            }
+            await load();
+          }
+          catch (e) { setErr(errMsg(e)); }
+        };
+        const actions: Array<DocAction | false> = [
+          { label: "Bearbeiten", group: "Allgemein", onClick: () => void startEditOrder(String(r.id)) },
+          ...next.map((to): DocAction => ({
+            label: to === "FAKTURIERT" ? "Fakturieren (Rechnung erzeugen)" : `→ ${prettyStatus(to)}`,
+            group: "Status & Folgeaktion",
+            color: to === "STORNIERT" ? "red" : to === "FAKTURIERT" ? "green" : undefined,
+            onClick: () => void runTransition(to)(),
+          })),
+        ];
         return (
-          <Group gap={4} justify="flex-end" wrap="nowrap">
+          // Eil-Stern bleibt inline (Status-Signal: gefüllt = priorisiert); übrige Aktionen im Menü.
+          <Group gap={6} justify="flex-end" wrap="nowrap" onClick={(e) => e.stopPropagation()}>
             <Button size="compact-xs" variant={r.fastLane === true ? "filled" : "subtle"} color="orange"
               title={r.fastLane === true ? "Eilauftrag — Klick entfernt die Priorisierung" : "Als Eilauftrag (Fast-Lane) priorisieren"}
               onClick={async () => {
@@ -3717,27 +3747,7 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
                 try { await trpc.shopOrders.setFastLane.mutate({ orderId: String(r.id), on: !(r.fastLane === true) }); await load(); }
                 catch (e) { setErr(errMsg(e)); }
               }}>{r.fastLane === true ? "★ Eil" : "Eil"}</Button>
-            <Button size="compact-xs" variant="subtle" onClick={() => void startEditOrder(String(r.id))}>Bearbeiten</Button>
-            {next.length === 0 && <Text size="xs" c="dimmed">—</Text>}
-            {next.map((to) => (
-              <Button key={to} size="compact-xs" variant={to === "STORNIERT" ? "light" : "default"} color={to === "STORNIERT" ? "red" : undefined}
-                onClick={async () => {
-                  setErr(null); setMsg(null);
-                  try {
-                    if (to === "FAKTURIERT") {
-                      // Faktura ist KEIN reiner Status-Schalter: erzeugt echte Rechnung (RE-Nr.,
-                      // USt, offener Posten) und setzt status=FAKTURIERT in einer Transaktion.
-                      const inv = await trpc.invoices.createFromOrder.mutate({ orderId: String(r.id) });
-                      setMsg(`Rechnung ${inv.number} erzeugt (${euro(inv.grossCents)} brutto).`);
-                    } else {
-                      await trpc.shopOrders.transition.mutate({ orderId: String(r.id), to: to as Exclude<OrderStatus, "ANGELEGT"> });
-                      setMsg(`Auftrag ${String(r.number ?? r.id)} → ${prettyStatus(to)}.`);
-                    }
-                    await load();
-                  }
-                  catch (e) { setErr(errMsg(e)); }
-                }}>→ {prettyStatus(to)}</Button>
-            ))}
+            <DocActionMenu actions={actions} />
           </Group>
         );
       }} />
