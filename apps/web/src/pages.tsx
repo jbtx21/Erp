@@ -7837,7 +7837,7 @@ const HOME_SHORTCUTS: ReadonlyArray<{ key: string; label: string; nav: string; c
   { key: "companies", label: "Firmen/Kunden", nav: "companies", countKey: "companies" },
   { key: "orders", label: "Aufträge", nav: "orders", countKey: "orders" },
   { key: "quotes", label: "Angebote", nav: "quotes", countKey: "quotes" },
-  { key: "leads", label: "Leads", nav: "leads", countKey: "leads" },
+  { key: "pipeline", label: "Vertriebs-Pipeline", nav: "pipeline", countKey: "leads" },
   { key: "invoices", label: "Rechnungen", nav: "dunning", countKey: "invoices" },
   { key: "suppliers", label: "Lieferanten", nav: "suppliers", countKey: "suppliers" },
   { key: "articles", label: "Artikel", nav: "products", countKey: "articles" },
@@ -8142,7 +8142,7 @@ export function HomePage({ userName, onNavigate }: { userName?: string; onNaviga
       </Group>
       {showLinks && (
         <Group mt="xs" gap="xl" align="flex-start" wrap="wrap">
-          {card("Vertrieb", [{ label: "Firmen/Kunden", navKey: "companies" }, { label: "Leads", navKey: "leads" }, { label: "Verkaufschancen", navKey: "opportunities" }, { label: "Angebote", navKey: "quotes" }, { label: "Aufträge", navKey: "orders" }])}
+          {card("Vertrieb", [{ label: "Firmen/Kunden", navKey: "companies" }, { label: "Vertriebs-Pipeline", navKey: "pipeline" }, { label: "Angebote", navKey: "quotes" }, { label: "Aufträge", navKey: "orders" }])}
           {card("Beschaffung", [{ label: "Lieferanten", navKey: "suppliers" }, { label: "Eingangsrechnungen", navKey: "incoming" }, { label: "Nachbestellung", navKey: "reorder" }, { label: "Muster-Leihgut", navKey: "samples" }, { label: "Lager & Inventur", navKey: "lager" }])}
           {card("Finanzen", [{ label: "Mahnwesen", navKey: "dunning" }, { label: "Banking", navKey: "banking" }, { label: "Auswertungen", navKey: "reporting" }, { label: "GoBD-Archiv", navKey: "archive" }, { label: "Kostenstellen", navKey: "costcenters" }])}
           {card("Produktion & System", [{ label: "Produktions-Reporting", navKey: "prodreport" }, { label: "Fremdvergabe", navKey: "subproduction" }, { label: "Automationen", navKey: "automation" }, { label: "Einstellungen", navKey: "admin" }, { label: "Personalwesen", navKey: "hr" }])}
