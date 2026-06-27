@@ -1942,7 +1942,8 @@ export const appRouter = router({
     // Beleg (Angebot/AB/Rechnung) als PDF-Anhang per E-Mail senden. Preis-sensibel → supplierRoles.
     sendBeleg: roleProcedure(...supplierRoles)
       .input(z.object({
-        kind: z.enum(["QUOTE", "AUFTRAGSBESTAETIGUNG", "INVOICE"]),
+        // Alle Kunden-Belege: jeder mit eigenem PDF ist auch per Mail versendbar.
+        kind: z.enum(["QUOTE", "AUFTRAGSBESTAETIGUNG", "INVOICE", "LIEFERSCHEIN", "GUTSCHRIFT", "MAHNUNG", "LEIHGUT"]),
         id: z.string().min(1),
         // Bewusst nur z.string(): die E-Mail-Plausibilität prüfen wir im Handler mit
         // klarer deutscher Meldung, statt den rohen Zod-„invalid_string"-Fehler ans UI zu reichen.
@@ -1958,10 +1959,23 @@ export const appRouter = router({
         try {
           const pdf = input.kind === "QUOTE" ? await ctx.print.quotePdf(input.id)
             : input.kind === "INVOICE" ? await ctx.print.invoicePdf(input.id)
-            : await ctx.print.auftragsbestaetigungPdf(input.id);
-          const labels = { QUOTE: "Angebot", AUFTRAGSBESTAETIGUNG: "Auftragsbestätigung", INVOICE: "Rechnung" } as const;
-          const subject = input.subject ?? `${labels[input.kind]} ${pdf.filename.replace(/\.pdf$/, "").replace(/^[^-]+-/, "")}`;
-          const body = input.body ?? `Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie ${labels[input.kind] === "Rechnung" ? "Ihre Rechnung" : `unser ${labels[input.kind]}`} als PDF.\n\nMit freundlichen Grüßen\nTEXMA Textilveredelung GmbH`;
+            : input.kind === "AUFTRAGSBESTAETIGUNG" ? await ctx.print.auftragsbestaetigungPdf(input.id)
+            : input.kind === "LIEFERSCHEIN" ? await ctx.print.deliveryNotePdf(input.id)
+            : input.kind === "GUTSCHRIFT" ? await ctx.print.creditNotePdf(input.id)
+            : input.kind === "MAHNUNG" ? await ctx.print.mahnungPdf(input.id)
+            : await ctx.print.sampleLoanLieferscheinPdf(input.id);
+          // Label + Anschreibe-Formulierung („Ihre/unser …") je Belegtyp.
+          const meta = {
+            QUOTE: { label: "Angebot", satz: "unser Angebot" },
+            AUFTRAGSBESTAETIGUNG: { label: "Auftragsbestätigung", satz: "unsere Auftragsbestätigung" },
+            INVOICE: { label: "Rechnung", satz: "Ihre Rechnung" },
+            LIEFERSCHEIN: { label: "Lieferschein", satz: "Ihren Lieferschein" },
+            GUTSCHRIFT: { label: "Gutschrift", satz: "Ihre Gutschrift" },
+            MAHNUNG: { label: "Mahnung", satz: "unsere Zahlungserinnerung" },
+            LEIHGUT: { label: "Leihgut-Lieferschein", satz: "den Lieferschein zum Muster-Leihgut" },
+          }[input.kind];
+          const subject = input.subject ?? `${meta.label} ${pdf.filename.replace(/\.pdf$/, "").replace(/^[^-]+-/, "")}`;
+          const body = input.body ?? `Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie ${meta.satz} als PDF.\n\nMit freundlichen Grüßen\nTEXMA Textilmarketing GmbH`;
           await ctx.mailSend.send({ to, subject, body, attachments: [{ filename: pdf.filename, contentBase64: pdf.base64, contentType: "application/pdf" }] });
           return { ok: true as const, filename: pdf.filename };
         } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }

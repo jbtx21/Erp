@@ -892,6 +892,12 @@ export function SampleLoansPage({ onOpen }: { onOpen?: (navKey: string, id: stri
             const pdf = await trpc.print.sampleLoanLieferschein.query({ loanId: String(r.id) });
             downloadBase64(pdf.filename, pdf.base64, "application/pdf");
           })}>Lieferschein</Button>
+          <Button size="compact-xs" variant="subtle" color="blue" onClick={() => void act(async () => {
+            const to = typeof window !== "undefined" ? window.prompt("Leihgut-Lieferschein per E-Mail senden an:") : null;
+            if (!to) return;
+            const res = await trpc.mail.sendBeleg.mutate({ kind: "LEIHGUT", id: String(r.id), to });
+            if (typeof window !== "undefined") window.alert(`„${res.filename}" an ${to} gesendet.`);
+          })}>Mail</Button>
           {String(r.status) === "VERLIEHEN"
             ? <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.sampleLoans.returnSample.mutate({ loanId: String(r.id) }))}>Zurückgenommen</Button>
             : <Text size="xs" c="dimmed">—</Text>}
@@ -2898,6 +2904,14 @@ function DeliveryPanel({ orderId, onChanged }: { orderId: string; onChanged: () 
                 try { const pdf = await trpc.print.deliveryNote.query({ deliveryNoteId: n.id }); downloadBase64Pdf(pdf.filename, pdf.base64); }
                 catch (e) { setErr(errMsg(e)); }
               }}>PDF</Button>
+              <Button size="compact-xs" variant="subtle" color="blue" onClick={async () => {
+                try {
+                  const to = typeof window !== "undefined" ? window.prompt("Lieferschein per E-Mail senden an:") : null;
+                  if (!to) return;
+                  const res = await trpc.mail.sendBeleg.mutate({ kind: "LIEFERSCHEIN", id: n.id, to });
+                  if (typeof window !== "undefined") window.alert(`„${res.filename}" an ${to} gesendet.`);
+                } catch (e) { setErr(errMsg(e)); }
+              }}>Mail</Button>
             </Group>
           ))}
         </>
@@ -3364,6 +3378,29 @@ function OrderDocumentsTab({ orderId }: { orderId: string }): JSX.Element {
     } catch (e) { setErr(errMsg(e)); }
   };
 
+  // Beleg per E-Mail versenden (jeder druckbare Beleg ist auch mailbar). Veredelungsauftrag → Veredler.
+  const PDFKIND_TO_MAIL: Record<string, "QUOTE" | "AUFTRAGSBESTAETIGUNG" | "INVOICE" | "LIEFERSCHEIN" | "GUTSCHRIFT"> = {
+    quote: "QUOTE", auftragsbestaetigung: "AUFTRAGSBESTAETIGUNG", invoice: "INVOICE", deliveryNote: "LIEFERSCHEIN", creditNote: "GUTSCHRIFT",
+  };
+  const mailDoc = async (kind: string, id: string): Promise<void> => {
+    setErr(null);
+    try {
+      if (kind === "veredelungsauftrag") {
+        const to = typeof window !== "undefined" ? window.prompt("Veredelungsauftrag senden an (leer = hinterlegte Veredler-Adresse):", "") : null;
+        if (to === null) return;
+        const r = await trpc.mail.sendVeredelungsauftrag.mutate({ subProductionId: id, ...(to.trim() ? { to: to.trim() } : {}) });
+        if (typeof window !== "undefined") window.alert(`„${r.filename}" an ${r.to} gesendet.`);
+        return;
+      }
+      const belegKind = PDFKIND_TO_MAIL[kind];
+      if (!belegKind) return;
+      const to = typeof window !== "undefined" ? window.prompt("Beleg per E-Mail senden an:") : null;
+      if (!to) return;
+      const r = await trpc.mail.sendBeleg.mutate({ kind: belegKind, id, to });
+      if (typeof window !== "undefined") window.alert(`„${r.filename}" an ${to} gesendet.`);
+    } catch (e) { setErr(errMsg(e)); }
+  };
+
   return (
     <Box>
       {err && <Alert color="red" mb="sm">{err}</Alert>}
@@ -3380,7 +3417,12 @@ function OrderDocumentsTab({ orderId }: { orderId: string }): JSX.Element {
                   : <Text size="xs" c="dimmed">—</Text>}
               </Table.Td>
               <Table.Td ta="right">
-                {d.pdfKind && d.id && <Button size="compact-xs" variant="subtle" onClick={() => void printDoc(d.pdfKind!, d.id!)}>PDF</Button>}
+                {d.pdfKind && d.id && (
+                  <Group gap={4} justify="flex-end" wrap="nowrap">
+                    <Button size="compact-xs" variant="subtle" onClick={() => void printDoc(d.pdfKind!, d.id!)}>PDF</Button>
+                    <Button size="compact-xs" variant="subtle" color="blue" onClick={() => void mailDoc(d.pdfKind!, d.id!)}>Mail</Button>
+                  </Group>
+                )}
               </Table.Td>
             </Table.Tr>
           ))}
