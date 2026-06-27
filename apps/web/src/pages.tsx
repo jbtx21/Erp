@@ -913,7 +913,15 @@ export function SampleLoansPage({ onOpen }: { onOpen?: (navKey: string, id: stri
         </Group>
       </Box>
 
-      <AutoTable rows={rows} hide={["lines"]} action={(r) => (
+      <AutoTable rows={rows} hide={["lines"]}
+        cellRender={(col, value, row) => {
+          // Mehrartikel-Leihe (aus Angebot): top-level variantId/menge sind null → aus den Zeilen zusammenfassen.
+          const lines = (row as { lines?: Array<{ description: string; menge: number }> }).lines ?? [];
+          if (lines.length > 0 && col === "variantId") return `${lines.length} Artikel: ${lines.map((l) => l.description).join(", ").slice(0, 60)}`;
+          if (lines.length > 0 && col === "menge") return lines.reduce((s, l) => s + l.menge, 0);
+          return undefined;
+        }}
+        action={(r) => (
         <Group gap={4} justify="flex-end" wrap="nowrap">
           {onOpen && r.quoteId ? <Button size="compact-xs" variant="subtle" onClick={() => onOpen("quotes", String(r.quoteId))} title="zugeordnetes Angebot öffnen">↗ Angebot</Button> : null}
           <Button size="compact-xs" variant="default" onClick={() => void act(async () => {
@@ -1967,8 +1975,8 @@ function LogoArticleDialog({ onClose, onCreated }: { onClose: () => void; onCrea
     <Modal opened onClose={onClose} title="Logo / Veredelung anlegen" size="lg">
       {err && <Alert color="red" mb="sm">{err}</Alert>}
       <Group gap="md" align="end" wrap="wrap">
-        <TextInput label="Bezeichnung" placeholder="z. B. Logo TSV Emden" value={name} onChange={(e) => setName(e.currentTarget.value)} w={240} />
-        <TextInput label="Artikel-Nr. (SKU)" placeholder="LOGO-…" value={sku} onChange={(e) => setSku(e.currentTarget.value)} w={150} />
+        <TextInput label="Bezeichnung" withAsterisk placeholder="z. B. Logo TSV Emden" value={name} onChange={(e) => setName(e.currentTarget.value)} w={240} />
+        <TextInput label="Artikel-Nr. (SKU)" withAsterisk placeholder="LOGO-…" value={sku} onChange={(e) => setSku(e.currentTarget.value)} w={150} />
         <Select label="Veredelungsart" w={150} value={method} onChange={(v) => v && setMethod(v as typeof method)}
           data={[{ value: "STICK", label: "Stick" }, { value: "DRUCK", label: "Siebdruck" }, { value: "DRUCK_DIGITAL", label: "Digitaldruck" }, { value: "TRANSFER", label: "Transfer" }]} />
         <TagsInput label="Platzierungen" placeholder="Brust links, Rücken …" value={placements} onChange={setPlacements} w={240}
@@ -1990,7 +1998,11 @@ function LogoArticleDialog({ onClose, onCreated }: { onClose: () => void; onCrea
         </Group>
       ))}
       <Button size="compact-xs" variant="light" mt="xs" onClick={() => setTiers((ts) => prefillTiers(typeof ek === "number" ? ek : 0, [...ts, { minMenge: (ts.at(-1)?.minMenge ?? 0) + 10, euro: 0 }]))}>+ Staffelstufe</Button>
-      <Group justify="flex-end" mt="lg">
+      <Group justify="flex-end" mt="lg" align="center">
+        {(() => {
+          const fehlt = [!name.trim() && "Bezeichnung", !sku.trim() && "Artikel-Nr. (SKU)", (!inhouse && !veredlerId) && "Veredler"].filter(Boolean);
+          return fehlt.length > 0 ? <Text size="xs" c="dimmed">Bitte ausfüllen: {fehlt.join(", ")}</Text> : null;
+        })()}
         <Button variant="default" onClick={onClose}>Abbrechen</Button>
         <Button loading={busy} disabled={!name.trim() || !sku.trim() || (!inhouse && !veredlerId)} onClick={() => void create()}>Anlegen &amp; übernehmen</Button>
       </Group>
@@ -4571,7 +4583,8 @@ export function InquiriesPage(): JSX.Element {
     return (
       <Group gap={4} justify="flex-end" wrap="nowrap">
         {status === "NEU" && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.inquiries.startProcessing.mutate({ id }))}>In Bearbeitung</Button>}
-        {status === "IN_BEARBEITUNG" && <Button size="compact-xs" color="green" onClick={() => void act(() => trpc.inquiries.convertToQuote.mutate({ id }))}>→ Angebot</Button>}
+        {status === "IN_BEARBEITUNG" && <Button size="compact-xs" color="green" disabled={!r.companyId} title={r.companyId ? "In ein Angebot wandeln" : "Erst eine Firma zuordnen (Anfrage-Detail) — Neukunde unter Kunden anlegen"} onClick={() => void act(() => trpc.inquiries.convertToQuote.mutate({ id }))}>→ Angebot</Button>}
+        {status === "IN_BEARBEITUNG" && !r.companyId && <Text size="xs" c="orange">Firma fehlt</Text>}
         {status !== "ANGEBOT" && status !== "VERWORFEN" && (
           <Button size="compact-xs" color="red" variant="light" onClick={() => {
             const grund = typeof window !== "undefined" ? window.prompt("Verwerfen — Grund?") : null;
