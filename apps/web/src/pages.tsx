@@ -5248,7 +5248,7 @@ function ComplaintsPanel({ orderId, reloadKey }: { orderId: string; reloadKey: n
 
 // ── Fertigung: mehrstufige Fremdvergabe / Lohnveredelung (T-04, Kap. 5.3) ─────
 type SubStatus = "OFFEN" | "BEISTELLUNG_VERSANDT" | "RUECKLAUF_ERHALTEN" | "ABGESCHLOSSEN";
-interface SubStage { id: string; sequence: number; supplierId: string; status: SubStatus; beistellMenge: number | null; ruecklaufMenge: number | null; dueDate: string | null; lohnCents: number | null; }
+interface SubStage { id: string; sequence: number; supplierId: string; status: SubStatus; beistellMenge: number | null; ruecklaufMenge: number | null; dueDate: string | null; lohnCents: number | null; beistellInfo?: string | null; }
 interface SubPlan {
   nextActionable: SubStage | null; blocked: SubStage[]; overdue: SubStage[];
   totalScrap: number; totalLohnCents: number; progressPercent: number; yieldPercent: number | null; allReturned: boolean;
@@ -5339,7 +5339,10 @@ export function SubproductionPage({ onOpen, focusId }: { onOpen?: (k: string, id
                   <Table.Td>#{s.sequence}</Table.Td>
                   <Table.Td><SupplierRef id={s.supplierId} names={supplierNames} onOpen={onOpen} /></Table.Td>
                   <Table.Td><StatusBadge status={s.status} /></Table.Td>
-                  <Table.Td style={numTd}>{s.beistellMenge ?? "—"}</Table.Td>
+                  <Table.Td style={numTd} title={s.beistellInfo ?? undefined}>
+                    {s.beistellMenge ?? "—"}
+                    {s.beistellInfo && <Text size="xs" c="dimmed" style={{ whiteSpace: "normal" }}>{s.beistellInfo}</Text>}
+                  </Table.Td>
                   <Table.Td style={numTd}>{s.ruecklaufMenge ?? "—"}</Table.Td>
                   <Table.Td style={numTd}>{euro(s.lohnCents)}</Table.Td>
                   <Table.Td>{s.dueDate ? new Date(s.dueDate).toLocaleDateString("de-DE") : "—"}</Table.Td>

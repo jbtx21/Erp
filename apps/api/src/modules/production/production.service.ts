@@ -19,6 +19,8 @@ import { buildEntry, type AuditSink } from "@texma/audit";
 import type { NumberingService } from "../numbering/numbering.service.js";
 
 export interface ProductionOrderLine {
+  /** Positionsnummer im Auftrag (1-basiert) — Ziel des Veredelungsbezugs. */
+  position: number;
   description: string;
   qty: number;
   variantId: string | null;
@@ -27,6 +29,8 @@ export interface ProductionOrderLine {
   components: VariantComponentDef[];
   /** Zugewiesener Veredler des (Veredelungs-)Artikels — Quelle der Fremdvergabe (T-04). */
   veredlerId: string | null;
+  /** Veredelungsbezug (Kap. 5.4/11): Positionsnummer der zu veredelnden Textilposition. */
+  bezugPosition: number | null;
 }
 
 /** Auto-Fremdvergabe-Stufe (T-04), beim externen PA aus den Veredlern der Positionen. */
@@ -34,6 +38,12 @@ export interface SubOrderInput {
   number: string;
   sequence: number;
   supplierId: string;
+  /** Beizustellende Menge (Summe der referenzierten Textilpositionen); null = unbekannt. */
+  beistellMenge: number | null;
+  /** Lesbare Beschreibung der Beistellung (z. B. „200× T-Shirt (Pos. 1)"). */
+  beistellInfo: string | null;
+  /** Referenzierte Textilpositionen — steuert das Parallel-/Sequenz-Gate der Stufen. */
+  beistellPositionen: number[];
 }
 
 export interface OrderForProduction {
@@ -218,8 +228,40 @@ export class ProductionService {
    * „inhouse"-Weg gewählt hat (verifiziert an AB-2026-0006).
    */
   static buildSubOrders(paNumber: string, _profile: FinishingLeadProfile | null, lines: ProductionOrderLine[]): SubOrderInput[] {
-    const veredler = [...new Set(lines.map((l) => l.veredlerId).filter((x): x is string => !!x))];
-    return veredler.map((supplierId, i) => ({ number: `${paNumber}-${String.fromCharCode(97 + i)}`, sequence: i + 1, supplierId }));
+    // Eine Stufe je distinktem Veredler (Reihenfolge = erstes Auftreten). Beistellung aus dem
+    // Veredelungsbezug ableiten (Kap. 5.4/11): Menge + Textilpositionen des referenzierten Textils;
+    // ohne Bezug Fallback auf die Menge der Veredelungsposition selbst. Die Textilpositionen
+    // steuern das Parallel-/Sequenz-Gate (subproduction): disjunkt = parallel, gleich = sequenziell.
+    const byPosition = new Map(lines.map((l) => [l.position, l]));
+    const groups = new Map<string, { positionen: Set<number>; menge: number; info: string[] }>();
+    for (const l of lines) {
+      if (!l.veredlerId) continue;
+      const g = groups.get(l.veredlerId) ?? { positionen: new Set<number>(), menge: 0, info: [] };
+      const textil = l.bezugPosition != null ? byPosition.get(l.bezugPosition) : undefined;
+      if (textil) {
+        // Jedes referenzierte Textil nur einmal je Veredler beistellen (mehrere Platzierungen am
+        // selben Textil zählen die Menge nicht doppelt).
+        if (!g.positionen.has(textil.position)) {
+          g.positionen.add(textil.position);
+          g.menge += textil.qty;
+          g.info.push(`${textil.qty}× ${textil.description} (Pos. ${textil.position})`);
+        }
+      } else if (!g.positionen.has(l.position)) {
+        // Kein Bezug hinterlegt → Beistellung = Menge der Veredelungsposition (bestmögliche Annahme).
+        g.positionen.add(l.position);
+        g.menge += l.qty;
+        g.info.push(`${l.qty}× ${l.description}`);
+      }
+      groups.set(l.veredlerId, g);
+    }
+    return [...groups.entries()].map(([supplierId, g], i) => ({
+      number: `${paNumber}-${String.fromCharCode(97 + i)}`,
+      sequence: i + 1,
+      supplierId,
+      beistellMenge: g.menge > 0 ? g.menge : null,
+      beistellInfo: g.info.length > 0 ? g.info.join("; ") : null,
+      beistellPositionen: [...g.positionen].sort((a, b) => a - b),
+    }));
   }
 
   async createFromOrder(orderId: string, opts: { dueDate?: Date | null; profile?: FinishingLeadProfile } = {}): Promise<{ id: string; number: string; bomItemCount: number; subOrderCount: number; dueDate: Date | null }> {

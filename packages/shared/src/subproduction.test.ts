@@ -54,6 +54,24 @@ describe("Mehrstufige Fremdvergabe (T-04)", () => {
     expect(canStartStage([t(1, "OFFEN")], 1)).toBe(true);
   });
 
+  it("Stufen an verschiedenen Textilien laufen parallel (disjunkte Beistellung, Kap. 5.4/11)", () => {
+    // Stufe 1 (T-Shirts, Pos. 1) noch unterwegs, Stufe 2 (Polos, Pos. 2) darf trotzdem starten.
+    const stages = [
+      { ...t(1, "BEISTELLUNG_VERSANDT"), beistellPositionen: [1] },
+      { ...t(2, "OFFEN"), beistellPositionen: [2] },
+    ];
+    expect(canStartStage(stages, 2)).toBe(true);
+  });
+
+  it("Stufen am selben Textil bleiben sequenziell (gemeinsame Beistellung)", () => {
+    // Mehrstufige Veredelung am selben Textil (Pos. 1): erst A zurück, dann B.
+    const stages = [
+      { ...t(1, "BEISTELLUNG_VERSANDT"), beistellPositionen: [1] },
+      { ...t(2, "OFFEN"), beistellPositionen: [1] },
+    ];
+    expect(canStartStage(stages, 2)).toBe(false);
+  });
+
   it("allStagesReturned erst wenn alle Stufen zurück sind", () => {
     expect(allStagesReturned([t(1, "RUECKLAUF_ERHALTEN"), t(2, "BEISTELLUNG_VERSANDT")])).toBe(
       false

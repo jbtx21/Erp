@@ -27,6 +27,13 @@ export interface SubProductionStage {
   dueDate?: Date | null;
   /** Lohnkosten dieser Veredelungsstufe in Cent (Nachkalkulation). */
   lohnCents?: number | null;
+  /**
+   * Textilpositionen (Auftrags-Positionsnummern), die an diesen Veredler beigestellt werden
+   * (Veredelungsbezug, Kap. 5.4/11). Basis des Parallel-/Sequenz-Gates: Stufen mit disjunkten
+   * Textilien laufen parallel, Stufen am selben Textil bleiben sequenziell. Leer = klassische
+   * strikte Kette (Rückwärtskompatibilität).
+   */
+  beistellPositionen?: number[];
 }
 
 export class SubProductionTransitionError extends Error {
@@ -79,18 +86,26 @@ export function transitionStage(
 }
 
 /**
- * Darf eine Stufe starten (Beistellung versenden)? Nur, wenn alle vorherigen
- * Stufen ihren Rücklauf erhalten haben (sequenzielle Fremdvergabe, T-04).
+ * Darf eine Stufe starten (Beistellung versenden)? Eine frühere Stufe blockiert nur, wenn sie
+ * dasselbe Textil betrifft (Veredelungsbezug, Kap. 5.4/11): mehrstufige Veredelung am SELBEN
+ * Textil bleibt sequenziell (erst A zurück, dann B), Stufen an VERSCHIEDENEN Textilien laufen
+ * parallel. Ohne Beistellpositionen (Altbestand) gilt die klassische strikte Kette (T-04).
  */
 export function canStartStage(
   stages: ReadonlyArray<SubProductionStage>,
   sequence: number
 ): boolean {
+  const target = stages.find((s) => s.sequence === sequence);
+  const targetPos = target?.beistellPositionen ?? [];
   return stages
     .filter((s) => s.sequence < sequence)
-    .every(
-      (s) => s.status === "RUECKLAUF_ERHALTEN" || s.status === "ABGESCHLOSSEN"
-    );
+    .every((s) => {
+      if (s.status === "RUECKLAUF_ERHALTEN" || s.status === "ABGESCHLOSSEN") return true;
+      // Parallel zulässig, wenn beide Stufen disjunkte Textilien beistellen (kein gemeinsames Textil).
+      const sPos = s.beistellPositionen ?? [];
+      if (targetPos.length > 0 && sPos.length > 0 && !targetPos.some((p) => sPos.includes(p))) return true;
+      return false;
+    });
 }
 
 /** Der gesamte Auftrag ist fremdvergabeseitig fertig, wenn jede Stufe zurück ist. */

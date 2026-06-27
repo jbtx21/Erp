@@ -24,6 +24,8 @@ export class PrismaSubProductionRepository implements SubProductionRepository {
       ruecklaufMenge: s.ruecklaufMenge,
       dueDate: s.dueDate,
       lohnCents: s.lohnCents,
+      beistellPositionen: s.beistellPositionen,
+      beistellInfo: s.beistellInfo,
     };
   }
 
@@ -44,6 +46,8 @@ export class PrismaSubProductionRepository implements SubProductionRepository {
       ruecklaufMenge: s.ruecklaufMenge,
       dueDate: s.dueDate,
       lohnCents: s.lohnCents,
+      beistellPositionen: s.beistellPositionen,
+      beistellInfo: s.beistellInfo,
     }));
   }
 

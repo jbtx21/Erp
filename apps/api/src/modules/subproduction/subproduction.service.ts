@@ -20,6 +20,8 @@ import { buildEntry, type AuditSink } from "@texma/audit";
 export interface StoredStage extends SubProductionStage {
   id: string;
   productionId: string;
+  /** Lesbare Beistellung (welche Textilien an den Veredler) — aus dem Veredelungsbezug (Kap. 5.4/11). */
+  beistellInfo?: string | null;
 }
 
 /** Felder, die der Statuswechsel persistiert (inkl. Mengenfluss). */

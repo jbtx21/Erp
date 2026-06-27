@@ -29,6 +29,8 @@ export class InMemorySubProductionRepository implements SubProductionRepository 
         ruecklaufMenge: s.ruecklaufMenge ?? null,
         dueDate: s.dueDate ?? null,
         lohnCents: s.lohnCents ?? null,
+        beistellPositionen: s.beistellPositionen ?? [],
+        beistellInfo: s.beistellInfo ?? null,
       }));
   }
 

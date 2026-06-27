@@ -18,7 +18,7 @@ export class PrismaProductionRepository implements ProductionRepository {
       select: {
         id: true, number: true, freigegeben: true, zugesagterLiefertermin: true,
         production: { select: { id: true, number: true } },
-        lines: { orderBy: { position: "asc" }, select: { description: true, qty: true, variantId: true } },
+        lines: { orderBy: { position: "asc" }, select: { position: true, description: true, qty: true, variantId: true, bezugPosition: true } },
       },
     });
     if (!o) return null;
@@ -59,10 +59,11 @@ export class PrismaProductionRepository implements ProductionRepository {
       lines: o.lines.map((l) => {
         const v = l.variantId ? byId.get(l.variantId) : undefined;
         return {
-          description: l.description, qty: l.qty, variantId: l.variantId,
+          position: l.position, description: l.description, qty: l.qty, variantId: l.variantId,
           isBundle: v?.isBundle ?? false,
           components: (v?.bundleComponents ?? []).map((c) => ({ description: c.description, qty: c.qty, componentVariantId: c.componentVariantId })),
           veredlerId: v?.article.veredlerId ?? null,
+          bezugPosition: l.bezugPosition ?? null,
         };
       }),
     };
@@ -76,7 +77,7 @@ export class PrismaProductionRepository implements ProductionRepository {
         dueDate: input.dueDate,
         finishingProfile: input.finishingProfile,
         bomItems: { create: input.bomItems.map((b) => ({ description: b.description, qty: b.qty, variantId: b.variantId ?? null })) },
-        subOrders: { create: input.subOrders.map((s) => ({ number: s.number, sequence: s.sequence, supplier: { connect: { id: s.supplierId } } })) },
+        subOrders: { create: input.subOrders.map((s) => ({ number: s.number, sequence: s.sequence, supplier: { connect: { id: s.supplierId } }, beistellMenge: s.beistellMenge, beistellInfo: s.beistellInfo, beistellPositionen: s.beistellPositionen })) },
       },
       select: { id: true },
     });

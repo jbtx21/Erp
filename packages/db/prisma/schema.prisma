@@ -1078,6 +1078,11 @@ model SubProductionOrder {
   ruecklaufMenge Int? // zurückerhaltene Menge (<= Beistellmenge)
   dueDate        DateTime? // zugesagter Rücklauftermin der Stufe
   lohnCents      Int? // Lohnkosten dieser Veredelungsstufe (Nachkalkulation)
+  // Beistellung aus dem Auftrag abgeleitet (Veredelungsbezug, Kap. 5.4/11): welche Textilien
+  // (Positionsnummern) gehen an diesen Veredler. Steuert das Parallel-/Sequenz-Gate: Stufen an
+  // disjunkten Textilien laufen parallel, Stufen am selben Textil bleiben sequenziell (T-04).
+  beistellInfo       String? // lesbare Beschreibung der Beistellung (z. B. "200× T-Shirt (Pos. 1)")
+  beistellPositionen Int[]   @default([]) // referenzierte Textilpositionen
 
   @@index([productionId])
 }
