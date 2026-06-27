@@ -105,7 +105,7 @@ export class PrismaCompanyRepository implements CompanyRepository {
         _count: { select: { contacts: true } },
         orders: { orderBy: { createdAt: "desc" }, take: 50, select: { id: true, number: true, status: true, createdAt: true } },
         quotes: { orderBy: { createdAt: "desc" }, take: 50, select: { id: true, number: true, status: true, createdAt: true } },
-        invoices: { orderBy: { issuedAt: "desc" }, take: 50, select: { id: true, number: true, grossCents: true, issuedAt: true, openItem: { select: { openCents: true } } } },
+        invoices: { orderBy: { issuedAt: "desc" }, take: 50, select: { id: true, number: true, grossCents: true, issuedAt: true, orderId: true, openItem: { select: { openCents: true } } } },
         sampleLoans: { orderBy: { ausgegebenAm: "desc" }, take: 50, select: { id: true, status: true, ausgegebenAm: true } },
       },
     });
@@ -132,7 +132,7 @@ export class PrismaCompanyRepository implements CompanyRepository {
       contactsCount: c._count.contacts,
       orders: c.orders.map((o) => ({ id: o.id, number: o.number, status: o.status, createdAt: o.createdAt })),
       quotes: c.quotes.map((q) => ({ id: q.id, number: q.number, status: q.status, createdAt: q.createdAt })),
-      invoices: c.invoices.map((i) => ({ id: i.id, number: i.number, grossCents: i.grossCents, issuedAt: i.issuedAt })),
+      invoices: c.invoices.map((i) => ({ id: i.id, number: i.number, grossCents: i.grossCents, issuedAt: i.issuedAt, orderId: i.orderId })),
       sampleLoans: c.sampleLoans.map((s) => ({ id: s.id, status: s.status, ausgegebenAm: s.ausgegebenAm })),
       openCents: c.invoices.reduce((sum, i) => sum + (i.openItem?.openCents ?? 0), 0),
       metrics: {

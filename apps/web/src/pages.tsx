@@ -3456,14 +3456,16 @@ function OrderDocumentsTab({ orderId }: { orderId: string }): JSX.Element {
         : kind === "auftragsbestaetigung" ? await trpc.print.auftragsbestaetigung.query({ orderId: id })
         : kind === "deliveryNote" ? await trpc.print.deliveryNote.query({ deliveryNoteId: id })
         : kind === "veredelungsauftrag" ? await trpc.print.veredelungsauftrag.query({ subProductionId: id })
+        : kind === "mahnung" ? await trpc.print.mahnung.query({ noticeId: id })
+        : kind === "sampleLoan" ? await trpc.print.sampleLoanLieferschein.query({ loanId: id })
         : await trpc.print.creditNote.query({ creditNoteId: id });
       downloadBase64(r.filename, r.base64, "application/pdf");
     } catch (e) { setErr(errMsg(e)); }
   };
 
   // Beleg per E-Mail versenden (jeder druckbare Beleg ist auch mailbar). Veredelungsauftrag → Veredler.
-  const PDFKIND_TO_MAIL: Record<string, "QUOTE" | "AUFTRAGSBESTAETIGUNG" | "INVOICE" | "LIEFERSCHEIN" | "GUTSCHRIFT"> = {
-    quote: "QUOTE", auftragsbestaetigung: "AUFTRAGSBESTAETIGUNG", invoice: "INVOICE", deliveryNote: "LIEFERSCHEIN", creditNote: "GUTSCHRIFT",
+  const PDFKIND_TO_MAIL: Record<string, "QUOTE" | "AUFTRAGSBESTAETIGUNG" | "INVOICE" | "LIEFERSCHEIN" | "GUTSCHRIFT" | "MAHNUNG" | "LEIHGUT"> = {
+    quote: "QUOTE", auftragsbestaetigung: "AUFTRAGSBESTAETIGUNG", invoice: "INVOICE", deliveryNote: "LIEFERSCHEIN", creditNote: "GUTSCHRIFT", mahnung: "MAHNUNG", sampleLoan: "LEIHGUT",
   };
   const mailDoc = async (kind: string, id: string): Promise<void> => {
     setErr(null);
@@ -4067,7 +4069,7 @@ function CompanyDetailPanel({ companyId, companies = [], onNavigate, onOpen }: {
           <Group align="flex-start" gap="lg" wrap="wrap">
             {histGroup("Aufträge", "orders", ov.orders.map((o) => ({ id: o.id, label: o.number, sub: o.status })))}
             {histGroup("Angebote", "quotes", ov.quotes.map((q) => ({ id: q.id, label: q.number, sub: q.status })))}
-            {histGroup("Rechnungen", "dunning", ov.invoices.map((i) => ({ id: i.id, label: i.number, sub: euro(i.grossCents) })), false)}
+            {histGroup("Rechnungen", "orders", ov.invoices.map((i) => ({ id: i.orderId ?? i.id, label: i.number, sub: euro(i.grossCents) })))}
             {histGroup("Muster-Leihgut", "samples", ov.sampleLoans.map((s) => ({ id: s.id, label: d(s.ausgegebenAm), sub: s.status })))}
           </Group>
         </Tabs.Panel>

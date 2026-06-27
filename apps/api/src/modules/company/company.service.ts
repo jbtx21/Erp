@@ -71,7 +71,7 @@ export interface CompanyOverview {
   contactsCount: number;
   orders: Array<{ id: string; number: string; status: string; createdAt: Date }>;
   quotes: Array<{ id: string; number: string; status: string; createdAt: Date }>;
-  invoices: Array<{ id: string; number: string; grossCents: number; issuedAt: Date }>;
+  invoices: Array<{ id: string; number: string; grossCents: number; issuedAt: Date; orderId: string | null }>;
   sampleLoans: Array<{ id: string; status: string; ausgegebenAm: Date }>;
   openCents: number;
   /** Umsatz-/Aktivitätskennzahlen je Kunde (über alle finalisierten Rechnungen). */

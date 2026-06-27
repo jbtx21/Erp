@@ -216,7 +216,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
 
   const repo = new PrismaOrderRepository();
   const orderImport = new OrderImportService(repo, new PrismaAuditSink());
-  const supplierRepo = new PrismaSupplierRepository();
+  const supplierRepo = new PrismaSupplierRepository(new PrismaAuditSink());
   const supplierImport = new SupplierImportService(supplierRepo, new PrismaAuditSink());
   const incomingInvoiceRepo = new PrismaIncomingInvoiceRepository();
   const incomingInvoiceImport = new IncomingInvoiceService(incomingInvoiceRepo, new PrismaAuditSink());

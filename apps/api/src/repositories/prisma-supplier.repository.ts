@@ -4,6 +4,7 @@
 // fortgeschrieben; priority/minStock bleiben unverändert (manuelle Pflege).
 
 import { prisma } from "@texma/db";
+import { buildEntry, type AuditSink } from "@texma/audit";
 import type {
   SupplierRepository,
   UpsertSupplierItemInput,
@@ -13,6 +14,9 @@ import type { SupplierCatalogItem, SupplierItemListItem, SupplierListItem, Suppl
 export class PrismaSupplierRepository
   implements SupplierRepository, SupplierQueryRepository
 {
+  // GoBD-Audit der Stammdaten-Mutationen (optional injiziert; in Tests weglassbar).
+  constructor(private readonly audit?: AuditSink) {}
+
   async findVariantIdBySku(sku: string): Promise<string | null> {
     const v = await prisma.variant.findUnique({ where: { sku }, select: { id: true } });
     return v?.id ?? null;
@@ -103,10 +107,12 @@ export class PrismaSupplierRepository
   }
 
   async createSupplier(input: { name: string; email?: string | null; vatId?: string | null; iban?: string | null; bic?: string | null }): Promise<{ id: string }> {
-    return prisma.supplier.create({
+    const created = await prisma.supplier.create({
       data: { name: input.name, email: input.email ?? null, vatId: input.vatId ?? null, iban: input.iban ?? null, bic: input.bic ?? null, kind: "MANUAL" },
       select: { id: true },
     });
+    await this.audit?.append(buildEntry({ entity: "Supplier", entityId: created.id, action: "CREATE", after: input }));
+    return created;
   }
 
   /** Veredler-E-Mail einer Fremdvergabe-Stufe (für den Veredelungsauftrag-Versand). */
@@ -128,6 +134,7 @@ export class PrismaSupplierRepository
         ...pick("zahlungszielTage"), ...pick("skontoPercent"), ...pick("skontoDays"), ...pick("lieferzeitTage"), ...pick("notiz"),
       },
     });
+    await this.audit?.append(buildEntry({ entity: "Supplier", entityId: input.id, action: "UPDATE", after: input }));
   }
 
   async supplierOverview(supplierId: string): Promise<SupplierOverview | null> {
@@ -159,18 +166,22 @@ export class PrismaSupplierRepository
   }
 
   async addSupplierContact(input: { supplierId: string; firstName: string; lastName: string; email?: string | null; phone?: string | null; role?: string | null }): Promise<{ id: string }> {
-    return prisma.supplierContact.create({
+    const created = await prisma.supplierContact.create({
       data: { supplierId: input.supplierId, firstName: input.firstName, lastName: input.lastName, email: input.email ?? null, phone: input.phone ?? null, role: input.role ?? null },
       select: { id: true },
     });
+    await this.audit?.append(buildEntry({ entity: "SupplierContact", entityId: created.id, action: "CREATE", after: input }));
+    return created;
   }
 
   async updateSupplierContact(id: string, fields: { firstName?: string; lastName?: string; email?: string | null; phone?: string | null; role?: string | null }): Promise<void> {
     const pick = <K extends keyof typeof fields>(k: K): object => (fields[k] !== undefined ? { [k]: fields[k] } : {});
     await prisma.supplierContact.update({ where: { id }, data: { ...pick("firstName"), ...pick("lastName"), ...pick("email"), ...pick("phone"), ...pick("role") } });
+    await this.audit?.append(buildEntry({ entity: "SupplierContact", entityId: id, action: "UPDATE", after: fields }));
   }
 
   async deleteSupplierContact(id: string): Promise<void> {
     await prisma.supplierContact.delete({ where: { id } });
+    await this.audit?.append(buildEntry({ entity: "SupplierContact", entityId: id, action: "STORNO" }));
   }
 }

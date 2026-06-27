@@ -155,7 +155,7 @@ export class QuoteService {
   /** Lehnt ein Angebot mit Pflicht-Verlustgrund ab (F2-Übergang erzwungen). */
   async reject(quoteId: string, verlustgrund: string): Promise<void> {
     const status = await this.repo.getStatus(quoteId);
-    if (!status) throw new Error(`Quote ${quoteId} nicht gefunden`);
+    if (!status) throw new QuoteError(`Quote ${quoteId} nicht gefunden`);
     assertQuoteRejectable(status, verlustgrund); // wirft bei unerlaubtem Übergang/fehlendem Grund
     await this.repo.reject(quoteId, verlustgrund.trim());
     await this.audit.append(

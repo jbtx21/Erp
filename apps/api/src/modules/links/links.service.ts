@@ -5,7 +5,7 @@
 // werden für Rollen ohne Finanzsicht ausgeblendet (RBAC, Kap. 12).
 
 /** PDF-Generator-Kennung für den Direkt-Download eines Belegs (UI → print.*). */
-export type DocPdfKind = "invoice" | "quote" | "auftragsbestaetigung" | "deliveryNote" | "creditNote" | "veredelungsauftrag";
+export type DocPdfKind = "invoice" | "quote" | "auftragsbestaetigung" | "deliveryNote" | "creditNote" | "veredelungsauftrag" | "mahnung" | "sampleLoan";
 
 export interface LinkRef {
   /** Belegtyp (Anzeigename), z. B. "Angebot", "Rechnung". */

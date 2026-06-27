@@ -412,7 +412,10 @@ export const appRouter = router({
     /** Legt einen Lieferanten an (manueller Stammsatz). */
     create: roleProcedure("ADMIN", "BUERO")
       .input(z.object({ name: z.string().min(1), email: z.string().optional(), vatId: z.string().optional(), iban: z.string().optional(), bic: z.string().optional() }))
-      .mutation(({ input, ctx }) => ctx.suppliers.createSupplier(input)),
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.suppliers.createSupplier(input); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
 
     /** Lieferanten-Detail + Historie (Bestellungen, Eingangsrechnungen, Einkaufsvolumen). */
     overview: roleProcedure(...supplierRoles)
@@ -431,25 +434,40 @@ export const appRouter = router({
         lieferzeitTage: z.number().int().min(0).max(365).nullable().optional(),
         notiz: z.string().nullable().optional(),
       }))
-      .mutation(async ({ input, ctx }) => { await ctx.suppliers.updateSupplier(input); return { ok: true as const }; }),
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.suppliers.updateSupplier(input); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
 
     /** Ansprechpartner anlegen/löschen. */
     addContact: roleProcedure("ADMIN", "BUERO")
       .input(z.object({ supplierId: z.string().min(1), firstName: z.string().min(1), lastName: z.string().min(1), email: z.string().optional(), phone: z.string().optional(), role: z.string().optional() }))
-      .mutation(({ input, ctx }) => ctx.suppliers.addSupplierContact(input)),
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.suppliers.addSupplierContact(input); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
     updateContact: roleProcedure("ADMIN", "BUERO")
       .input(z.object({ id: z.string().min(1), firstName: z.string().optional(), lastName: z.string().optional(), email: z.string().nullable().optional(), phone: z.string().nullable().optional(), role: z.string().nullable().optional() }))
-      .mutation(async ({ input, ctx }) => { const { id, ...fields } = input; await ctx.suppliers.updateSupplierContact(id, fields); return { ok: true as const }; }),
+      .mutation(async ({ input, ctx }) => {
+        try { const { id, ...fields } = input; await ctx.suppliers.updateSupplierContact(id, fields); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
     deleteContact: roleProcedure("ADMIN", "BUERO")
       .input(z.object({ id: z.string().min(1) }))
-      .mutation(async ({ input, ctx }) => { await ctx.suppliers.deleteSupplierContact(input.id); return { ok: true as const }; }),
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.suppliers.deleteSupplierContact(input.id); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
   }),
 
   incomingInvoices: router({
     /** Empfängt eine eingehende E-Rechnung (CII-XML), validiert + erfasst sie (Kap. 19/K-13). */
     receive: roleProcedure(...supplierRoles)
       .input(z.object({ xml: z.string().min(1) }))
-      .mutation(async ({ input, ctx }) => ctx.incomingInvoiceImport.receive(input.xml)),
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.incomingInvoiceImport.receive(input.xml); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
 
     /** Liste der erfassten Eingangsrechnungen (Finanzdaten, kein PRODUKTION-Zugriff). */
     list: roleProcedure(...supplierRoles)
