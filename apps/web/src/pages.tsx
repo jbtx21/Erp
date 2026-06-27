@@ -1001,6 +1001,9 @@ const PIM_COLS: ReadonlyArray<{ key: "name" | "brand" | "materialComposition" | 
 // Eine editierbare Artikelzeile (Schnellbearbeitung): lokaler Entwurf + Speichern.
 type ArticleData = Row & { completeness?: { percent: number; missing: string[] } };
 function ArticleRowEdit({ a, onSaved, onVariants, onOpen }: { a: ArticleData; onSaved: () => void; onVariants: () => void; onOpen: () => void }): JSX.Element {
+  // Vorschau statt „Form-Soup": Felder als Text; Schnellbearbeitung erst auf Klick (Eingabefelder
+  // nur im Edit-Modus), Voll-Stammblatt über „Öffnen". Reduziert visuelle Überladung (Xentral).
+  const [edit, setEdit] = useState(false);
   const [draft, setDraft] = useState<Record<string, string>>(() => Object.fromEntries(PIM_COLS.map((c) => [c.key, String(a[c.key] ?? "")])));
   const [busy, setBusy] = useState(false);
   const dirty = PIM_COLS.some((c) => draft[c.key] !== String(a[c.key] ?? ""));
@@ -1009,17 +1012,30 @@ function ArticleRowEdit({ a, onSaved, onVariants, onOpen }: { a: ArticleData; on
     <Table.Tr>
       <Table.Td><Text size="sm" fw={600}>{String(a.sku)}</Text></Table.Td>
       {PIM_COLS.map((c) => (
-        <Table.Td key={c.key}><TextInput size="xs" w={c.w} value={draft[c.key] ?? ""} onChange={(e) => setDraft((d) => ({ ...d, [c.key]: e.currentTarget.value }))} /></Table.Td>
+        <Table.Td key={c.key}>
+          {edit
+            ? <TextInput size="xs" w={c.w} value={draft[c.key] ?? ""} onChange={(e) => setDraft((d) => ({ ...d, [c.key]: e.currentTarget.value }))} />
+            : <Text size="sm" c={a[c.key] ? undefined : "dimmed"}>{a[c.key] ? String(a[c.key]) : "—"}</Text>}
+        </Table.Td>
       ))}
-      <Table.Td><Badge color={pct === 100 ? "green" : pct >= 50 ? "yellow" : "red"} variant="light">{pct}%</Badge></Table.Td>
+      <Table.Td><Badge color={pct === 100 ? "green" : pct >= 50 ? "yellow" : "orange"} variant="light">{pct}%</Badge></Table.Td>
       <Table.Td>
-        <Group gap={4} wrap="nowrap">
-          <Button size="compact-xs" disabled={!dirty} loading={busy} onClick={async () => {
-            setBusy(true);
-            try { await trpc.products.updateArticle.mutate({ id: String(a.id), patch: draft }); onSaved(); } finally { setBusy(false); }
-          }}>Speichern</Button>
-          <Button size="compact-xs" variant="subtle" onClick={onOpen}>Öffnen</Button>
-          <Button size="compact-xs" variant="default" onClick={onVariants}>Varianten</Button>
+        <Group gap={4} wrap="nowrap" justify="flex-end">
+          {edit ? (
+            <>
+              <Button size="compact-xs" disabled={!dirty} loading={busy} onClick={async () => {
+                setBusy(true);
+                try { await trpc.products.updateArticle.mutate({ id: String(a.id), patch: draft }); setEdit(false); onSaved(); } finally { setBusy(false); }
+              }}>Speichern</Button>
+              <Button size="compact-xs" variant="subtle" color="gray" onClick={() => { setDraft(Object.fromEntries(PIM_COLS.map((c) => [c.key, String(a[c.key] ?? "")]))); setEdit(false); }}>Abbrechen</Button>
+            </>
+          ) : (
+            <DocActionMenu actions={[
+              { label: "Schnell bearbeiten", group: "Allgemein", onClick: () => setEdit(true) },
+              { label: "Stammblatt öffnen", group: "Allgemein", onClick: onOpen },
+              { label: "Varianten", group: "Allgemein", onClick: onVariants },
+            ]} />
+          )}
         </Group>
       </Table.Td>
     </Table.Tr>
