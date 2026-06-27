@@ -75,6 +75,7 @@ export interface SupplierCatalogItem {
 
 /** Lieferanten-Stammdaten 360° (Paket 1): Adresse + Konditionen. */
 export interface SupplierStammdaten {
+  email: string | null;
   street: string | null;
   zip: string | null;
   city: string | null;
@@ -121,7 +122,9 @@ export interface SupplierQueryRepository {
   /** Alle Lieferanten-Stammsätze (B6). */
   listSuppliers(): Promise<SupplierListItem[]>;
   /** Legt einen Lieferanten an (manueller Stammsatz). */
-  createSupplier(input: { name: string; vatId?: string | null; iban?: string | null; bic?: string | null }): Promise<{ id: string }>;
+  createSupplier(input: { name: string; email?: string | null; vatId?: string | null; iban?: string | null; bic?: string | null }): Promise<{ id: string }>;
+  /** E-Mail des Veredlers einer Fremdvergabe-Stufe (Veredelungsauftrag-Versand); null = keine. */
+  emailForSubProduction(subProductionId: string): Promise<string | null>;
   /** Aktualisiert Lieferanten-Stammdaten (Adresse/Konditionen). */
   updateSupplier(input: UpdateSupplierInput): Promise<void>;
   /** Lieferanten-Detail + Historie. */

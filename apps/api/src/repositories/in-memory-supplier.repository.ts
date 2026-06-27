@@ -30,10 +30,20 @@ export class InMemorySupplierRepository
     return this.suppliers.map((s) => ({ ...s })).sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  async createSupplier(input: { name: string; vatId?: string | null; iban?: string | null; bic?: string | null }): Promise<{ id: string }> {
+  async createSupplier(input: { name: string; email?: string | null; vatId?: string | null; iban?: string | null; bic?: string | null }): Promise<{ id: string }> {
     const id = `sup_${++this.seq}`;
     this.suppliers.push({ id, name: input.name, vatId: input.vatId ?? null, iban: input.iban ?? null, kind: "MANUAL", active: true });
+    if (input.email !== undefined) this.stamm.set(id, { ...(this.stamm.get(id) ?? {}), email: input.email });
     return { id };
+  }
+
+  /** Veredler-E-Mail einer Stufe; im Test über setSubProductionSupplier hinterlegt. */
+  private readonly subSupplier = new Map<string, string>();
+  setSubProductionSupplier(subProductionId: string, supplierId: string): void { this.subSupplier.set(subProductionId, supplierId); }
+  async emailForSubProduction(subProductionId: string): Promise<string | null> {
+    const supplierId = this.subSupplier.get(subProductionId);
+    if (!supplierId) return null;
+    return (this.stamm.get(supplierId)?.email as string | null | undefined) ?? null;
   }
 
   async updateSupplier(input: UpdateSupplierInput): Promise<void> {
@@ -53,7 +63,7 @@ export class InMemorySupplierRepository
     const sd = this.stamm.get(supplierId) ?? {};
     return {
       supplier: {
-        ...s, bic: (sd.bic as string | null) ?? null,
+        ...s, bic: (sd.bic as string | null) ?? null, email: (sd.email as string | null) ?? null,
         street: sd.street ?? null, zip: sd.zip ?? null, city: sd.city ?? null, country: sd.country ?? "DE",
         zahlungszielTage: sd.zahlungszielTage ?? 14, skontoPercent: sd.skontoPercent ?? null, skontoDays: sd.skontoDays ?? null,
         lieferzeitTage: sd.lieferzeitTage ?? null, notiz: sd.notiz ?? null,

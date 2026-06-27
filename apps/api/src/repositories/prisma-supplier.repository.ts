@@ -102,11 +102,20 @@ export class PrismaSupplierRepository
     });
   }
 
-  async createSupplier(input: { name: string; vatId?: string | null; iban?: string | null; bic?: string | null }): Promise<{ id: string }> {
+  async createSupplier(input: { name: string; email?: string | null; vatId?: string | null; iban?: string | null; bic?: string | null }): Promise<{ id: string }> {
     return prisma.supplier.create({
-      data: { name: input.name, vatId: input.vatId ?? null, iban: input.iban ?? null, bic: input.bic ?? null, kind: "MANUAL" },
+      data: { name: input.name, email: input.email ?? null, vatId: input.vatId ?? null, iban: input.iban ?? null, bic: input.bic ?? null, kind: "MANUAL" },
       select: { id: true },
     });
+  }
+
+  /** Veredler-E-Mail einer Fremdvergabe-Stufe (für den Veredelungsauftrag-Versand). */
+  async emailForSubProduction(subProductionId: string): Promise<string | null> {
+    const s = await prisma.subProductionOrder.findUnique({
+      where: { id: subProductionId },
+      select: { supplier: { select: { email: true } } },
+    });
+    return s?.supplier?.email ?? null;
   }
 
   async updateSupplier(input: UpdateSupplierInput): Promise<void> {
@@ -114,7 +123,7 @@ export class PrismaSupplierRepository
     await prisma.supplier.update({
       where: { id: input.id },
       data: {
-        ...pick("name"), ...pick("vatId"), ...pick("iban"), ...pick("bic"),
+        ...pick("name"), ...pick("email"), ...pick("vatId"), ...pick("iban"), ...pick("bic"),
         ...pick("street"), ...pick("zip"), ...pick("city"), ...pick("country"),
         ...pick("zahlungszielTage"), ...pick("skontoPercent"), ...pick("skontoDays"), ...pick("lieferzeitTage"), ...pick("notiz"),
       },
@@ -125,7 +134,7 @@ export class PrismaSupplierRepository
     const s = await prisma.supplier.findUnique({
       where: { id: supplierId },
       select: {
-        id: true, name: true, vatId: true, iban: true, bic: true, kind: true, active: true,
+        id: true, name: true, email: true, vatId: true, iban: true, bic: true, kind: true, active: true,
         street: true, zip: true, city: true, country: true,
         zahlungszielTage: true, skontoPercent: true, skontoDays: true, lieferzeitTage: true, notiz: true,
         _count: { select: { supplierItems: true } },
@@ -137,7 +146,7 @@ export class PrismaSupplierRepository
     if (!s) return null;
     return {
       supplier: {
-        id: s.id, name: s.name, vatId: s.vatId, iban: s.iban, bic: s.bic, kind: s.kind, active: s.active,
+        id: s.id, name: s.name, email: s.email, vatId: s.vatId, iban: s.iban, bic: s.bic, kind: s.kind, active: s.active,
         street: s.street, zip: s.zip, city: s.city, country: s.country,
         zahlungszielTage: s.zahlungszielTage, skontoPercent: s.skontoPercent, skontoDays: s.skontoDays, lieferzeitTage: s.lieferzeitTage, notiz: s.notiz,
       },

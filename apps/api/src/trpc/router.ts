@@ -411,7 +411,7 @@ export const appRouter = router({
 
     /** Legt einen Lieferanten an (manueller Stammsatz). */
     create: roleProcedure("ADMIN", "BUERO")
-      .input(z.object({ name: z.string().min(1), vatId: z.string().optional(), iban: z.string().optional(), bic: z.string().optional() }))
+      .input(z.object({ name: z.string().min(1), email: z.string().optional(), vatId: z.string().optional(), iban: z.string().optional(), bic: z.string().optional() }))
       .mutation(({ input, ctx }) => ctx.suppliers.createSupplier(input)),
 
     /** Lieferanten-Detail + Historie (Bestellungen, Eingangsrechnungen, Einkaufsvolumen). */
@@ -423,7 +423,7 @@ export const appRouter = router({
     update: roleProcedure("ADMIN", "BUERO")
       .input(z.object({
         id: z.string().min(1),
-        name: z.string().optional(), vatId: z.string().nullable().optional(), iban: z.string().nullable().optional(), bic: z.string().nullable().optional(),
+        name: z.string().optional(), email: z.string().nullable().optional(), vatId: z.string().nullable().optional(), iban: z.string().nullable().optional(), bic: z.string().nullable().optional(),
         street: z.string().nullable().optional(), zip: z.string().nullable().optional(), city: z.string().nullable().optional(), country: z.string().nullable().optional(),
         zahlungszielTage: z.number().int().min(0).max(180).optional(),
         skontoPercent: z.number().int().min(0).max(100).nullable().optional(),
@@ -1964,6 +1964,26 @@ export const appRouter = router({
           const body = input.body ?? `Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie ${labels[input.kind] === "Rechnung" ? "Ihre Rechnung" : `unser ${labels[input.kind]}`} als PDF.\n\nMit freundlichen Grüßen\nTEXMA Textilveredelung GmbH`;
           await ctx.mailSend.send({ to, subject, body, attachments: [{ filename: pdf.filename, contentBase64: pdf.base64, contentType: "application/pdf" }] });
           return { ok: true as const, filename: pdf.filename };
+        } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    // Veredelungsauftrag (Werkstattblatt) als PDF-Anhang an den Veredler senden. Ohne Preise →
+    // allRoles. Empfänger default = hinterlegte Veredler-E-Mail (Supplier.email), überschreibbar.
+    sendVeredelungsauftrag: roleProcedure(...allRoles)
+      .input(z.object({ subProductionId: z.string().min(1), to: z.string().optional(), subject: z.string().optional(), body: z.string().optional() }))
+      .mutation(async ({ input, ctx }) => {
+        const veredlerMail = await ctx.suppliers.emailForSubProduction(input.subProductionId);
+        const to = (input.to?.trim() || veredlerMail || "").trim();
+        if (!to) throw new TRPCError({ code: "BAD_REQUEST", message: "Keine Empfänger-E-Mail: beim Veredler eine E-Mail hinterlegen oder eine Adresse angeben." });
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) throw new TRPCError({ code: "BAD_REQUEST", message: `„${to}" ist keine gültige E-Mail-Adresse.` });
+        try {
+          const pdf = await ctx.print.veredelungsauftragPdf(input.subProductionId);
+          const nr = pdf.filename.replace(/\.pdf$/, "").replace(/^[^-]+-/, "");
+          const subject = input.subject ?? `Veredelungsauftrag ${nr}`;
+          const body = input.body ?? `Guten Tag,\n\nanbei erhalten Sie unseren Veredelungsauftrag ${nr} mit der Größenaufstellung der Beistellung und den Veredelungspositionen.\n\nBitte bestätigen Sie uns den Eingang sowie den Fertigstellungstermin.\n\nMit freundlichen Grüßen\nTEXMA Textilmarketing GmbH`;
+          await ctx.mailSend.send({ to, subject, body, attachments: [{ filename: pdf.filename, contentBase64: pdf.base64, contentType: "application/pdf" }] });
+          // GoBD: ausgehender Geschäftsbrief an den Veredler unveränderbar archivieren (6 J.).
+          await autoArchive(ctx, "GESCHAEFTSBRIEF", "SubProductionOrder", input.subProductionId, () => ctx.print.veredelungsauftragPdf(input.subProductionId));
+          return { ok: true as const, filename: pdf.filename, to };
         } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
   }),

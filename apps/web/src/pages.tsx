@@ -218,6 +218,7 @@ function SupplierStammdatenEditor({ s, onSaved }: { s: SupplierDetail["supplier"
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const init = () => ({
+    email: s.email ?? "",
     street: s.street ?? "", zip: s.zip ?? "", city: s.city ?? "", country: s.country ?? "DE",
     iban: s.iban ?? "", bic: s.bic ?? "",
     zahlungszielTage: String(s.zahlungszielTage ?? 14), skontoPercent: s.skontoPercent?.toString() ?? "", skontoDays: s.skontoDays?.toString() ?? "",
@@ -231,7 +232,7 @@ function SupplierStammdatenEditor({ s, onSaved }: { s: SupplierDetail["supplier"
     setBusy(true); setErr(null);
     try {
       await trpc.suppliers.update.mutate({
-        id: s.id, street: f.street.trim() || null, zip: f.zip.trim() || null, city: f.city.trim() || null, country: f.country.trim() || "DE",
+        id: s.id, email: f.email.trim() || null, street: f.street.trim() || null, zip: f.zip.trim() || null, city: f.city.trim() || null, country: f.country.trim() || "DE",
         iban: f.iban.trim() || null, bic: f.bic.trim() || null,
         zahlungszielTage: Number(f.zahlungszielTage) || 14, skontoPercent: numOrNull(f.skontoPercent), skontoDays: numOrNull(f.skontoDays),
         lieferzeitTage: numOrNull(f.lieferzeitTage), notiz: f.notiz.trim() || null,
@@ -248,6 +249,7 @@ function SupplierStammdatenEditor({ s, onSaved }: { s: SupplierDetail["supplier"
           <Button size="compact-xs" variant="subtle" onClick={() => { setF(init()); setEdit(true); }}>Bearbeiten</Button></Group>
         <Group gap="lg" wrap="wrap">
           <Text size="sm">Adresse: <b>{addr || "—"}</b></Text>
+          <Text size="sm">E-Mail: <b>{s.email || "—"}</b></Text>
           <Text size="sm">USt-IdNr.: <b>{s.vatId || "—"}</b></Text>
           <Text size="sm">IBAN: <b>{s.iban || "—"}</b></Text>
           <Text size="sm">Zahlungsziel: <b>{s.zahlungszielTage} T</b></Text>
@@ -262,6 +264,7 @@ function SupplierStammdatenEditor({ s, onSaved }: { s: SupplierDetail["supplier"
     <Box mt="sm" p="xs" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 6 }}>
       {err && <Alert color="red" mb="xs">{err}</Alert>}
       <Group gap="xs" align="end" wrap="wrap">
+        <TextInput size="xs" label="E-Mail (Veredler/Lieferant)" w={240} value={f.email} onChange={(e) => set("email")(e.currentTarget.value)} placeholder="auftrag@veredler.de" />
         <TextInput size="xs" label="Straße" w={200} value={f.street} onChange={(e) => set("street")(e.currentTarget.value)} />
         <TextInput size="xs" label="PLZ" w={80} value={f.zip} onChange={(e) => set("zip")(e.currentTarget.value)} />
         <TextInput size="xs" label="Ort" w={150} value={f.city} onChange={(e) => set("city")(e.currentTarget.value)} />
@@ -3355,6 +3358,7 @@ function OrderDocumentsTab({ orderId }: { orderId: string }): JSX.Element {
         : kind === "quote" ? await trpc.print.quote.query({ quoteId: id })
         : kind === "auftragsbestaetigung" ? await trpc.print.auftragsbestaetigung.query({ orderId: id })
         : kind === "deliveryNote" ? await trpc.print.deliveryNote.query({ deliveryNoteId: id })
+        : kind === "veredelungsauftrag" ? await trpc.print.veredelungsauftrag.query({ subProductionId: id })
         : await trpc.print.creditNote.query({ creditNoteId: id });
       downloadBase64(r.filename, r.base64, "application/pdf");
     } catch (e) { setErr(errMsg(e)); }
@@ -5393,6 +5397,17 @@ export function SubproductionPage({ onOpen, focusId }: { onOpen?: (k: string, id
     catch (e) { setErr(errMsg(e)); }
   };
 
+  // Veredelungsauftrag per Mail an den Veredler (Default: hinterlegte Veredler-E-Mail; überschreibbar).
+  const mailVeredler = async (sub: SubStage): Promise<void> => {
+    setErr(null);
+    const to = typeof window !== "undefined" ? window.prompt("Veredelungsauftrag per E-Mail senden an (leer = hinterlegte Veredler-Adresse):", "") : null;
+    if (to === null) return;
+    try {
+      const r = await trpc.mail.sendVeredelungsauftrag.mutate({ subProductionId: sub.id, ...(to.trim() ? { to: to.trim() } : {}) });
+      if (typeof window !== "undefined") window.alert(`„${r.filename}" an ${r.to} gesendet.`);
+    } catch (e) { setErr(errMsg(e)); }
+  };
+
   const actionsFor = (s: SubStage): ReactNode => {
     const blocked = plan?.blocked.some((b) => b.sequence === s.sequence) ?? false;
     if (s.inhouse) {
@@ -5456,6 +5471,7 @@ export function SubproductionPage({ onOpen, focusId }: { onOpen?: (k: string, id
                     <Group gap={6} wrap="nowrap">
                       {actionsFor(s)}
                       <Button size="compact-xs" variant="subtle" onClick={() => void veredelungsauftragPdf(s)} title="Werkstattblatt mit Größen-Matrix + Veredelungspositionen">Veredelungsauftrag</Button>
+                      {!s.inhouse && <Button size="compact-xs" variant="subtle" color="blue" onClick={() => void mailVeredler(s)} title="Veredelungsauftrag als PDF per Mail an den Veredler">Mail an Veredler</Button>}
                     </Group>
                   </Table.Td>
                 </Table.Tr>

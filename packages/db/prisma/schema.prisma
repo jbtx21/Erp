@@ -620,6 +620,7 @@ enum SupplierKind {
 model Supplier {
   id              String   @id @default(cuid())
   name            String
+  email           String? // zentrale E-Mail (Veredelungsauftrag-Versand an den Veredler, Kap. 5.3/5.4)
   vatId           String? // USt-IdNr. — Auflösung eingehender E-Rechnungen (Kap. 19/C4)
   iban            String? // Gläubiger-IBAN für SEPA-Überweisungen (PIS, Kap. 9)
   bic             String?

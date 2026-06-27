@@ -10,7 +10,7 @@ export class PrismaLinksRepository implements LinksRepository {
       select: {
         id: true, number: true, status: true,
         quote: { select: { id: true, number: true, status: true } },
-        production: { select: { number: true } },
+        production: { select: { number: true, subOrders: { orderBy: { sequence: "asc" }, select: { id: true, number: true, status: true, inhouse: true, supplier: { select: { name: true } } } } } },
         deliveryNotes: { select: { id: true, number: true } },
         invoice: { select: { id: true, number: true, finalized: true, creditNotes: { select: { id: true, number: true } } } },
         complaints: { select: { cause: true, followUp: true } },
@@ -25,6 +25,11 @@ export class PrismaLinksRepository implements LinksRepository {
     // Auftragsbestätigung — eigener Beleg (über die Order-ID adressiert), sobald der Auftrag in Bearbeitung ist.
     if (o.status !== "ANGELEGT") links.push({ type: "Auftragsbestätigung", label: o.number, navKey: "orders", financial: false, id: o.id, pdfKind: "auftragsbestaetigung", sourceEntity: "Auftragsbestaetigung" });
     if (o.production) links.push({ type: "Produktionsauftrag", label: o.production.number, navKey: "prodreport", financial: false });
+    // Veredelungsaufträge (Fremdvergabe-/Inhouse-Stufen) — Werkstattblatt je Stufe, druckbar + verknüpft.
+    for (const sub of o.production?.subOrders ?? []) {
+      const veredler = sub.inhouse ? "Inhouse" : (sub.supplier?.name ?? "Veredler");
+      links.push({ type: "Veredelungsauftrag", label: `${sub.number} · ${veredler} · ${sub.status}`, navKey: "subproduction", financial: false, id: sub.id, pdfKind: "veredelungsauftrag", sourceEntity: "SubProductionOrder" });
+    }
     for (const d of o.deliveryNotes) links.push({ type: "Lieferschein", label: d.number, navKey: "orders", financial: false, id: d.id, pdfKind: "deliveryNote", sourceEntity: "DeliveryNote" });
     if (o.invoice) {
       links.push({ type: "Rechnung", label: `${o.invoice.number}${o.invoice.finalized ? " · final" : " · Entwurf"}`, navKey: null, financial: true, id: o.invoice.id, pdfKind: "invoice", sourceEntity: "Invoice" });
