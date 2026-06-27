@@ -49,13 +49,26 @@ describe("aggregateDemand (auftragsübergreifend + Leihgut)", () => {
       [{ variantId: "v1", supplierId: "sup-a", ekCents: 500 }, { variantId: "v2", supplierId: "sup-b", ekCents: 300 }],
     );
     const v1 = props.find((p) => p.variantId === "v1")!;
-    expect(v1.requiredQty).toBe(17);
+    // Auftrag 10+5=15, Muster 2 kommen zurück → Netto-Bedarf 13; abzgl. 8 Bestand → 5 bestellen.
+    expect(v1.requiredQty).toBe(13);
     expect(v1.stockQty).toBe(8);
-    expect(v1.orderQty).toBe(9); // 17 − 8
+    expect(v1.orderQty).toBe(5); // (15 − 2) − 8
     expect(v1.supplierId).toBe("sup-a");
     expect(v1.sources).toHaveLength(3);
     const v2 = props.find((p) => p.variantId === "v2")!;
     expect(v2.orderQty).toBe(3);
+  });
+
+  it("zieht zurückkommende Muster vom Auftragsbedarf ab (200 Auftrag − 5 Muster → 195)", () => {
+    const props = aggregateDemand(
+      [
+        { variantId: "v-shirt", qty: 200, source: "ORDER", ref: "AB-9" },
+        { variantId: "v-shirt", qty: 5, source: "LOAN", ref: "Muster-9" },
+      ],
+      [],
+      [{ variantId: "v-shirt", supplierId: "sup-a", ekCents: 640 }],
+    );
+    expect(props[0]!.orderQty).toBe(195);
   });
 
   it("blendet Varianten ohne Netto-Bedarf aus (genug Bestand)", () => {

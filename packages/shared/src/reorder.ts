@@ -73,6 +73,11 @@ export interface DemandProposal {
  * Aggregiert den Bedarf je Variante auftragsübergreifend (mehrere Aufträge + Leihgut),
  * verrechnet den Bestand und ordnet den Hauptlieferanten zu. Nur Varianten mit
  * Netto-Bedarf (> 0); Quellen je Variante werden mitgeführt (Nachvollziehbarkeit).
+ *
+ * Muster-Leihen (`LOAN`) REDUZIEREN den Auftragsbedarf: die Muster wurden vorab zur
+ * Anprobe beschafft, kommen vom Kunden zurück und gehen in die Gesamtbestellung ein —
+ * es müssen also nur die fehlenden Stück nachbeschafft werden (200 Auftrag − 5 Muster
+ * → 195). `requiredQty` ist daher der Netto-Auftragsbedarf nach Abzug der Muster.
  */
 export function aggregateDemand(
   demand: ReadonlyArray<DemandItem>,
@@ -85,7 +90,8 @@ export function aggregateDemand(
   for (const d of demand) {
     if (d.qty <= 0) continue;
     const cur = byVariant.get(d.variantId) ?? { required: 0, sources: [] };
-    cur.required += d.qty;
+    // Auftrag erhöht den Bedarf; zurückkommende Muster senken ihn (sie gehen in die Bestellung ein).
+    cur.required += d.source === "LOAN" ? -d.qty : d.qty;
     cur.sources.push({ source: d.source, ref: d.ref, qty: d.qty });
     byVariant.set(d.variantId, cur);
   }
@@ -95,7 +101,7 @@ export function aggregateDemand(
     const orderQty = Math.max(0, agg.required - stockQty);
     if (orderQty <= 0) continue;
     const sup = supBy.get(variantId);
-    out.push({ variantId, supplierId: sup?.supplierId ?? null, requiredQty: agg.required, stockQty, orderQty, ekCents: sup?.ekCents ?? 0, sources: agg.sources });
+    out.push({ variantId, supplierId: sup?.supplierId ?? null, requiredQty: Math.max(0, agg.required), stockQty, orderQty, ekCents: sup?.ekCents ?? 0, sources: agg.sources });
   }
   return out.sort((a, b) => b.orderQty - a.orderQty);
 }
