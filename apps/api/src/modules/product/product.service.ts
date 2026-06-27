@@ -108,7 +108,10 @@ export interface CreateVeredelungInput {
   name: string;
   sku: string;
   method: "STICK" | "DRUCK" | "DRUCK_DIGITAL" | "TRANSFER";
+  /** Einzelne Platzierung (Rückwärtskompatibilität); für mehrere Platzierungen `placements`. */
   placement?: string;
+  /** Mehrere Platzierungen je Logo (z. B. Brust + Rücken) → je eine Veredelungs-Spezifikation. */
+  placements?: string[];
   /** Zugewiesener externer Veredler; null/leer = inhouse-Veredelung (keine Fremdvergabe). */
   veredlerId?: string | null;
   /** Einkaufspreis des Logos beim Veredler (Cent); je Logo abweichend. */
@@ -141,7 +144,7 @@ export interface ProductRepository {
   /** Prüft, ob ein Lieferant (Veredler) existiert. */
   supplierExists(id: string): Promise<boolean>;
   /** Legt einen Veredelungs-/Logo-Artikel mit (optionalem) Veredler, EK und Mengenstaffel an. */
-  createVeredelungArticle(input: Required<Pick<CreateVeredelungInput, "name" | "sku" | "method">> & { veredlerId: string | null; placement: string | null; ekCents: number | null; tiers: VeredelungTier[] }): Promise<CatalogEntry>;
+  createVeredelungArticle(input: Required<Pick<CreateVeredelungInput, "name" | "sku" | "method">> & { veredlerId: string | null; placements: string[]; ekCents: number | null; tiers: VeredelungTier[] }): Promise<CatalogEntry>;
 }
 
 export class ProductError extends Error {}
@@ -294,15 +297,21 @@ export class ProductService {
     if (input.ekCents !== undefined && input.ekCents < 0) throw new ProductError("EK darf nicht negativ sein.");
     const tiers = (input.tiers ?? []).filter((t) => t.minMenge > 0 && t.vkCents >= 0).sort((a, b) => a.minMenge - b.minMenge);
     for (const t of tiers) if (t.vkCents < 0) throw new ProductError("Staffelpreis darf nicht negativ sein.");
+    // Mehrere Platzierungen je Logo (z. B. Siebdruck vorne + hinten) → je eine FinishingSpec.
+    // Rückwärtskompatibel: ohne `placements` zählt das Einzelfeld `placement`. Dedupliziert;
+    // mindestens eine (ggf. leere) Spezifikation, damit die Veredelungsart erhalten bleibt.
+    const rawPlacements = input.placements && input.placements.length > 0 ? input.placements : (input.placement ? [input.placement] : []);
+    const placements = [...new Set(rawPlacements.map((p) => p.trim()).filter(Boolean))];
+    const finalPlacements = placements.length > 0 ? placements : [""];
 
     const entry = await this.repo.createVeredelungArticle({
       name: input.name.trim(), sku: input.sku.trim(), method: input.method,
-      placement: input.placement?.trim() || null, veredlerId,
+      placements: finalPlacements, veredlerId,
       ekCents: input.ekCents ?? null, tiers,
     });
     await this.audit.append(buildEntry({
       entity: "Article", entityId: entry.articleId, action: "CREATE",
-      after: { veredelung: input.method, veredlerId, inhouse: veredlerId === null, ekCents: input.ekCents ?? null, staffeln: tiers.length },
+      after: { veredelung: input.method, veredlerId, inhouse: veredlerId === null, ekCents: input.ekCents ?? null, staffeln: tiers.length, platzierungen: finalPlacements.filter(Boolean).length },
     }));
     return entry;
   }

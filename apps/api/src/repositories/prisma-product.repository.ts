@@ -208,7 +208,7 @@ export class PrismaProductRepository implements ProductRepository {
     return (await prisma.supplier.count({ where: { id } })) > 0;
   }
 
-  async createVeredelungArticle(input: { name: string; sku: string; method: "STICK" | "DRUCK" | "DRUCK_DIGITAL" | "TRANSFER"; placement: string | null; veredlerId: string | null; ekCents: number | null; tiers: VeredelungTier[] }): Promise<CatalogEntry> {
+  async createVeredelungArticle(input: { name: string; sku: string; method: "STICK" | "DRUCK" | "DRUCK_DIGITAL" | "TRANSFER"; placements: string[]; veredlerId: string | null; ekCents: number | null; tiers: VeredelungTier[] }): Promise<CatalogEntry> {
     // VK-Staffel des Logos liegt unter der Basis-Preisgruppe STANDARD (Preisgruppe ≠ Mengenstaffel).
     const standard = input.tiers.length > 0 ? await prisma.priceGroup.findFirst({ where: { kind: "STANDARD" }, select: { id: true } }) : null;
     if (input.tiers.length > 0 && !standard) throw new Error("Keine Preisgruppe STANDARD vorhanden — Staffel kann nicht angelegt werden.");
@@ -217,7 +217,8 @@ export class PrismaProductRepository implements ProductRepository {
       const article = await tx.article.create({
         data: {
           sku: input.sku, name: input.name, type: "FINISHING", isVeredelung: true, veredlerId: input.veredlerId,
-          finishingSpecs: { create: { method: input.method as never, placement: input.placement ?? "" } },
+          // Eine Veredelungs-Spezifikation je Platzierung (z. B. Siebdruck vorne + hinten).
+          finishingSpecs: { create: (input.placements.length > 0 ? input.placements : [""]).map((placement) => ({ method: input.method as never, placement })) },
           variants: { create: { sku: input.sku } },
         },
         select: { id: true, name: true, variants: { select: { id: true } } },

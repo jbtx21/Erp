@@ -3,7 +3,7 @@
 // Bereiche mit wenig Code anbindbar sind. Interaktive Aktionen (Versand bestätigen,
 // Mahnlauf, Reorder→Bestellungen) sind je Seite ergänzt.
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Alert, Anchor, Badge, Box, Button, Card, Checkbox, Group, Loader, Modal, NumberInput, Paper, PasswordInput, SegmentedControl, Select, SimpleGrid, Stack, Switch, Table, Tabs, Text, Textarea, TextInput, Title } from "@mantine/core";
+import { Alert, Anchor, Badge, Box, Button, Card, Checkbox, Group, Loader, Modal, NumberInput, Paper, PasswordInput, SegmentedControl, Select, SimpleGrid, Stack, Switch, Table, Tabs, TagsInput, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { validateVatId } from "@texma/shared/vat";
 import { buildTrackingUrl, type Carrier } from "@texma/shared/tracking";
@@ -1885,7 +1885,8 @@ interface TierRow { minMenge: number; euro: number }
 function LogoArticleDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (e: { label: string; variantId: string; unitNetCents: number }) => void }): JSX.Element {
   const [name, setName] = useState(""); const [sku, setSku] = useState("");
   const [method, setMethod] = useState<"STICK" | "DRUCK" | "DRUCK_DIGITAL" | "TRANSFER">("STICK");
-  const [placement, setPlacement] = useState("");
+  // Mehrere Platzierungen je Logo (z. B. Siebdruck vorne + hinten) → je eine Veredelungs-Spezifikation.
+  const [placements, setPlacements] = useState<string[]>([]);
   const [veredlerId, setVeredlerId] = useState("");
   // Inhouse-Veredelung (z. B. 2-farbiger Transferdruck im Haus): kein externer Veredler →
   // keine Fremdvergabe-Stufe in der Produktion.
@@ -1913,7 +1914,7 @@ function LogoArticleDialog({ onClose, onCreated }: { onClose: () => void; onCrea
     try {
       const cleanTiers = tiers.filter((t) => t.minMenge > 0).map((t) => ({ minMenge: t.minMenge, vkCents: Math.round(t.euro * 100) }));
       const e = await trpc.products.createVeredelung.mutate({
-        name: name.trim(), sku: sku.trim(), method, ...(placement.trim() ? { placement: placement.trim() } : {}),
+        name: name.trim(), sku: sku.trim(), method, ...(placements.length > 0 ? { placements } : {}),
         ...(inhouse || !veredlerId ? {} : { veredlerId }), ...(ek !== "" ? { ekCents: Math.round(Number(ek) * 100) } : {}), tiers: cleanTiers,
       });
       onCreated({ label: e.label, variantId: e.variantId, unitNetCents: e.unitNetCents });
@@ -1928,7 +1929,8 @@ function LogoArticleDialog({ onClose, onCreated }: { onClose: () => void; onCrea
         <TextInput label="Artikel-Nr. (SKU)" placeholder="LOGO-…" value={sku} onChange={(e) => setSku(e.currentTarget.value)} w={150} />
         <Select label="Veredelungsart" w={150} value={method} onChange={(v) => v && setMethod(v as typeof method)}
           data={[{ value: "STICK", label: "Stick" }, { value: "DRUCK", label: "Siebdruck" }, { value: "DRUCK_DIGITAL", label: "Digitaldruck" }, { value: "TRANSFER", label: "Transfer" }]} />
-        <TextInput label="Position" placeholder="Brust links" value={placement} onChange={(e) => setPlacement(e.currentTarget.value)} w={140} />
+        <TagsInput label="Platzierungen" placeholder="Brust links, Rücken …" value={placements} onChange={setPlacements} w={240}
+          description="Mehrere möglich (je Platzierung eine Spezifikation)" />
       </Group>
       <Group gap="md" align="end" wrap="wrap" mt="sm">
         <Switch label="Inhouse (kein Veredler)" checked={inhouse} onChange={(e) => setInhouse(e.currentTarget.checked)} mb={6}

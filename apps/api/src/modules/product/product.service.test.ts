@@ -149,6 +149,16 @@ describe("ProductService — Veredelungs-/Logo-Artikel (Kap. 5.4/11)", () => {
     expect(repo.veredelungArticles.get(entry.articleId)?.veredlerId).toBeNull();
   });
 
+  it("legt mehrere Platzierungen je Logo an (z. B. Siebdruck vorne + hinten)", async () => {
+    const { svc, repo } = await setup();
+    repo.addSupplier("sup_druck");
+    const entry = await svc.createVeredelungArticle({
+      name: "Siebdruck 2-seitig", sku: "SD-2S", method: "DRUCK", veredlerId: "sup_druck",
+      placements: ["Brust vorne", "Rücken", "Brust vorne"], // doppelte werden dedupliziert
+    });
+    expect(repo.veredelungArticles.get(entry.articleId)?.placements).toEqual(["Brust vorne", "Rücken"]);
+  });
+
   it("weist einen unbekannten Veredler ab", async () => {
     const { svc } = await setup();
     await expect(svc.createVeredelungArticle({ name: "Logo", sku: "L-2", method: "STICK", veredlerId: "sup_unknown" }))

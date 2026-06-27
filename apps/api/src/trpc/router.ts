@@ -1290,6 +1290,8 @@ export const appRouter = router({
         sku: z.string().min(1),
         method: z.enum(["STICK", "DRUCK", "DRUCK_DIGITAL", "TRANSFER"]),
         placement: z.string().optional(),
+        // Mehrere Platzierungen je Logo (z. B. Brust + Rücken) → je eine Veredelungs-Spezifikation.
+        placements: z.array(z.string()).optional(),
         // Optional: leer = inhouse-Veredelung (keine Fremdvergabe).
         veredlerId: z.string().optional(),
         ekCents: z.number().int().nonnegative().optional(),
