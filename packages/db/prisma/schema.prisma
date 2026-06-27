@@ -969,6 +969,14 @@ model Order {
   externalNumber String? // Shop-Bestellnummer (Idempotenz beim Import, T-01)
   trackingNumber String? // DPD (Kap. 4.2/T-06)
   carrier        Carrier? // Versanddienstleister → Tracking-Link-Vorlage (Kap. 4.2)
+  // Qualitätssicherung (QS-Gate vor Versand): Stückzahl + externe Veredelung kontrollieren,
+  // Foto. Erst wenn BESTANDEN, ist der Auftrag versandbereit (listShippable).
+  qsStatus       String   @default("OFFEN") // OFFEN | BESTANDEN
+  qsStueckzahlOk Boolean  @default(false)
+  qsVeredelungOk Boolean  @default(false)
+  qsFotoOk       Boolean  @default(false)
+  qsNotiz        String?
+  qsGeprueftAm   DateTime?
   lines       OrderLine[]
   production  ProductionOrder?
   invoice     Invoice?

@@ -27,6 +27,7 @@ import type { StickereiService } from "../modules/stickerei/stickerei.service.js
 import type { ReorderService } from "../modules/reorder/reorder.service.js";
 import type { ProductionSheetService } from "../modules/production-sheet/production-sheet.service.js";
 import type { ProductionService } from "../modules/production/production.service.js";
+import type { QualityService } from "../modules/quality/quality.service.js";
 import type { ReportingService } from "../modules/reporting/reporting.service.js";
 import type { ProductionReportingService } from "../modules/production-reporting/production-reporting.service.js";
 import type { CostCenterService } from "../modules/cost-center/cost-center.service.js";
@@ -117,6 +118,7 @@ export interface Context {
   reorder: ReorderService;
   productionSheet: ProductionSheetService;
   production: ProductionService;
+  quality: QualityService;
   reporting: ReportingService;
   productionReporting: ProductionReportingService;
   costCenters: CostCenterService;

@@ -18,7 +18,8 @@ export class PrismaShipmentRepository implements ShipmentRepository {
   async listShippable(limit: number): Promise<ShippableOrder[]> {
     const rows = await prisma.order.findMany({
       // Liefersperre (Xentral-Benchmark): gesperrte Kunden erscheinen nicht in der Versandliste.
-      where: { status: "VERSANDBEREIT", deliveryAddressId: { not: null }, company: { is: { liefersperre: false } } },
+      // QS-Gate (Kap. 20): nur Aufträge mit bestandener Qualitätssicherung sind versandbereit.
+      where: { status: "VERSANDBEREIT", deliveryAddressId: { not: null }, company: { is: { liefersperre: false } }, qsStatus: "BESTANDEN" },
       orderBy: { createdAt: "asc" },
       take: limit,
       select: {

@@ -47,6 +47,8 @@ import { ReorderService } from "./modules/reorder/reorder.service.js";
 import { ProductionSheetService } from "./modules/production-sheet/production-sheet.service.js";
 import { ProductionService } from "./modules/production/production.service.js";
 import { PrismaProductionRepository } from "./repositories/prisma-production.repository.js";
+import { QualityService } from "./modules/quality/quality.service.js";
+import { PrismaQualityRepository } from "./repositories/prisma-quality.repository.js";
 import { ReportingService } from "./modules/reporting/reporting.service.js";
 import { AnthropicReportClient } from "./modules/reporting/anthropic-report-client.js";
 import { ProductionReportingService } from "./modules/production-reporting/production-reporting.service.js";
@@ -248,6 +250,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const reorder = new ReorderService(new PrismaReorderRepository(), new PrismaAuditSink());
   const productionSheet = new ProductionSheetService(new PrismaProductionSheetRepository());
   const production = new ProductionService(new PrismaProductionRepository(), new NumberingService(new PrismaNumberingRepository()), new PrismaAuditSink());
+  const quality = new QualityService(new PrismaQualityRepository(), new PrismaAuditSink());
   // KI-Reporting nutzt Claude nur, wenn ein API-Schlüssel hinterlegt ist (sonst Heuristik).
   const reporting = new ReportingService(new PrismaReportingRepository(), AnthropicReportClient.fromEnv());
   const productionReporting = new ProductionReportingService(new PrismaProductionReportingRepository());
@@ -511,6 +514,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           reorder,
           productionSheet,
           production,
+          quality,
           reporting,
           productionReporting,
           costCenters,

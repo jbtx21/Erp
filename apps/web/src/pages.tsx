@@ -3299,6 +3299,40 @@ function OrderAbschlaege({ orderId }: { orderId: string }): JSX.Element {
 // Belegkette eines Auftrags (Connections): Angebot/AB/Lieferschein/Rechnung/Gutschrift mit
 // PDF-Download und GoBD-Archivstatus („Archiviert ✓"). Schließt die UX-Lücken (Rechnungs-PDF
 // war nicht anbindbar) und macht die Verknüpfungen klickbar.
+// Qualitätssicherung als Gate vor dem Versand (Kap. 20): Stückzahl + externe Veredelung
+// kontrollieren, Foto. Erst wenn alle drei erfüllt sind (BESTANDEN), ist der Auftrag versandbereit.
+function OrderQualityTab({ orderId }: { orderId: string }): JSX.Element {
+  const [qc, setQc] = useState<Awaited<ReturnType<typeof trpc.quality.get.query>> | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    try { setQc(await trpc.quality.get.query({ orderId })); setErr(null); } catch (e) { setErr(errMsg(e)); }
+  }, [orderId]);
+  useEffect(() => { void load(); }, [load]);
+  const setCheck = async (patch: { stueckzahlOk?: boolean; veredelungOk?: boolean; fotoOk?: boolean; notiz?: string }): Promise<void> => {
+    try { setQc(await trpc.quality.check.mutate({ orderId, ...patch })); setErr(null); } catch (e) { setErr(errMsg(e)); }
+  };
+  if (err) return <Alert color="red">{err}</Alert>;
+  if (!qc) return <Group gap="xs"><Loader size="sm" /><Text size="sm">lädt…</Text></Group>;
+  return (
+    <Stack gap="sm" maw={560}>
+      <Group>
+        <Text fw={600}>Status:</Text>
+        <Badge color={qc.status === "BESTANDEN" ? "teal" : "gray"} variant="light">{qc.status === "BESTANDEN" ? "QS bestanden" : "QS offen"}</Badge>
+        {qc.geprueftAm && <Text size="xs" c="dimmed">geprüft am {new Date(qc.geprueftAm).toLocaleString("de-DE")}</Text>}
+      </Group>
+      <Text size="sm" c="dimmed">Alle drei Punkte abhaken — erst dann ist der Auftrag versandbereit.</Text>
+      <Checkbox label="Stückzahl kontrolliert" checked={qc.stueckzahlOk} onChange={(e) => void setCheck({ stueckzahlOk: e.currentTarget.checked })} />
+      <Checkbox label="Externe Veredelung kontrolliert" checked={qc.veredelungOk} onChange={(e) => void setCheck({ veredelungOk: e.currentTarget.checked })} />
+      <Checkbox label="Foto gemacht" checked={qc.fotoOk} onChange={(e) => void setCheck({ fotoOk: e.currentTarget.checked })} />
+      <Textarea label="Notiz" autosize minRows={2} value={qc.notiz ?? ""} onChange={(e) => setQc({ ...qc, notiz: e.currentTarget.value })} onBlur={(e) => void setCheck({ notiz: e.currentTarget.value })} />
+      <div>
+        <Text size="sm" fw={500} mb={4}>QS-Foto(s)</Text>
+        <RecordFilesPanel entity="Order" entityId={orderId} />
+      </div>
+    </Stack>
+  );
+}
+
 function OrderDocumentsTab({ orderId }: { orderId: string }): JSX.Element {
   const [data, setData] = useState<Awaited<ReturnType<typeof trpc.documents.forOrder.query>> | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -3455,6 +3489,7 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
                 <Tabs.Tab value="details">Details</Tabs.Tab>
                 <Tabs.Tab value="stickerei">Stickerei-Referenz</Tabs.Tab>
                 {editOrderId && <Tabs.Tab value="belege">Belege</Tabs.Tab>}
+                {editOrderId && <Tabs.Tab value="qs">Qualitätssicherung</Tabs.Tab>}
                 {editOrderId && <Tabs.Tab value="ampel">Auftragsampel</Tabs.Tab>}
                 {editOrderId && <Tabs.Tab value="abschlag">Abschläge</Tabs.Tab>}
               </Tabs.List>
@@ -3471,6 +3506,11 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
               {editOrderId && (
                 <Tabs.Panel value="belege" pt="md">
                   <OrderDocumentsTab orderId={editOrderId} />
+                </Tabs.Panel>
+              )}
+              {editOrderId && (
+                <Tabs.Panel value="qs" pt="md">
+                  <OrderQualityTab orderId={editOrderId} />
                 </Tabs.Panel>
               )}
               {editOrderId && (

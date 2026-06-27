@@ -1193,6 +1193,30 @@ export const appRouter = router({
 
   // Auftrag → Produktionsauftrag (PA) + Freigabe (Kap. 5.2). Schreibt Status/Stammdaten →
   // kein PRODUKTION-Zugriff auf die Erzeugung; der Laufzettel-PDF läuft über productionSheet.
+  // Qualitätssicherung als Gate vor dem Versand (Kap. 20): Stückzahl + externe Veredelung
+  // kontrollieren, Foto. PRODUKTION darf prüfen (keine Preis-/Kundendaten).
+  quality: router({
+    get: roleProcedure("ADMIN", "BUERO", "PRODUKTION")
+      .input(z.object({ orderId: z.string().min(1) }))
+      .query(async ({ input, ctx }) => {
+        try { return await ctx.quality.get(input.orderId); }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
+      }),
+    check: roleProcedure("ADMIN", "BUERO", "PRODUKTION")
+      .input(z.object({
+        orderId: z.string().min(1),
+        stueckzahlOk: z.boolean().optional(),
+        veredelungOk: z.boolean().optional(),
+        fotoOk: z.boolean().optional(),
+        notiz: z.string().nullish(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const { orderId, ...patch } = input;
+        try { return await ctx.quality.check(orderId, patch); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+  }),
+
   production: router({
     status: roleProcedure(...supplierRoles)
       .input(z.object({ orderId: z.string().min(1) }))

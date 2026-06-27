@@ -132,6 +132,8 @@ import { InMemoryFinApiClient } from "../repositories/in-memory-finapi-client.js
 import { InMemoryDunningRepository } from "../repositories/in-memory-dunning.repository.js";
 import { InMemoryProcurementRepository } from "../repositories/in-memory-procurement.repository.js";
 import { InMemorySubProductionRepository } from "../repositories/in-memory-subproduction.repository.js";
+import { QualityService } from "../modules/quality/quality.service.js";
+import { InMemoryQualityRepository } from "../repositories/in-memory-quality.repository.js";
 import { InMemoryThreeWayMatchRepository } from "../repositories/in-memory-three-way-match.repository.js";
 import { InMemoryPostCalcRepository } from "../repositories/in-memory-postcalc.repository.js";
 import { InMemoryReklamationRepository } from "../repositories/in-memory-reklamation.repository.js";
@@ -212,6 +214,7 @@ function setup(user: AuthUser | null = BUERO) {
     { id: "sub_2", productionId: "pa_1", sequence: 2, supplierId: "sup_stick", status: "OFFEN", beistellungVersandtAm: null, ruecklaufErhaltenAm: null },
   ]);
   const subproduction = new SubProductionService(subRepo, new MemoryAuditSink());
+  const quality = new QualityService(new InMemoryQualityRepository(), new MemoryAuditSink());
   // 9.6: Rechnung iinv_ok hat passende PO (10×500, alles geliefert); iinv_bad teurer.
   const twmRepo = new InMemoryThreeWayMatchRepository({
     iinv_ok: { po: { poQty: 10, poUnitCents: 500, receivedQty: 10 } },
@@ -327,6 +330,7 @@ function setup(user: AuthUser | null = BUERO) {
     reorder,
     productionSheet,
     production,
+    quality,
     reporting,
     productionReporting,
     costCenters: new CostCenterService(new InMemoryCostCenterRepository(), new MemoryAuditSink()),
@@ -468,6 +472,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       reorder: {} as Context["reorder"],
       productionSheet: {} as Context["productionSheet"],
       production: {} as Context["production"],
+      quality: {} as Context["quality"],
       reporting: {} as Context["reporting"],
       productionReporting: {} as Context["productionReporting"],
       costCenters: {} as Context["costCenters"],
