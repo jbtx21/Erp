@@ -911,6 +911,9 @@ model QuoteLine {
   // Bei der Auftragswandlung wird für reine Hauptartikel die Farbe×Größe abgefragt.
   articleId   String?
   variantId   String?
+  // Veredelungsbezug (Kap. 5.4/11): Positionsnummer der Textilposition, auf die sich eine
+  // Veredelung bezieht (z. B. Siebdruck → Position der T-Shirts). null = ohne Bezug/frei.
+  bezugPosition Int?
   // Alternativposition (Kunde wählt eine Variante) — wird bei der Auftragswandlung NICHT übernommen.
   isAlternative Boolean @default(false)
 }
@@ -993,6 +996,7 @@ model OrderLine {
   taxRatePct  Int  @default(19) // USt-Satz der Position zum Auftragszeitpunkt (eingefroren, GoBD); 0 = steuerbefreit
   dbCents     Int? // Deckungsbeitrag je Stück (VK − EK) zum Auftragszeitpunkt (Kap. 4.4)
   kind        PositionKind @default(TEXTIL) // Textil- vs. Veredelungsposition (Kap. 4.4/11)
+  bezugPosition Int? // Veredelungsbezug: Positionsnummer der Textilposition (Kap. 5.4/11)
   variantId   String? // optionale Artikel-/Variantenverknüpfung (Bedarfsermittlung)
   rawPayload  Json? // Roh-Shopzeile für Replay/Traceability (Kap. 3)
   deliveryLines DeliveryNoteLine[] // gelieferte Teilmengen (Mehrfach-Teillieferung)

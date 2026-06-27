@@ -1557,7 +1557,7 @@ export type PositionKind = "TEXTIL" | "VEREDELUNG" | "SONSTIGE";
 // Eine Position kann auf eine konkrete Variante (variantId) ODER nur auf einen
 // Hauptartikel (articleId, Farbe×Größe noch offen) verweisen; isAlternative kennzeichnet
 // ein unverbindliches Alternativangebot (wird beim Wandeln in den Auftrag weggelassen).
-export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind; variantId?: string; articleId?: string; articleNumber?: string; articleName?: string; isAlternative?: boolean; ekEuro?: number; isBundle?: boolean; rabattPct?: number; taxRatePct?: number; vkManual?: boolean }
+export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind; variantId?: string; articleId?: string; articleNumber?: string; articleName?: string; isAlternative?: boolean; ekEuro?: number; isBundle?: boolean; rabattPct?: number; taxRatePct?: number; vkManual?: boolean; bezugPosition?: number }
 
 // Artikel-Picker: durchsuchbare Auswahl aus dem Artikelstamm (ERPNext „Link field").
 // Bei Auswahl wird eine Position vorbefüllt (Bezeichnung, Standardpreis, Variante).
@@ -2081,8 +2081,10 @@ export function LinesEditor({ lines, onChange, quoteMode = false, companyId, tax
   // Veredelung IMMER als zusätzliche Position anhängen (nie eine bestehende ersetzen); Menge
   // an die zugehörige Textilposition koppeln, damit die Mengenstaffel greift (Kap. 5.4/11).
   const appendVeredelung = (e: { label: string; variantId: string; unitNetCents: number }): void => {
-    const textilQty = lines.find((l) => l.kind === "TEXTIL" && l.qty > 0)?.qty ?? 1;
-    onChange([...lines, { description: e.label, qty: textilQty, euro: e.unitNetCents / 100, kind: "VEREDELUNG", variantId: e.variantId }]);
+    const textilIdx = lines.findIndex((l) => l.kind === "TEXTIL" && l.qty > 0);
+    const textilQty = textilIdx >= 0 ? lines[textilIdx]!.qty : 1;
+    // Standard-Bezug = erste Textilposition (Kap. 5.4/11); im Bezug-Select änderbar.
+    onChange([...lines, { description: e.label, qty: textilQty, euro: e.unitNetCents / 100, kind: "VEREDELUNG", variantId: e.variantId, ...(textilIdx >= 0 ? { bezugPosition: textilIdx + 1 } : {}) }]);
   };
   // Staffelpreis + Lieferanten-EK (→ Deckungsbeitrag) für eine Variante des Kunden ziehen.
   const resolve = async (variantId: string, qty: number): Promise<{ euro?: number; ekEuro?: number }> => {
@@ -2141,6 +2143,16 @@ export function LinesEditor({ lines, onChange, quoteMode = false, companyId, tax
               onChange={(v) => v && pickVariant(i, l, v)} title="Variantenstruktur (Farbe×Größe) aus dem PIM" />
           )}
           <TextInput label={i === 0 ? "Beschreibung" : undefined} value={l.description} onChange={(e) => set(i, { description: e.currentTarget.value })} placeholder="200 Polos bestickt" w={180} />
+          {l.kind === "VEREDELUNG" && (
+            // Veredelungsbezug (Kap. 5.4/11): an welche Textilposition gehört diese Veredelung?
+            // Verknüpft Logo/Druck mit dem zu veredelnden Textil (mehrere Platzierungen je Textil möglich).
+            <Select label={i === 0 ? "Bezug" : undefined} w={150} clearable placeholder="Textil-Pos."
+              value={l.bezugPosition != null ? String(l.bezugPosition) : null}
+              data={lines.map((t, j) => ({ line: t, pos: j + 1 })).filter(({ line }) => line.kind === "TEXTIL")
+                .map(({ line, pos }) => ({ value: String(pos), label: `Pos. ${pos} — ${(line.articleName || line.description || "Textil").slice(0, 24)}` }))}
+              onChange={(v) => set(i, { bezugPosition: v ? Number(v) : undefined })}
+              title="Zugehörige Textilposition (Veredelungsbezug, Kap. 5.4/11)" />
+          )}
           <NumberInput label={i === 0 ? "Menge" : undefined} value={l.qty} onChange={(v) => set(i, { qty: Number(v) || 1 })}
             onBlur={() => { if (companyId && l.variantId) void resolve(l.variantId, l.qty).then((p) => { if (p.euro !== undefined || p.ekEuro !== undefined) set(i, p); }); }}
             min={1} w={70} />
@@ -2228,24 +2240,27 @@ export const lineHasContent = (l: EditorLine): boolean =>
 // Beschreibung mit Fallback (Server verlangt eine nicht-leere Beschreibung je Position).
 const lineDesc = (l: EditorLine): string => l.description.trim() || l.articleName?.trim() || l.articleNumber?.trim() || "Position";
 
-export const toApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; variantId?: string; dbCents?: number }[] =>
+export const toApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; variantId?: string; bezugPosition?: number; dbCents?: number }[] =>
   lines.filter(lineHasContent).map((l) => ({
     description: lineDesc(l), qty: l.qty, kind: l.kind, ...lineMoney(l), ...(l.variantId ? { variantId: l.variantId } : {}),
     // USt-Satz der Position mitschicken (eingefroren); so bleibt die Steuerbefreiung (0 %)
     // aus dem Angebot beim Auftrag erhalten und fließt korrekt in die Rechnung.
     ...(l.taxRatePct != null ? { taxRatePct: l.taxRatePct } : {}),
+    // Veredelungsbezug: Positionsnummer der zugehörigen Textilposition (Kap. 5.4/11).
+    ...(l.bezugPosition != null ? { bezugPosition: l.bezugPosition } : {}),
   }));
 
 // Wie toApiLines, aber inkl. Artikel-/Varianten-Referenz und Alternativ-Kennzeichen (Angebot).
-export const toQuoteApiLines = (lines: EditorLine[], taxRatePct = 19): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; articleId?: string; variantId?: string; isAlternative?: boolean; dbCents?: number }[] =>
+export const toQuoteApiLines = (lines: EditorLine[], taxRatePct = 19): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; articleId?: string; variantId?: string; isAlternative?: boolean; bezugPosition?: number; dbCents?: number }[] =>
   lines.filter(lineHasContent).map((l) => ({
     description: lineDesc(l), qty: l.qty, kind: l.kind, ...lineMoney(l), taxRatePct,
     ...(l.articleId ? { articleId: l.articleId } : {}), ...(l.variantId ? { variantId: l.variantId } : {}), ...(l.isAlternative ? { isAlternative: true } : {}),
+    ...(l.bezugPosition != null ? { bezugPosition: l.bezugPosition } : {}),
   }));
 
 // Rekonstruiert die Erfassungs-Positionen aus gespeicherten Angebots-/Auftragszeilen
 // (für die Bearbeitung): VK = Listenpreis, Rabatt, EK = effektiver Netto − DB.
-type StoredLine = { description: string; qty: number; kind: PositionKind; unitNetCents: number; listNetCents: number | null; rabattPct: number | null; taxRatePct?: number | null; dbCents: number | null; articleId?: string | null; variantId?: string | null; isAlternative?: boolean };
+type StoredLine = { description: string; qty: number; kind: PositionKind; unitNetCents: number; listNetCents: number | null; rabattPct: number | null; taxRatePct?: number | null; dbCents: number | null; articleId?: string | null; variantId?: string | null; isAlternative?: boolean; bezugPosition?: number | null };
 export const fromStoredLines = (ls: StoredLine[]): EditorLine[] =>
   ls.map((l) => ({
     description: l.description, qty: l.qty, kind: l.kind,
@@ -2256,6 +2271,7 @@ export const fromStoredLines = (ls: StoredLine[]): EditorLine[] =>
     ...(l.variantId ? { variantId: l.variantId } : {}),
     ...(l.articleId ? { articleId: l.articleId } : {}),
     ...(l.isAlternative ? { isAlternative: true } : {}),
+    ...(l.bezugPosition != null ? { bezugPosition: l.bezugPosition } : {}),
   }));
 
 // Angebot → Auftrag: fragt für Hauptartikel ohne Variante (needsVariant) die genaue

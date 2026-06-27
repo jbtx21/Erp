@@ -17,14 +17,14 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
         invoice: { select: { id: true } },
         production: { select: { id: true } },
         _count: { select: { deliveryNotes: true } },
-        lines: { orderBy: { position: "asc" }, select: { description: true, qty: true, kind: true, unitNetCents: true, listNetCents: true, rabattPct: true, taxRatePct: true, dbCents: true, variantId: true } },
+        lines: { orderBy: { position: "asc" }, select: { description: true, qty: true, kind: true, unitNetCents: true, listNetCents: true, rabattPct: true, taxRatePct: true, dbCents: true, variantId: true, bezugPosition: true } },
       },
     });
     if (!o) return null;
     return {
       id: o.id, number: o.number, companyId: o.companyId, status: String(o.status),
       invoiced: o.invoice !== null, inProduction: o.production !== null, delivered: o._count.deliveryNotes > 0,
-      lines: o.lines.map((l) => ({ description: l.description, qty: l.qty, kind: l.kind as PositionKind, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents, rabattPct: l.rabattPct, taxRatePct: l.taxRatePct, dbCents: l.dbCents, variantId: l.variantId })),
+      lines: o.lines.map((l) => ({ description: l.description, qty: l.qty, kind: l.kind as PositionKind, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents, rabattPct: l.rabattPct, taxRatePct: l.taxRatePct, dbCents: l.dbCents, variantId: l.variantId, bezugPosition: l.bezugPosition })),
     };
   }
 
@@ -39,7 +39,7 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
     const lineData = (l: SalesLine, i: number) => ({
       position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents,
       listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, taxRatePct: l.taxRatePct ?? 19, dbCents: l.dbCents ?? null,
-      kind: (l.kind ?? "TEXTIL") as never, variantId: l.variantId ?? null,
+      kind: (l.kind ?? "TEXTIL") as never, variantId: l.variantId ?? null, bezugPosition: l.bezugPosition ?? null,
     });
 
     await prisma.$transaction(async (tx) => {
@@ -90,7 +90,7 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
           companyId: input.companyId,
           quoteId: input.quoteId,
           status: "ANGELEGT",
-          lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, taxRatePct: l.taxRatePct ?? 19, dbCents: l.dbCents ?? null, kind: (l.kind ?? "TEXTIL") as never, variantId: l.variantId ?? variantByIndex.get(i) ?? null })) },
+          lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, taxRatePct: l.taxRatePct ?? 19, dbCents: l.dbCents ?? null, kind: (l.kind ?? "TEXTIL") as never, variantId: l.variantId ?? variantByIndex.get(i) ?? null, bezugPosition: l.bezugPosition ?? null })) },
         },
         select: { id: true },
       });
@@ -120,7 +120,7 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
         companyId: true,
         lines: {
           orderBy: { position: "asc" },
-          select: { position: true, description: true, qty: true, unitNetCents: true, listNetCents: true, rabattPct: true, taxRatePct: true, dbCents: true, kind: true, articleId: true, variantId: true, isAlternative: true },
+          select: { position: true, description: true, qty: true, unitNetCents: true, listNetCents: true, rabattPct: true, taxRatePct: true, dbCents: true, kind: true, articleId: true, variantId: true, isAlternative: true, bezugPosition: true },
         },
       },
     });
@@ -150,6 +150,7 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
         articleName: l.articleId ? nameById.get(l.articleId) ?? null : null,
         variantId: l.variantId ?? null,
         isAlternative: l.isAlternative,
+        bezugPosition: l.bezugPosition ?? null,
         dbCents: l.dbCents ?? null,
         needsVariant: !!l.articleId && !l.variantId && !l.isAlternative,
       })),

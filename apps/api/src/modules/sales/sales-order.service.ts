@@ -15,6 +15,7 @@ export interface SalesLine {
   taxRatePct?: number | null; // USt-Satz der Position (eingefroren); 0 = steuerbefreit. Default 19.
   kind?: PositionKind;
   variantId?: string;
+  bezugPosition?: number | null; // Veredelungsbezug: Positionsnummer der Textilposition (Kap. 5.4/11)
   dbCents?: number | null; // Deckungsbeitrag je Stück (VK − EK), Kap. 4.4
   /**
    * Materialisierung: temporär (frei) erfasste Produktposition beim Wandeln in einen
@@ -43,6 +44,7 @@ export interface ConversionPlanLine {
   articleName: string | null;
   variantId: string | null;
   isAlternative: boolean;
+  bezugPosition: number | null; // Veredelungsbezug aus dem Angebot (Positionsnummer der Textilposition)
   dbCents: number | null; // Deckungsbeitrag je Stück (aus dem Angebot übernommen)
   /** true, wenn ein Hauptartikel ohne Variante (Farbe×Größe muss gewählt werden). */
   needsVariant: boolean;
@@ -65,6 +67,7 @@ export interface OrderEditLine {
   taxRatePct: number; // USt-Satz der Position (Round-Trip bei Bearbeitung)
   dbCents: number | null;
   variantId: string | null;
+  bezugPosition: number | null; // Veredelungsbezug (Positionsnummer der Textilposition)
 }
 
 export interface OrderEditData {
@@ -156,7 +159,7 @@ export class SalesOrderService {
         // → beim Wandeln immer als fester Artikel anlegen. SONSTIGE bleibt freie Position.
         const materialize = !variantId && !l.articleId && (l.kind === "TEXTIL" || l.kind === "VEREDELUNG");
         return {
-          description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents, rabattPct: l.rabattPct, taxRatePct: l.taxRatePct, kind: l.kind, variantId, dbCents: l.dbCents,
+          description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents, rabattPct: l.rabattPct, taxRatePct: l.taxRatePct, kind: l.kind, variantId, bezugPosition: l.bezugPosition, dbCents: l.dbCents,
           ...(materialize ? { materializeArticle: { sku: `${number}-P${l.position}`, name: l.description.trim(), isVeredelung: l.kind === "VEREDELUNG" } } : {}),
         };
       });

@@ -47,6 +47,17 @@ describe("SalesOrderService (Auftragserstellung)", () => {
     expect(repo.orders[0]?.lines[0]?.taxRatePct).toBe(0);
   });
 
+  it("übernimmt den Veredelungsbezug (bezugPosition) des Angebots in den Auftrag", async () => {
+    const { svc, repo } = setup();
+    // Veredelungsposition verweist auf die Textilposition 1 → Bezug bleibt beim Wandeln erhalten (Kap. 5.4/11).
+    repo.addQuote({ id: "q-1", companyId: "co-1", accepted: false, lines: [
+      { position: 1, description: "200 T-Shirts", qty: 200, unitNetCents: 500, kind: "TEXTIL" },
+      { position: 2, description: "Siebdruck Brust", qty: 200, unitNetCents: 150, kind: "VEREDELUNG", bezugPosition: 1 },
+    ] });
+    await svc.convertQuote("q-1");
+    expect(repo.orders[0]?.lines[1]?.bezugPosition).toBe(1);
+  });
+
   it("verhindert doppelte Umwandlung desselben Angebots", async () => {
     const { svc, repo } = setup();
     repo.addQuote({ id: "q-1", companyId: "co-1", accepted: false, lines: [{ description: "Cap", qty: 3, unitNetCents: 900 }] });

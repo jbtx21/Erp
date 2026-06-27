@@ -39,7 +39,7 @@ export class PrismaQuoteRepository implements QuoteRepository {
         zahlungszielTage: input.zahlungszielTage ?? null,
         incoterm: input.incoterm ?? null,
         versandregel: input.versandregel ?? null,
-        lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, taxRatePct: l.taxRatePct ?? 19, dbCents: l.dbCents ?? null, kind: (l.kind ?? "TEXTIL") as never, articleId: l.articleId ?? null, variantId: l.variantId ?? null, isAlternative: l.isAlternative ?? false })) },
+        lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, taxRatePct: l.taxRatePct ?? 19, dbCents: l.dbCents ?? null, kind: (l.kind ?? "TEXTIL") as never, articleId: l.articleId ?? null, variantId: l.variantId ?? null, isAlternative: l.isAlternative ?? false, bezugPosition: l.bezugPosition ?? null })) },
       },
       select: { id: true },
     });
@@ -54,13 +54,13 @@ export class PrismaQuoteRepository implements QuoteRepository {
       where: { id: quoteId },
       select: {
         id: true, companyId: true, status: true, gueltigBisAm: true, terms: true, orderType: true, quotationTo: true, zahlungszielTage: true, incoterm: true, versandregel: true,
-        lines: { orderBy: { position: "asc" }, select: { description: true, qty: true, kind: true, unitNetCents: true, listNetCents: true, rabattPct: true, taxRatePct: true, dbCents: true, articleId: true, variantId: true, isAlternative: true } },
+        lines: { orderBy: { position: "asc" }, select: { description: true, qty: true, kind: true, unitNetCents: true, listNetCents: true, rabattPct: true, taxRatePct: true, dbCents: true, articleId: true, variantId: true, isAlternative: true, bezugPosition: true } },
       },
     });
     if (!q) return null;
     return {
       id: q.id, companyId: q.companyId, status: q.status as QuoteStatus, gueltigBisAm: q.gueltigBisAm, terms: q.terms, orderType: q.orderType, quotationTo: q.quotationTo, zahlungszielTage: q.zahlungszielTage, incoterm: q.incoterm, versandregel: q.versandregel,
-      lines: q.lines.map((l) => ({ description: l.description, qty: l.qty, kind: l.kind as never, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents, rabattPct: l.rabattPct, taxRatePct: l.taxRatePct, dbCents: l.dbCents, articleId: l.articleId, variantId: l.variantId, isAlternative: l.isAlternative })),
+      lines: q.lines.map((l) => ({ description: l.description, qty: l.qty, kind: l.kind as never, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents, rabattPct: l.rabattPct, taxRatePct: l.taxRatePct, dbCents: l.dbCents, articleId: l.articleId, variantId: l.variantId, isAlternative: l.isAlternative, bezugPosition: l.bezugPosition })),
     };
   }
 
@@ -78,7 +78,7 @@ export class PrismaQuoteRepository implements QuoteRepository {
           zahlungszielTage: input.zahlungszielTage ?? null,
           incoterm: input.incoterm ?? null,
           versandregel: input.versandregel ?? null,
-          lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, taxRatePct: l.taxRatePct ?? 19, dbCents: l.dbCents ?? null, kind: (l.kind ?? "TEXTIL") as never, articleId: l.articleId ?? null, variantId: l.variantId ?? null, isAlternative: l.isAlternative ?? false })) },
+          lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, taxRatePct: l.taxRatePct ?? 19, dbCents: l.dbCents ?? null, kind: (l.kind ?? "TEXTIL") as never, articleId: l.articleId ?? null, variantId: l.variantId ?? null, isAlternative: l.isAlternative ?? false, bezugPosition: l.bezugPosition ?? null })) },
         },
       }),
     ]);
