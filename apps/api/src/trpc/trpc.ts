@@ -25,6 +25,7 @@ import type { ApiTokenService } from "../modules/api-token/api-token.service.js"
 import type { AbschlagService } from "../modules/abschlag/abschlag.service.js";
 import type { StickereiService } from "../modules/stickerei/stickerei.service.js";
 import type { ReorderService } from "../modules/reorder/reorder.service.js";
+import type { TransferSourcingService } from "../modules/transfer-sourcing/transfer-sourcing.service.js";
 import type { ProductionSheetService } from "../modules/production-sheet/production-sheet.service.js";
 import type { ProductionService } from "../modules/production/production.service.js";
 import type { QualityService } from "../modules/quality/quality.service.js";
@@ -116,6 +117,7 @@ export interface Context {
   abschlag: AbschlagService;
   stickerei: StickereiService;
   reorder: ReorderService;
+  transferSourcing: TransferSourcingService;
   productionSheet: ProductionSheetService;
   production: ProductionService;
   quality: QualityService;

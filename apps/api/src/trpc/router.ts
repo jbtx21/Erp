@@ -1059,6 +1059,25 @@ export const appRouter = router({
     ),
   }),
 
+  // Transferdruck-Bezug (Inhouse-Veredelung, Kap. 5.4/11): Lager TRANSFERDRUCK zuerst,
+  // Fehlmenge beim Material-Lieferanten nachbestellen. EK-Preise → kein PRODUKTION-Zugriff.
+  transfers: router({
+    /** Bezugsvorschau je Transferartikel (Bedarf/verfügbar/Lager/Bestellung) — ohne Buchung. */
+    preview: roleProcedure(...supplierRoles)
+      .input(z.object({ orderId: z.string().min(1) }))
+      .query(async ({ input, ctx }) => {
+        try { return await ctx.transferSourcing.preview(input.orderId); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    /** Stößt den Bezug an: reserviert aus dem Lager + bestellt die Fehlmengen nach. */
+    source: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ orderId: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.transferSourcing.source(input.orderId); }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+  }),
+
   reporting: router({
     /** Umsatz-Übersicht (Netto je Tag/Woche/Monat/Jahr) + Gesamtsumme (Kap. 29). */
     revenueOverview: roleProcedure(...supplierRoles)

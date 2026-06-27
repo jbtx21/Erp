@@ -44,6 +44,8 @@ import { PrismaAbschlagRepository } from "./repositories/prisma-abschlag.reposit
 import { PrismaGutscheinRepository } from "./repositories/prisma-gutschein.repository.js";
 import { StickereiService } from "./modules/stickerei/stickerei.service.js";
 import { ReorderService } from "./modules/reorder/reorder.service.js";
+import { TransferSourcingService } from "./modules/transfer-sourcing/transfer-sourcing.service.js";
+import { PrismaTransferSourcingRepository } from "./repositories/prisma-transfer-sourcing.repository.js";
 import { ProductionSheetService } from "./modules/production-sheet/production-sheet.service.js";
 import { ProductionService } from "./modules/production/production.service.js";
 import { PrismaProductionRepository } from "./repositories/prisma-production.repository.js";
@@ -330,6 +332,8 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
     },
   };
   const reservations = new ReservationService(new PrismaReservationRepository(), stock, lowStockNotifier);
+  // Transferdruck-Bezug (Inhouse-Veredelung): Lager TRANSFERDRUCK zuerst, Fehlmenge nachbestellen.
+  const transferSourcing = new TransferSourcingService(new PrismaTransferSourcingRepository(), reservations, new PrismaReorderRepository(), new PrismaAuditSink());
   const hr = new HrService(new PrismaHrRepository(), new PrismaAuditSink());
   const integrations = new IntegrationsService(new PrismaIntegrationsRepository(), new PrismaAuditSink(), new HttpSlackSender());
   // GoBD-Belegarchiv (Kap. 10): WORM-Objektspeicher. Lokal Dateisystem (Read-only-Dateien);
@@ -512,6 +516,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           abschlag,
           stickerei,
           reorder,
+          transferSourcing,
           productionSheet,
           production,
           quality,

@@ -19,6 +19,7 @@ import { ReklamationService } from "../modules/reklamation/reklamation.service.j
 import { AmpelService } from "../modules/ampel/ampel.service.js";
 import { StickereiService } from "../modules/stickerei/stickerei.service.js";
 import { ReorderService } from "../modules/reorder/reorder.service.js";
+import { TransferSourcingService } from "../modules/transfer-sourcing/transfer-sourcing.service.js";
 import { CostCenterService } from "../modules/cost-center/cost-center.service.js";
 import { InMemoryCostCenterRepository } from "../repositories/in-memory-cost-center.repository.js";
 import { LeadService } from "../modules/lead/lead.service.js";
@@ -328,6 +329,12 @@ function setup(user: AuthUser | null = BUERO) {
     abschlag: { forOrder: async () => ({ order: { id: "", number: "", orderNetCents: 0 }, abschlaege: [], summary: { orderNetCents: 0, sumNetCents: 0, restNetCents: 0, count: 0 } }), create: async () => ({}), setBezahlt: async () => undefined } as unknown as Context["abschlag"],
     stickerei,
     reorder,
+    transferSourcing: new TransferSourcingService(
+      { transferNeedsForOrder: async () => [] },
+      new ReservationService(new InMemoryReservationRepository(), { balance: async () => ({ HAUPT: 0, MUSTER: 0, SHOWROOM: 0, TRANSFERDRUCK: 0 }), listBalances: async () => [] }),
+      reorderRepo,
+      new MemoryAuditSink(),
+    ),
     productionSheet,
     production,
     quality,
@@ -470,6 +477,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       abschlag: {} as Context["abschlag"],
       stickerei: {} as Context["stickerei"],
       reorder: {} as Context["reorder"],
+      transferSourcing: {} as Context["transferSourcing"],
       productionSheet: {} as Context["productionSheet"],
       production: {} as Context["production"],
       quality: {} as Context["quality"],

@@ -2849,6 +2849,61 @@ function WorkflowPanel({ orderId }: { orderId: string }): JSX.Element {
   );
 }
 
+// Transferdruck-Bezug (Inhouse-Veredelung): Lager TRANSFERDRUCK zuerst, Fehlmenge nachbestellen.
+// Steuert sich vollständig über die Stammdaten (bestandsgeführter Veredelungsartikel + Material-Lieferant).
+function TransferSourcingPanel({ orderId }: { orderId: string }): JSX.Element | null {
+  type Row = { variantId: string; sku: string; bezeichnung: string; needed: number; available: number; fromStock: number; toOrder: number; materialSupplierId: string | null };
+  const [rows, setRows] = useState<Row[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    try { setRows(await trpc.transfers.preview.query({ orderId }) as Row[]); setErr(null); }
+    catch { setRows([]); }
+  }, [orderId]);
+  useEffect(() => { void load(); }, [load]);
+  if (!rows || rows.length === 0) return null;
+
+  const source = async (): Promise<void> => {
+    setBusy(true); setErr(null); setMsg(null);
+    try {
+      const r = await trpc.transfers.source.mutate({ orderId });
+      const teile = [`${r.reserved.length} aus Lager reserviert`, `${r.orders.length} Bestellung(en) erzeugt`];
+      if (r.ohneLieferant.length > 0) teile.push(`${r.ohneLieferant.length} ohne Material-Lieferant (Klärung)`);
+      setMsg(teile.join(" · ")); await load();
+    } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+
+  return (
+    <Box mt="md" p="sm" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 6 }}>
+      <Group justify="space-between" mb={4}>
+        <Text fw={600} size="sm">Transferdruck-Bezug (Lager / Bestellung)</Text>
+        <Button size="compact-xs" loading={busy} onClick={() => void source()}>Bezug anstoßen</Button>
+      </Group>
+      <Text size="xs" c="dimmed" mb="xs">Vorrätige Transferdrucke werden aus dem Lager TRANSFERDRUCK reserviert, Fehlmengen beim hinterlegten Material-Lieferanten nachbestellt.</Text>
+      {err && <Alert color="red" mb="xs">{err}</Alert>}
+      {msg && <Alert color="green" mb="xs">{msg}</Alert>}
+      <Table withTableBorder verticalSpacing={2} fz="xs">
+        <Table.Thead><Table.Tr>
+          <Table.Th>Art-Nr.</Table.Th><Table.Th>Transferdruck</Table.Th>
+          <Table.Th ta="right">Bedarf</Table.Th><Table.Th ta="right">verfügbar</Table.Th>
+          <Table.Th ta="right">aus Lager</Table.Th><Table.Th ta="right">bestellen</Table.Th>
+        </Table.Tr></Table.Thead>
+        <Table.Tbody>
+          {rows.map((r) => (
+            <Table.Tr key={r.variantId}>
+              <Table.Td>{r.sku}</Table.Td><Table.Td>{r.bezeichnung}</Table.Td>
+              <Table.Td ta="right">{r.needed}</Table.Td><Table.Td ta="right">{r.available}</Table.Td>
+              <Table.Td ta="right">{r.fromStock}</Table.Td>
+              <Table.Td ta="right">{r.toOrder > 0 ? <Text span c={r.materialSupplierId ? undefined : "red"} fw={600}>{r.toOrder}{r.materialSupplierId ? "" : " ⚠"}</Text> : "—"}</Table.Td>
+            </Table.Tr>
+          ))}
+        </Table.Tbody>
+      </Table>
+    </Box>
+  );
+}
+
 function DeliveryPanel({ orderId, onChanged }: { orderId: string; onChanged: () => void }): JSX.Element {
   const [lines, setLines] = useState<Awaited<ReturnType<typeof trpc.deliveries.remaining.query>>>([]);
   const [notes, setNotes] = useState<Awaited<ReturnType<typeof trpc.deliveries.list.query>>>([]);
@@ -3740,7 +3795,7 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
               <Tabs.Panel value="belegkette"><ConnectionsPanel orderId={termOrder} role={role} onChanged={() => void load()} onOpen={onOpen} /></Tabs.Panel>
               <Tabs.Panel value="aufgaben"><AssignTaskBox entity="Order" entityId={termOrder} navKey="orders" /></Tabs.Panel>
               <Tabs.Panel value="workflow"><WorkflowPanel orderId={termOrder} /></Tabs.Panel>
-              <Tabs.Panel value="lieferung"><LinksPanel orderId={termOrder} /><DeliveryPanel orderId={termOrder} onChanged={() => void load()} /></Tabs.Panel>
+              <Tabs.Panel value="lieferung"><LinksPanel orderId={termOrder} /><TransferSourcingPanel orderId={termOrder} /><DeliveryPanel orderId={termOrder} onChanged={() => void load()} /></Tabs.Panel>
               <Tabs.Panel value="notizen"><RecordPanel entity="Order" entityId={termOrder} /></Tabs.Panel>
             </Tabs>
           )}
