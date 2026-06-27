@@ -2,7 +2,7 @@
 // AutoTable rendert jede Liste robust (Cent→€, Datum, Status-Badge), sodass neue
 // Bereiche mit wenig Code anbindbar sind. Interaktive Aktionen (Versand bestätigen,
 // Mahnlauf, Reorder→Bestellungen) sind je Seite ergänzt.
-import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Alert, Anchor, Badge, Box, Button, Card, Checkbox, FileButton, Group, Image, Loader, Menu, Modal, NumberInput, Paper, PasswordInput, SegmentedControl, Select, SimpleGrid, Stack, Switch, Table, Tabs, TagsInput, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { validateVatId } from "@texma/shared/vat";
@@ -151,7 +151,12 @@ export function AutoTable({ rows, hide = [], action, onRowClick, highlightId, bu
   const hasNumber = "number" in (rows[0] as object) && Boolean((rows[0] as Row).number);
   const cols = Object.keys(rows[0] as object).filter((k) => !hide.includes(k) && !(k === "id" && hasNumber));
   // Breite Tabellen (v. a. Aufträge mit Status-Aktionen) horizontal scrollbar halten,
-  // damit die Aktionsspalte rechts nie abgeschnitten wird (QA #13).
+  // damit die Aktionsspalte rechts nie abgeschnitten wird (QA #13). Zusätzlich die
+  // Aktionsspalte rechts FIXIEREN (sticky), sodass „Aktionen ▾"/Eil bei überbreiten
+  // Tabellen (Aufträge: 14 Spalten) ohne horizontales Scrollen sichtbar bleiben —
+  // deckender Hintergrund, damit darunterliegende Zellen nicht durchscheinen.
+  const stickyActionTd: CSSProperties = { position: "sticky", right: 0, background: "var(--mantine-color-body)", whiteSpace: "nowrap", boxShadow: "-6px 0 6px -6px rgba(0,0,0,0.18)", zIndex: 1 };
+  const stickyActionTh: CSSProperties = { ...stickyActionTd, zIndex: 2 };
   return (
     <>
       {selectable && (
@@ -170,7 +175,7 @@ export function AutoTable({ rows, hide = [], action, onRowClick, highlightId, bu
             <Table.Tr>
               {selectable && <Table.Th style={{ width: 32 }}><Checkbox aria-label="Alle auswählen" checked={allSelected} indeterminate={sel.size > 0 && !allSelected} onChange={toggleAll} /></Table.Th>}
               {cols.map((c) => <Table.Th key={c}>{colLabel(c)}</Table.Th>)}
-              {action && <Table.Th />}
+              {action && <Table.Th style={stickyActionTh} />}
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -188,7 +193,7 @@ export function AutoTable({ rows, hide = [], action, onRowClick, highlightId, bu
                       ? <Table.Td key={c}>{custom}</Table.Td>
                       : <Table.Td key={c} onClick={onRowClick ? () => onRowClick(r) : undefined}>{fmtCell(c, r[c])}</Table.Td>;
                   })}
-                  {action && <Table.Td style={{ whiteSpace: "nowrap" }}>{action(r)}</Table.Td>}
+                  {action && <Table.Td style={stickyActionTd}>{action(r)}</Table.Td>}
                 </Table.Tr>
               );
             })}
@@ -3536,6 +3541,7 @@ function OrderDocumentsTab({ orderId }: { orderId: string }): JSX.Element {
 
 export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: string; onOpen?: (k: string, id: string) => void }): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
+  const [loaded, setLoaded] = useState(false); // erster Ladevorgang abgeschlossen → kein „Keine Daten"-Flackern
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const globalTaxRate = useDefaultTaxRate();
@@ -3572,6 +3578,7 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
       }
       setErr(null);
     } catch (e) { setErr(errMsg(e)); }
+    finally { setLoaded(true); }
   }, [canSeeAmpel]);
   useEffect(() => { void load(); }, [load]);
   // Direkter Sprung aus der globalen Suche: das Detail-/Belegketten-Panel des Auftrags öffnen.
@@ -3686,6 +3693,7 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
           <Tabs.Tab value="ampel">Ampel</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="liste" pt="md">
+      {!loaded ? <Group justify="center" py="xl"><Loader size="sm" /></Group> :
       <AutoTable rows={rows} hide={["rawPayload", "companyId", "fastLane", "allowedTransitions", "carrier"]}
         cellRender={(c, v, r) => {
           if (c === "companyName" && v && r.companyId)
@@ -3749,7 +3757,7 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
             <DocActionMenu actions={actions} />
           </Group>
         );
-      }} />
+      }} />}
         </Tabs.Panel>
         <Tabs.Panel value="ampel" pt="md">
           {/* Prüfungsbasierte Auftragsampel (gleiche Komponente wie #statusampel), Zeilenklick öffnet den Auftrag. */}
