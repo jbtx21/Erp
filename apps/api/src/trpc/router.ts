@@ -1290,7 +1290,8 @@ export const appRouter = router({
         sku: z.string().min(1),
         method: z.enum(["STICK", "DRUCK", "DRUCK_DIGITAL", "TRANSFER"]),
         placement: z.string().optional(),
-        veredlerId: z.string().min(1),
+        // Optional: leer = inhouse-Veredelung (keine Fremdvergabe).
+        veredlerId: z.string().optional(),
         ekCents: z.number().int().nonnegative().optional(),
         tiers: z.array(z.object({ minMenge: z.number().int().positive(), vkCents: z.number().int().nonnegative() })).optional(),
       }))

@@ -142,10 +142,11 @@ describe("ProductService — Veredelungs-/Logo-Artikel (Kap. 5.4/11)", () => {
     expect(repo.veredelungArticles.get(entry.articleId)?.tiers).toHaveLength(2);
   });
 
-  it("verlangt einen Veredler (Pflicht, wie Hersteller bei Textilien)", async () => {
-    const { svc } = await setup();
-    await expect(svc.createVeredelungArticle({ name: "Logo", sku: "L-1", method: "STICK", veredlerId: "  " }))
-      .rejects.toBeInstanceOf(ProductError);
+  it("erlaubt inhouse-Veredelung ohne Veredler (kein Pflicht-Veredler, keine Fremdvergabe)", async () => {
+    const { svc, repo } = await setup();
+    // Leerer/fehlender Veredler = inhouse (z. B. 2-farbiger Transferdruck im Haus).
+    const entry = await svc.createVeredelungArticle({ name: "Transfer 2-farbig", sku: "TRANS-2C", method: "TRANSFER", veredlerId: "  " });
+    expect(repo.veredelungArticles.get(entry.articleId)?.veredlerId).toBeNull();
   });
 
   it("weist einen unbekannten Veredler ab", async () => {

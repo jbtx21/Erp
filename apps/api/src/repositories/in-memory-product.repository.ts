@@ -144,12 +144,12 @@ export class InMemoryProductRepository implements ProductRepository {
 
   // Veredler (Lieferanten) für Tests registrierbar.
   readonly suppliers = new Set<string>();
-  readonly veredelungArticles = new Map<string, { veredlerId: string; ekCents: number | null; tiers: VeredelungTier[] }>();
+  readonly veredelungArticles = new Map<string, { veredlerId: string | null; ekCents: number | null; tiers: VeredelungTier[] }>();
   addSupplier(id: string): void { this.suppliers.add(id); }
 
   async supplierExists(id: string): Promise<boolean> { return this.suppliers.has(id); }
 
-  async createVeredelungArticle(input: { name: string; sku: string; method: "STICK" | "DRUCK" | "DRUCK_DIGITAL" | "TRANSFER"; placement: string | null; veredlerId: string; ekCents: number | null; tiers: VeredelungTier[] }): Promise<CatalogEntry> {
+  async createVeredelungArticle(input: { name: string; sku: string; method: "STICK" | "DRUCK" | "DRUCK_DIGITAL" | "TRANSFER"; placement: string | null; veredlerId: string | null; ekCents: number | null; tiers: VeredelungTier[] }): Promise<CatalogEntry> {
     const articleId = `art_${++this.seq}`;
     this.articles.set(articleId, { id: articleId, sku: input.sku, name: input.name, ...emptyPim });
     const variantId = `var_${++this.seq}`;

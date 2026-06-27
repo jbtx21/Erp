@@ -1887,6 +1887,9 @@ function LogoArticleDialog({ onClose, onCreated }: { onClose: () => void; onCrea
   const [method, setMethod] = useState<"STICK" | "DRUCK" | "DRUCK_DIGITAL" | "TRANSFER">("STICK");
   const [placement, setPlacement] = useState("");
   const [veredlerId, setVeredlerId] = useState("");
+  // Inhouse-Veredelung (z. B. 2-farbiger Transferdruck im Haus): kein externer Veredler →
+  // keine Fremdvergabe-Stufe in der Produktion.
+  const [inhouse, setInhouse] = useState(false);
   const [ek, setEk] = useState<number | "">("");
   const [tiers, setTiers] = useState<TierRow[]>([{ minMenge: 1, euro: 0 }]);
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
@@ -1902,7 +1905,7 @@ function LogoArticleDialog({ onClose, onCreated }: { onClose: () => void; onCrea
   // Standard-Siebdruck-Veredler: bei Veredelungsart Siebdruck vorbelegen (sofern noch leer).
   const [siebdruckDefault, setSiebdruckDefault] = useState<string | null>(null);
   useEffect(() => { void (async () => { try { setSiebdruckDefault(await trpc.settings.siebdruckVeredler.query()); } catch { /* ignore */ } })(); }, []);
-  useEffect(() => { if (method === "DRUCK" && siebdruckDefault && !veredlerId) setVeredlerId(siebdruckDefault); }, [method, siebdruckDefault]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!inhouse && method === "DRUCK" && siebdruckDefault && !veredlerId) setVeredlerId(siebdruckDefault); }, [method, siebdruckDefault, inhouse]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setTier = (i: number, patch: Partial<TierRow>): void => setTiers((ts) => ts.map((t, j) => (j === i ? { ...t, ...patch } : t)));
   const create = async (): Promise<void> => {
@@ -1911,7 +1914,7 @@ function LogoArticleDialog({ onClose, onCreated }: { onClose: () => void; onCrea
       const cleanTiers = tiers.filter((t) => t.minMenge > 0).map((t) => ({ minMenge: t.minMenge, vkCents: Math.round(t.euro * 100) }));
       const e = await trpc.products.createVeredelung.mutate({
         name: name.trim(), sku: sku.trim(), method, ...(placement.trim() ? { placement: placement.trim() } : {}),
-        veredlerId, ...(ek !== "" ? { ekCents: Math.round(Number(ek) * 100) } : {}), tiers: cleanTiers,
+        ...(inhouse || !veredlerId ? {} : { veredlerId }), ...(ek !== "" ? { ekCents: Math.round(Number(ek) * 100) } : {}), tiers: cleanTiers,
       });
       onCreated({ label: e.label, variantId: e.variantId, unitNetCents: e.unitNetCents });
     } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
@@ -1928,8 +1931,10 @@ function LogoArticleDialog({ onClose, onCreated }: { onClose: () => void; onCrea
         <TextInput label="Position" placeholder="Brust links" value={placement} onChange={(e) => setPlacement(e.currentTarget.value)} w={140} />
       </Group>
       <Group gap="md" align="end" wrap="wrap" mt="sm">
-        <SupplierPicker label={method === "DRUCK" ? "Siebdruck-Lieferant (Pflicht)" : "Veredler (Pflicht)"} value={veredlerId} onChange={setVeredlerId} w={240} />
-        <NumberInput label="EK beim Veredler (€)" value={ek} onChange={(v) => { const n = typeof v === "number" ? v : ""; setEk(n); if (typeof n === "number") setTiers((ts) => prefillTiers(n, ts)); }} min={0} decimalScale={2} w={170} placeholder="je Logo abweichend" title="VK je Staffelstufe wird automatisch über den Aufschlagsfaktor vorbelegt (überschreibbar)" />
+        <Switch label="Inhouse (kein Veredler)" checked={inhouse} onChange={(e) => setInhouse(e.currentTarget.checked)} mb={6}
+          description="z. B. 2-farbiger Transferdruck im Haus — erzeugt keine Fremdvergabe" />
+        {!inhouse && <SupplierPicker label={method === "DRUCK" ? "Siebdruck-Lieferant" : "Veredler"} value={veredlerId} onChange={setVeredlerId} w={240} />}
+        <NumberInput label={inhouse ? "EK/Kosten je Stück (€)" : "EK beim Veredler (€)"} value={ek} onChange={(v) => { const n = typeof v === "number" ? v : ""; setEk(n); if (typeof n === "number") setTiers((ts) => prefillTiers(n, ts)); }} min={0} decimalScale={2} w={170} placeholder="je Logo abweichend" title="VK je Staffelstufe wird automatisch über den Aufschlagsfaktor vorbelegt (überschreibbar)" />
       </Group>
       <Title order={6} mt="md">Mengenstaffel (VK je Stück)</Title>
       {tiers.map((t, i) => (

@@ -109,8 +109,8 @@ export interface CreateVeredelungInput {
   sku: string;
   method: "STICK" | "DRUCK" | "DRUCK_DIGITAL" | "TRANSFER";
   placement?: string;
-  /** Zugewiesener Veredler (Pflicht; analog Textil-„Hersteller"). */
-  veredlerId: string;
+  /** Zugewiesener externer Veredler; null/leer = inhouse-Veredelung (keine Fremdvergabe). */
+  veredlerId?: string | null;
   /** Einkaufspreis des Logos beim Veredler (Cent); je Logo abweichend. */
   ekCents?: number;
   /** Eigene Mengenstaffel (VK je Stück ab Menge) — pro Logo unterschiedlich. */
@@ -140,8 +140,8 @@ export interface ProductRepository {
   setComponents(variantId: string, components: ComponentInput[]): Promise<void>;
   /** Prüft, ob ein Lieferant (Veredler) existiert. */
   supplierExists(id: string): Promise<boolean>;
-  /** Legt einen Veredelungs-/Logo-Artikel mit Veredler, EK und Mengenstaffel an. */
-  createVeredelungArticle(input: Required<Pick<CreateVeredelungInput, "name" | "sku" | "method" | "veredlerId">> & { placement: string | null; ekCents: number | null; tiers: VeredelungTier[] }): Promise<CatalogEntry>;
+  /** Legt einen Veredelungs-/Logo-Artikel mit (optionalem) Veredler, EK und Mengenstaffel an. */
+  createVeredelungArticle(input: Required<Pick<CreateVeredelungInput, "name" | "sku" | "method">> & { veredlerId: string | null; placement: string | null; ekCents: number | null; tiers: VeredelungTier[] }): Promise<CatalogEntry>;
 }
 
 export class ProductError extends Error {}
@@ -287,20 +287,22 @@ export class ProductService {
    */
   async createVeredelungArticle(input: CreateVeredelungInput): Promise<CatalogEntry> {
     if (!input.name?.trim() || !input.sku?.trim()) throw new ProductError("SKU und Name sind Pflicht.");
-    if (!input.veredlerId?.trim()) throw new ProductError("Veredler ist Pflicht (Logo/Veredelung).");
-    if (!(await this.repo.supplierExists(input.veredlerId))) throw new ProductError("Unbekannter Veredler.");
+    // Veredler ist optional: leer = inhouse-Veredelung (z. B. 2-farbiger Transferdruck im
+    // Haus) → erzeugt KEINE Fremdvergabe-Stufe. Mit Veredler = externe Lohnveredelung.
+    const veredlerId = input.veredlerId?.trim() || null;
+    if (veredlerId && !(await this.repo.supplierExists(veredlerId))) throw new ProductError("Unbekannter Veredler.");
     if (input.ekCents !== undefined && input.ekCents < 0) throw new ProductError("EK darf nicht negativ sein.");
     const tiers = (input.tiers ?? []).filter((t) => t.minMenge > 0 && t.vkCents >= 0).sort((a, b) => a.minMenge - b.minMenge);
     for (const t of tiers) if (t.vkCents < 0) throw new ProductError("Staffelpreis darf nicht negativ sein.");
 
     const entry = await this.repo.createVeredelungArticle({
       name: input.name.trim(), sku: input.sku.trim(), method: input.method,
-      placement: input.placement?.trim() || null, veredlerId: input.veredlerId,
+      placement: input.placement?.trim() || null, veredlerId,
       ekCents: input.ekCents ?? null, tiers,
     });
     await this.audit.append(buildEntry({
       entity: "Article", entityId: entry.articleId, action: "CREATE",
-      after: { veredelung: input.method, veredlerId: input.veredlerId, ekCents: input.ekCents ?? null, staffeln: tiers.length },
+      after: { veredelung: input.method, veredlerId, inhouse: veredlerId === null, ekCents: input.ekCents ?? null, staffeln: tiers.length },
     }));
     return entry;
   }
