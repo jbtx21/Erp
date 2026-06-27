@@ -36,11 +36,49 @@ export interface BelegDokument {
   zeigePreise: boolean;
 }
 
-/** Standard-Absender (Briefkopf). Später aus den Firmen-Einstellungen (Admin-Portal). */
+/**
+ * Strukturiertes Firmenprofil (Briefkopf, Fußzeile, Bank, Steuer) für die Belege. Wird im
+ * Admin-Portal gepflegt (AppSetting `company_profile`) und vom Beleg-Renderer für Kopf + Fußzeile
+ * genutzt. Default = TEXMA-Stammdaten (aus den echten Belegen).
+ */
+export interface FirmenProfil {
+  name: string;
+  street: string;
+  zipCity: string;
+  tel: string;
+  mail: string;
+  web: string;
+  ustId: string;
+  gf: string;
+  bankName: string;
+  iban: string;
+  bic: string;
+}
+
+export const FIRMA_DEFAULT: FirmenProfil = {
+  name: "TEXMA Textilmarketing GmbH",
+  street: "Benzstraße 32",
+  zipCity: "71083 Herrenberg",
+  tel: "07032 7999281",
+  mail: "info@texma-gmbh.de",
+  web: "www.texma-gmbh.de",
+  ustId: "DE 225496461",
+  gf: "Herbert Bökle, Jannik Bökle",
+  bankName: "Volksbank in der Region eG",
+  iban: "DE37 6039 1310 0767 5040 03",
+  bic: "GENODES1VBH",
+};
+
+/** Einzeiliger Briefkopf-Absender aus dem Firmenprofil (z. B. über dem Empfängerblock). */
+export function briefkopfZeile(f: FirmenProfil): string {
+  return `${f.name}   ${f.street}   ${f.zipCity}`;
+}
+
+/** Standard-Absender (Briefkopf) als Zeilen — abgeleitet aus dem Firmenprofil-Default. */
 export const ABSENDER_TEXMA: readonly string[] = [
-  "TEXMA Textilveredelung GmbH",
-  "Musterstraße 1 · 00000 Musterstadt",
-  "info@texma-gmbh.de",
+  FIRMA_DEFAULT.name,
+  `${FIRMA_DEFAULT.street} · ${FIRMA_DEFAULT.zipCity}`,
+  FIRMA_DEFAULT.mail,
 ];
 
 function formatDatum(d: Date): string {

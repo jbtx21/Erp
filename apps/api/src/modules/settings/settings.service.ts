@@ -3,8 +3,11 @@
 // (ApprovalThreshold) und Aufschlagsfaktor (MarkupConfig).
 
 import { buildEntry, type AuditSink } from "@texma/audit";
+import { FIRMA_DEFAULT, type FirmenProfil } from "@texma/shared";
 
 export const BRIEFKOPF_KEY = "briefkopf";
+/** Strukturiertes Firmenprofil (JSON) für Belegkopf/-fuß (Name/Anschrift/USt-IdNr/GF/Bank). */
+export const COMPANY_PROFILE_KEY = "company_profile";
 export const SIEBDRUCK_VEREDLER_KEY = "siebdruck_veredler";
 export const DEFAULT_TAX_RATE_KEY = "default_tax_rate_pct";
 /** Globaler USt-Satz, wenn nichts konfiguriert ist (Regelsteuersatz). */
@@ -22,6 +25,8 @@ export interface AppSettings {
   siebdruckVeredlerId: string | null;
   /** Globaler USt-Satz in Prozent — gilt für alle Positionen (zentral, keine USt je Position). */
   defaultTaxRatePct: number;
+  /** Firmenprofil für Belegkopf/-fuß (Name/Anschrift/USt-IdNr/GF/Bank). */
+  companyProfile: FirmenProfil;
 }
 
 export interface SettingsRepository {
@@ -38,16 +43,26 @@ export class SettingsError extends Error {}
 export class SettingsService {
   constructor(private readonly repo: SettingsRepository, private readonly audit: AuditSink) {}
 
-  /** Briefkopf-Zeilen (für die PDF-Erzeugung); leer = Default des Renderers. */
+  /** Briefkopf-Zeilen (für die PDF-Erzeugung); ohne expliziten Briefkopf aus dem Firmenprofil. */
   async briefkopf(): Promise<string[]> {
     const raw = await this.repo.getSetting(BRIEFKOPF_KEY);
-    return raw ? raw.split("\n").map((l) => l.trim()).filter(Boolean) : [];
+    if (raw) return raw.split("\n").map((l) => l.trim()).filter(Boolean);
+    const f = await this.companyProfile();
+    return [f.name, `${f.street} · ${f.zipCity}`, `${f.tel} · ${f.mail}`];
   }
 
   /** Standard-Siebdruck-Veredler (Lieferant-ID) — auch operativ lesbar für die Vorbelegung. */
   async siebdruckVeredlerId(): Promise<string | null> {
     const v = await this.repo.getSetting(SIEBDRUCK_VEREDLER_KEY);
     return v && v.trim() ? v.trim() : null;
+  }
+
+  /** Firmenprofil für Belegkopf/-fuß; fehlende Felder werden mit dem Default ergänzt. */
+  async companyProfile(): Promise<FirmenProfil> {
+    const raw = await this.repo.getSetting(COMPANY_PROFILE_KEY);
+    if (!raw) return { ...FIRMA_DEFAULT };
+    try { return { ...FIRMA_DEFAULT, ...(JSON.parse(raw) as Partial<FirmenProfil>) }; }
+    catch { return { ...FIRMA_DEFAULT }; }
   }
 
   /** Globaler USt-Satz (auch operativ lesbar — Vorbelegung der Positionssummen). */
@@ -58,8 +73,8 @@ export class SettingsService {
   }
 
   async get(): Promise<AppSettings> {
-    const [briefkopf, thr, markupFactor, siebdruckVeredlerId, defaultTaxRatePct] = await Promise.all([
-      this.briefkopf(), this.repo.getApprovalThreshold(), this.repo.getMarkupFactor(), this.siebdruckVeredlerId(), this.defaultTaxRatePct(),
+    const [briefkopf, thr, markupFactor, siebdruckVeredlerId, defaultTaxRatePct, companyProfile] = await Promise.all([
+      this.briefkopf(), this.repo.getApprovalThreshold(), this.repo.getMarkupFactor(), this.siebdruckVeredlerId(), this.defaultTaxRatePct(), this.companyProfile(),
     ]);
     return {
       briefkopf,
@@ -68,12 +83,18 @@ export class SettingsService {
       markupFactor,
       siebdruckVeredlerId,
       defaultTaxRatePct,
+      companyProfile,
     };
   }
 
-  async update(patch: Partial<{ briefkopf: string[]; maxDiscountPct: number | null; maxOrderValueEuro: number | null; markupFactor: number; siebdruckVeredlerId: string | null; defaultTaxRatePct: number }>): Promise<void> {
+  async update(patch: Partial<{ briefkopf: string[]; maxDiscountPct: number | null; maxOrderValueEuro: number | null; markupFactor: number; siebdruckVeredlerId: string | null; defaultTaxRatePct: number; companyProfile: Partial<FirmenProfil> }>): Promise<void> {
     if (patch.briefkopf !== undefined) {
       await this.repo.setSetting(BRIEFKOPF_KEY, patch.briefkopf.join("\n"));
+    }
+    if (patch.companyProfile !== undefined) {
+      // Bestehende Werte erhalten, nur übergebene Felder überschreiben (Teil-Update).
+      const merged: FirmenProfil = { ...(await this.companyProfile()), ...patch.companyProfile };
+      await this.repo.setSetting(COMPANY_PROFILE_KEY, JSON.stringify(merged));
     }
     if (patch.siebdruckVeredlerId !== undefined) {
       await this.repo.setSetting(SIEBDRUCK_VEREDLER_KEY, patch.siebdruckVeredlerId?.trim() ?? "");

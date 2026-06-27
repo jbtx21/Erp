@@ -9,7 +9,9 @@ describe("SettingsService (Admin-Portal)", () => {
   it("liefert Defaults und speichert Briefkopf + Schwellen + Faktor", async () => {
     const s = svc();
     const def = await s.get();
-    expect(def.briefkopf).toEqual([]);
+    // Ohne expliziten Briefkopf wird er aus dem Firmenprofil abgeleitet (TEXMA-Default).
+    expect(def.briefkopf[0]).toContain("TEXMA");
+    expect(def.companyProfile.ustId).toBe("DE 225496461");
     expect(def.markupFactor).toBe(1.88);
 
     await s.update({ briefkopf: ["TEXMA GmbH", "Musterstr. 1", "info@texma.de"], maxDiscountPct: 15, maxOrderValueEuro: 5000, markupFactor: 2.0 });
@@ -24,6 +26,17 @@ describe("SettingsService (Admin-Portal)", () => {
     const s = svc();
     await s.update({ briefkopf: ["A", "B"] });
     expect(await s.briefkopf()).toEqual(["A", "B"]);
+  });
+
+  it("speichert das Firmenprofil als Teil-Update und ergänzt fehlende Felder mit dem Default", async () => {
+    const s = svc();
+    await s.update({ companyProfile: { name: "TEXMA Textilmarketing GmbH", iban: "DE99 1234" } });
+    const p = (await s.get()).companyProfile;
+    expect(p.name).toBe("TEXMA Textilmarketing GmbH");
+    expect(p.iban).toBe("DE99 1234");
+    expect(p.bic).toBe("GENODES1VBH"); // Default erhalten
+    // Briefkopf folgt jetzt dem Firmenprofil.
+    expect((await s.briefkopf())[0]).toContain("TEXMA Textilmarketing GmbH");
   });
 
   it("lehnt ungültigen Aufschlagsfaktor ab", async () => {

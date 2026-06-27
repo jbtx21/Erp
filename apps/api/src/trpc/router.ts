@@ -1790,6 +1790,13 @@ export const appRouter = router({
         markupFactor: z.number().positive().optional(),
         siebdruckVeredlerId: z.string().nullable().optional(),
         defaultTaxRatePct: z.number().int().min(0).max(100).optional(),
+        // Firmenprofil für Belegkopf/-fuß (Teil-Update der einzelnen Felder).
+        companyProfile: z.object({
+          name: z.string(), street: z.string(), zipCity: z.string(),
+          tel: z.string(), mail: z.string(), web: z.string(),
+          ustId: z.string(), gf: z.string(),
+          bankName: z.string(), iban: z.string(), bic: z.string(),
+        }).partial().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         try { await ctx.settings.update(input); return { ok: true as const }; }

@@ -6423,6 +6423,7 @@ export function AdminPage(): JSX.Element {
   const [markup, setMarkup] = useState<number>(1.88);
   const [taxRate, setTaxRate] = useState<number>(19);
   const [siebdruckVeredler, setSiebdruckVeredler] = useState("");
+  const [firma, setFirma] = useState<Record<string, string>>({});
   const [testTo, setTestTo] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -6436,9 +6437,12 @@ export function AdminPage(): JSX.Element {
       setMarkup(s.markupFactor);
       setTaxRate(s.defaultTaxRatePct);
       setSiebdruckVeredler(s.siebdruckVeredlerId ?? "");
+      setFirma(s.companyProfile as unknown as Record<string, string>);
       setErr(null);
     } catch (e) { setErr(errMsg(e)); }
   }, []);
+  const fF = (k: string): string => firma[k] ?? "";
+  const setF = (k: string, v: string): void => setFirma((p) => ({ ...p, [k]: v }));
   useEffect(() => { void load(); }, [load]);
 
   return (
@@ -6448,8 +6452,24 @@ export function AdminPage(): JSX.Element {
       {err && <Alert color="red" mt="sm">{err}</Alert>}
       {msg && <Alert color="green" mt="sm">{msg}</Alert>}
 
-      <Textarea label="Briefkopf (eine Zeile je Adresszeile)" value={briefkopf} onChange={(e) => setBriefkopf(e.currentTarget.value)} autosize minRows={3} mt="md" w={460}
-        placeholder={"TEXMA Textilveredelung GmbH\nMusterstraße 1 · 00000 Musterstadt\ninfo@texma-gmbh.de"} />
+      <Title order={4} mt="lg">Firmenprofil (Belegkopf &amp; -fuß)</Title>
+      <Text size="xs" c="dimmed" mb="xs">Erscheint auf allen Belegen (Briefkopf, Fußzeile mit Bankdaten, USt-IdNr.).</Text>
+      <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="xs" maw={760}>
+        <TextInput label="Firmenname" value={fF("name")} onChange={(e) => setF("name", e.currentTarget.value)} />
+        <TextInput label="Straße" value={fF("street")} onChange={(e) => setF("street", e.currentTarget.value)} />
+        <TextInput label="PLZ Ort" value={fF("zipCity")} onChange={(e) => setF("zipCity", e.currentTarget.value)} />
+        <TextInput label="Telefon" value={fF("tel")} onChange={(e) => setF("tel", e.currentTarget.value)} />
+        <TextInput label="E-Mail" value={fF("mail")} onChange={(e) => setF("mail", e.currentTarget.value)} />
+        <TextInput label="Web" value={fF("web")} onChange={(e) => setF("web", e.currentTarget.value)} />
+        <TextInput label="USt-IdNr." value={fF("ustId")} onChange={(e) => setF("ustId", e.currentTarget.value)} />
+        <TextInput label="Geschäftsführer" value={fF("gf")} onChange={(e) => setF("gf", e.currentTarget.value)} />
+        <TextInput label="Bank" value={fF("bankName")} onChange={(e) => setF("bankName", e.currentTarget.value)} />
+        <TextInput label="IBAN" value={fF("iban")} onChange={(e) => setF("iban", e.currentTarget.value)} />
+        <TextInput label="BIC" value={fF("bic")} onChange={(e) => setF("bic", e.currentTarget.value)} />
+      </SimpleGrid>
+
+      <Textarea label="Briefkopf-Override (optional, eine Zeile je Adresszeile)" value={briefkopf} onChange={(e) => setBriefkopf(e.currentTarget.value)} autosize minRows={2} mt="md" w={460}
+        description="Leer = automatisch aus dem Firmenprofil" />
 
       <Group gap="md" align="end" mt="md" wrap="wrap">
         <NumberInput label="Max. Rabatt ohne Freigabe (%)" value={maxDiscount} onChange={(v) => setMaxDiscount(v === "" ? "" : Number(v))} min={0} max={100} w={220} />
@@ -6473,6 +6493,7 @@ export function AdminPage(): JSX.Element {
             markupFactor: markup,
             defaultTaxRatePct: taxRate,
             siebdruckVeredlerId: siebdruckVeredler || null,
+            companyProfile: firma as unknown as Parameters<typeof trpc.settings.update.mutate>[0]["companyProfile"],
           });
           setMsg("Einstellungen gespeichert."); await load();
         } catch (e) { setErr(errMsg(e)); }
