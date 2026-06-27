@@ -82,6 +82,8 @@ export const statusLabel: Record<string, string> = {
   GRUEN: "Grün", NEU: "Neu", OFFEN: "Offen", ERFASST: "Erfasst", BERECHNET: "Berechnet", VERWORFEN: "Verworfen",
   ZUGEORDNET: "Zugeordnet", TEILZUGEORDNET: "Teilzugeordnet", KLAERUNG: "Klärung",
   TEXTIL: "Textil", VEREDELUNG: "Veredelung", SONSTIGE: "Sonstiges",
+  // Lieferanten-Connector-Art (statt englischer Enum-Token in deutscher UI).
+  MANUAL: "Manuell", ID_IDENTITY: "ID Identity", STANLEY_STELLA: "Stanley/Stella", HAKRO: "HAKRO", FHB_NEXMART: "FHB/nexmart",
 };
 /** Lesbare Anzeige eines Status/Enums: Map oder generischer Prettifier (Snake→Wörter). */
 export const prettyStatus = (s: string): string =>

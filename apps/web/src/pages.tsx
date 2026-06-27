@@ -99,12 +99,23 @@ const COL_LABELS: Record<string, string> = {
   verworfenGrund: "Grund", finalized: "Final", lastSyncAt: "Letzter Sync", dunningLevel: "Mahnstufe",
   quoteId: "Angebot", externalRef: "Externe Ref.", receivedAt: "Erhalten am", totalEkCents: "EK gesamt",
   lines: "Positionen", weightGrams: "Gewicht (g)", shopConnectorId: "Shop", orderId: "Auftrag",
+  invoiceNumber: "Rechnungsnr.", erzeugtAm: "Erzeugt", stufe: "Mahnstufe", offenCents: "Offen", mahngebuehrCents: "Mahngebühr", faelligSeit: "Fällig seit",
 };
 const colLabel = (key: string): string =>
   COL_LABELS[key] ?? key.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (c) => c.toUpperCase());
 
+// Rohe Prisma-CUIDs (z. B. „cmqwoqa6e0008ue3g92nv6588") nie als Klartext zeigen — unleserlich,
+// nicht referenzierbar. Sprechende Slugs (co-muster, sup-fhb) und Belegnummern (AN-2026-…) sind
+// erlaubt; nur die cuid-Form wird erkannt.
+const CUID_RE = /^c[a-z0-9]{20,}$/;
+export const isCuidLike = (v: unknown): v is string => typeof v === "string" && CUID_RE.test(v);
+// Display-Identifikatoren: existiert eine sprechende Kennung, wird die rohe `id`-Spalte ausgeblendet.
+const DISPLAY_ID_KEYS = ["number", "customerNumber", "nummer", "belegNr", "kundenNr", "rechnungNr", "rechnungsnummer", "invoiceNumber", "sku"] as const;
+
 function fmtCell(key: string, v: unknown): ReactNode {
   if (v === null || v === undefined) return "—";
+  // CUID-Werte (id/companyId/…) als kompaktes, dezentes Kürzel mit Voll-ID im Tooltip.
+  if (isCuidLike(v)) return <Text component="span" c="dimmed" size="xs" title={v} style={{ fontVariantNumeric: "tabular-nums" }}>#{v.slice(-6)}</Text>;
   if (/cents$/i.test(key) && typeof v === "number") return <span style={numTd}>{euro(v)}</span>;
   if (typeof v === "boolean") return v ? "ja" : "nein";
   if (/(status|stage|ampel|level)$/i.test(key) && typeof v === "string") {
@@ -146,10 +157,12 @@ export function AutoTable({ rows, hide = [], action, onRowClick, highlightId, bu
   const allSelected = selectable && rows.length > 0 && sel.size === rows.length;
   const toggleAll = (): void => setSel(allSelected ? new Set() : new Set(rows.map((r, i) => rowKey(r, i))));
   const toggleOne = (k: string): void => setSel((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
-  // Rohe cuid-`id`-Spalte ausblenden, sobald eine sprechende `number` vorhanden ist
-  // (QA: kryptische IDs neben Belegnummern). Klick/Highlight nutzen r.id intern weiter.
-  const hasNumber = "number" in (rows[0] as object) && Boolean((rows[0] as Row).number);
-  const cols = Object.keys(rows[0] as object).filter((k) => !hide.includes(k) && !(k === "id" && hasNumber));
+  // Rohe cuid-`id`-Spalte ausblenden, sobald eine sprechende Kennung vorhanden ist
+  // (Kunden-Nr./Beleg-Nr./SKU …). Klick/Highlight nutzen r.id intern weiter; verbleibende
+  // cuid-Werte rendert fmtCell als kompaktes Tooltip-Kürzel (ID-Hygiene, Xentral-Parität).
+  const row0 = rows[0] as Row;
+  const hasDisplayId = DISPLAY_ID_KEYS.some((k) => k in (row0 as object) && Boolean((row0 as Row)[k]));
+  const cols = Object.keys(row0 as object).filter((k) => !hide.includes(k) && !(k === "id" && hasDisplayId));
   // Breite Tabellen (v. a. Aufträge mit Status-Aktionen) horizontal scrollbar halten,
   // damit die Aktionsspalte rechts nie abgeschnitten wird (QA #13). Zusätzlich die
   // Aktionsspalte rechts FIXIEREN (sticky), sodass „Aktionen ▾"/Eil bei überbreiten
@@ -4359,20 +4372,23 @@ export function CompaniesPage({ focusId, onNavigate, onOpen }: { focusId?: strin
         </>} />
       {err && <Alert color="red" mt="sm">{err}</Alert>}
       <AutoTable rows={rows} onRowClick={(r) => setOpenCompany((c) => c === String(r.id) ? null : String(r.id))} action={(r) => (
-        <Group gap={4} justify="flex-end" wrap="nowrap">
+        // „Details" (Preview-Toggle) inline wie Xentras Vorschau-Auge; Sekundäraktionen im Kebab.
+        <Group gap={6} justify="flex-end" wrap="nowrap" onClick={(e) => e.stopPropagation()}>
           <Button size="compact-xs" variant={openCompany === String(r.id) ? "filled" : "subtle"} onClick={() => setOpenCompany((c) => c === String(r.id) ? null : String(r.id))}>Details</Button>
-          <Button size="compact-xs" variant="light" color={r.mahnsperre ? "teal" : "orange"} onClick={async () => {
-            try { await trpc.companies.update.mutate({ id: String(r.id), mahnsperre: !r.mahnsperre }); await load(); }
-            catch (e) { setErr(errMsg(e)); }
-          }}>{r.mahnsperre ? "Mahnsperre aufheben" : "Mahnsperre setzen"}</Button>
-          {/* Löschen nur für unbenutzte Stammsätze (Fehleingaben/Test-Müll, P1-4); Server
-              verweigert die Löschung bei verknüpften Belegen mit klarer Meldung. */}
-          <Button size="compact-xs" variant="subtle" color="red" onClick={async () => {
-            if (typeof window !== "undefined" && !window.confirm(`Kunde „${String(r.name ?? r.id)}" löschen? Nur möglich, wenn keine Belege/Vorgänge verknüpft sind.`)) return;
-            setErr(null);
-            try { await trpc.companies.delete.mutate({ id: String(r.id) }); setOpenCompany(null); await load(); }
-            catch (e) { setErr(errMsg(e)); }
-          }}>Löschen</Button>
+          <DocActionMenu actions={[
+            { label: r.mahnsperre ? "Mahnsperre aufheben" : "Mahnsperre setzen", group: "Allgemein", onClick: async () => {
+              try { await trpc.companies.update.mutate({ id: String(r.id), mahnsperre: !r.mahnsperre }); await load(); }
+              catch (e) { setErr(errMsg(e)); }
+            } },
+            // Löschen nur für unbenutzte Stammsätze (Fehleingaben/Test-Müll, P1-4); Server
+            // verweigert die Löschung bei verknüpften Belegen mit klarer Meldung.
+            { label: "Löschen", group: "Gefahr", color: "red", onClick: async () => {
+              if (typeof window !== "undefined" && !window.confirm(`Kunde „${String(r.name ?? r.id)}" löschen? Nur möglich, wenn keine Belege/Vorgänge verknüpft sind.`)) return;
+              setErr(null);
+              try { await trpc.companies.delete.mutate({ id: String(r.id) }); setOpenCompany(null); await load(); }
+              catch (e) { setErr(errMsg(e)); }
+            } },
+          ]} />
         </Group>
       )} />
       {openCompany && <CompanyDetailPanel companyId={openCompany} companies={rows.map((r) => ({ id: String(r.id), name: String(r.name ?? r.id) }))} onNavigate={onNavigate} onOpen={onOpen} />}
@@ -5599,7 +5615,7 @@ export function SubproductionPage({ onOpen, focusId }: { onOpen?: (k: string, id
       {plan?.allReturned && stages.length > 0 && <Alert color="teal" variant="light" mt="sm" title="Fremdvergabe komplett">Alle Stufen zurück — interne Weiterverarbeitung freigegeben.</Alert>}
 
       {loading ? <Group mt="sm" gap="xs"><Loader size="sm" /><Text size="sm">lädt…</Text></Group> : (
-        stages.length === 0 ? <Text c="dimmed" mt="sm">Keine Fremdvergabe-Stufen zu „{applied}".</Text> : (
+        stages.length === 0 ? <Text c="dimmed" mt="sm">{applied ? `Keine Fremdvergabe-Stufen zu „${applied}".` : "Produktionsauftrag wählen, um die Fremdvergabe-Stufen anzuzeigen."}</Text> : (
           <Table striped highlightOnHover withTableBorder mt="md" verticalSpacing="xs" fz="sm">
             <Table.Thead><Table.Tr>
               <Table.Th>Stufe</Table.Th><Table.Th>Veredler</Table.Th><Table.Th>Status</Table.Th>
