@@ -502,6 +502,9 @@ export function SuppliersPage({ focusId }: { focusId?: string } = {}): JSX.Eleme
   const [openSupplier, setOpenSupplier] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Filter (Suche) getrennt von der Anlage (Modal) — Xentral-Muster.
+  const [q, setQ] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -518,28 +521,38 @@ export function SuppliersPage({ focusId }: { focusId?: string } = {}): JSX.Eleme
   // Deep-Link aus der globalen Suche: Lieferanten-Zeile hervorheben + Detail öffnen.
   useEffect(() => { if (focusId) { setApplied(focusId); setSid(focusId); setOpenSupplier(focusId); } }, [focusId]);
 
+  const term = q.trim().toLowerCase();
+  const filtered = term ? rows.filter((r) => [r.name, r.vatId, r.email].some((v) => String(v ?? "").toLowerCase().includes(term))) : rows;
+
   return (
     <>
+      <Modal opened={createOpen} onClose={() => setCreateOpen(false)} title="Neuen Lieferanten anlegen" size="md">
+        <Stack gap="sm">
+          <TextInput label="Name" withAsterisk value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Muster Textil GmbH" data-autofocus />
+          <Box>
+            <TextInput label="USt-IdNr." value={vatId} onChange={(e) => setVatId(e.currentTarget.value)} />
+            <VatBadge value={vatId} />
+          </Box>
+          <TextInput label="IBAN" value={iban} onChange={(e) => setIban(e.currentTarget.value)} />
+          <Group justify="flex-end" mt="xs">
+            <Button variant="default" onClick={() => setCreateOpen(false)}>Abbrechen</Button>
+            <Button loading={busy} disabled={!name.trim()} onClick={async () => {
+              setBusy(true); setErr(null);
+              try { await trpc.suppliers.create.mutate({ name: name.trim(), vatId: vatId || undefined, iban: iban || undefined }); setName(""); setVatId(""); setIban(""); setCreateOpen(false); await load(); }
+              catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+            }}>Lieferant anlegen</Button>
+          </Group>
+        </Stack>
+      </Modal>
       <DocListHeader
         module="Einkauf / Lieferanten"
         title="Lieferanten"
         hint="Stammsätze + Katalog je Lieferant (EK nur ADMIN/Büro/Buchhaltung, Kap. 12)."
-        filters={<>
-          <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Neuer Lieferant GmbH" />
-          <Box>
-            <TextInput label="USt-IdNr." value={vatId} onChange={(e) => setVatId(e.currentTarget.value)} w={150} />
-            <VatBadge value={vatId} />
-          </Box>
-          <TextInput label="IBAN" value={iban} onChange={(e) => setIban(e.currentTarget.value)} w={200} />
-          <Button mt={22} loading={busy} disabled={!name.trim()} onClick={async () => {
-            setBusy(true); setErr(null);
-            try { await trpc.suppliers.create.mutate({ name: name.trim(), vatId: vatId || undefined, iban: iban || undefined }); setName(""); setVatId(""); setIban(""); await load(); }
-            catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
-          }}>Lieferant anlegen</Button>
-        </>}
+        action={<Button size="xs" onClick={() => setCreateOpen(true)}>+ Lieferant anlegen</Button>}
+        filters={<TextInput placeholder="Suche: Name, USt-IdNr., E-Mail …" value={q} onChange={(e) => setQ(e.currentTarget.value)} w={320} />}
       />
-      {err && <Alert color="red" mt="sm">{err}</Alert>}
-      <AutoTable rows={rows} highlightId={focusId} onRowClick={(r) => setOpenSupplier((c) => c === String(r.id) ? null : String(r.id))} action={(r) => (
+      {err && <Alert color="red" mt="sm" withCloseButton onClose={() => setErr(null)}>{err}</Alert>}
+      <AutoTable rows={filtered} highlightId={focusId} onRowClick={(r) => setOpenSupplier((c) => c === String(r.id) ? null : String(r.id))} action={(r) => (
         <Group gap={4} justify="flex-end" wrap="nowrap">
           <Button size="compact-xs" variant={openSupplier === String(r.id) ? "filled" : "subtle"} onClick={() => setOpenSupplier((c) => c === String(r.id) ? null : String(r.id))}>Details</Button>
           <Button size="compact-xs" variant="default" onClick={() => { setSid(String(r.id)); setApplied(String(r.id)); }}>Katalog</Button>
@@ -4346,6 +4359,9 @@ export function CompaniesPage({ focusId, onNavigate, onOpen }: { focusId?: strin
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [openCompany, setOpenCompany] = useState<string | null>(null);
+  // Filter (Suche) klar getrennt von der Anlage (Modal) — Xentral-Muster.
+  const [q, setQ] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
 
   const load = useCallback(async () => {
     try { setRows((await trpc.companies.list.query()) as Row[]); setErr(null); }
@@ -4355,23 +4371,35 @@ export function CompaniesPage({ focusId, onNavigate, onOpen }: { focusId?: strin
   // Direkter Sprung aus der globalen Suche: Detailpanel des gesuchten Kunden öffnen.
   useEffect(() => { if (focusId) setOpenCompany(focusId); }, [focusId]);
 
+  const term = q.trim().toLowerCase();
+  const filtered = term
+    ? rows.filter((r) => [r.name, r.customerNumber, r.branche, r.email].some((v) => String(v ?? "").toLowerCase().includes(term)))
+    : rows;
+
   return (
     <>
-      <DocListHeader module="Vertrieb / Kunden" title="Kunden" hint="Stammdaten (B3). Sperren/Anonymisieren erfolgt separat (DSGVO)."
-        filters={<>
-          <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Neue Firma GmbH" />
-          <TextInput label="Branche" value={branche} onChange={(e) => setBranche(e.currentTarget.value)} w={140} />
-          <Select label="Preisgruppe" value={kind} onChange={(v) => v && setKind(v)} w={170}
+      <Modal opened={createOpen} onClose={() => setCreateOpen(false)} title="Neue Firma anlegen" size="md">
+        <Stack gap="sm">
+          <TextInput label="Name" withAsterisk value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Muster GmbH" data-autofocus />
+          <TextInput label="Branche" value={branche} onChange={(e) => setBranche(e.currentTarget.value)} />
+          <Select label="Preisgruppe" value={kind} onChange={(v) => v && setKind(v)}
             data={["STANDARD", "TOP", "PREMIUM", "WIEDERVERKAEUFER", "AGENTUR"]} />
-          <NumberInput label="Zahlungsziel (Tage)" value={ziel} onChange={(v) => setZiel(Number(v) || 0)} min={0} max={180} w={150} />
-          <Button mt={22} loading={busy} disabled={!name.trim()} onClick={async () => {
-            setBusy(true); setErr(null);
-            try { await trpc.companies.create.mutate({ name: name.trim(), branche: branche || undefined, priceGroupKind: kind as "STANDARD" | "TOP" | "PREMIUM" | "WIEDERVERKAEUFER" | "AGENTUR", zahlungszielTage: ziel }); setName(""); setBranche(""); await load(); }
-            catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
-          }}>Firma anlegen</Button>
-        </>} />
-      {err && <Alert color="red" mt="sm">{err}</Alert>}
-      <AutoTable rows={rows} onRowClick={(r) => setOpenCompany((c) => c === String(r.id) ? null : String(r.id))} action={(r) => (
+          <NumberInput label="Zahlungsziel (Tage)" value={ziel} onChange={(v) => setZiel(Number(v) || 0)} min={0} max={180} />
+          <Group justify="flex-end" mt="xs">
+            <Button variant="default" onClick={() => setCreateOpen(false)}>Abbrechen</Button>
+            <Button loading={busy} disabled={!name.trim()} onClick={async () => {
+              setBusy(true); setErr(null);
+              try { await trpc.companies.create.mutate({ name: name.trim(), branche: branche || undefined, priceGroupKind: kind as "STANDARD" | "TOP" | "PREMIUM" | "WIEDERVERKAEUFER" | "AGENTUR", zahlungszielTage: ziel }); setName(""); setBranche(""); setCreateOpen(false); await load(); }
+              catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+            }}>Firma anlegen</Button>
+          </Group>
+        </Stack>
+      </Modal>
+      <DocListHeader module="Vertrieb / Kunden" title="Kunden" hint="Stammdaten (B3). Sperren/Anonymisieren erfolgt separat (DSGVO)."
+        action={<Button size="xs" onClick={() => setCreateOpen(true)}>+ Firma anlegen</Button>}
+        filters={<TextInput placeholder="Suche: Name, Kunden-Nr., Branche, E-Mail …" value={q} onChange={(e) => setQ(e.currentTarget.value)} w={340} />} />
+      {err && <Alert color="red" mt="sm" withCloseButton onClose={() => setErr(null)}>{err}</Alert>}
+      <AutoTable rows={filtered} onRowClick={(r) => setOpenCompany((c) => c === String(r.id) ? null : String(r.id))} action={(r) => (
         // „Details" (Preview-Toggle) inline wie Xentras Vorschau-Auge; Sekundäraktionen im Kebab.
         <Group gap={6} justify="flex-end" wrap="nowrap" onClick={(e) => e.stopPropagation()}>
           <Button size="compact-xs" variant={openCompany === String(r.id) ? "filled" : "subtle"} onClick={() => setOpenCompany((c) => c === String(r.id) ? null : String(r.id))}>Details</Button>
@@ -5648,7 +5676,7 @@ export function SubproductionPage({ onOpen, focusId }: { onOpen?: (k: string, id
           <PlanStat label="Schwund" value={`${plan.totalScrap} Stk`} color={plan.totalScrap > 0 ? "amber.7" : undefined} />
           <PlanStat label="Lohnkosten" value={euro(plan.totalLohnCents)} />
           <PlanStat label="Nächste Stufe" value={plan.nextActionable ? `#${plan.nextActionable.sequence}` : (plan.allReturned ? "alle zurück" : "—")} />
-          <PlanStat label="Überfällig" value={String(plan.overdue.length)} color={plan.overdue.length ? "red.7" : undefined} />
+          <PlanStat label="Überfällig" value={String(plan.overdue.length)} color={plan.overdue.length ? "amber.8" : undefined} />
         </Group>
       )}
       {plan?.allReturned && stages.length > 0 && <Alert color="teal" variant="light" mt="sm" title="Fremdvergabe komplett">Alle Stufen zurück — interne Weiterverarbeitung freigegeben.</Alert>}
@@ -5945,7 +5973,7 @@ export function FinanceReportingPage(): JSX.Element {
         <>
           <Group mt="md" gap="md" wrap="wrap">
             {card("Gesamt offen", euro(total))}
-            {card("Davon überfällig", euro(overdue), total > 0 ? `${Math.round((overdue / total) * 100)} % der offenen Posten` : undefined, overdue > 0 ? "red.7" : undefined)}
+            {card("Davon überfällig", euro(overdue), total > 0 ? `${Math.round((overdue / total) * 100)} % der offenen Posten` : undefined, overdue > 0 ? "amber.8" : undefined)}
             {card("DSO", `${Math.round(data.dsoDays)} Tage`, "Ø Forderungslaufzeit")}
           </Group>
 
@@ -6120,7 +6148,7 @@ function ZahlungZeile({ oi, onBooked, onErr }: {
       <Table.Td>{oi.companyName}</Table.Td>
       <Table.Td ta="right">{euro(oi.grossCents)}</Table.Td>
       <Table.Td ta="right" fw={600}>{euro(oi.openCents)}</Table.Td>
-      <Table.Td c={overdue ? "red" : undefined}>{new Date(oi.dueDate).toLocaleDateString("de-DE")}{oi.dunningLevel > 0 ? ` · M${oi.dunningLevel}` : ""}</Table.Td>
+      <Table.Td c={overdue ? "orange" : undefined}>{new Date(oi.dueDate).toLocaleDateString("de-DE")}{oi.dunningLevel > 0 ? ` · M${oi.dunningLevel}` : ""}</Table.Td>
       <Table.Td>
         <Group gap={6} wrap="nowrap" justify="flex-end">
           <NumberInput size="xs" w={110} min={0} step={0.01} decimalScale={2} value={euroVal} onChange={(v) => setEuroVal(Number(v) || 0)} />
@@ -6172,7 +6200,7 @@ export function ZahlungsabgleichOverview({ onOpen }: { onOpen?: (k: string, id: 
         {kpi("Zahlungseingänge", summary.paymentsTotal)}
         {kpi("Davon Klärung", summary.byStatus.KLAERUNG, summary.byStatus.KLAERUNG > 0 ? "red" : undefined)}
         {kpi("Offene Posten", `${summary.openItemsCount} · ${euro(summary.openTotalCents)}`)}
-        {kpi("Überfällig", euro(summary.overdueTotalCents), summary.overdueTotalCents > 0 ? "red" : undefined)}
+        {kpi("Überfällig", euro(summary.overdueTotalCents), summary.overdueTotalCents > 0 ? "orange" : undefined)}
       </Group>
 
       <Text fw={600} mt="lg" mb="xs">Zahlungseingänge (alle Quellen)</Text>
@@ -6221,7 +6249,7 @@ export function ZahlungsabgleichOverview({ onOpen }: { onOpen?: (k: string, id: 
               <Table.Td>{oi.invoiceNumber}</Table.Td>
               <Table.Td>{oi.companyName}</Table.Td>
               <Table.Td ta="right" style={numTd}>{euro(oi.openCents)}</Table.Td>
-              <Table.Td ta="right">{oi.overdueDays > 0 ? <Text component="span" c="red">+{oi.overdueDays} T</Text> : `${-oi.overdueDays} T`}</Table.Td>
+              <Table.Td ta="right">{oi.overdueDays > 0 ? <Text component="span" c="orange.8">+{oi.overdueDays} T</Text> : `${-oi.overdueDays} T`}</Table.Td>
               <Table.Td>{BUCKET_LABEL[oi.bucket] ?? oi.bucket}</Table.Td>
               <Table.Td ta="right">{oi.dunningLevel > 0 ? <Badge size="sm" color="orange" variant="light">M{oi.dunningLevel}</Badge> : "—"}</Table.Td>
             </Table.Tr>
@@ -8158,7 +8186,7 @@ export function HomePage({ userName, onNavigate }: { userName?: string; onNaviga
             <Text size="xs" c="blue">Übersicht ↗</Text>
           </Group>
           <Group gap="xs" wrap="wrap">
-            <Badge color="red" variant="light" size="lg">{termin?.overdue ?? 0} überfällig</Badge>
+            <Badge color="orange" variant="light" size="lg">{termin?.overdue ?? 0} überfällig</Badge>
             <Badge color="orange" variant="light" size="lg">{termin?.kritisch ?? 0} kritisch</Badge>
             <Badge color="gray" variant="light" size="lg">{termin?.total ?? 0} Vorgänge</Badge>
           </Group>
@@ -8173,7 +8201,7 @@ export function HomePage({ userName, onNavigate }: { userName?: string; onNaviga
             key: `${r.level}-${r.id}`,
             primary: `${HOME_LEVEL_LABEL[r.level] ?? r.level} · ${r.label}`,
             secondary: fristText(r),
-            color: r.overdueDays > 0 ? "red.7" : r.daysRemaining <= 2 ? "orange.7" : undefined,
+            color: r.overdueDays > 0 ? "amber.8" : r.daysRemaining <= 2 ? "orange.7" : undefined,
             onClick: () => onNavigate("dashboard"),
           })))}
         {quickPanel("Nächste Termine", "calendar", "Keine anstehenden Termine.",
