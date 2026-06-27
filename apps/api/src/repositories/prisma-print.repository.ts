@@ -2,7 +2,7 @@
 
 import { prisma } from "@texma/db";
 import { FIRMA_DEFAULT, lineNet, taxOnNet, VAT_STANDARD, type FirmenProfil, type PositionKind } from "@texma/shared";
-import type { CompanyDataSheetData, DeliveryNotePrintData, InvoicePrintData, LaufzettelPrintData, LetterMeta, OrderConfirmationPrintData, PrintRepository, PricePrintLine, QuotePrintData, SupplierDataSheetData } from "../modules/print/print.service.js";
+import type { BelegMailKind, CompanyDataSheetData, DeliveryNotePrintData, InvoicePrintData, LaufzettelPrintData, LetterMeta, OrderConfirmationPrintData, PrintRepository, PricePrintLine, QuotePrintData, SupplierDataSheetData } from "../modules/print/print.service.js";
 
 /** Schlüssel im AppSetting-Speicher (gespiegelt aus settings.service). */
 const COMPANY_PROFILE_KEY = "company_profile";
@@ -71,6 +71,26 @@ function recipientLines(
 }
 
 export class PrismaPrintRepository implements PrintRepository {
+  /** Empfänger-E-Mail (Firma) je Belegtyp — über die FK-Kette zur Company aufgelöst. */
+  async recipientEmailForBeleg(kind: BelegMailKind, id: string): Promise<string | null> {
+    switch (kind) {
+      case "QUOTE":
+        return (await prisma.quote.findUnique({ where: { id }, select: { company: { select: { email: true } } } }))?.company.email ?? null;
+      case "INVOICE":
+        return (await prisma.invoice.findUnique({ where: { id }, select: { company: { select: { email: true } } } }))?.company.email ?? null;
+      case "AUFTRAGSBESTAETIGUNG":
+        return (await prisma.order.findUnique({ where: { id }, select: { company: { select: { email: true } } } }))?.company.email ?? null;
+      case "LIEFERSCHEIN":
+        return (await prisma.deliveryNote.findUnique({ where: { id }, select: { order: { select: { company: { select: { email: true } } } } } }))?.order.company.email ?? null;
+      case "GUTSCHRIFT":
+        return (await prisma.creditNote.findUnique({ where: { id }, select: { invoice: { select: { company: { select: { email: true } } } } } }))?.invoice.company.email ?? null;
+      case "MAHNUNG":
+        return (await prisma.dunningNotice.findUnique({ where: { id }, select: { openItem: { select: { invoice: { select: { company: { select: { email: true } } } } } } } }))?.openItem.invoice.company.email ?? null;
+      case "LEIHGUT":
+        return (await prisma.sampleLoan.findUnique({ where: { id }, select: { company: { select: { email: true } } } }))?.company.email ?? null;
+    }
+  }
+
   async briefkopf(): Promise<string[]> {
     const row = await prisma.appSetting.findUnique({ where: { key: "briefkopf" } });
     return row ? row.value.split("\n").map((l) => l.trim()).filter(Boolean) : [];

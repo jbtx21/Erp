@@ -17,6 +17,7 @@ import { DocActionMenu, DocFormShell, DocListHeader, StatusDot, StatusBadge, Emp
 import { OrderAmpelDetail, Auftragsampel } from "./StatusAmpel.js";
 import { useUnsavedGuard } from "./use-unsaved-guard.js";
 import { downloadCsv } from "./export.js";
+import { openOutlookDraft } from "./outlook-draft.js";
 
 type Row = Record<string, unknown>;
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
@@ -55,6 +56,28 @@ function downloadBase64(filename: string, base64: string, type: string): void {
   const a = document.createElement("a");
   a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
+}
+
+// Belegtypen mit eigenem PDF/Outlook-Entwurf (Spiegel des mail.buildDraft-Enums).
+type BelegMailKind = "QUOTE" | "AUFTRAGSBESTAETIGUNG" | "INVOICE" | "LIEFERSCHEIN" | "GUTSCHRIFT" | "MAHNUNG" | "LEIHGUT";
+
+// Outlook-Entwurf für einen Kunden-Beleg: holt Empfänger (aus Kontakt) + Betreff + Text + PDF
+// gebündelt vom Backend und öffnet die fertige .eml in Outlook. Fehlt die Kontakt-E-Mail, wird
+// der Entwurf trotzdem geöffnet (leeres An-Feld) und der Nutzer per Hinweis gebeten, sie zu
+// ergänzen — statt eines stillen Leer-Versands. Wirft bei Backend-Fehlern (Caller fängt → setErr).
+async function openBelegMail(kind: BelegMailKind, id: string): Promise<void> {
+  const draft = await trpc.mail.buildDraft.query({ kind, id });
+  openOutlookDraft(draft);
+  if (!draft.to && typeof window !== "undefined")
+    window.alert("Hinweis: Für diesen Beleg ist keine Kontakt-E-Mail hinterlegt. Bitte den Empfänger im Outlook-Entwurf ergänzen (oder die E-Mail in den Kundenstammdaten pflegen).");
+}
+
+// Outlook-Entwurf für den Veredelungsauftrag (an den Veredler).
+async function openVeredelungsauftragMail(subProductionId: string): Promise<void> {
+  const draft = await trpc.mail.buildVeredelungsauftragDraft.query({ subProductionId });
+  openOutlookDraft(draft);
+  if (!draft.to && typeof window !== "undefined")
+    window.alert("Hinweis: Beim Veredler ist keine E-Mail hinterlegt. Bitte den Empfänger im Outlook-Entwurf ergänzen (oder die E-Mail in den Lieferantenstammdaten pflegen).");
 }
 
 // Deutsche Spaltenbezeichnungen statt roher Feldnamen ("Don't ship the schema").
@@ -766,13 +789,9 @@ function DunningRowActions({ noticeId }: { noticeId: string | null }): JSX.Eleme
       }}>PDF</Button>
       <Button size="compact-xs" variant="subtle" color="blue" onClick={async () => {
         setErr(null);
-        try {
-          const to = typeof window !== "undefined" ? window.prompt("Mahnung per E-Mail senden an:") : null;
-          if (!to) return;
-          const res = await trpc.mail.sendBeleg.mutate({ kind: "MAHNUNG", id: noticeId, to });
-          if (typeof window !== "undefined") window.alert(`„${res.filename}" an ${to} gesendet.`);
-        } catch (e) { setErr(errMsg(e)); }
-      }}>Mail</Button>
+        try { await openBelegMail("MAHNUNG", noticeId); }
+        catch (e) { setErr(errMsg(e)); }
+      }}>In Outlook</Button>
       {err && <Text size="xs" c="red" title={err}>!</Text>}
     </Group>
   );
@@ -928,12 +947,7 @@ export function SampleLoansPage({ onOpen }: { onOpen?: (navKey: string, id: stri
             const pdf = await trpc.print.sampleLoanLieferschein.query({ loanId: String(r.id) });
             downloadBase64(pdf.filename, pdf.base64, "application/pdf");
           })}>Lieferschein</Button>
-          <Button size="compact-xs" variant="subtle" color="blue" onClick={() => void act(async () => {
-            const to = typeof window !== "undefined" ? window.prompt("Leihgut-Lieferschein per E-Mail senden an:") : null;
-            if (!to) return;
-            const res = await trpc.mail.sendBeleg.mutate({ kind: "LEIHGUT", id: String(r.id), to });
-            if (typeof window !== "undefined") window.alert(`„${res.filename}" an ${to} gesendet.`);
-          })}>Mail</Button>
+          <Button size="compact-xs" variant="subtle" color="blue" onClick={() => void act(() => openBelegMail("LEIHGUT", String(r.id)))}>In Outlook</Button>
           {String(r.status) === "VERLIEHEN"
             ? <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.sampleLoans.returnSample.mutate({ loanId: String(r.id) }))}>Zurückgenommen</Button>
             : <Text size="xs" c="dimmed">—</Text>}
@@ -2475,10 +2489,8 @@ export function QuotesPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k:
     catch (e) { setErr(errMsg(e)); }
   };
   const mailPdf = async (quoteId: string): Promise<void> => {
-    const to = typeof window !== "undefined" ? window.prompt("Angebot per E-Mail senden an:") : null;
-    if (!to) return;
     setErr(null);
-    try { const r = await trpc.mail.sendBeleg.mutate({ kind: "QUOTE", id: quoteId, to }); window.alert(`„${r.filename}" an ${to} gesendet.`); }
+    try { await openBelegMail("QUOTE", quoteId); }
     catch (e) { setErr(errMsg(e)); }
   };
 
@@ -2489,7 +2501,7 @@ export function QuotesPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k:
     const editable = status !== "ANGENOMMEN" && status !== "ABGELEHNT";
     const actions: Array<DocAction | false> = [
       { label: "PDF herunterladen", group: "Allgemein", onClick: () => void printPdf(id) },
-      { label: "Per E-Mail senden", group: "Allgemein", onClick: () => void mailPdf(id) },
+      { label: "In Outlook öffnen (PDF-Anhang)", group: "Allgemein", onClick: () => void mailPdf(id) },
       editable && { label: "Bearbeiten", group: "Allgemein", onClick: () => void startEdit(id) },
       status === "ENTWURF" && { label: "→ Versendet", group: "Status & Folgeaktion", onClick: () => void act(() => trpc.quotes.transition.mutate({ id, to: "VERSENDET" })) },
       // Annahme schließt direkt mit der Auftragswandlung ab — sonst bleibt der „→ Auftrag"-Schritt unentdeckt.
@@ -3005,13 +3017,9 @@ function DeliveryPanel({ orderId, onChanged }: { orderId: string; onChanged: () 
                 catch (e) { setErr(errMsg(e)); }
               }}>PDF</Button>
               <Button size="compact-xs" variant="subtle" color="blue" onClick={async () => {
-                try {
-                  const to = typeof window !== "undefined" ? window.prompt("Lieferschein per E-Mail senden an:") : null;
-                  if (!to) return;
-                  const res = await trpc.mail.sendBeleg.mutate({ kind: "LIEFERSCHEIN", id: n.id, to });
-                  if (typeof window !== "undefined") window.alert(`„${res.filename}" an ${to} gesendet.`);
-                } catch (e) { setErr(errMsg(e)); }
-              }}>Mail</Button>
+                try { await openBelegMail("LIEFERSCHEIN", n.id); }
+                catch (e) { setErr(errMsg(e)); }
+              }}>In Outlook</Button>
             </Group>
           ))}
         </>
@@ -3487,19 +3495,10 @@ function OrderDocumentsTab({ orderId }: { orderId: string }): JSX.Element {
   const mailDoc = async (kind: string, id: string): Promise<void> => {
     setErr(null);
     try {
-      if (kind === "veredelungsauftrag") {
-        const to = typeof window !== "undefined" ? window.prompt("Veredelungsauftrag senden an (leer = hinterlegte Veredler-Adresse):", "") : null;
-        if (to === null) return;
-        const r = await trpc.mail.sendVeredelungsauftrag.mutate({ subProductionId: id, ...(to.trim() ? { to: to.trim() } : {}) });
-        if (typeof window !== "undefined") window.alert(`„${r.filename}" an ${r.to} gesendet.`);
-        return;
-      }
+      if (kind === "veredelungsauftrag") { await openVeredelungsauftragMail(id); return; }
       const belegKind = PDFKIND_TO_MAIL[kind];
       if (!belegKind) return;
-      const to = typeof window !== "undefined" ? window.prompt("Beleg per E-Mail senden an:") : null;
-      if (!to) return;
-      const r = await trpc.mail.sendBeleg.mutate({ kind: belegKind, id, to });
-      if (typeof window !== "undefined") window.alert(`„${r.filename}" an ${to} gesendet.`);
+      await openBelegMail(belegKind, id);
     } catch (e) { setErr(errMsg(e)); }
   };
 
@@ -3522,7 +3521,7 @@ function OrderDocumentsTab({ orderId }: { orderId: string }): JSX.Element {
                 {d.pdfKind && d.id && (
                   <Group gap={4} justify="flex-end" wrap="nowrap">
                     <Button size="compact-xs" variant="subtle" onClick={() => void printDoc(d.pdfKind!, d.id!)}>PDF</Button>
-                    <Button size="compact-xs" variant="subtle" color="blue" onClick={() => void mailDoc(d.pdfKind!, d.id!)}>Mail</Button>
+                    <Button size="compact-xs" variant="subtle" color="blue" onClick={() => void mailDoc(d.pdfKind!, d.id!)}>In Outlook</Button>
                   </Group>
                 )}
               </Table.Td>
@@ -3828,12 +3827,10 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
                 catch (e) { setErr(errMsg(e)); }
               }}>Auftragsbestätigung (PDF)</Button>
               <Button size="xs" variant="default" onClick={async () => {
-                const to = typeof window !== "undefined" ? window.prompt("Auftragsbestätigung per E-Mail senden an:") : null;
-                if (!to) return;
                 setErr(null);
-                try { const r = await trpc.mail.sendBeleg.mutate({ kind: "AUFTRAGSBESTAETIGUNG", id: termOrder, to }); window.alert(`„${r.filename}" an ${to} gesendet.`); }
+                try { await openBelegMail("AUFTRAGSBESTAETIGUNG", termOrder); }
                 catch (e) { setErr(errMsg(e)); }
-              }}>AB per Mail</Button>
+              }}>AB in Outlook</Button>
             </Group>
           )}
           {termOrder && (
@@ -5548,15 +5545,11 @@ export function SubproductionPage({ onOpen, focusId }: { onOpen?: (k: string, id
     catch (e) { setErr(errMsg(e)); }
   };
 
-  // Veredelungsauftrag per Mail an den Veredler (Default: hinterlegte Veredler-E-Mail; überschreibbar).
+  // Veredelungsauftrag als Outlook-Entwurf an den Veredler (Empfänger = hinterlegte Veredler-E-Mail).
   const mailVeredler = async (sub: SubStage): Promise<void> => {
     setErr(null);
-    const to = typeof window !== "undefined" ? window.prompt("Veredelungsauftrag per E-Mail senden an (leer = hinterlegte Veredler-Adresse):", "") : null;
-    if (to === null) return;
-    try {
-      const r = await trpc.mail.sendVeredelungsauftrag.mutate({ subProductionId: sub.id, ...(to.trim() ? { to: to.trim() } : {}) });
-      if (typeof window !== "undefined") window.alert(`„${r.filename}" an ${r.to} gesendet.`);
-    } catch (e) { setErr(errMsg(e)); }
+    try { await openVeredelungsauftragMail(sub.id); }
+    catch (e) { setErr(errMsg(e)); }
   };
 
   const actionsFor = (s: SubStage): ReactNode => {
@@ -5622,7 +5615,7 @@ export function SubproductionPage({ onOpen, focusId }: { onOpen?: (k: string, id
                     <Group gap={6} wrap="nowrap">
                       {actionsFor(s)}
                       <Button size="compact-xs" variant="subtle" onClick={() => void veredelungsauftragPdf(s)} title="Werkstattblatt mit Größen-Matrix + Veredelungspositionen">Veredelungsauftrag</Button>
-                      {!s.inhouse && <Button size="compact-xs" variant="subtle" color="blue" onClick={() => void mailVeredler(s)} title="Veredelungsauftrag als PDF per Mail an den Veredler">Mail an Veredler</Button>}
+                      {!s.inhouse && <Button size="compact-xs" variant="subtle" color="blue" onClick={() => void mailVeredler(s)} title="Veredelungsauftrag als Outlook-Entwurf (PDF-Anhang) an den Veredler">In Outlook (Veredler)</Button>}
                     </Group>
                   </Table.Td>
                 </Table.Tr>

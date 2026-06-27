@@ -110,8 +110,13 @@ export type CompanyDataSheetData = Omit<KundenStammblattInput, "datum" | "absend
 /** Lieferanten-Stammdaten fürs Datenblatt. */
 export type SupplierDataSheetData = Omit<LieferantenStammblattInput, "datum" | "absender">;
 
+/** Kunden-Belegtypen mit eigenem PDF (Mailversand/Outlook-Entwurf). */
+export type BelegMailKind = "QUOTE" | "AUFTRAGSBESTAETIGUNG" | "INVOICE" | "LIEFERSCHEIN" | "GUTSCHRIFT" | "MAHNUNG" | "LEIHGUT";
+
 export interface PrintRepository {
   deliveryNoteForPrint(id: string): Promise<DeliveryNotePrintData | null>;
+  /** E-Mail des Belegempfängers (Firma) für den Outlook-Entwurf; null = keine hinterlegt. */
+  recipientEmailForBeleg(kind: BelegMailKind, id: string): Promise<string | null>;
   /** Kunden-Stammdaten fürs Stammdatenblatt; null, wenn unbekannt. */
   companyForDataSheet(companyId: string): Promise<CompanyDataSheetData | null>;
   /** Lieferanten-Stammdaten fürs Stammdatenblatt; null, wenn unbekannt. */
@@ -159,6 +164,11 @@ export class PrintService {
       ...(meta?.metaExtra ? { metaExtra: meta.metaExtra } : {}),
       anrede: meta?.anrede ?? anredeFallback,
     };
+  }
+
+  /** E-Mail des Belegempfängers (Firma) für den Outlook-Entwurf; null = keine hinterlegt. */
+  recipientEmailForBeleg(kind: BelegMailKind, id: string): Promise<string | null> {
+    return this.repo.recipientEmailForBeleg(kind, id);
   }
 
   async deliveryNotePdf(id: string): Promise<PdfResult> {

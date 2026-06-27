@@ -6,6 +6,7 @@ import { z } from "zod";
 import { AuthError, SESSION_TTL_SECONDS } from "../modules/auth/auth.service.js";
 import { protectedProcedure, publicProcedure, roleProcedure, router, type Context } from "./trpc.js";
 import type { Belegart } from "@texma/shared";
+import type { BelegMailKind } from "../modules/print/print.service.js";
 
 // EK-Preise sind finanziell sensibel → kein PRODUKTION-Zugriff (Kap. 12, C3).
 const supplierRoles = ["ADMIN", "BUERO", "BUCHHALTUNG"] as const;
@@ -44,6 +45,48 @@ function toTrpcError(err: unknown): never {
     throw new TRPCError({ code, message: err.message });
   }
   throw err;
+}
+
+/**
+ * Beleg-Mail-Metadaten je Belegtyp: Label (Betreff) + Anschreibe-Formulierung („Ihre/unser …").
+ * Eine Quelle für SMTP-Versand (mail.sendBeleg) UND Outlook-Entwurf (mail.buildDraft), damit
+ * Betreff/Text überall identisch sind.
+ */
+const BELEG_MAIL_META: Record<BelegMailKind, { label: string; satz: string }> = {
+  QUOTE: { label: "Angebot", satz: "unser Angebot" },
+  AUFTRAGSBESTAETIGUNG: { label: "Auftragsbestätigung", satz: "unsere Auftragsbestätigung" },
+  INVOICE: { label: "Rechnung", satz: "Ihre Rechnung" },
+  LIEFERSCHEIN: { label: "Lieferschein", satz: "Ihren Lieferschein" },
+  GUTSCHRIFT: { label: "Gutschrift", satz: "Ihre Gutschrift" },
+  MAHNUNG: { label: "Mahnung", satz: "unsere Zahlungserinnerung" },
+  LEIHGUT: { label: "Leihgut-Lieferschein", satz: "den Lieferschein zum Muster-Leihgut" },
+};
+
+/** Belegnummer aus dem PDF-Dateinamen (z. B. „Angebot-AN-0001.pdf" → „AN-0001"). */
+function belegNummerAusDateiname(filename: string): string {
+  return filename.replace(/\.pdf$/, "").replace(/^[^-]+-/, "");
+}
+
+/** Standard-Betreff/-Text eines Kunden-Belegs (gemeinsam für SMTP + Outlook-Entwurf). */
+function belegMailText(kind: BelegMailKind, filename: string): { subject: string; body: string } {
+  const meta = BELEG_MAIL_META[kind];
+  return {
+    subject: `${meta.label} ${belegNummerAusDateiname(filename)}`,
+    body: `Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie ${meta.satz} als PDF.\n\nMit freundlichen Grüßen\nTEXMA Textilmarketing GmbH`,
+  };
+}
+
+/** Das passende Beleg-PDF je Kind erzeugen (gemeinsam für SMTP-Versand + Outlook-Entwurf). */
+function belegPdf(ctx: Context, kind: BelegMailKind, id: string): Promise<{ filename: string; base64: string }> {
+  switch (kind) {
+    case "QUOTE": return ctx.print.quotePdf(id);
+    case "INVOICE": return ctx.print.invoicePdf(id);
+    case "AUFTRAGSBESTAETIGUNG": return ctx.print.auftragsbestaetigungPdf(id);
+    case "LIEFERSCHEIN": return ctx.print.deliveryNotePdf(id);
+    case "GUTSCHRIFT": return ctx.print.creditNotePdf(id);
+    case "MAHNUNG": return ctx.print.mahnungPdf(id);
+    case "LEIHGUT": return ctx.print.sampleLoanLieferscheinPdf(id);
+  }
 }
 
 /**
@@ -1994,27 +2037,43 @@ export const appRouter = router({
         if (!to) throw new TRPCError({ code: "BAD_REQUEST", message: "Bitte eine Empfänger-E-Mail angeben." });
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) throw new TRPCError({ code: "BAD_REQUEST", message: `„${to}" ist keine gültige E-Mail-Adresse.` });
         try {
-          const pdf = input.kind === "QUOTE" ? await ctx.print.quotePdf(input.id)
-            : input.kind === "INVOICE" ? await ctx.print.invoicePdf(input.id)
-            : input.kind === "AUFTRAGSBESTAETIGUNG" ? await ctx.print.auftragsbestaetigungPdf(input.id)
-            : input.kind === "LIEFERSCHEIN" ? await ctx.print.deliveryNotePdf(input.id)
-            : input.kind === "GUTSCHRIFT" ? await ctx.print.creditNotePdf(input.id)
-            : input.kind === "MAHNUNG" ? await ctx.print.mahnungPdf(input.id)
-            : await ctx.print.sampleLoanLieferscheinPdf(input.id);
-          // Label + Anschreibe-Formulierung („Ihre/unser …") je Belegtyp.
-          const meta = {
-            QUOTE: { label: "Angebot", satz: "unser Angebot" },
-            AUFTRAGSBESTAETIGUNG: { label: "Auftragsbestätigung", satz: "unsere Auftragsbestätigung" },
-            INVOICE: { label: "Rechnung", satz: "Ihre Rechnung" },
-            LIEFERSCHEIN: { label: "Lieferschein", satz: "Ihren Lieferschein" },
-            GUTSCHRIFT: { label: "Gutschrift", satz: "Ihre Gutschrift" },
-            MAHNUNG: { label: "Mahnung", satz: "unsere Zahlungserinnerung" },
-            LEIHGUT: { label: "Leihgut-Lieferschein", satz: "den Lieferschein zum Muster-Leihgut" },
-          }[input.kind];
-          const subject = input.subject ?? `${meta.label} ${pdf.filename.replace(/\.pdf$/, "").replace(/^[^-]+-/, "")}`;
-          const body = input.body ?? `Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie ${meta.satz} als PDF.\n\nMit freundlichen Grüßen\nTEXMA Textilmarketing GmbH`;
+          const pdf = await belegPdf(ctx, input.kind, input.id);
+          const def = belegMailText(input.kind, pdf.filename);
+          const subject = input.subject ?? def.subject;
+          const body = input.body ?? def.body;
           await ctx.mailSend.send({ to, subject, body, attachments: [{ filename: pdf.filename, contentBase64: pdf.base64, contentType: "application/pdf" }] });
           return { ok: true as const, filename: pdf.filename };
+        } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    // Outlook-Entwurf statt SMTP-Direktversand: liefert Empfänger (aus Kontakt), Betreff, Text
+    // und das Beleg-PDF gebündelt. Das Frontend baut daraus eine .eml und öffnet sie in Outlook —
+    // der Sachbearbeiter prüft und versendet selbst. `to` kann "" sein (keine Kontakt-Mail
+    // hinterlegt) → das Frontend zeigt einen Hinweis. Preis-sensibel → supplierRoles.
+    buildDraft: roleProcedure(...supplierRoles)
+      .input(z.object({
+        kind: z.enum(["QUOTE", "AUFTRAGSBESTAETIGUNG", "INVOICE", "LIEFERSCHEIN", "GUTSCHRIFT", "MAHNUNG", "LEIHGUT"]),
+        id: z.string().min(1),
+      }))
+      .query(async ({ input, ctx }) => {
+        try {
+          const pdf = await belegPdf(ctx, input.kind, input.id);
+          const { subject, body } = belegMailText(input.kind, pdf.filename);
+          const to = (await ctx.print.recipientEmailForBeleg(input.kind, input.id))?.trim() ?? "";
+          return { to, subject, body, pdf: { filename: pdf.filename, base64: pdf.base64 } };
+        } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    // Outlook-Entwurf für den Veredelungsauftrag (an den Veredler). Empfänger default =
+    // hinterlegte Veredler-E-Mail (Supplier.email). Ohne Preise → allRoles.
+    buildVeredelungsauftragDraft: roleProcedure(...allRoles)
+      .input(z.object({ subProductionId: z.string().min(1) }))
+      .query(async ({ input, ctx }) => {
+        try {
+          const pdf = await ctx.print.veredelungsauftragPdf(input.subProductionId);
+          const nr = belegNummerAusDateiname(pdf.filename);
+          const to = (await ctx.suppliers.emailForSubProduction(input.subProductionId))?.trim() ?? "";
+          const subject = `Veredelungsauftrag ${nr}`;
+          const body = `Guten Tag,\n\nanbei erhalten Sie unseren Veredelungsauftrag ${nr} mit der Größenaufstellung der Beistellung und den Veredelungspositionen.\n\nBitte bestätigen Sie uns den Eingang sowie den Fertigstellungstermin.\n\nMit freundlichen Grüßen\nTEXMA Textilmarketing GmbH`;
+          return { to, subject, body, pdf: { filename: pdf.filename, base64: pdf.base64 } };
         } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
     // Veredelungsauftrag (Werkstattblatt) als PDF-Anhang an den Veredler senden. Ohne Preise →

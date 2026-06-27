@@ -35,6 +35,14 @@ describe("PrintService (Druckerzeugnisse)", () => {
   it("wirft bei unbekanntem Beleg", async () => {
     await expect(new PrintService(new InMemoryPrintRepository()).deliveryNotePdf("nope")).rejects.toBeInstanceOf(PrintError);
   });
+
+  it("löst die Empfänger-E-Mail je Beleg auf (Outlook-Entwurf) und null ohne Kontakt", async () => {
+    const repo = new InMemoryPrintRepository();
+    repo.recipientEmails["q-1"] = "einkauf@kunde.de";
+    const svc = new PrintService(repo);
+    expect(await svc.recipientEmailForBeleg("QUOTE", "q-1")).toBe("einkauf@kunde.de");
+    expect(await svc.recipientEmailForBeleg("INVOICE", "ohne-kontakt")).toBeNull();
+  });
 });
 
 describe("PrintService — Angebot / Auftragsbestätigung", () => {

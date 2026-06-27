@@ -1,7 +1,7 @@
 // In-Memory-Druckdaten für Tests.
 
 import { FIRMA_DEFAULT, type FirmenProfil } from "@texma/shared";
-import type { CompanyDataSheetData, CreditNotePrintData, DeliveryNotePrintData, InvoicePrintData, LaufzettelPrintData, MahnungPrintData, OrderConfirmationPrintData, PrintRepository, QuotePrintData, SupplierDataSheetData, VeredelungsauftragPrintData } from "../modules/print/print.service.js";
+import type { BelegMailKind, CompanyDataSheetData, CreditNotePrintData, DeliveryNotePrintData, InvoicePrintData, LaufzettelPrintData, MahnungPrintData, OrderConfirmationPrintData, PrintRepository, QuotePrintData, SupplierDataSheetData, VeredelungsauftragPrintData } from "../modules/print/print.service.js";
 
 export class InMemoryPrintRepository implements PrintRepository {
   companyProfileValue: FirmenProfil = { ...FIRMA_DEFAULT };
@@ -17,6 +17,9 @@ export class InMemoryPrintRepository implements PrintRepository {
   companies: Record<string, CompanyDataSheetData> = {};
   suppliers: Record<string, SupplierDataSheetData> = {};
   briefkopfLines: string[] = [];
+  /** Test-Stub: Empfänger-E-Mail je Beleg-ID (Tests setzen die Map nach Bedarf). */
+  recipientEmails: Record<string, string> = {};
+  async recipientEmailForBeleg(_kind: BelegMailKind, id: string): Promise<string | null> { return this.recipientEmails[id] ?? null; }
   async companyForDataSheet(companyId: string): Promise<CompanyDataSheetData | null> { return this.companies[companyId] ?? null; }
   async supplierForDataSheet(supplierId: string): Promise<SupplierDataSheetData | null> { return this.suppliers[supplierId] ?? null; }
   async deliveryNoteForPrint(id: string): Promise<DeliveryNotePrintData | null> { return this.deliveryNotes[id] ?? null; }
