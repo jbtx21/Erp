@@ -484,6 +484,8 @@ model Variant {
   bomItems   BomItem[]
   purchaseOrderLines PurchaseOrderLine[]
   goodsReceiptLines  GoodsReceiptLine[]
+  incomingInvoiceLines IncomingInvoiceLine[] // EK-Abgleich Eingangsrechnung
+
   stockLevel StockLevel? // Lager/Bestand (T-12) — materialisierter Cache des Ledgers
   stockMoves StockMove[] // Bewegungs-Ledger (F4)
   stockReservations StockReservation[] // Vormerkungen gegen Aufträge
@@ -1575,8 +1577,24 @@ model StockThreshold {
 enum IncomingInvoiceStatus {
   ERFASST
   GEPRUEFT // 3-Way-Match ok
-  GESPERRT // Abweichung
+  GESPERRT // Abweichung (3-Way / EK)
+  FREIGEGEBEN // nach EK-Abgleich zur Zahlung freigegeben (Kap. 9.4)
   BEZAHLT
+}
+
+// EK-Abgleich-Status (Rechnung ↔ Artikelstammdaten): OFFEN bis geprüft, dann OK/ABWEICHUNG/PRUEFUNG.
+enum EkCheckStatus {
+  OFFEN
+  OK
+  ABWEICHUNG
+  PRUEFUNG
+}
+
+// Herkunft der Eingangsrechnung (GetMyInvoices-Vorbild: ein zentraler Beleg-Eingang).
+enum IncomingInvoiceSource {
+  E_RECHNUNG // CII/XRechnung (EN16931)
+  OCR // PDF/Scan via Texterkennung
+  MANUAL // von Hand erfasst
 }
 
 model IncomingInvoice {
@@ -1592,9 +1610,42 @@ model IncomingInvoice {
   grossCents  Int
   status      IncomingInvoiceStatus @default(ERFASST)
   receivedAt  DateTime @default(now())
+  // Herkunft + GoBD-Quellbeleg (E-Rechnung-XML bzw. OCR-Rohtext).
+  source      IncomingInvoiceSource @default(E_RECHNUNG)
+  eInvoiceXml String?
+  // Zahlungskonditionen (Snapshot der Lieferantenkonditionen bei Erfassung, Kap. 9.4)
+  issueDate   DateTime?
+  dueDate     DateTime? // Nettofälligkeit = Rechnungsdatum + Zahlungsziel
+  skontoPercent Int?
+  skontoDays    Int?
+  skontoUntil   DateTime? // letzter Tag mit Skontoabzug
+  // EK-Abgleich + Zahlungsfreigabe (GetMyInvoices: prüfen → freigeben → zahlen)
+  ekCheckStatus EkCheckStatus @default(OFFEN)
+  freigegebenVon String?
+  freigegebenAm  DateTime?
+  paidAt          DateTime?
+  paymentAmountCents Int? // tatsächlich gezahlter Betrag (ggf. abzüglich Skonto)
+  lines       IncomingInvoiceLine[]
 
   @@unique([supplierId, number])
   @@index([status])
+}
+
+// Position einer Eingangsrechnung (für den EK-Abgleich gegen die Artikelstammdaten).
+model IncomingInvoiceLine {
+  id          String   @id @default(cuid())
+  incomingInvoiceId String
+  incomingInvoice   IncomingInvoice @relation(fields: [incomingInvoiceId], references: [id], onDelete: Cascade)
+  position    Int
+  description String
+  supplierSku String? // Lieferanten-Artikelnummer (Auflösung auf die interne Variante)
+  variantId   String?
+  variant     Variant? @relation(fields: [variantId], references: [id])
+  qty         Int
+  unitEkCents Int // berechneter EK je Stück (netto)
+  lineNetCents Int
+
+  @@index([incomingInvoiceId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
