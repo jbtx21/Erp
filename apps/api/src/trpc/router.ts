@@ -1813,6 +1813,10 @@ export const appRouter = router({
   // manuelle Bewegung (Zugang/Abgang), Inventur-Zählung (bucht Differenz).
   stock: router({
     list: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.stock.listBalances()),
+    // Bestandsbewegungs-Journal (F4): das append-only Ledger lesbar machen (neueste zuerst).
+    moves: roleProcedure(...supplierRoles)
+      .input(z.object({ variantId: z.string().optional(), lager: z.enum(["HAUPT", "MUSTER", "SHOWROOM", "TRANSFERDRUCK"]).optional(), limit: z.number().int().positive().max(500).optional() }).optional())
+      .query(({ input, ctx }) => ctx.stock.listMoves({ variantId: input?.variantId, lager: input?.lager, limit: input?.limit })),
     move: roleProcedure(...supplierRoles)
       .input(z.object({
         variantId: z.string().min(1), deltaQty: z.number().int(),

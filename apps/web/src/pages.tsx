@@ -143,6 +143,7 @@ const COL_LABELS: Record<string, string> = {
   openCents: "Offen", ekCents: "EK", unitNetCents: "Einzel netto", totalNetCents: "Summe",
   qty: "Menge", menge: "Menge", position: "Pos.", description: "Beschreibung", sku: "SKU",
   vorlage: "Vorlage", verwendung: "Verwendung", subject: "Betreff", key: "Schlüssel",
+  kunde: "Kunde", issuedAt: "Rechnungsdatum", deltaQty: "Menge ±", belegRef: "Beleg", lager: "Lager",
   supplierSku: "Lief.-SKU", availableQty: "Verfügbar", variantCount: "Varianten",
   createdAt: "Erstellt", updatedAt: "Geändert", ausgegebenAm: "Ausgegeben", dueDate: "Fällig",
   gueltigBisAm: "Gültig bis", zugesagterLiefertermin: "Liefertermin", lieferstatus: "Lieferstatus", fakturastatus: "Fakturastatus", externalNumber: "Shop-Nr.", employeeNote: "Vermerk",
@@ -628,6 +629,49 @@ export function IncomingInvoicesPage({ onOpen }: { onOpen?: (k: string, id: stri
     <ListPage module="Einkauf / Eingangsrechnungen" title="Eingangsrechnungen" hint="Erfasste Kreditorenrechnungen (3-Wege-Match, Kap. 9)."
       load={() => trpc.incomingInvoices.list.query({ limit: 100 }) as Promise<Row[]>}
       cellRender={(c, v) => c === "supplierId" ? <SupplierRef id={v ? String(v) : null} names={supplierNames} onOpen={onOpen} /> : undefined} />
+  );
+}
+
+// Dedizierter Ausgangsrechnungs-Workspace (Xentral-Parität): Rechnungen waren bisher nur
+// indirekt über Mahnwesen/Zahlungsabgleich/Archiv erreichbar. Kunde wird clientseitig
+// aufgelöst; Status = OFFEN/BEZAHLT aus dem offenen Betrag.
+export function InvoicesPage({ onOpen }: { onOpen?: (k: string, id: string) => void } = {}): JSX.Element {
+  return (
+    <ListPage module="Buchhaltung / Rechnungen" title="Rechnungen"
+      hint="Ausgangsrechnungen (Faktura, Kap. 9.1) — Netto/USt/Brutto, offener Betrag, Fälligkeit. Status aus dem offenen OP-Betrag."
+      hide={["id", "orderId", "companyId"]}
+      load={async () => {
+        const [inv, cos] = await Promise.all([trpc.invoices.list.query({ limit: 200 }), trpc.companies.list.query()]);
+        const cmap = new Map(cos.map((c) => [String(c.id), c.name]));
+        return inv.map((i) => ({
+          number: i.number, kunde: cmap.get(String(i.companyId)) ?? "—",
+          netCents: i.netCents, taxCents: i.taxCents, grossCents: i.grossCents, openCents: i.openCents,
+          status: (i.openCents ?? 1) <= 0 ? "BEZAHLT" : "OFFEN",
+          issuedAt: i.issuedAt, dueDate: i.dueDate, id: i.id, orderId: i.orderId, companyId: i.companyId,
+        })) as Row[];
+      }}
+      action={(r) => (
+        <DocActionMenu actions={[
+          ...(onOpen ? [{ label: "Kunde öffnen", group: "Allgemein", onClick: () => onOpen("companies", String(r.companyId)) }] : []),
+          ...(onOpen && r.orderId ? [{ label: "Auftrag öffnen", group: "Allgemein", onClick: () => onOpen("orders", String(r.orderId)) }] : []),
+          ...belegDocActions("INVOICE", String(r.id), "Rechnung", (m) => window.alert(m)),
+        ]} />
+      )} />
+  );
+}
+
+// Bestandsbewegungs-Journal (Xentral-Parität): das Append-only-Ledger (F4) sichtbar machen —
+// jede Bestandsänderung als Buchung (Zugang +/Abgang −), niemals direktes Setzen.
+export function StockJournalPage(): JSX.Element {
+  return (
+    <ListPage module="Lager / Bestandsbewegungen" title="Bestandsbewegungen"
+      hint="Append-only Bewegungs-Ledger (F4): jede Bestandsänderung ist eine Buchung — Korrekturen laufen als Gegenbewegung, nie als Überschreiben. Neueste zuerst."
+      hide={["id", "variantId"]}
+      load={() => trpc.stock.moves.query({ limit: 300 }) as unknown as Promise<Row[]>}
+      cellRender={(c, v) =>
+        c === "deltaQty" ? <Text component="span" fw={600} c={Number(v) >= 0 ? "teal.7" : "red.7"}>{Number(v) > 0 ? `+${v}` : String(v)}</Text>
+        : (c === "grund" || c === "lager") && v != null ? prettyStatus(String(v))
+        : undefined} />
   );
 }
 

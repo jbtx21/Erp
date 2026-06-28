@@ -33,6 +33,25 @@ export interface StockBalanceRow {
   balances: Record<StockLager, number>;
 }
 
+/** Eine Zeile des Bewegungs-Journals (append-only Ledger, F4). */
+export interface StockMoveRow {
+  id: string;
+  variantId: string;
+  sku: string;
+  name: string;
+  deltaQty: number;
+  grund: StockMoveReason;
+  lager: StockLager;
+  belegRef: string | null;
+  createdAt: Date;
+}
+
+export interface StockMoveQuery {
+  variantId?: string;
+  lager?: StockLager;
+  limit: number;
+}
+
 export interface StockRepository {
   /** Schreibt eine Bewegung (append-only) und aktualisiert den StockLevel-Cache atomar. */
   postMove(move: StockMoveInput): Promise<PostedMove>;
@@ -40,6 +59,8 @@ export interface StockRepository {
   movesByVariant(variantId: string): Promise<Array<{ deltaQty: number; lager: StockLager }>>;
   /** Bestandsübersicht je Variante × Lager (für Lager-/Inventur-Ansicht). */
   listBalances(): Promise<StockBalanceRow[]>;
+  /** Bewegungs-Journal (neueste zuerst), optional je Variante/Lager gefiltert. */
+  listMoves(query: StockMoveQuery): Promise<StockMoveRow[]>;
 }
 
 export class StockService {
@@ -50,6 +71,11 @@ export class StockService {
 
   /** Bestandsübersicht je Variante × Lager. */
   listBalances(): Promise<StockBalanceRow[]> { return this.repo.listBalances(); }
+
+  /** Bestandsbewegungs-Journal (F4): das append-only Ledger lesbar machen. */
+  listMoves(opts: { variantId?: string; lager?: StockLager; limit?: number } = {}): Promise<StockMoveRow[]> {
+    return this.repo.listMoves({ variantId: opts.variantId, lager: opts.lager, limit: opts.limit ?? 200 });
+  }
 
   /** Bucht eine Bestandsbewegung und protokolliert sie im Audit-Trail. */
   async post(move: StockMoveInput): Promise<PostedMove> {

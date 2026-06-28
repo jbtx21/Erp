@@ -82,6 +82,9 @@ export const statusLabel: Record<string, string> = {
   GRUEN: "Grün", NEU: "Neu", OFFEN: "Offen", ERFASST: "Erfasst", BERECHNET: "Berechnet", VERWORFEN: "Verworfen",
   ZUGEORDNET: "Zugeordnet", TEILZUGEORDNET: "Teilzugeordnet", KLAERUNG: "Klärung",
   TEXTIL: "Textil", VEREDELUNG: "Veredelung", SONSTIGE: "Sonstiges",
+  // Bestandsbewegungs-Gründe (F4-Ledger) — lesbar statt rohem Enum.
+  EROEFFNUNG: "Eröffnung", WARENEINGANG: "Wareneingang", VERBRAUCH: "Verbrauch", KORREKTUR: "Korrektur",
+  HAUPT: "Hauptlager", SHOWROOM: "Showroom", TRANSFERDRUCK: "Transferdruck",
   // Lieferanten-Connector-Art (statt englischer Enum-Token in deutscher UI).
   MANUAL: "Manuell", ID_IDENTITY: "ID Identity", STANLEY_STELLA: "Stanley/Stella", HAKRO: "HAKRO", FHB_NEXMART: "FHB/nexmart",
 };

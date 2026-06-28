@@ -37,6 +37,7 @@ import {
   CompaniesPage, CallLogsPage, CostCentersPage, DunningPage, InquiriesPage, IncomingInvoicesPage, LeadsPage, CrmPipelinePage, MailAccountsPage, OrdersPage, ProcurementPage, ProductionReportingPage,
   ProductsPage, MatrixStammPage, PricingPage, EmailTemplatesPage, DashboardsPage, DataIoPage, EanImportPage, FinanceReportingPage, WareneingangPage, ZahlungenPage, ZahlungsabgleichOverview, NewsletterPage, OpportunitiesPage, CalendarPage, MessagesPage, AdminPage, ArchivePage, AuditLogPage, AutomationPage, TasksPage, HomePage, LagerPage, HrPage, IntegrationsPage, SecurityPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
   LogosPage, AufschlagPage, AusschreibungenPage, NachkalkulationPage, GuVReportPage, GutscheinePage,
+  InvoicesPage, StockJournalPage,
 } from "./pages.js";
 import { ImportMapperPage } from "./import-mapper.js";
 import { trpc } from "./trpc.js";
@@ -59,6 +60,7 @@ const NAV: ReadonlyArray<{ group: string; icon: NavIconName; items: ReadonlyArra
   ] },
   { group: "Lager", icon: "lager", items: [
     { key: "products", label: "Artikel/Varianten" }, { key: "matrixstamm", label: "Matrix-Stamm" }, { key: "lager", label: "Lager & Inventur" },
+    { key: "stockmoves", label: "Bestandsbewegungen" },
     { key: "wareneingang", label: "Wareneingang" }, { key: "samples", label: "Muster-Leihgut" }, { key: "shipments", label: "Versand" },
     { key: "importmapper", label: "Import-Mapper" }, { key: "eanimport", label: "EAN-Listen-Import" },
   ] },
@@ -71,6 +73,7 @@ const NAV: ReadonlyArray<{ group: string; icon: NavIconName; items: ReadonlyArra
   ] },
   { group: "Buchhaltung", icon: "finanzen", items: [
     { key: "guv", label: "Gewinn- und Verlustrechnung" },
+    { key: "invoices", label: "Rechnungen" },
     // Zahlungseingänge / OP-Aging / Banking sind Tabs im konsolidierten „Zahlungsabgleich"
     // (IA) — daher KEINE eigenen Sidebar-Einträge mehr. Direkt-Hashes (#zahlungen/#finance/
     // #banking) bleiben über die Page-Routen erreichbar (Rückwärtskompatibilität).
@@ -437,6 +440,7 @@ function Page({ k, role, userName, onNavigate, onOpen, focusId }: { k: string; r
     case "security": return <SecurityPage userName={userName} onProfileUpdated={() => { if (typeof location !== "undefined") location.reload(); }} />;
     case "tasks": return <TasksPage onNavigate={onNavigate} />;
     case "lager": return <LagerPage />;
+    case "stockmoves": return <StockJournalPage />;
     case "hr": return <HrPage />;
     case "integrations": return <IntegrationsPage />;
     case "logos": return <LogosPage />;
@@ -449,6 +453,7 @@ function Page({ k, role, userName, onNavigate, onOpen, focusId }: { k: string; r
     case "prodreport": return <ProductionReportingPage />;
     case "shipments": return <ShipmentsPage onOpen={onOpen} />;
     case "dunning": return <DunningPage />;
+    case "invoices": return <InvoicesPage onOpen={onOpen} />;
     case "zahlungsabgleich": return <ZahlungsabgleichPage role={role} onOpen={onOpen} />;
     case "banking": return <Banking role={role} />;
     case "zahlungen": return <ZahlungenPage />;

@@ -8,10 +8,28 @@ import type {
   PostedMove,
   StockBalanceRow,
   StockMoveInput,
+  StockMoveQuery,
+  StockMoveRow,
   StockRepository,
 } from "../modules/stock/stock.service.js";
 
 export class PrismaStockRepository implements StockRepository {
+  async listMoves(query: StockMoveQuery): Promise<StockMoveRow[]> {
+    const moves = await prisma.stockMove.findMany({
+      where: { ...(query.variantId ? { variantId: query.variantId } : {}), ...(query.lager ? { lager: query.lager } : {}) },
+      orderBy: { createdAt: "desc" },
+      take: query.limit,
+      select: {
+        id: true, variantId: true, deltaQty: true, grund: true, lager: true, belegRef: true, createdAt: true,
+        variant: { select: { sku: true, article: { select: { name: true } } } },
+      },
+    });
+    return moves.map((m) => ({
+      id: m.id, variantId: m.variantId, sku: m.variant.sku, name: m.variant.article.name,
+      deltaQty: m.deltaQty, grund: m.grund, lager: m.lager, belegRef: m.belegRef, createdAt: m.createdAt,
+    }));
+  }
+
   async postMove(move: StockMoveInput): Promise<PostedMove> {
     return prisma.$transaction(async (tx) => {
       // Klare Meldung statt rohem FK-Fehler, wenn die Varianten-ID nicht existiert.
