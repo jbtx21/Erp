@@ -56,6 +56,7 @@ export interface InvoiceRepository {
     netCents: number;
     taxCents: number;
     grossCents: number;
+    issuedAt: Date;
     dueDate: Date;
   }): Promise<{ id: string }>;
   listRecent(limit: number): Promise<Array<{ id: string; number: string; orderId: string | null; companyId: string; netCents: number; taxCents: number; grossCents: number; openCents: number | null; dueDate: Date | null; issuedAt: Date }>>;
@@ -80,7 +81,11 @@ export class InvoiceService {
     // 0-€-Schutz: keine Nullrechnung erzeugen (verhindert leeres Angebot → leerer Auftrag → 0-€-Rechnung).
     if (totals.grossCents <= 0) throw new InvoiceError("Auftrag mit Gesamtwert 0 € kann nicht fakturiert werden.");
     const number = await this.numbering.next("INVOICE", this.now());
-    const dueDate = new Date(this.now().getTime() + order.zahlungszielTage * 24 * 60 * 60 * 1000);
+    // Abrechnungsdatum (issuedAt) und Fälligkeit teilen denselben Anker: Fälligkeit =
+    // Abrechnungsdatum + Zahlungsziel (Tage). So ist die Kette Zahlungsziel ↔ Abrechnungs-
+    // datum ↔ Fälligkeit deterministisch und prüfbar (statt zweier getrennter now()-Werte).
+    const issuedAt = this.now();
+    const dueDate = new Date(issuedAt.getTime() + order.zahlungszielTage * 24 * 60 * 60 * 1000);
 
     const { id } = await this.repo.createInvoiceFromOrder({
       orderId: order.id,
@@ -89,6 +94,7 @@ export class InvoiceService {
       netCents: totals.netCents,
       taxCents: totals.taxCents,
       grossCents: totals.grossCents,
+      issuedAt,
       dueDate,
     });
 

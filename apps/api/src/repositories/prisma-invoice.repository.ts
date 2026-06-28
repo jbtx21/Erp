@@ -23,7 +23,7 @@ export class PrismaInvoiceRepository implements InvoiceRepository {
     };
   }
 
-  async createInvoiceFromOrder(input: { orderId: string; companyId: string; number: string; netCents: number; taxCents: number; grossCents: number; dueDate: Date }): Promise<{ id: string }> {
+  async createInvoiceFromOrder(input: { orderId: string; companyId: string; number: string; netCents: number; taxCents: number; grossCents: number; issuedAt: Date; dueDate: Date }): Promise<{ id: string }> {
     return prisma.$transaction(async (tx) => {
       const invoice = await tx.invoice.create({
         data: {
@@ -33,6 +33,7 @@ export class PrismaInvoiceRepository implements InvoiceRepository {
           netCents: input.netCents,
           taxCents: input.taxCents,
           grossCents: input.grossCents,
+          issuedAt: input.issuedAt, // Abrechnungsdatum = Anker der Fälligkeit
           finalized: true,
         },
         select: { id: true },

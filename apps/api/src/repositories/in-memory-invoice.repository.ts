@@ -36,9 +36,9 @@ export class InMemoryInvoiceRepository implements InvoiceRepository {
     return { id: o.id, number: o.number, companyId: o.companyId, zahlungszielTage: o.zahlungszielTage, alreadyInvoicedId: o.invoiceId, lines: o.lines };
   }
 
-  async createInvoiceFromOrder(input: { orderId: string; companyId: string; number: string; netCents: number; taxCents: number; grossCents: number; dueDate: Date }): Promise<{ id: string }> {
+  async createInvoiceFromOrder(input: { orderId: string; companyId: string; number: string; netCents: number; taxCents: number; grossCents: number; issuedAt: Date; dueDate: Date }): Promise<{ id: string }> {
     const id = `inv_${String(++this.seq)}`;
-    this.invoices.push({ id, number: input.number, orderId: input.orderId, companyId: input.companyId, netCents: input.netCents, taxCents: input.taxCents, grossCents: input.grossCents, issuedAt: new Date(), openCents: input.grossCents, dueDate: input.dueDate, creditedCents: 0 });
+    this.invoices.push({ id, number: input.number, orderId: input.orderId, companyId: input.companyId, netCents: input.netCents, taxCents: input.taxCents, grossCents: input.grossCents, issuedAt: input.issuedAt, openCents: input.grossCents, dueDate: input.dueDate, creditedCents: 0 });
     const o = this.orders.find((x) => x.id === input.orderId);
     if (o) { o.invoiceId = id; o.fakturastatus = "VOLL"; o.status = "FAKTURIERT"; }
     return { id };

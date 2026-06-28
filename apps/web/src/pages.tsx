@@ -145,7 +145,7 @@ const COL_LABELS: Record<string, string> = {
   vorlage: "Vorlage", verwendung: "Verwendung", subject: "Betreff", key: "Schlüssel",
   kunde: "Kunde", issuedAt: "Rechnungsdatum", deltaQty: "Menge ±", belegRef: "Beleg", lager: "Lager",
   supplierSku: "Lief.-SKU", availableQty: "Verfügbar", variantCount: "Varianten",
-  createdAt: "Erstellt", updatedAt: "Geändert", ausgegebenAm: "Ausgegeben", dueDate: "Fällig",
+  createdAt: "Erstellt", updatedAt: "Geändert", ausgegebenAm: "Ausgegeben", dueDate: "Fällig", daysOverdue: "Tage überfällig",
   gueltigBisAm: "Gültig bis", zugesagterLiefertermin: "Liefertermin", lieferstatus: "Lieferstatus", fakturastatus: "Fakturastatus", externalNumber: "Shop-Nr.", employeeNote: "Vermerk",
   trackingNumber: "Tracking", invoiceId: "Rechnung", kontaktName: "Kontakt", note: "Notiz",
   verworfenGrund: "Grund", finalized: "Final", lastSyncAt: "Letzter Sync", dunningLevel: "Mahnstufe",
@@ -893,10 +893,33 @@ function ConfirmShipBtn({ orderId, reload }: { orderId: string; reload: () => Pr
   );
 }
 
+// Mahnstufe (OpenItem.dunningLevel / DunningNotice.stufe) → lesbare Bezeichnung.
+// 0 = noch nicht gemahnt; 1 = Zahlungserinnerung, 2 = 1. Mahnung, 3 = 2. Mahnung (Kap. 9.5).
+const MAHNSTUFE_LABEL: Record<number, string> = { 0: "—", 1: "Zahlungserinnerung", 2: "1. Mahnung", 3: "2. Mahnung" };
+
+// Zell-Rendering der Mahnwesen-Liste: Tage überfällig (rot bei >0), Mahnstufe lesbar,
+// Mahnsperre als Badge. Macht die Kette Fälligkeit ⇒ Überfälligkeit ⇒ Mahnstufe sichtbar.
+function dunningCell(c: string, v: unknown): JSX.Element | undefined {
+  if (c === "daysOverdue") {
+    return Number(v) > 0
+      ? <Text component="span" fw={600} c="red.7">{`+${String(v)}`}</Text>
+      : <Text component="span" c="dimmed">{String(v)}</Text>;
+  }
+  if (c === "dunningLevel") {
+    return <Text component="span" c={Number(v) > 0 ? "amber.7" : "dimmed"}>{MAHNSTUFE_LABEL[Number(v)] ?? String(v)}</Text>;
+  }
+  if (c === "mahnsperre") {
+    return v ? <Badge size="xs" color="red">Mahnsperre</Badge> : <Text component="span" c="dimmed">—</Text>;
+  }
+  return undefined;
+}
+
 export const DunningPage = (): JSX.Element => (
-  <ListPage module="Finanzen / Mahnwesen" title="Mahnwesen" hint="Offene Posten / Mahnstufen (Gebühr + Historie, Kap. 9.5)."
+  <ListPage module="Finanzen / Mahnwesen" title="Mahnwesen"
+    hint="Offene Posten mit der vollständigen Kette: Abrechnungsdatum + Zahlungsziel ⇒ Fälligkeit ⇒ Tage überfällig ⇒ Mahnstufe (Kap. 9.5). „Mahnlauf starten“ hebt überfällige, nicht gesperrte Posten um eine Stufe und schreibt den Mahnbeleg (Historie). Bezahlte/gutgeschriebene Posten verschwinden automatisch."
     load={() => trpc.dunning.list.query({ limit: 100 }) as Promise<Row[]>}
-    hide={["latestNoticeId"]}
+    hide={["latestNoticeId", "companyId"]}
+    cellRender={dunningCell}
     toolbar={(reload) => <RunDunningBtn reload={reload} />}
     action={(r) => <DunningRowActions noticeId={r.latestNoticeId ? String(r.latestNoticeId) : null} />} />
 );

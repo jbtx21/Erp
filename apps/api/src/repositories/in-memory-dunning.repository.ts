@@ -1,11 +1,18 @@
 // In-Memory-Implementierung der Mahnwesen-Repositories — für Tests/lokale Durchstiche.
 
-import type { DunnableItem, DunningNoticeDraft } from "@texma/shared";
+import { daysOverdue as overdueDays, type DunnableItem, type DunningNoticeDraft } from "@texma/shared";
 import type { DunningRepository } from "../modules/dunning/dunning.service.js";
 import type { DunningOverviewItem, DunningQueryRepository } from "./read.js";
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 export interface SeedOpenItem extends DunnableItem {
   invoiceNumber: string;
+  /** Optionale Verknüpfungsdaten (Tests, die die Übersicht prüfen). */
+  companyId?: string;
+  companyName?: string;
+  issuedAt?: Date;
+  grossCents?: number;
 }
 
 export class InMemoryDunningRepository implements DunningRepository, DunningQueryRepository {
@@ -37,14 +44,24 @@ export class InMemoryDunningRepository implements DunningRepository, DunningQuer
   }
 
   async listDunning(limit: number): Promise<DunningOverviewItem[]> {
-    return this.items.slice(0, limit).map((i) => ({
-      id: i.id,
-      invoiceNumber: i.invoiceNumber,
-      openCents: i.openCents,
-      dueDate: i.dueDate,
-      dunningLevel: i.dunningLevel,
-      mahnsperre: i.mahnsperre,
-      latestNoticeId: this.latestNotice.get(i.id) ?? null,
-    }));
+    const today = new Date();
+    return this.items.slice(0, limit).map((i) => {
+      const issuedAt = i.issuedAt ?? i.dueDate;
+      return {
+        id: i.id,
+        invoiceNumber: i.invoiceNumber,
+        companyId: i.companyId ?? "",
+        companyName: i.companyName ?? "—",
+        issuedAt,
+        zahlungszielTage: Math.round((i.dueDate.getTime() - issuedAt.getTime()) / DAY_MS),
+        grossCents: i.grossCents ?? i.openCents,
+        openCents: i.openCents,
+        dueDate: i.dueDate,
+        daysOverdue: overdueDays(i.dueDate, today),
+        dunningLevel: i.dunningLevel,
+        mahnsperre: i.mahnsperre,
+        latestNoticeId: this.latestNotice.get(i.id) ?? null,
+      };
+    });
   }
 }

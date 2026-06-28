@@ -3,12 +3,23 @@
 // aufgelöst.
 
 import { prisma } from "@texma/db";
-import type { DunnableItem, DunningNoticeDraft } from "@texma/shared";
+import { daysOverdue as overdueDays, type DunnableItem, type DunningNoticeDraft } from "@texma/shared";
 import type { DunningRepository } from "../modules/dunning/dunning.service.js";
 import type { DunningOverviewItem, DunningQueryRepository } from "./read.js";
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Angereicherter offener Posten: Mahn-Fakten + Rechnungs-/Debitor-Bezug (Verknüpfungssicht). */
+type LoadedItem = DunnableItem & {
+  invoiceNumber: string;
+  companyId: string;
+  companyName: string;
+  issuedAt: Date;
+  grossCents: number;
+};
+
 export class PrismaDunningRepository implements DunningRepository, DunningQueryRepository {
-  private async load(): Promise<Array<DunnableItem & { invoiceNumber: string }>> {
+  private async load(): Promise<LoadedItem[]> {
     const rows = await prisma.openItem.findMany({
       where: { openCents: { gt: 0 } },
       orderBy: { dueDate: "asc" },
@@ -17,7 +28,7 @@ export class PrismaDunningRepository implements DunningRepository, DunningQueryR
         openCents: true,
         dueDate: true,
         dunningLevel: true,
-        invoice: { select: { number: true, company: { select: { mahnsperre: true } } } },
+        invoice: { select: { number: true, issuedAt: true, grossCents: true, company: { select: { id: true, name: true, mahnsperre: true } } } },
       },
     });
     return rows.map((r) => ({
@@ -27,6 +38,10 @@ export class PrismaDunningRepository implements DunningRepository, DunningQueryR
       dunningLevel: r.dunningLevel,
       mahnsperre: r.invoice.company.mahnsperre,
       invoiceNumber: r.invoice.number,
+      companyId: r.invoice.company.id,
+      companyName: r.invoice.company.name,
+      issuedAt: r.invoice.issuedAt,
+      grossCents: r.invoice.grossCents,
     }));
   }
 
@@ -67,11 +82,19 @@ export class PrismaDunningRepository implements DunningRepository, DunningQueryR
     });
     const latest = new Map<string, string>();
     for (const n of notices) if (!latest.has(n.openItemId)) latest.set(n.openItemId, n.id);
+    const today = new Date();
     return rows.map((r) => ({
       id: r.id,
       invoiceNumber: r.invoiceNumber,
+      companyId: r.companyId,
+      companyName: r.companyName,
+      issuedAt: r.issuedAt,
+      // Effektives Zahlungsziel = wie es die Rechnung trägt (Fälligkeit − Abrechnungsdatum).
+      zahlungszielTage: Math.round((r.dueDate.getTime() - r.issuedAt.getTime()) / DAY_MS),
+      grossCents: r.grossCents,
       openCents: r.openCents,
       dueDate: r.dueDate,
+      daysOverdue: overdueDays(r.dueDate, today), // gleiche Basis wie der Mahnlauf
       dunningLevel: r.dunningLevel,
       mahnsperre: r.mahnsperre,
       latestNoticeId: latest.get(r.id) ?? null,

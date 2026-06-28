@@ -46,4 +46,17 @@ describe("DunningService.runDunning (T-14)", () => {
     const run = await service.runDunning(TODAY);
     expect(run.proposals).toHaveLength(0);
   });
+
+  it("verknüpft in der Übersicht Abrechnungsdatum + Zahlungsziel ⇒ Fälligkeit", async () => {
+    // Rechnung am 17.04., 14 Tage Ziel ⇒ Fälligkeit 01.05. — die Übersicht macht die Kette sichtbar.
+    const { repo } = setup([
+      oi({ id: "c", issuedAt: new Date(Date.UTC(2026, 3, 17)), dueDate: new Date(Date.UTC(2026, 4, 1)), grossCents: 5000, companyName: "Maier GmbH" }),
+    ]);
+    const row = (await repo.listDunning(10))[0]!;
+    expect(row.zahlungszielTage).toBe(14); // dueDate − issuedAt
+    expect(row.companyName).toBe("Maier GmbH");
+    expect(row.grossCents).toBe(5000);
+    // daysOverdue ist auf „heute" bezogen (≥ Tage seit 01.05.2026) — nur Konsistenz prüfen.
+    expect(typeof row.daysOverdue).toBe("number");
+  });
 });

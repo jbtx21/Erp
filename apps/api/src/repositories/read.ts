@@ -183,8 +183,19 @@ export interface BankingQueryRepository {
 export interface DunningOverviewItem {
   id: string;
   invoiceNumber: string;
+  /** Kunde (für die Verknüpfung Offener Posten ↔ Debitor). */
+  companyId: string;
+  companyName: string;
+  /** Abrechnungsdatum der Rechnung (Rechnungsdatum). */
+  issuedAt: Date;
+  /** Effektives Zahlungsziel in Tagen (dueDate − issuedAt) — so wie es die Rechnung trägt. */
+  zahlungszielTage: number;
+  /** Rechnungsbetrag (brutto) zur Einordnung des offenen Betrags. */
+  grossCents: number;
   openCents: number;
   dueDate: Date;
+  /** Tage über die Fälligkeit hinaus (≤0 = noch nicht fällig) — dieselbe Basis wie der Mahnlauf. */
+  daysOverdue: number;
   dunningLevel: number;
   mahnsperre: boolean;
   /** Jüngster Mahnbeleg (DunningNotice) zum Posten — für PDF/Mail; null = noch keiner. */
