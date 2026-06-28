@@ -2053,6 +2053,11 @@ export const appRouter = router({
           return { ok: true as const, filename: pdf.filename };
         } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
+    // Empfänger-E-Mail eines Belegs (Firma) — zum Vorbefüllen des „Direkt senden"-Dialogs,
+    // ohne das PDF zu erzeugen. Leerer String, wenn keine Adresse hinterlegt ist.
+    belegRecipient: roleProcedure(...supplierRoles)
+      .input(z.object({ kind: z.enum(["QUOTE", "AUFTRAGSBESTAETIGUNG", "INVOICE", "LIEFERSCHEIN", "GUTSCHRIFT", "MAHNUNG", "LEIHGUT"]), id: z.string().min(1) }))
+      .query(async ({ input, ctx }) => ({ to: (await ctx.print.recipientEmailForBeleg(input.kind, input.id))?.trim() ?? "" })),
     // Outlook-Entwurf statt SMTP-Direktversand: liefert Empfänger (aus Kontakt), Betreff, Text
     // und das Beleg-PDF gebündelt. Das Frontend baut daraus eine .eml und öffnet sie in Outlook —
     // der Sachbearbeiter prüft und versendet selbst. `to` kann "" sein (keine Kontakt-Mail

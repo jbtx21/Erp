@@ -82,6 +82,31 @@ async function openVeredelungsauftragMail(subProductionId: string): Promise<void
     window.alert("Hinweis: Beim Veredler ist keine E-Mail hinterlegt. Bitte den Empfänger im Outlook-Entwurf ergänzen (oder die E-Mail in den Lieferantenstammdaten pflegen).");
 }
 
+// Veredelungsauftrag DIREKT an den Veredler senden (PDF-Anhang) — verbindlich, Empfänger
+// vorbefüllt (Lieferanten-E-Mail) und im Dialog bestätigt. Wirft bei Fehlern (Caller fängt).
+async function sendVeredelungsauftragDirect(subProductionId: string): Promise<void> {
+  const draft = await trpc.mail.buildVeredelungsauftragDraft.query({ subProductionId });
+  const target = typeof window !== "undefined"
+    ? window.prompt("Veredelungsauftrag jetzt per E-Mail mit PDF-Anhang an den Veredler senden an:", draft.to)
+    : draft.to;
+  if (!target || !target.trim()) return;
+  const res = await trpc.mail.sendVeredelungsauftrag.mutate({ subProductionId, to: target.trim() });
+  if (typeof window !== "undefined") window.alert(`Veredelungsauftrag wurde an ${res.to} gesendet (${res.filename}).`);
+}
+
+// Beleg DIREKT per SMTP versenden (PDF-Anhang) — verbindliche Alternative zum Outlook-Entwurf.
+// Der Empfänger wird vorbefüllt (Firmen-E-Mail) und im Dialog bestätigt/angepasst, weil der
+// Versand sofort ausgeht (kein stiller Versand). Wirft bei Backend-Fehlern (Caller fängt → onErr).
+async function sendBelegDirect(kind: BelegMailKind, id: string, label: string): Promise<void> {
+  const { to } = await trpc.mail.belegRecipient.query({ kind, id });
+  const target = typeof window !== "undefined"
+    ? window.prompt(`„${label}" jetzt per E-Mail mit PDF-Anhang senden an:`, to)
+    : to;
+  if (!target || !target.trim()) return; // Abbruch oder leer → nicht senden
+  const res = await trpc.mail.sendBeleg.mutate({ kind, id, to: target.trim() });
+  if (typeof window !== "undefined") window.alert(`„${label}" wurde an ${target.trim()} gesendet (${res.filename}).`);
+}
+
 // Beleg-PDF je Kind herunterladen (spiegelt belegPdf/buildDraft im Backend). Eine Quelle für
 // alle „PDF herunterladen"-Aktionen, damit jede Liste denselben Pfad nutzt (Konsistenz).
 async function printBeleg(kind: BelegMailKind, id: string): Promise<void> {
@@ -101,6 +126,7 @@ function belegDocActions(kind: BelegMailKind, id: string, label: string, onErr: 
   return [
     { label: `${label} – PDF`, group: "Dokumente", onClick: () => { void printBeleg(kind, id).catch((e) => onErr(errMsg(e))); } },
     { label: `${label} – In Outlook`, group: "Dokumente", onClick: () => { void openBelegMail(kind, id).catch((e) => onErr(errMsg(e))); } },
+    { label: `${label} – Direkt senden`, group: "Dokumente", onClick: () => { void sendBelegDirect(kind, id, label).catch((e) => onErr(errMsg(e))); } },
   ];
 }
 
@@ -994,6 +1020,7 @@ export function SampleLoansPage({ onOpen }: { onOpen?: (navKey: string, id: stri
             Boolean(onOpen && r.quoteId) && { label: "Zugeordnetes Angebot öffnen", group: "Allgemein", onClick: () => onOpen!("quotes", String(r.quoteId)) },
             { label: "Leihgut-Lieferschein – PDF", group: "Dokumente", onClick: () => void act(async () => { const pdf = await trpc.print.sampleLoanLieferschein.query({ loanId: String(r.id) }); downloadBase64(pdf.filename, pdf.base64, "application/pdf"); }) },
             { label: "Leihgut-Lieferschein – In Outlook", group: "Dokumente", onClick: () => void act(() => openBelegMail("LEIHGUT", String(r.id))) },
+            { label: "Leihgut-Lieferschein – Direkt senden", group: "Dokumente", onClick: () => void act(() => sendBelegDirect("LEIHGUT", String(r.id), "Leihgut-Lieferschein")) },
             String(r.status) === "VERLIEHEN" && { label: "Als zurückgenommen buchen", group: "Status & Folgeaktion", onClick: () => void act(() => trpc.sampleLoans.returnSample.mutate({ loanId: String(r.id) })) },
           ]} />
         </Group>
@@ -2563,6 +2590,7 @@ export function QuotesPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k:
     const actions: Array<DocAction | false> = [
       { label: "PDF herunterladen", group: "Allgemein", onClick: () => void printPdf(id) },
       { label: "In Outlook öffnen (PDF-Anhang)", group: "Allgemein", onClick: () => void mailPdf(id) },
+      { label: "Direkt senden (PDF-Anhang)", group: "Allgemein", onClick: () => { setErr(null); void sendBelegDirect("QUOTE", id, "Angebot").catch((e) => setErr(errMsg(e))); } },
       editable && { label: "Bearbeiten", group: "Allgemein", onClick: () => void startEdit(id) },
       status === "ENTWURF" && { label: "→ Versendet", group: "Status & Folgeaktion", onClick: () => void act(() => trpc.quotes.transition.mutate({ id, to: "VERSENDET" })) },
       // Annahme schließt direkt mit der Auftragswandlung ab — sonst bleibt der „→ Auftrag"-Schritt unentdeckt.
@@ -3082,6 +3110,10 @@ function DeliveryPanel({ orderId, onChanged }: { orderId: string; onChanged: () 
                 try { await openBelegMail("LIEFERSCHEIN", n.id); }
                 catch (e) { setErr(errMsg(e)); }
               }}>In Outlook</Button>
+              <Button size="compact-xs" variant="subtle" color="blue" onClick={async () => {
+                try { await sendBelegDirect("LIEFERSCHEIN", n.id, "Lieferschein"); }
+                catch (e) { setErr(errMsg(e)); }
+              }}>Direkt senden</Button>
             </Group>
           ))}
         </>
@@ -3554,6 +3586,10 @@ function OrderDocumentsTab({ orderId }: { orderId: string }): JSX.Element {
   const PDFKIND_TO_MAIL: Record<string, "QUOTE" | "AUFTRAGSBESTAETIGUNG" | "INVOICE" | "LIEFERSCHEIN" | "GUTSCHRIFT" | "MAHNUNG" | "LEIHGUT"> = {
     quote: "QUOTE", auftragsbestaetigung: "AUFTRAGSBESTAETIGUNG", invoice: "INVOICE", deliveryNote: "LIEFERSCHEIN", creditNote: "GUTSCHRIFT", mahnung: "MAHNUNG", sampleLoan: "LEIHGUT",
   };
+  const PDFKIND_LABEL: Record<string, string> = {
+    quote: "Angebot", auftragsbestaetigung: "Auftragsbestätigung", invoice: "Rechnung",
+    deliveryNote: "Lieferschein", creditNote: "Gutschrift", mahnung: "Mahnung", sampleLoan: "Leihgut-Lieferschein",
+  };
   const mailDoc = async (kind: string, id: string): Promise<void> => {
     setErr(null);
     try {
@@ -3561,6 +3597,15 @@ function OrderDocumentsTab({ orderId }: { orderId: string }): JSX.Element {
       const belegKind = PDFKIND_TO_MAIL[kind];
       if (!belegKind) return;
       await openBelegMail(belegKind, id);
+    } catch (e) { setErr(errMsg(e)); }
+  };
+  const sendDoc = async (kind: string, id: string): Promise<void> => {
+    setErr(null);
+    try {
+      if (kind === "veredelungsauftrag") { await sendVeredelungsauftragDirect(id); return; }
+      const belegKind = PDFKIND_TO_MAIL[kind];
+      if (!belegKind) return;
+      await sendBelegDirect(belegKind, id, PDFKIND_LABEL[kind] ?? "Beleg");
     } catch (e) { setErr(errMsg(e)); }
   };
 
@@ -3584,6 +3629,7 @@ function OrderDocumentsTab({ orderId }: { orderId: string }): JSX.Element {
                   <Group gap={4} justify="flex-end" wrap="nowrap">
                     <Button size="compact-xs" variant="subtle" onClick={() => void printDoc(d.pdfKind!, d.id!)}>PDF</Button>
                     <Button size="compact-xs" variant="subtle" color="blue" onClick={() => void mailDoc(d.pdfKind!, d.id!)}>In Outlook</Button>
+                    <Button size="compact-xs" variant="subtle" color="blue" onClick={() => void sendDoc(d.pdfKind!, d.id!)}>Direkt senden</Button>
                   </Group>
                 )}
               </Table.Td>
@@ -3900,6 +3946,11 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
                 try { await openBelegMail("AUFTRAGSBESTAETIGUNG", termOrder); }
                 catch (e) { setErr(errMsg(e)); }
               }}>AB in Outlook</Button>
+              <Button size="xs" variant="default" onClick={async () => {
+                setErr(null);
+                try { await sendBelegDirect("AUFTRAGSBESTAETIGUNG", termOrder, "Auftragsbestätigung"); }
+                catch (e) { setErr(errMsg(e)); }
+              }}>AB direkt senden</Button>
             </Group>
           )}
           {termOrder && (
@@ -5721,6 +5772,12 @@ export function SubproductionPage({ onOpen, focusId }: { onOpen?: (k: string, id
     try { await openVeredelungsauftragMail(sub.id); }
     catch (e) { setErr(errMsg(e)); }
   };
+  // Veredelungsauftrag direkt per SMTP an den Veredler senden.
+  const sendVeredler = async (sub: SubStage): Promise<void> => {
+    setErr(null);
+    try { await sendVeredelungsauftragDirect(sub.id); }
+    catch (e) { setErr(errMsg(e)); }
+  };
 
   // Status-Schritt einer Stufe als Menü-Item (+ optionaler Wartehinweis, wenn blockiert).
   const stageStep = (s: SubStage): { item?: DocAction; hint?: string } => {
@@ -5794,6 +5851,7 @@ export function SubproductionPage({ onOpen, focusId }: { onOpen?: (k: string, id
                           step.item ?? false,
                           { label: "Veredelungsauftrag – PDF", group: "Dokumente", onClick: () => void veredelungsauftragPdf(s) },
                           !s.inhouse && { label: "Veredelungsauftrag – In Outlook (Veredler)", group: "Dokumente", onClick: () => void mailVeredler(s) },
+                          !s.inhouse && { label: "Veredelungsauftrag – Direkt senden (Veredler)", group: "Dokumente", onClick: () => void sendVeredler(s) },
                         ]} />
                       </Group>
                     ); })()}
