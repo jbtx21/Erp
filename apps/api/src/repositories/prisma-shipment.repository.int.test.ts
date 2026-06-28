@@ -57,6 +57,7 @@ if (!dbConfigured) {
           shopConnectorId: SC,
           deliveryAddressId: DA,
           status: "VERSANDBEREIT",
+          qsStatus: "BESTANDEN", // QS-Gate (Kap. 20): nur geprüfte Aufträge sind versandbereit.
         },
       });
       // Versandbereit, aber OHNE Lieferadresse → muss im Versand-Gate (listBlocked) erscheinen.

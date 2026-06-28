@@ -44,6 +44,7 @@ if (!dbConfigured) {
       await prisma.article.deleteMany({ where: { id: { in: [ART, ART_NP] } } });
       await prisma.company.deleteMany({ where: { id: CO } });
       await prisma.priceGroup.deleteMany({ where: { id: PG } });
+      await prisma.supplier.deleteMany({ where: { id: "sup-x" } });
     }
 
     beforeAll(async () => {
@@ -114,6 +115,10 @@ if (!dbConfigured) {
 
     it("issueMulti: DueItem-Frist = Ausgabe + 21 Tage (Mehrartikel-Leihe, T-SAMPLE-002)", async () => {
       await cleanup();
+      // cleanup() löscht Firma + Lieferant → für issueMulti (companyId-/supplierId-FK) neu anlegen.
+      await prisma.priceGroup.create({ data: { id: PG, kind: "STANDARD", name: "Standard" } });
+      await prisma.company.create({ data: { id: CO, name: "ACME GmbH", priceGroupId: PG } });
+      await prisma.supplier.create({ data: { id: "sup-x", name: "Stickerei-Partner X" } });
       const ausgabe = new Date(Date.UTC(2026, 5, 1)); // 1.6.2026
       const { id } = await service.issueMulti({ companyId: CO, zweck: "Anprobe", lines: [{ description: "Polo blau M", supplierId: "sup-x", menge: 2 }], at: ausgabe });
       const due = await prisma.dueItem.findFirst({ where: { entity: "SampleLoan", entityId: id }, select: { dueDate: true, note: true } });
