@@ -575,9 +575,9 @@ export function SuppliersPage({ focusId }: { focusId?: string } = {}): JSX.Eleme
       />
       {err && <Alert color="red" mt="sm" withCloseButton onClose={() => setErr(null)}>{err}</Alert>}
       <AutoTable rows={filtered} highlightId={focusId} onRowClick={(r) => setOpenSupplier((c) => c === String(r.id) ? null : String(r.id))} action={(r) => (
-        <Group gap={4} justify="flex-end" wrap="nowrap">
+        <Group gap={6} justify="flex-end" wrap="nowrap" onClick={(e) => e.stopPropagation()}>
           <Button size="compact-xs" variant={openSupplier === String(r.id) ? "filled" : "subtle"} onClick={() => setOpenSupplier((c) => c === String(r.id) ? null : String(r.id))}>Details</Button>
-          <Button size="compact-xs" variant="default" onClick={() => { setSid(String(r.id)); setApplied(String(r.id)); }}>Katalog</Button>
+          <DocActionMenu actions={[{ label: "Katalog anzeigen", group: "Allgemein", onClick: () => { setSid(String(r.id)); setApplied(String(r.id)); } }]} />
         </Group>
       )} />
       {openSupplier && <SupplierDetailPanel supplierId={openSupplier} />}
@@ -834,17 +834,8 @@ function DunningRowActions({ noticeId }: { noticeId: string | null }): JSX.Eleme
   const [err, setErr] = useState<string | null>(null);
   if (!noticeId) return <Text size="xs" c="dimmed">noch keine Mahnung</Text>;
   return (
-    <Group gap={4} justify="flex-end" wrap="nowrap">
-      <Button size="compact-xs" variant="subtle" onClick={async () => {
-        setErr(null);
-        try { const pdf = await trpc.print.mahnung.query({ noticeId }); downloadBase64(pdf.filename, pdf.base64, "application/pdf"); }
-        catch (e) { setErr(errMsg(e)); }
-      }}>PDF</Button>
-      <Button size="compact-xs" variant="subtle" color="blue" onClick={async () => {
-        setErr(null);
-        try { await openBelegMail("MAHNUNG", noticeId); }
-        catch (e) { setErr(errMsg(e)); }
-      }}>In Outlook</Button>
+    <Group gap={6} justify="flex-end" wrap="nowrap" onClick={(e) => e.stopPropagation()}>
+      <DocActionMenu actions={belegDocActions("MAHNUNG", noticeId, "Mahnung", setErr)} />
       {err && <Text size="xs" c="red" title={err}>!</Text>}
     </Group>
   );
@@ -994,16 +985,13 @@ export function SampleLoansPage({ onOpen }: { onOpen?: (navKey: string, id: stri
           return undefined;
         }}
         action={(r) => (
-        <Group gap={4} justify="flex-end" wrap="nowrap">
-          {onOpen && r.quoteId ? <Button size="compact-xs" variant="subtle" onClick={() => onOpen("quotes", String(r.quoteId))} title="zugeordnetes Angebot öffnen">↗ Angebot</Button> : null}
-          <Button size="compact-xs" variant="default" onClick={() => void act(async () => {
-            const pdf = await trpc.print.sampleLoanLieferschein.query({ loanId: String(r.id) });
-            downloadBase64(pdf.filename, pdf.base64, "application/pdf");
-          })}>Lieferschein</Button>
-          <Button size="compact-xs" variant="subtle" color="blue" onClick={() => void act(() => openBelegMail("LEIHGUT", String(r.id)))}>In Outlook</Button>
-          {String(r.status) === "VERLIEHEN"
-            ? <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.sampleLoans.returnSample.mutate({ loanId: String(r.id) }))}>Zurückgenommen</Button>
-            : <Text size="xs" c="dimmed">—</Text>}
+        <Group gap={6} justify="flex-end" wrap="nowrap" onClick={(e) => e.stopPropagation()}>
+          <DocActionMenu actions={[
+            Boolean(onOpen && r.quoteId) && { label: "Zugeordnetes Angebot öffnen", group: "Allgemein", onClick: () => onOpen!("quotes", String(r.quoteId)) },
+            { label: "Leihgut-Lieferschein – PDF", group: "Dokumente", onClick: () => void act(async () => { const pdf = await trpc.print.sampleLoanLieferschein.query({ loanId: String(r.id) }); downloadBase64(pdf.filename, pdf.base64, "application/pdf"); }) },
+            { label: "Leihgut-Lieferschein – In Outlook", group: "Dokumente", onClick: () => void act(() => openBelegMail("LEIHGUT", String(r.id))) },
+            String(r.status) === "VERLIEHEN" && { label: "Als zurückgenommen buchen", group: "Status & Folgeaktion", onClick: () => void act(() => trpc.sampleLoans.returnSample.mutate({ loanId: String(r.id) })) },
+          ]} />
         </Group>
       )} />
     </>
@@ -4705,16 +4693,13 @@ export function InquiriesPage(): JSX.Element {
   const actionsFor = (r: Row): ReactNode => {
     const id = String(r.id); const status = String(r.status);
     return (
-      <Group gap={4} justify="flex-end" wrap="nowrap">
-        {status === "NEU" && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.inquiries.startProcessing.mutate({ id }))}>In Bearbeitung</Button>}
-        {status === "IN_BEARBEITUNG" && <Button size="compact-xs" color="green" disabled={!r.companyId} title={r.companyId ? "In ein Angebot wandeln" : "Erst eine Firma zuordnen (Anfrage-Detail) — Neukunde unter Kunden anlegen"} onClick={() => void act(() => trpc.inquiries.convertToQuote.mutate({ id }))}>→ Angebot</Button>}
+      <Group gap={6} justify="flex-end" wrap="nowrap" onClick={(e) => e.stopPropagation()}>
         {status === "IN_BEARBEITUNG" && !r.companyId && <Text size="xs" c="orange">Firma fehlt</Text>}
-        {status !== "ANGEBOT" && status !== "VERWORFEN" && (
-          <Button size="compact-xs" color="red" variant="light" onClick={() => {
-            const grund = typeof window !== "undefined" ? window.prompt("Verwerfen — Grund?") : null;
-            if (grund) void act(() => trpc.inquiries.discard.mutate({ id, grund }));
-          }}>Verwerfen</Button>
-        )}
+        <DocActionMenu actions={[
+          status === "NEU" && { label: "In Bearbeitung nehmen", group: "Status & Folgeaktion", onClick: () => void act(() => trpc.inquiries.startProcessing.mutate({ id })) },
+          status === "IN_BEARBEITUNG" && { label: "→ In Angebot wandeln", group: "Status & Folgeaktion", color: "green", disabled: !r.companyId, title: r.companyId ? undefined : "Erst eine Firma zuordnen (Anfrage-Detail) — Neukunde unter Kunden anlegen", onClick: () => void act(() => trpc.inquiries.convertToQuote.mutate({ id })) },
+          (status !== "ANGEBOT" && status !== "VERWORFEN") && { label: "Verwerfen", group: "Status & Folgeaktion", color: "red", onClick: () => { const grund = typeof window !== "undefined" ? window.prompt("Verwerfen — Grund?") : null; if (grund) void act(() => trpc.inquiries.discard.mutate({ id, grund })); } },
+        ]} />
       </Group>
     );
   };
@@ -4766,19 +4751,14 @@ export function LeadsPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k: 
   const actionsFor = (r: Row): ReactNode => {
     const id = String(r.id); const status = String(r.status);
     return (
-      <Group gap={4} justify="flex-end" wrap="nowrap">
-        {status === "NEU" && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.leads.transition.mutate({ id, to: "KONTAKTIERT" }))}>→ Kontaktiert</Button>}
-        {status === "KONTAKTIERT" && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.leads.transition.mutate({ id, to: "QUALIFIZIERT" }))}>→ Qualifiziert</Button>}
-        {status === "QUALIFIZIERT" && <Button size="compact-xs" color="green" onClick={() => void act(() => trpc.leads.convert.mutate({ id }))}>Konvertieren</Button>}
-        {status !== "KONVERTIERT" && status !== "VERWORFEN" && (
-          <Button size="compact-xs" color="red" variant="light" onClick={() => {
-            const grund = typeof window !== "undefined" ? window.prompt("Verwerfen — Grund?") : null;
-            if (grund) void act(() => trpc.leads.discard.mutate({ id, grund }));
-          }}>Verwerfen</Button>
-        )}
-        {status === "KONVERTIERT" && !!r.convertedCompanyId && (
-          <Button size="compact-xs" variant="subtle" onClick={() => onOpen?.("companies", String(r.convertedCompanyId))} title="Zum erzeugten Kundenstamm">↗ Kunde</Button>
-        )}
+      <Group gap={6} justify="flex-end" wrap="nowrap" onClick={(e) => e.stopPropagation()}>
+        <DocActionMenu actions={[
+          status === "NEU" && { label: "→ Kontaktiert", group: "Status & Folgeaktion", onClick: () => void act(() => trpc.leads.transition.mutate({ id, to: "KONTAKTIERT" })) },
+          status === "KONTAKTIERT" && { label: "→ Qualifiziert", group: "Status & Folgeaktion", onClick: () => void act(() => trpc.leads.transition.mutate({ id, to: "QUALIFIZIERT" })) },
+          status === "QUALIFIZIERT" && { label: "In Kunde konvertieren", group: "Status & Folgeaktion", color: "green", onClick: () => void act(() => trpc.leads.convert.mutate({ id })) },
+          (status !== "KONVERTIERT" && status !== "VERWORFEN") && { label: "Verwerfen", group: "Status & Folgeaktion", color: "red", onClick: () => { const grund = typeof window !== "undefined" ? window.prompt("Verwerfen — Grund?") : null; if (grund) void act(() => trpc.leads.discard.mutate({ id, grund })); } },
+          (status === "KONVERTIERT" && Boolean(r.convertedCompanyId)) && { label: "Kundenstamm öffnen", group: "Allgemein", onClick: () => onOpen?.("companies", String(r.convertedCompanyId)) },
+        ]} />
       </Group>
     );
   };
@@ -4896,9 +4876,11 @@ export function CallLogsPage(): JSX.Element {
   const actionsFor = (r: Row): ReactNode => {
     const id = String(r.id);
     return (
-      <Group gap={4} justify="flex-end" wrap="nowrap">
-        <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setEditRow((rows as unknown as CallRow[]).find((x) => String(x.id) === id) ?? null)}>Bearbeiten</Button>
-        {String(r.status) === "RUECKRUF" && <Button size="compact-xs" color="green" onClick={() => void act(() => trpc.callLogs.setStatus.mutate({ id, status: "ERLEDIGT" }))}>Rückruf erledigt</Button>}
+      <Group gap={6} justify="flex-end" wrap="nowrap" onClick={(e) => e.stopPropagation()}>
+        <DocActionMenu actions={[
+          { label: "Bearbeiten", group: "Allgemein", onClick: () => setEditRow((rows as unknown as CallRow[]).find((x) => String(x.id) === id) ?? null) },
+          String(r.status) === "RUECKRUF" && { label: "Rückruf erledigt", group: "Status & Folgeaktion", color: "green", onClick: () => void act(() => trpc.callLogs.setStatus.mutate({ id, status: "ERLEDIGT" })) },
+        ]} />
       </Group>
     );
   };
@@ -5052,13 +5034,15 @@ export function CostCentersPage(): JSX.Element {
       </Group>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
       <AutoTable rows={rows} action={(r) => (
-        <Group gap={4} justify="flex-end" wrap="nowrap">
-          <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setEdit({ id: String(r.id), nummer: String(r.nummer), name: String(r.name) })}>Bearbeiten</Button>
-          <Button size="compact-xs" color="red" variant="light" onClick={async () => {
-            if (typeof window !== "undefined" && !window.confirm(`Kostenstelle „${String(r.nummer)}" löschen?`)) return;
-            try { await trpc.costCenters.delete.mutate({ id: String(r.id) }); await load(); }
-            catch (e) { setErr(errMsg(e)); }
-          }}>Löschen</Button>
+        <Group gap={6} justify="flex-end" wrap="nowrap" onClick={(e) => e.stopPropagation()}>
+          <DocActionMenu actions={[
+            { label: "Bearbeiten", group: "Allgemein", onClick: () => setEdit({ id: String(r.id), nummer: String(r.nummer), name: String(r.name) }) },
+            { label: "Löschen", group: "Gefahr", color: "red", onClick: async () => {
+              if (typeof window !== "undefined" && !window.confirm(`Kostenstelle „${String(r.nummer)}" löschen?`)) return;
+              try { await trpc.costCenters.delete.mutate({ id: String(r.id) }); await load(); }
+              catch (e) { setErr(errMsg(e)); }
+            } },
+          ]} />
         </Group>
       )} />
       <Modal opened={!!edit} onClose={() => setEdit(null)} title="Kostenstelle bearbeiten" size="sm">
@@ -5700,20 +5684,17 @@ export function SubproductionPage({ onOpen, focusId }: { onOpen?: (k: string, id
     catch (e) { setErr(errMsg(e)); }
   };
 
-  const actionsFor = (s: SubStage): ReactNode => {
+  // Status-Schritt einer Stufe als Menü-Item (+ optionaler Wartehinweis, wenn blockiert).
+  const stageStep = (s: SubStage): { item?: DocAction; hint?: string } => {
     const blocked = plan?.blocked.some((b) => b.sequence === s.sequence) ?? false;
     if (s.inhouse) {
-      if (s.status === "ABGESCHLOSSEN") return <Text size="xs" c="dimmed">—</Text>;
-      return blocked
-        ? <Text size="xs" c="dimmed">wartet auf externe Veredelung</Text>
-        : <Button size="compact-xs" color="grape" variant="light" onClick={() => void completeInhouse(s)}>Inhouse erledigt</Button>;
+      if (s.status === "ABGESCHLOSSEN") return {};
+      return blocked ? { hint: "wartet auf externe Veredelung" } : { item: { label: "Inhouse erledigt", group: "Status & Folgeaktion", color: "grape", onClick: () => void completeInhouse(s) } };
     }
-    if (s.status === "OFFEN") return blocked
-      ? <Text size="xs" c="dimmed">wartet auf Vorstufe</Text>
-      : <Button size="compact-xs" variant="default" onClick={() => void advance(s, "BEISTELLUNG_VERSANDT")}>Beistellung versenden</Button>;
-    if (s.status === "BEISTELLUNG_VERSANDT") return <Button size="compact-xs" color="green" onClick={() => void advance(s, "RUECKLAUF_ERHALTEN")}>Rücklauf buchen</Button>;
-    if (s.status === "RUECKLAUF_ERHALTEN") return <Button size="compact-xs" variant="light" onClick={() => void advance(s, "ABGESCHLOSSEN")}>Abschließen</Button>;
-    return <Text size="xs" c="dimmed">—</Text>;
+    if (s.status === "OFFEN") return blocked ? { hint: "wartet auf Vorstufe" } : { item: { label: "Beistellung versenden", group: "Status & Folgeaktion", onClick: () => void advance(s, "BEISTELLUNG_VERSANDT") } };
+    if (s.status === "BEISTELLUNG_VERSANDT") return { item: { label: "Rücklauf buchen", group: "Status & Folgeaktion", color: "green", onClick: () => void advance(s, "RUECKLAUF_ERHALTEN") } };
+    if (s.status === "RUECKLAUF_ERHALTEN") return { item: { label: "Abschließen", group: "Status & Folgeaktion", onClick: () => void advance(s, "ABGESCHLOSSEN") } };
+    return {};
   };
 
   return (
@@ -5768,11 +5749,16 @@ export function SubproductionPage({ onOpen, focusId }: { onOpen?: (k: string, id
                   <Table.Td style={numTd}>{euro(s.lohnCents)}</Table.Td>
                   <Table.Td>{s.dueDate ? new Date(s.dueDate).toLocaleDateString("de-DE") : "—"}</Table.Td>
                   <Table.Td>
-                    <Group gap={6} wrap="nowrap">
-                      {actionsFor(s)}
-                      <Button size="compact-xs" variant="subtle" onClick={() => void veredelungsauftragPdf(s)} title="Werkstattblatt mit Größen-Matrix + Veredelungspositionen">Veredelungsauftrag</Button>
-                      {!s.inhouse && <Button size="compact-xs" variant="subtle" color="blue" onClick={() => void mailVeredler(s)} title="Veredelungsauftrag als Outlook-Entwurf (PDF-Anhang) an den Veredler">In Outlook (Veredler)</Button>}
-                    </Group>
+                    {(() => { const step = stageStep(s); return (
+                      <Group gap={6} wrap="nowrap" justify="flex-end" onClick={(e) => e.stopPropagation()}>
+                        {step.hint && <Text size="xs" c="dimmed">{step.hint}</Text>}
+                        <DocActionMenu actions={[
+                          step.item ?? false,
+                          { label: "Veredelungsauftrag – PDF", group: "Dokumente", onClick: () => void veredelungsauftragPdf(s) },
+                          !s.inhouse && { label: "Veredelungsauftrag – In Outlook (Veredler)", group: "Dokumente", onClick: () => void mailVeredler(s) },
+                        ]} />
+                      </Group>
+                    ); })()}
                   </Table.Td>
                 </Table.Tr>
               ))}
@@ -6468,10 +6454,12 @@ export function OpportunitiesPage(): JSX.Element {
         const id = String(r.id); const status = String(r.status);
         if (status !== "OFFEN") return <Text size="xs" c="dimmed">{status === "GEWONNEN" ? "✓ gewonnen" : "✗ verloren"}</Text>;
         return (
-          <Group gap={4} justify="flex-end" wrap="nowrap">
+          <Group gap={6} justify="flex-end" wrap="nowrap" onClick={(e) => e.stopPropagation()}>
             <Select size="xs" w={140} value={String(r.stage)} onChange={(v) => v && void act(() => trpc.opportunities.advanceStage.mutate({ id, stage: v as "ANGEBOT" }))} data={OPP_STAGES.map((s) => ({ value: s.value, label: s.label }))} />
-            <Button size="compact-xs" color="green" onClick={() => void act(() => trpc.opportunities.markWon.mutate({ id }))}>Gewonnen</Button>
-            <Button size="compact-xs" color="red" variant="light" onClick={() => { const g = window.prompt("Verlustgrund?"); if (g) void act(() => trpc.opportunities.markLost.mutate({ id, reason: g })); }}>Verloren</Button>
+            <DocActionMenu actions={[
+              { label: "Gewonnen", group: "Status & Folgeaktion", color: "green", onClick: () => void act(() => trpc.opportunities.markWon.mutate({ id })) },
+              { label: "Verloren", group: "Status & Folgeaktion", color: "red", onClick: () => { const g = window.prompt("Verlustgrund?"); if (g) void act(() => trpc.opportunities.markLost.mutate({ id, reason: g })); } },
+            ]} />
           </Group>
         );
       }} />
