@@ -1,11 +1,11 @@
-import { prisma } from "@texma/db";
+import { prisma, Prisma } from "@texma/db";
 import type { CrmStage } from "@texma/shared";
-import type { CreateCrmLeadInput, CrmLeadRecord, CrmRepository, UpdateCrmLeadInput } from "../modules/crm/crm.service.js";
+import type { CreateCrmLeadInput, CrmLeadRecord, CrmLine, CrmRepository, UpdateCrmLeadInput } from "../modules/crm/crm.service.js";
 
 const VIEW = {
   id: true, name: true, companyId: true, contactName: true, email: true, phone: true,
   source: true, stage: true, valueCents: true, probability: true, expectedCloseAt: true,
-  text: true, note: true, lostReason: true, quoteId: true, createdAt: true,
+  text: true, note: true, lostReason: true, quoteId: true, lines: true, createdAt: true,
   company: { select: { name: true } },
 } as const;
 
@@ -13,13 +13,13 @@ type ViewRow = {
   id: string; name: string; companyId: string | null; contactName: string | null; email: string | null;
   phone: string | null; source: CrmLeadRecord["source"]; stage: CrmStage; valueCents: number | null;
   probability: number | null; expectedCloseAt: Date | null; text: string | null; note: string | null;
-  lostReason: string | null; quoteId: string | null; createdAt: Date; company: { name: string } | null;
+  lostReason: string | null; quoteId: string | null; lines: unknown; createdAt: Date; company: { name: string } | null;
 };
 
 // Firma-Relation flach in companyName auflösen (Liste zeigt den Namen, nicht die cuid).
 function toRecord(r: ViewRow): CrmLeadRecord {
-  const { company, ...rest } = r;
-  return { ...rest, companyName: company?.name ?? null };
+  const { company, lines, ...rest } = r;
+  return { ...rest, companyName: company?.name ?? null, lines: Array.isArray(lines) ? (lines as CrmLine[]) : null };
 }
 
 export class PrismaCrmRepository implements CrmRepository {
@@ -57,6 +57,7 @@ export class PrismaCrmRepository implements CrmRepository {
         ...(patch.expectedCloseAt !== undefined ? { expectedCloseAt: patch.expectedCloseAt } : {}),
         ...(patch.text !== undefined ? { text: patch.text } : {}),
         ...(patch.note !== undefined ? { note: patch.note } : {}),
+        ...(patch.lines !== undefined ? { lines: patch.lines === null ? Prisma.DbNull : (patch.lines as unknown as Prisma.InputJsonValue) } : {}),
       },
       select: VIEW,
     })) as ViewRow;
@@ -65,7 +66,7 @@ export class PrismaCrmRepository implements CrmRepository {
   async setStage(id: string, stage: CrmStage, lostReason: string | null): Promise<void> {
     await prisma.crmLead.update({ where: { id }, data: { stage, lostReason } });
   }
-  async convertToQuote(id: string, input: { quoteNumber: string; companyId: string; text: string }): Promise<{ quoteId: string }> {
+  async convertToQuote(id: string, input: { quoteNumber: string; companyId: string; text: string; lines: CrmLine[] | null }): Promise<{ quoteId: string }> {
     return prisma.$transaction(async (tx) => {
       // Atomarer Gate: nur eine offene Vor-Angebot-Stufe konvertieren (Doppelklick-sicher).
       const gate = await tx.crmLead.updateMany({
@@ -74,9 +75,20 @@ export class PrismaCrmRepository implements CrmRepository {
       });
       if (gate.count === 0) throw new Error(`CRM-Eintrag ${id} ist bereits überführt oder nicht überführbar`);
       const quote = await tx.quote.create({ data: { number: input.quoteNumber, companyId: input.companyId, status: "ENTWURF" }, select: { id: true } });
-      const text = input.text.trim();
-      if (text.length > 0) {
-        await tx.quoteLine.create({ data: { quoteId: quote.id, position: 1, description: text, qty: 1, unitNetCents: 0, taxRatePct: 19, kind: "TEXTIL" } });
+      // Erfasste Anfrage-Positionen → echte QuoteLines (Freitext bleibt erhalten, Variante optional).
+      // Ohne Positionen Fallback auf eine Freitext-Zeile aus Bedarf/Bezeichnung.
+      const lines = (input.lines ?? []).filter((l) => l.description.trim().length > 0 && l.qty > 0);
+      if (lines.length > 0) {
+        await tx.quoteLine.createMany({ data: lines.map((l, i) => ({
+          quoteId: quote.id, position: i + 1, description: l.description.trim(), qty: l.qty,
+          unitNetCents: l.unitNetCents, taxRatePct: l.taxRatePct ?? 19, kind: l.kind,
+          variantId: l.variantId ?? null, bezugPosition: l.bezugPosition ?? null,
+        })) });
+      } else {
+        const text = input.text.trim();
+        if (text.length > 0) {
+          await tx.quoteLine.create({ data: { quoteId: quote.id, position: 1, description: text, qty: 1, unitNetCents: 0, taxRatePct: 19, kind: "TEXTIL" } });
+        }
       }
       await tx.crmLead.update({ where: { id }, data: { quoteId: quote.id } });
       return { quoteId: quote.id };

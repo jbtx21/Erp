@@ -2516,6 +2516,16 @@ export const appRouter = router({
         expectedCloseAt: z.string().nullable().optional(),
         text: z.string().nullable().optional(),
         note: z.string().nullable().optional(),
+        // Konkrete Anfrage-Positionen (gleiche Form wie Angebotspositionen, Freitext erlaubt).
+        lines: z.array(z.object({
+          description: z.string(),
+          qty: z.number().int().positive(),
+          unitNetCents: z.number().int().nonnegative(),
+          taxRatePct: z.number().optional(),
+          kind: z.enum(["TEXTIL", "VEREDELUNG", "SONSTIGE"]),
+          variantId: z.string().nullable().optional(),
+          bezugPosition: z.number().int().nullable().optional(),
+        })).nullable().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         const { id, expectedCloseAt, ...rest } = input;

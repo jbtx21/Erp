@@ -1993,6 +1993,9 @@ model CrmLead {
   note            String?
   lostReason      String?
   quoteId         String? // gesetzt nach Angebotsüberführung
+  // Konkrete Anfrage-Positionen (Mehr-Positionen-Erfassung wie im Angebot, inkl. Freitext auf
+  // Artikel-/Veredelungsebene). JSON (Entwurfscharakter); beim Überführen → echte QuoteLines.
+  lines           Json?
   legacyKind      String? // Backfill-Herkunft: LEAD | INQUIRY | OPPORTUNITY
   legacyId        String? // ID im alten Backend (Nachvollziehbarkeit)
   createdAt       DateTime       @default(now())

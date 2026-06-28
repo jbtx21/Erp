@@ -4489,6 +4489,10 @@ function CrmEditModal({ lead, onClose, onSaved }: { lead: CrmRow | null; onClose
   const [valueEur, setValueEur] = useState("");
   const [expectedCloseAt, setExpectedCloseAt] = useState("");
   const [text, setText] = useState("");
+  // Konkrete Anfrage-Positionen (gleiche Maske wie das Angebot, Freitext auf Artikel-/
+  // Veredelungsebene erlaubt; beim Überführen → echte Angebotspositionen).
+  const [lines, setLines] = useState<EditorLine[]>([]);
+  const globalTaxRate = useDefaultTaxRate();
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -4498,6 +4502,14 @@ function CrmEditModal({ lead, onClose, onSaved }: { lead: CrmRow | null; onClose
     setEmail(lead.email ?? ""); setPhone(lead.phone ?? ""); setSource(lead.source ?? "WEB");
     setValueEur(lead.valueCents != null ? String(lead.valueCents / 100) : "");
     setExpectedCloseAt(lead.expectedCloseAt ? String(lead.expectedCloseAt).slice(0, 10) : "");
+    // Gespeicherte Anfrage-Positionen → Editor-Zeilen (Freitext/Variante/Veredelung).
+    const stored = (lead.lines ?? []) as Array<{ description: string; qty: number; unitNetCents: number; taxRatePct?: number | null; kind: PositionKind; variantId?: string | null; bezugPosition?: number | null }>;
+    setLines(stored.map((l) => ({
+      description: l.description, qty: l.qty, euro: l.unitNetCents / 100, kind: l.kind,
+      ...(l.variantId ? { variantId: l.variantId } : {}),
+      ...(l.taxRatePct != null ? { taxRatePct: l.taxRatePct } : {}),
+      ...(l.bezugPosition != null ? { bezugPosition: l.bezugPosition } : {}),
+    })));
     setText(lead.text ?? ""); setErr(null);
   }, [lead]);
 
@@ -4513,13 +4525,15 @@ function CrmEditModal({ lead, onClose, onSaved }: { lead: CrmRow | null; onClose
         source: source as "WEB" | "EMAIL" | "SHOP" | "TELEFON",
         valueCents: Number.isFinite(valueCents) ? valueCents : null,
         expectedCloseAt: expectedCloseAt || null, text: text.trim() || null,
+        // Anfrage-Positionen mitspeichern (gleiches Format wie Angebotspositionen).
+        lines: (() => { const api = toApiLines(lines); return api.length ? api : null; })(),
       });
       onSaved(); onClose();
     } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
   };
 
   return (
-    <Modal opened={!!lead} onClose={onClose} title="CRM-Eintrag bearbeiten" size="lg">
+    <Modal opened={!!lead} onClose={onClose} title="CRM-Eintrag / Anfrage bearbeiten" size="xl">
       {err && <Alert color="red" mb="sm">{err}</Alert>}
       <Stack gap="sm">
         <TextInput label="Bezeichnung" value={name} onChange={(e) => setName(e.currentTarget.value)} required />
@@ -4536,7 +4550,14 @@ function CrmEditModal({ lead, onClose, onSaved }: { lead: CrmRow | null; onClose
           <TextInput label="Wunschtermin" type="date" value={expectedCloseAt} onChange={(e) => setExpectedCloseAt(e.currentTarget.value)} />
           <TextInput label="Budget €" value={valueEur} onChange={(e) => setValueEur(e.currentTarget.value)} />
         </Group>
-        <Textarea label="Bedarf (Was/Wo)" value={text} onChange={(e) => setText(e.currentTarget.value)} autosize minRows={2} />
+        <Textarea label="Bedarf (Freitext / Notiz)" value={text} onChange={(e) => setText(e.currentTarget.value)} autosize minRows={2} />
+        {/* Konkrete Anfrage → Positionen wie im Angebot erfassen (Artikel/Variante wählen ODER
+            Freitext auf Artikel-/Veredelungsebene); werden bei „→ Angebot" zu echten Positionen. */}
+        <Box>
+          <Text size="sm" fw={600} mb={4}>Anfrage-Positionen (optional)</Text>
+          <Text size="xs" c="dimmed" mb="xs">Mehrere Positionen wie im Angebot — Artikel/Variante wählen oder frei beschreiben (auch Veredelung). Freitext lässt sich später in feste Artikel wandeln.</Text>
+          <LinesEditor lines={lines} onChange={setLines} quoteMode companyId={companyId || undefined} taxRate={globalTaxRate} />
+        </Box>
         <Group justify="flex-end" mt="xs">
           <Button variant="default" onClick={onClose}>Abbrechen</Button>
           <Button loading={busy} disabled={!name.trim()} onClick={() => void save()}>Speichern</Button>

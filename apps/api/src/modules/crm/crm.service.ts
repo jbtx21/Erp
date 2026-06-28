@@ -6,6 +6,17 @@ import { crmStageMachine, canConvertCrmToQuote, CrmError, type CrmStage, type In
 import { buildEntry, type AuditSink } from "@texma/audit";
 import type { NumberingService } from "../numbering/numbering.service.js";
 
+/** Anfrage-Position (gleiche Form wie eine Angebotsposition; Freitext erlaubt, Variante optional). */
+export interface CrmLine {
+  description: string;
+  qty: number;
+  unitNetCents: number;
+  taxRatePct?: number;
+  kind: "TEXTIL" | "VEREDELUNG" | "SONSTIGE";
+  variantId?: string | null;
+  bezugPosition?: number | null;
+}
+
 export interface CrmLeadRecord {
   id: string;
   name: string;
@@ -23,6 +34,7 @@ export interface CrmLeadRecord {
   note: string | null;
   lostReason: string | null;
   quoteId: string | null;
+  lines: CrmLine[] | null;
   createdAt: Date;
 }
 
@@ -51,6 +63,7 @@ export interface UpdateCrmLeadInput {
   expectedCloseAt?: Date | null;
   text?: string | null;
   note?: string | null;
+  lines?: CrmLine[] | null;
 }
 
 export interface CrmRepository {
@@ -59,8 +72,9 @@ export interface CrmRepository {
   create(input: CreateCrmLeadInput & { stage: CrmStage }): Promise<CrmLeadRecord>;
   update(id: string, patch: UpdateCrmLeadInput): Promise<CrmLeadRecord>;
   setStage(id: string, stage: CrmStage, lostReason: string | null): Promise<void>;
-  /** Legt das Angebot an, setzt stage=ANGEBOT + quoteId (transaktional). */
-  convertToQuote(id: string, input: { quoteNumber: string; companyId: string; text: string }): Promise<{ quoteId: string }>;
+  /** Legt das Angebot an, setzt stage=ANGEBOT + quoteId (transaktional). Übernimmt erfasste
+   *  Anfrage-Positionen als QuoteLines; ohne Positionen Fallback auf eine Freitext-Zeile. */
+  convertToQuote(id: string, input: { quoteNumber: string; companyId: string; text: string; lines: CrmLine[] | null }): Promise<{ quoteId: string }>;
 }
 
 export class CrmService {
@@ -119,7 +133,7 @@ export class CrmService {
     if (!canConvertCrmToQuote(lead.stage)) throw new CrmError(`Aus Stufe ${lead.stage} ist keine Angebotsüberführung möglich.`);
     if (!lead.companyId) throw new CrmError("Überführung in ein Angebot erfordert eine zugeordnete Firma.");
     const quoteNumber = await this.numbering.next("QUOTE");
-    const { quoteId } = await this.repo.convertToQuote(id, { quoteNumber, companyId: lead.companyId, text: lead.text ?? lead.name });
+    const { quoteId } = await this.repo.convertToQuote(id, { quoteNumber, companyId: lead.companyId, text: lead.text ?? lead.name, lines: lead.lines });
     await this.audit.append(buildEntry({ entity: "CrmLead", entityId: id, action: "UPDATE", after: { stage: "ANGEBOT", quoteId, quoteNumber } }));
     return { quoteId, number: quoteNumber };
   }

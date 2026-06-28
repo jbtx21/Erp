@@ -1,5 +1,5 @@
 import type { CrmStage } from "@texma/shared";
-import type { CreateCrmLeadInput, CrmLeadRecord, CrmRepository, UpdateCrmLeadInput } from "../modules/crm/crm.service.js";
+import type { CreateCrmLeadInput, CrmLeadRecord, CrmLine, CrmRepository, UpdateCrmLeadInput } from "../modules/crm/crm.service.js";
 
 let seq = 0;
 
@@ -19,7 +19,7 @@ export class InMemoryCrmRepository implements CrmRepository {
       id: `crm-${++seq}`, name: input.name, companyId: input.companyId ?? null, companyName: null, contactName: input.contactName ?? null,
       email: input.email ?? null, phone: input.phone ?? null, source: input.source ?? null, stage: input.stage,
       valueCents: input.valueCents ?? null, probability: null, expectedCloseAt: input.expectedCloseAt ?? null,
-      text: input.text ?? null, note: input.note ?? null, lostReason: null, quoteId: null, createdAt: new Date(0),
+      text: input.text ?? null, note: input.note ?? null, lostReason: null, quoteId: null, lines: null, createdAt: new Date(0),
     };
     this.rows.push(rec);
     return { ...rec };
@@ -37,7 +37,7 @@ export class InMemoryCrmRepository implements CrmRepository {
     const r = this.rows.find((x) => x.id === id);
     if (r) { r.stage = stage; r.lostReason = lostReason; }
   }
-  async convertToQuote(id: string, _input: { quoteNumber: string; companyId: string; text: string }): Promise<{ quoteId: string }> {
+  async convertToQuote(id: string, _input: { quoteNumber: string; companyId: string; text: string; lines: CrmLine[] | null }): Promise<{ quoteId: string }> {
     const r = this.rows.find((x) => x.id === id);
     if (!r || !(r.stage === "NEU" || r.stage === "KONTAKTIERT" || r.stage === "QUALIFIZIERT")) {
       throw new Error(`CRM-Eintrag ${id} ist bereits überführt oder nicht überführbar`);

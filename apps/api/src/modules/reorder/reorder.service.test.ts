@@ -55,7 +55,8 @@ describe("ReorderService.demandProposals (auftragsübergreifend + Leihgut)", () 
     const svc = new ReorderService(repo, { append: async () => {} });
     const props = await svc.demandProposals();
     expect(props).toHaveLength(1);
-    expect(props[0]).toMatchObject({ variantId: "v1", supplierId: "sup-a", requiredQty: 20, stockQty: 5, orderQty: 15 });
+    // Auftrag 10+8=18, Muster 2 kommen zurück → Netto-Bedarf 16; abzgl. 5 Bestand → 11 bestellen.
+    expect(props[0]).toMatchObject({ variantId: "v1", supplierId: "sup-a", requiredQty: 16, stockQty: 5, orderQty: 11 });
     expect(props[0]?.sources).toHaveLength(3);
   });
 });
