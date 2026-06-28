@@ -134,9 +134,9 @@ export class PrismaBankConnectionRepository implements BankConnectionRepository 
   }
 
   async listPayableInvoices(): Promise<PayableInvoice[]> {
-    // „Zahlbar" = geprüfte (3-Way-Match ok), noch nicht bezahlte Eingangsrechnungen.
+    // „Zahlbar" = nach EK-Abgleich freigegebene, noch nicht bezahlte Eingangsrechnungen (Kap. 9.4).
     const rows = await prisma.incomingInvoice.findMany({
-      where: { status: "GEPRUEFT" },
+      where: { status: "FREIGEGEBEN" },
       select: { id: true, number: true, grossCents: true, supplier: { select: { name: true, iban: true, bic: true } } },
       orderBy: { receivedAt: "asc" },
     });

@@ -139,11 +139,17 @@ export interface SupplierQueryRepository {
 export interface IncomingInvoiceListItem {
   id: string;
   supplierId: string;
+  supplierName: string;
   number: string;
   netCents: number;
   taxCents: number;
   grossCents: number;
   status: string;
+  /** EK-Abgleich-Status (OFFEN/OK/ABWEICHUNG/PRUEFUNG). */
+  ekCheckStatus: string;
+  /** Nettofälligkeit + Skonto-Frist (Zahlungssteuerung). */
+  dueDate: Date | null;
+  skontoUntil: Date | null;
   receivedAt: Date;
 }
 

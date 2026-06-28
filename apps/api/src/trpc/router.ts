@@ -540,6 +540,46 @@ export const appRouter = router({
     list: roleProcedure(...supplierRoles)
       .input(z.object({ limit: z.number().int().positive().max(200) }).optional())
       .query(async ({ input, ctx }) => ctx.incomingInvoices.listRecent(input?.limit ?? 50)),
+
+    /** Erfasst eine per OCR/Texterkennung ausgelesene Rechnung (PDF/Scan, GetMyInvoices-Vorbild). */
+    receiveOcr: roleProcedure(...supplierRoles)
+      .input(z.object({ text: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.incomingInvoiceImport.receiveOcrText(input.text); }
+        catch (e) { throw toTrpcError(e); }
+      }),
+
+    /** Beleg-Detail inkl. Positionen + Stamm-EK (für den EK-Abgleich). */
+    detail: roleProcedure(...supplierRoles)
+      .input(z.object({ invoiceId: z.string().min(1) }))
+      .query(async ({ input, ctx }) => {
+        try { return await ctx.incomingInvoiceImport.detail(input.invoiceId); }
+        catch (e) { throw toTrpcError(e); }
+      }),
+
+    /** EK-Abgleich: berechneter EK ↔ Artikelstammdaten (SupplierItem.ekCents). */
+    runEkCheck: roleProcedure(...supplierRoles)
+      .input(z.object({ invoiceId: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.incomingInvoiceImport.runEkCheck(input.invoiceId); }
+        catch (e) { throw toTrpcError(e); }
+      }),
+
+    /** Nach EK-Abgleich zur Zahlung freigeben (ABWEICHUNG nur durch ADMIN). */
+    freigeben: roleProcedure(...supplierRoles)
+      .input(z.object({ invoiceId: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.incomingInvoiceImport.freigeben(input.invoiceId, ctx.user.email, { role: ctx.user.role }); }
+        catch (e) { throw toTrpcError(e); }
+      }),
+
+    /** Freigegebene Rechnung „direkt bezahlen" (Skonto/Fälligkeit), Zahlung dem Beleg zugeordnet. */
+    pay: roleProcedure(...supplierRoles)
+      .input(z.object({ invoiceId: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.incomingInvoiceImport.markPaid(input.invoiceId); }
+        catch (e) { throw toTrpcError(e); }
+      }),
   }),
 
   // Ausgangs-E-Rechnung (XRechnung/ZUGFeRD-CII, Kap. 19): erzeugt das EN16931-XML zu einer

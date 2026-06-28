@@ -5,6 +5,7 @@
 // strukturelle Extraktion der EN16931-Kern-Geschäftsobjekte.
 
 import type { Cents } from "./money.js";
+import type { ExtractedInvoiceLine } from "./invoice-extraction.js";
 import {
   type EInvoiceModel,
   type EInvoiceValidationResult,
@@ -106,6 +107,8 @@ export interface IncomingInvoiceDraft {
   taxCents: Cents;
   grossCents: Cents;
   issueDate: Date;
+  /** Positionen (für den EK-Abgleich) — aus den CII-Zeilen extrahiert. */
+  lines: ExtractedInvoiceLine[];
 }
 
 export interface InboundEInvoiceResult {
@@ -136,6 +139,7 @@ export function receiveEInvoice(xml: string): InboundEInvoiceResult {
       taxCents: parsed.taxCents!,
       grossCents: parsed.grossCents!,
       issueDate: parsed.issueDate!,
+      lines: (parsed.lines ?? []).map((l) => ({ description: l.name, qty: l.qty, unitNetCents: l.unitNetCents })),
     },
   };
 }
