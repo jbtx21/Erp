@@ -27,6 +27,30 @@ export class PrismaProcurementRepository implements ProcurementRepository {
     return lines.map((l) => ({ variantId: l.variantId, supplierId: l.purchaseOrder.supplierId, qty: l.qty }));
   }
 
+  async componentRefs(productionId: string): Promise<Array<{ variantId: string; label: string; supplierName: string }>> {
+    // Lesbare Bezeichnungen je Komponente (Artikelname + Varianten-SKU, Lieferantenname)
+    // statt der rohen cuid in der Anzeige (Bucket A).
+    const lines = await prisma.purchaseOrderLine.findMany({
+      where: { purchaseOrder: { productionId } },
+      select: {
+        variantId: true,
+        variant: { select: { sku: true, article: { select: { name: true } } } },
+        purchaseOrder: { select: { supplier: { select: { name: true } } } },
+      },
+    });
+    // Eine Variante kann mehrfach (mehrere POs) vorkommen — pro Variante genügt ein Ref.
+    const byVariant = new Map<string, { variantId: string; label: string; supplierName: string }>();
+    for (const l of lines) {
+      if (byVariant.has(l.variantId)) continue;
+      byVariant.set(l.variantId, {
+        variantId: l.variantId,
+        label: `${l.variant.article.name} (${l.variant.sku})`,
+        supplierName: l.purchaseOrder.supplier.name,
+      });
+    }
+    return [...byVariant.values()];
+  }
+
   async receivedComponents(productionId: string): Promise<GoodsReceiptLine[]> {
     const lines = await prisma.goodsReceiptLine.findMany({
       where: { goodsReceipt: { purchaseOrder: { productionId } } },

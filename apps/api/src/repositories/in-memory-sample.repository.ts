@@ -40,7 +40,9 @@ export class InMemorySampleLoanRepository implements SampleLoanRepository {
   }
 
   async list(): Promise<SampleLoanRow[]> {
-    return [...this.loans.values()].map((l) => ({ ...l })).sort((a, b) => b.ausgegebenAm.getTime() - a.ausgegebenAm.getTime());
+    return [...this.loans.values()]
+      .map((l) => ({ ...l, companyName: null, articleLabel: l.variantId }))
+      .sort((a, b) => b.ausgegebenAm.getTime() - a.ausgegebenAm.getTime());
   }
 
   /** Test-Helfer: Angebot für „Angebot → Leihgut" hinterlegen. */

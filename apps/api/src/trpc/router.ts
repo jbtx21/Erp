@@ -605,6 +605,12 @@ export const appRouter = router({
       .input(z.object({ limit: z.number().int().positive().max(200) }).optional())
       .query(async ({ input, ctx }) => ctx.shipments.listShippable(input?.limit ?? 50)),
 
+    /** Versandbereite, aber durch ein Gate blockierte Aufträge (Adresse/Liefersperre/QS) —
+     *  macht „Keine Daten" in der Versandliste erklärbar (T-06). */
+    listBlocked: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ limit: z.number().int().positive().max(200) }).optional())
+      .query(async ({ input, ctx }) => ctx.shipments.listBlocked(input?.limit ?? 50)),
+
     /** Bestätigt den Versand: Auftrag → VERSENDET, Tracking + Carrier gespeichert, Shop-Push
      *  eingereiht; bei Aufträgen ohne Shop zusätzlich Versand-Mail an den Kunden (Kap. 4.2). */
     confirmShipped: roleProcedure("ADMIN", "BUERO")

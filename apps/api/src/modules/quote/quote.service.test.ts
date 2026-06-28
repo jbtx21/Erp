@@ -70,4 +70,17 @@ describe("QuoteService.transition — 0-€-/Leer-Schutz (P0-2)", () => {
     const { id } = await svc.create({ companyId: "co-1", lines: [{ description: "Polo", qty: 10, unitNetCents: 1290 }] });
     await expect(svc.transition(id, "VERSENDET")).resolves.toBeUndefined();
   });
+
+  it("hebt die verknüpfte Verkaufschance auf GEWONNEN, sobald das Angebot angenommen wird (Pipeline-Sync)", async () => {
+    const repo = new InMemoryQuoteRepository();
+    const wonFor: string[] = [];
+    // Optionalen Pipeline-Sync-Hook für den Test ergänzen (im echten Repo: CrmLead-Update).
+    (repo as unknown as { markLinkedLeadWon: (q: string) => Promise<void> }).markLinkedLeadWon = async (q) => { wonFor.push(q); };
+    const svc = new QuoteService(repo, new NumberingService(new InMemoryNumberingRepository()), new MemAudit());
+    const { id } = await svc.create({ companyId: "co-1", lines: [{ description: "Polo", qty: 10, unitNetCents: 1290 }] });
+    await svc.transition(id, "VERSENDET");
+    expect(wonFor).toEqual([]); // noch nicht bei VERSENDET
+    await svc.transition(id, "ANGENOMMEN");
+    expect(wonFor).toEqual([id]); // genau bei der Annahme
+  });
 });

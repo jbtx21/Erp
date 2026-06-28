@@ -2,7 +2,7 @@
 // AutoTable rendert jede Liste robust (Cent→€, Datum, Status-Badge), sodass neue
 // Bereiche mit wenig Code anbindbar sind. Interaktive Aktionen (Versand bestätigen,
 // Mahnlauf, Reorder→Bestellungen) sind je Seite ergänzt.
-import { Fragment, useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Alert, Anchor, Badge, Box, Button, Card, Checkbox, FileButton, Group, Image, Loader, Menu, Modal, NumberInput, Paper, PasswordInput, Popover, SegmentedControl, Select, SimpleGrid, Stack, Switch, Table, Tabs, TagsInput, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { validateVatId } from "@texma/shared/vat";
@@ -161,9 +161,11 @@ const COL_LABELS: Record<string, string> = {
   gueltigBisAm: "Gültig bis", zugesagterLiefertermin: "Liefertermin", lieferstatus: "Lieferstatus", fakturastatus: "Fakturastatus", externalNumber: "Shop-Nr.", employeeNote: "Vermerk",
   trackingNumber: "Tracking", invoiceId: "Rechnung", kontaktName: "Kontakt", note: "Notiz",
   verworfenGrund: "Grund", finalized: "Final", lastSyncAt: "Letzter Sync", dunningLevel: "Mahnstufe",
-  quoteId: "Angebot", externalRef: "Externe Ref.", receivedAt: "Erhalten am", totalEkCents: "EK gesamt",
+  quoteId: "Angebot", externalRef: "Externe Ref.", receivedAt: "Erhalten am", totalEkCents: "EK gesamt", articleLabel: "Artikel",
   lines: "Positionen", weightGrams: "Gewicht (g)", shopConnectorId: "Shop", orderId: "Auftrag",
   invoiceNumber: "Rechnungsnr.", erzeugtAm: "Erzeugt", stufe: "Mahnstufe", offenCents: "Offen", mahngebuehrCents: "Mahngebühr", faelligSeit: "Fällig seit",
+  productionNumber: "PA-Nr.", orderNumber: "Auftragsnr.", supplierName: "Lieferant", inhouse: "Ausführung", subNumber: "Stufen-Nr.", sequence: "Stufe",
+  source: "Quelle", ekCheckStatus: "EK-Prüfung", articleName: "Artikel", requiredQty: "Bedarf", receivedQty: "Erhalten", orderQty: "Bestellen", stockQty: "Bestand",
 };
 const colLabel = (key: string): string =>
   COL_LABELS[key] ?? key.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (c) => c.toUpperCase());
@@ -863,6 +865,12 @@ export function ReorderPage({ onOpen }: { onOpen?: (k: string, id: string) => vo
   }, []);
   useEffect(() => { void reload(); }, [reload]);
 
+  // Bucket A: Variante als „Artikel (SKU)" statt roher cuid — Namen aus der gruppierten Sicht.
+  const variantLabel = useMemo(() => {
+    const m = new Map(grouped.map((g) => [g.variantId, `${g.articleName} (${g.sku})`]));
+    return (variantId: string): string => m.get(variantId) ?? variantId;
+  }, [grouped]);
+
   return (
     <>
       <DocListHeader module="Einkauf" title="Warenbestellvorschläge" />
@@ -883,7 +891,7 @@ export function ReorderPage({ onOpen }: { onOpen?: (k: string, id: string) => vo
           <Table.Tbody>
             {demand.map((d) => (
               <Table.Tr key={d.variantId}>
-                <Table.Td>{d.variantId}</Table.Td>
+                <Table.Td>{variantLabel(d.variantId)}</Table.Td>
                 <Table.Td ta="right">{d.requiredQty}</Table.Td>
                 <Table.Td ta="right">{d.stockQty}</Table.Td>
                 <Table.Td ta="right"><b>{d.orderQty}</b></Table.Td>
@@ -950,9 +958,45 @@ function CreatePOButton({ reload }: { reload: () => Promise<void> }): JSX.Elemen
   );
 }
 
+// Produktionsstart-Status lesbar rendern (Bucket B/A): Komponenten mit aufgelösten
+// Namen (Artikel + Lieferant) statt roher cuid, plus Freigabe-Ampel (T-05).
+type ProductionStartStatusData = Awaited<ReturnType<typeof trpc.procurement.productionStartStatus.query>>;
+
+function ProductionStartStatusView({ data }: { data: ProductionStartStatusData }): JSX.Element {
+  return (
+    <>
+      <Alert color={data.canStart ? "green" : "orange"} mt="sm">
+        {data.canStart
+          ? "Produktionsstart frei — alle Komponenten vollständig im Wareneingang."
+          : "Noch nicht startklar — Komponenten unvollständig."}
+      </Alert>
+      <Table mt="xs" withTableBorder verticalSpacing="xs" fz="sm" w="auto">
+        <Table.Thead><Table.Tr>
+          <Table.Th>Komponente</Table.Th><Table.Th>Lieferant</Table.Th>
+          <Table.Th ta="right">Benötigt</Table.Th><Table.Th ta="right">Erhalten</Table.Th><Table.Th>Status</Table.Th>
+        </Table.Tr></Table.Thead>
+        <Table.Tbody>
+          {data.components.map((c) => (
+            <Table.Tr key={`${c.variantId}-${c.supplierId}`}>
+              <Table.Td>{c.label}</Table.Td>
+              <Table.Td>{c.supplierName}</Table.Td>
+              <Table.Td ta="right">{c.requiredQty}</Table.Td>
+              <Table.Td ta="right">{c.receivedQty}</Table.Td>
+              <Table.Td><StatusDot color={c.complete ? "green" : "orange"} label={c.complete ? "vollständig" : "offen"} /></Table.Td>
+            </Table.Tr>
+          ))}
+          {data.components.length === 0 && (
+            <Table.Tr><Table.Td colSpan={5}><Text size="sm" c="dimmed">Keine externen Komponenten — keine Beschaffung nötig.</Text></Table.Td></Table.Tr>
+          )}
+        </Table.Tbody>
+      </Table>
+    </>
+  );
+}
+
 export const ProcurementPage = (): JSX.Element => {
   const [pid, setPid] = useState("");
-  const [data, setData] = useState<unknown>(null);
+  const [data, setData] = useState<ProductionStartStatusData | null>(null);
   const [err, setErr] = useState<string | null>(null);
   return (
     <>
@@ -967,7 +1011,7 @@ export const ProcurementPage = (): JSX.Element => {
         }}>Prüfen</Button>
       </Group>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
-      {data != null && <AutoTable rows={Array.isArray(data) ? (data as Row[]) : [data as Row]} />}
+      {data != null && <ProductionStartStatusView data={data} />}
     </>
   );
 };
@@ -1002,8 +1046,36 @@ export function ShipmentsPage({ onOpen }: { onOpen?: (navKey: string, id: string
             </Group>
           );
         }} />
+      <ShippingBlockedNotice onOpen={onOpen} />
       <ManualShipmentBox onOpen={onOpen} />
     </>
+  );
+}
+
+// Versand-Gate sichtbar machen: versandbereite Aufträge, die ein Gate aus der Liste hält
+// (fehlende Lieferadresse / Liefersperre / offene QS), mit Grund + Link zum Auftrag. So ist
+// „Keine Daten" in der Versandliste erklärbar statt rätselhaft (T-06).
+function ShippingBlockedNotice({ onOpen }: { onOpen?: (navKey: string, id: string) => void }): JSX.Element | null {
+  const [rows, setRows] = useState<Awaited<ReturnType<typeof trpc.shipments.listBlocked.query>>>([]);
+  useEffect(() => { void trpc.shipments.listBlocked.query({ limit: 100 }).then(setRows).catch(() => setRows([])); }, []);
+  if (rows.length === 0) return null;
+  return (
+    <Alert color="orange" mt="lg" title={`${rows.length} versandbereite(r) Auftrag/Aufträge blockiert`}>
+      <Text size="sm" mb="xs">Diese Aufträge sind versandbereit, erscheinen aber nicht in der Versandliste, weil ein Gate sie hält:</Text>
+      <Table withTableBorder verticalSpacing={4} fz="sm" w="auto">
+        <Table.Thead><Table.Tr><Table.Th>Auftrag</Table.Th><Table.Th>Kunde</Table.Th><Table.Th>Grund</Table.Th><Table.Th /></Table.Tr></Table.Thead>
+        <Table.Tbody>
+          {rows.map((r) => (
+            <Table.Tr key={r.id}>
+              <Table.Td>{r.number}</Table.Td>
+              <Table.Td>{r.companyName}</Table.Td>
+              <Table.Td>{r.reasons.join(" · ")}</Table.Td>
+              <Table.Td>{onOpen && <Button size="compact-xs" variant="subtle" onClick={() => onOpen("orders", r.id)}>↗ Auftrag</Button>}</Table.Td>
+            </Table.Tr>
+          ))}
+        </Table.Tbody>
+      </Table>
+    </Alert>
   );
 }
 
@@ -1120,26 +1192,50 @@ function RunDunningBtn({ reload }: { reload: () => Promise<void> }): JSX.Element
 }
 
 // ── Produktion / Auswertung ─────────────────────────────────────────────────
+// Lesbare Labels für die Produktions-Reporting-Kennzahlen (statt rohem JSON-Dump).
+// leadTime liefert `stats` (count/avgHours/…), defects/onTime liefern `overall`
+// (total/defects bzw. onTime/ratePercent). `ratePercent` ist bereits 0–100.
+const PRODREPORT_STAT_LABEL: Record<string, string> = {
+  count: "Anzahl", avgHours: "Ø Stunden", medianHours: "Median (h)", minHours: "Min (h)", maxHours: "Max (h)",
+  total: "Gesamt", defects: "Fehler", onTime: "pünktlich",
+};
+const fmtStat = (k: string, v: unknown): string => {
+  if (v == null) return "—";
+  if (typeof v !== "number") return String(v);
+  if (k === "ratePercent") return `${v.toFixed(0)} %`;
+  return Number.isInteger(v) ? String(v) : v.toFixed(1);
+};
+
 export const ProductionReportingPage = (): JSX.Element => {
   const [gran, setGran] = useState("MONTH");
   const [tab, setTab] = useState<"leadTime" | "defects" | "onTime">("leadTime");
-  const [data, setData] = useState<Row[]>([]);
+  const [buckets, setBuckets] = useState<Row[]>([]);
+  const [stats, setStats] = useState<Record<string, unknown>>({});
   const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const run = useCallback(async () => {
-    setErr(null);
+    setErr(null); setLoading(true);
     try {
       const q = { granularity: gran as "DAY" | "WEEK" | "MONTH" | "YEAR" };
       const d = tab === "leadTime" ? await trpc.productionReporting.leadTime.query(q)
         : tab === "defects" ? await trpc.productionReporting.defects.query(q)
         : await trpc.productionReporting.onTime.query(q);
-      setData((Array.isArray(d) ? d : [d]) as Row[]);
-    } catch (e) { setErr(errMsg(e)); }
+      // leadTime → stats, defects/onTime → overall (verschiedene Kennzahl-Shapes).
+      const dd = d as { buckets?: unknown[]; stats?: Record<string, unknown>; overall?: Record<string, unknown> };
+      setBuckets((dd.buckets ?? []) as Row[]);
+      setStats((dd.stats ?? dd.overall ?? {}) as Record<string, unknown>);
+    } catch (e) { setErr(errMsg(e)); } finally { setLoading(false); }
   }, [gran, tab]);
   useEffect(() => { void run(); }, [run]);
+
+  // `ratePercent` heißt je nach Auswertung anders (Fehlerquote vs. Termintreue).
+  const rateLabel = tab === "defects" ? "Fehlerquote" : "Termintreue";
+  const labelFor = (k: string): string => (k === "ratePercent" ? rateLabel : (PRODREPORT_STAT_LABEL[k] ?? k));
+  const statEntries = Object.entries(stats);
   return (
     <>
       <DocListHeader module="Fertigung" title="Produktions-Reporting" />
-      <Text size="sm" c="dimmed" mt={4}>Durchlaufzeit, Fehlerquote, Termintreue (Kap. 29).</Text>
+      <Text size="sm" c="dimmed" mt={4}>Durchlaufzeit, Fehlerquote, Termintreue je Periode (Kap. 29).</Text>
       <Group mt="sm" gap="xs">
         <Select size="xs" value={tab} onChange={(v) => v && setTab(v as typeof tab)} data={[
           { value: "leadTime", label: "Durchlaufzeit" }, { value: "defects", label: "Fehlerquote" }, { value: "onTime", label: "Termintreue" },
@@ -1147,7 +1243,22 @@ export const ProductionReportingPage = (): JSX.Element => {
         <Select size="xs" value={gran} onChange={(v) => v && setGran(v)} data={["DAY", "WEEK", "MONTH", "YEAR"]} />
       </Group>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
-      <AutoTable rows={data} />
+
+      {statEntries.length > 0 && (
+        <Group gap="sm" mt="md" wrap="wrap">
+          {statEntries.map(([k, v]) => (
+            <Card key={k} withBorder padding="sm" radius="md" style={{ minWidth: 130 }}>
+              <Text size="xs" c="dimmed">{labelFor(k)}</Text>
+              <Text fw={700} fz={22}>{fmtStat(k, v)}</Text>
+            </Card>
+          ))}
+        </Group>
+      )}
+
+      <Title order={5} mt="lg">Perioden</Title>
+      {buckets.length === 0
+        ? <Text size="sm" c="dimmed" mt="xs">{loading ? "Lädt…" : "Keine abgeschlossenen Produktionsaufträge im Zeitraum."}</Text>
+        : <AutoTable rows={buckets} />}
     </>
   );
 };
@@ -1243,12 +1354,16 @@ export function SampleLoansPage({ onOpen }: { onOpen?: (navKey: string, id: stri
         </Group>
       </Box>
 
-      <AutoTable rows={rows} hide={["lines"]}
+      <AutoTable rows={rows} hide={["lines", "companyId", "variantId"]}
         cellRender={(col, value, row) => {
           // Mehrartikel-Leihe (aus Angebot): top-level variantId/menge sind null → aus den Zeilen zusammenfassen.
-          const lines = (row as { lines?: Array<{ description: string; menge: number }> }).lines ?? [];
-          if (lines.length > 0 && col === "variantId") return `${lines.length} Artikel: ${lines.map((l) => l.description).join(", ").slice(0, 60)}`;
-          if (lines.length > 0 && col === "menge") return lines.reduce((s, l) => s + l.menge, 0);
+          const r = row as { lines?: Array<{ description: string; menge: number }>; articleLabel?: string | null };
+          const lines = r.lines ?? [];
+          // Bucket A: aufgelöste Artikelbezeichnung (Einzel-Leihe) bzw. Zeilen-Zusammenfassung (Mehrartikel).
+          if (col === "articleLabel") return lines.length > 0
+            ? `${lines.length} Artikel: ${lines.map((l) => l.description).join(", ").slice(0, 60)}`
+            : (r.articleLabel ?? "—");
+          if (col === "menge" && lines.length > 0) return lines.reduce((s, l) => s + l.menge, 0);
           return undefined;
         }}
         action={(r) => (
@@ -6467,7 +6582,7 @@ function WareneingangPo({ po, onBooked, onErr }: {
 
 function ProductionStartGate(): JSX.Element {
   const [pid, setPid] = useState("");
-  const [data, setData] = useState<Awaited<ReturnType<typeof trpc.procurement.productionStartStatus.query>> | null>(null);
+  const [data, setData] = useState<ProductionStartStatusData | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const check = async (): Promise<void> => {
     setErr(null);
@@ -6479,33 +6594,11 @@ function ProductionStartGate(): JSX.Element {
       <Title order={4}>Produktionsstart-Gate (T-05)</Title>
       <Text size="sm" c="dimmed" mt={4}>Prüft, ob alle benötigten Komponenten eines Produktionsauftrags vollständig im Wareneingang gebucht sind (Multi-Lieferant-Gate, Kap. 5.6).</Text>
       <Group align="end" gap="xs" mt="xs">
-        <TextInput label="Produktionsauftrags-ID" value={pid} onChange={(e) => setPid(e.currentTarget.value)} w={240} placeholder="pa-1" />
+        <ProductionPicker value={pid} onChange={setPid} />
         <Button variant="default" disabled={!pid.trim()} onClick={() => void check()}>Prüfen</Button>
       </Group>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
-      {data && (
-        <>
-          <Alert color={data.canStart ? "green" : "orange"} mt="sm">
-            {data.canStart ? "Produktionsstart frei — alle Komponenten vollständig im Wareneingang." : "Noch nicht startklar — Komponenten unvollständig."}
-          </Alert>
-          <Table mt="xs" withTableBorder verticalSpacing="xs" fz="sm" w="auto">
-            <Table.Thead><Table.Tr>
-              <Table.Th>Variante</Table.Th><Table.Th ta="right">Benötigt</Table.Th><Table.Th ta="right">Erhalten</Table.Th><Table.Th>Vollständig</Table.Th>
-            </Table.Tr></Table.Thead>
-            <Table.Tbody>
-              {data.components.map((c) => (
-                <Table.Tr key={`${c.variantId}-${c.supplierId}`}>
-                  <Table.Td><Text size="xs" ff="monospace">{c.variantId}</Text></Table.Td>
-                  <Table.Td ta="right">{c.requiredQty}</Table.Td>
-                  <Table.Td ta="right">{c.receivedQty}</Table.Td>
-                  <Table.Td>{c.complete ? "✓" : <Text span c="orange">offen</Text>}</Table.Td>
-                </Table.Tr>
-              ))}
-              {data.components.length === 0 && <Table.Tr><Table.Td colSpan={4}><Text size="sm" c="dimmed">Keine Komponenten für diesen Produktionsauftrag.</Text></Table.Td></Table.Tr>}
-            </Table.Tbody>
-          </Table>
-        </>
-      )}
+      {data && <ProductionStartStatusView data={data} />}
     </Box>
   );
 }

@@ -6,6 +6,7 @@
 import { prisma } from "@texma/db";
 import type { Carrier } from "@texma/shared";
 import type {
+  BlockedShipment,
   ConfirmShippedResult,
   ShipmentRepository,
   ShippableOrder,
@@ -47,6 +48,33 @@ export class PrismaShipmentRepository implements ShipmentRepository {
         },
         weightGrams: DEFAULT_WEIGHT_GRAMS,
       }));
+  }
+
+  async listBlocked(limit: number): Promise<BlockedShipment[]> {
+    // VERSANDBEREITE Aufträge, die ein Gate aus der Versandliste hält — macht „Keine Daten" erklärbar.
+    const rows = await prisma.order.findMany({
+      where: {
+        status: "VERSANDBEREIT",
+        OR: [
+          { deliveryAddressId: null },
+          { company: { is: { liefersperre: true } } },
+          { qsStatus: { not: "BESTANDEN" } },
+        ],
+      },
+      orderBy: { createdAt: "asc" },
+      take: limit,
+      select: {
+        id: true, number: true, deliveryAddressId: true, qsStatus: true,
+        company: { select: { name: true, liefersperre: true } },
+      },
+    });
+    return rows.map((r) => {
+      const reasons: string[] = [];
+      if (r.deliveryAddressId == null) reasons.push("Keine Lieferadresse");
+      if (r.company?.liefersperre) reasons.push("Liefersperre des Kunden");
+      if (r.qsStatus !== "BESTANDEN") reasons.push("Qualitätssicherung nicht bestanden");
+      return { id: r.id, number: r.number, companyName: r.company?.name ?? "—", reasons };
+    });
   }
 
   async confirmShipped(input: { orderId: string; trackingNumber: string; carrier?: Carrier }): Promise<ConfirmShippedResult> {

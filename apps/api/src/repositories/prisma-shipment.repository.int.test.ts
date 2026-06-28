@@ -14,6 +14,7 @@ const CO = "co_ship_acme";
 const SC = "sc_ship_acme";
 const DA = "da_ship_acme";
 const ORD = "order_ship_int";
+const ORD_BLOCKED = "order_ship_blocked"; // versandbereit, aber ohne Lieferadresse (Gate)
 
 const dbConfigured = process.env.RUN_DB_TESTS === "1";
 
@@ -30,7 +31,7 @@ if (!dbConfigured) {
 
     async function cleanup() {
       await prisma.outboxEvent.deleteMany({ where: { aggregateId: ORD } });
-      await prisma.order.deleteMany({ where: { id: ORD } });
+      await prisma.order.deleteMany({ where: { id: { in: [ORD, ORD_BLOCKED] } } });
       await prisma.deliveryAddress.deleteMany({ where: { id: DA } });
       await prisma.shopConnector.deleteMany({ where: { id: SC } });
       await prisma.company.deleteMany({ where: { id: CO } });
@@ -58,6 +59,10 @@ if (!dbConfigured) {
           status: "VERSANDBEREIT",
         },
       });
+      // Versandbereit, aber OHNE Lieferadresse → muss im Versand-Gate (listBlocked) erscheinen.
+      await prisma.order.create({
+        data: { id: ORD_BLOCKED, number: "WC-SHIP-BLK", companyId: CO, status: "VERSANDBEREIT" },
+      });
     });
 
     afterAll(async () => {
@@ -84,6 +89,13 @@ if (!dbConfigured) {
       // Nach Versand nicht mehr versandbereit.
       const after = await service.listShippable(50);
       expect(after.find((o) => o.id === ORD)).toBeUndefined();
+    });
+
+    it("macht das Versand-Gate sichtbar: blockierter Auftrag ohne Lieferadresse mit Grund", async () => {
+      const blocked = await service.listBlocked(50);
+      const row = blocked.find((b) => b.id === ORD_BLOCKED);
+      expect(row).toMatchObject({ number: "WC-SHIP-BLK", companyName: "ACME GmbH" });
+      expect(row?.reasons).toContain("Keine Lieferadresse");
     });
   });
 }

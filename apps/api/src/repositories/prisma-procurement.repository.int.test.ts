@@ -82,6 +82,13 @@ if (!dbConfigured) {
       });
       const after = await service.productionStartStatus(PA);
       expect(after.canStart).toBe(true);
+      // Bucket A: lesbare Komponenten-/Lieferantennamen statt Roh-cuid.
+      expect(after.components).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ label: "Shirt (PROC-FHB)", supplierName: "FHB" }),
+          expect.objectContaining({ label: "Shirt (PROC-SS)", supplierName: "Stanley/Stella" }),
+        ])
+      );
     });
   });
 }

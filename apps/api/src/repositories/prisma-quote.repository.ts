@@ -49,6 +49,14 @@ export class PrismaQuoteRepository implements QuoteRepository {
     await prisma.quote.update({ where: { id: quoteId }, data: { status: status as never } });
   }
 
+  /** Verknüpfte, noch offene Verkaufschance auf GEWONNEN heben (Pipeline-Sync bei Annahme). */
+  async markLinkedLeadWon(quoteId: string): Promise<void> {
+    await prisma.crmLead.updateMany({
+      where: { quoteId, stage: { notIn: ["GEWONNEN", "VERLOREN"] } },
+      data: { stage: "GEWONNEN", probability: 100 },
+    });
+  }
+
   async forEdit(quoteId: string): Promise<QuoteEditData | null> {
     const q = await prisma.quote.findUnique({
       where: { id: quoteId },

@@ -10,8 +10,13 @@ const required = [
   { variantId: "v_ss", supplierId: "sup_ss", qty: 5 },
 ];
 
+const refs = [
+  { variantId: "v_fhb", label: "Polo navy (POLO-NV-L)", supplierName: "FHB" },
+  { variantId: "v_ss", label: "T-Shirt weiß (TS-WS-M)", supplierName: "Stanley/Stella" },
+];
+
 function setup(received: { variantId: string; supplierId: string; receivedQty: number }[]) {
-  const repo = new InMemoryProcurementRepository({ pa: required }, { pa: received });
+  const repo = new InMemoryProcurementRepository({ pa: required }, { pa: received }, { pa: refs });
   return new ProcurementService(repo);
 }
 
@@ -41,5 +46,20 @@ describe("ProcurementService.productionStartStatus (T-05)", () => {
       { variantId: "v_ss", supplierId: "sup_ss", receivedQty: 5 },
     ]);
     expect((await service.productionStartStatus("pa")).canStart).toBe(true);
+  });
+
+  it("löst Roh-IDs zu lesbaren Komponenten-/Lieferantennamen auf (Bucket A)", async () => {
+    const service = setup([{ variantId: "v_fhb", supplierId: "sup_fhb", receivedQty: 10 }]);
+    const status = await service.productionStartStatus("pa");
+    expect(status.components).toEqual([
+      expect.objectContaining({ label: "Polo navy (POLO-NV-L)", supplierName: "FHB" }),
+      expect.objectContaining({ label: "T-Shirt weiß (TS-WS-M)", supplierName: "Stanley/Stella" }),
+    ]);
+  });
+
+  it("fällt auf die ID zurück, wenn kein Ref hinterlegt ist", async () => {
+    const repo = new InMemoryProcurementRepository({ pa: required }, { pa: [] });
+    const status = await new ProcurementService(repo).productionStartStatus("pa");
+    expect(status.components[0]).toMatchObject({ label: "v_fhb", supplierName: "sup_fhb" });
   });
 });

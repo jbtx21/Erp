@@ -3,6 +3,7 @@
 // Tests den Shop-Rückmeldepfad prüfen können, ohne DB/Queue.
 
 import type {
+  BlockedShipment,
   ConfirmShippedResult,
   ShipmentRepository,
   ShippableOrder,
@@ -16,10 +17,14 @@ export interface EnqueuedEvent {
 export class InMemoryShipmentRepository implements ShipmentRepository {
   readonly outbox: EnqueuedEvent[] = [];
 
-  constructor(private readonly shippable: ShippableOrder[]) {}
+  constructor(private readonly shippable: ShippableOrder[], private readonly blocked: BlockedShipment[] = []) {}
 
   async listShippable(limit: number): Promise<ShippableOrder[]> {
     return this.shippable.slice(0, limit);
+  }
+
+  async listBlocked(limit: number): Promise<BlockedShipment[]> {
+    return this.blocked.slice(0, limit);
   }
 
   async confirmShipped(input: { orderId: string; trackingNumber: string }): Promise<ConfirmShippedResult> {

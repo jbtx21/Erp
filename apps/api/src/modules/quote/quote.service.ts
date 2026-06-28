@@ -81,6 +81,12 @@ export interface QuoteRepository {
   list(): Promise<QuoteRow[]>;
   create(input: CreateQuoteInput & { number: string }): Promise<{ id: string }>;
   setStatus(quoteId: string, status: QuoteStatus): Promise<void>;
+  /**
+   * Hebt eine verknüpfte, noch offene CRM-Verkaufschance auf GEWONNEN, sobald das Angebot
+   * angenommen wird — hält die Vertriebs-Pipeline (Lead-Phasen) mit der Angebots-Erfolgsquote
+   * konsistent (sonst „GEWONNEN 0" trotz angenommener Angebote). Optional (Repos ohne CRM).
+   */
+  markLinkedLeadWon?(quoteId: string): Promise<void>;
   /** Angebot mit Positionen für die Bearbeitung laden. */
   forEdit(quoteId: string): Promise<QuoteEditData | null>;
   /** Kopf + Positionen ersetzen (vollständige Bearbeitung). */
@@ -150,6 +156,8 @@ export class QuoteService {
     }
     await this.repo.setStatus(quoteId, to);
     await this.audit.append(buildEntry({ entity: "Quote", entityId: quoteId, action: "UPDATE", after: { status: to } }));
+    // Pipeline-Sync: angenommenes Angebot hebt die verknüpfte Verkaufschance auf GEWONNEN.
+    if (to === "ANGENOMMEN") await this.repo.markLinkedLeadWon?.(quoteId);
   }
 
   /** Lehnt ein Angebot mit Pflicht-Verlustgrund ab (F2-Übergang erzwungen). */

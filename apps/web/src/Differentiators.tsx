@@ -835,6 +835,9 @@ interface PostcalcResult {
 
 export function Postcalc(): JSX.Element {
   const [productionId, setProductionId] = useState("");
+  // PA-Auswahl per ID-Picker statt roher cuid-Eingabe (Tiefenanalyse: gate-bedingt unbenutzbar).
+  const [prods, setProds] = useState<{ value: string; label: string }[]>([]);
+  useEffect(() => { void trpc.procurement.listProductions.query().then((rows) => setProds(rows.map((p) => ({ value: p.id, label: `${p.number}${p.orderNumber ? ` · Auftrag ${p.orderNumber}` : ""}` })))).catch(() => { /* ignore */ }); }, []);
   const [revenueEuro, setRevenueEuro] = useState(1000);
   const [materialEuro, setMaterialEuro] = useState(400);
   const [laborMinutes, setLaborMinutes] = useState(120);
@@ -871,8 +874,9 @@ export function Postcalc(): JSX.Element {
         Plan-DB gegen Ist-DB, inkl. Abweichungszerlegung (Material · Lohn-Menge · Lohn-Satz).
       </Text>
       <Group align="end" gap="sm" mt="xs">
-        <TextInput label="PA-ID" placeholder="z. B. cuid…" w={180}
-          value={productionId} onChange={(e) => setProductionId(e.currentTarget.value)} />
+        <Select label="Produktionsauftrag" searchable placeholder="PA wählen…" w={220}
+          value={productionId || null} onChange={(v) => setProductionId(v ?? "")} data={prods}
+          nothingFoundMessage="Kein Produktionsauftrag" />
         <MoneyInput label="Umsatz (€)" w={110} value={revenueEuro} onChange={(v) => setRevenueEuro(Number(v) || 0)} />
         <MoneyInput label="Material (€)" w={110} value={materialEuro} onChange={(v) => setMaterialEuro(Number(v) || 0)} />
         <NumberInput label="Lohn (Min)" w={100} hideControls value={laborMinutes} onChange={(v) => setLaborMinutes(Number(v) || 0)} />

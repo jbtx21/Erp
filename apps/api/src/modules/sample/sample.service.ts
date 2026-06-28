@@ -35,7 +35,11 @@ export interface LoanLine {
 export interface SampleLoanRow {
   id: string;
   companyId: string;
+  /** Lesbarer Firmenname (statt roher cuid in der Liste) — Bucket A. */
+  companyName: string | null;
   variantId: string | null;
+  /** Lesbare Artikel-/Variantenbezeichnung für Einzel-Leihen (statt cuid). */
+  articleLabel: string | null;
   menge: number | null;
   zweck: string | null;
   ausgegebenAm: Date;

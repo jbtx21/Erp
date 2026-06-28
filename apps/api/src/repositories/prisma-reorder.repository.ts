@@ -9,8 +9,13 @@ import type {
   CreatedReorderPo,
   ReorderRepository,
 } from "../modules/reorder/reorder.service.js";
+import { NumberingService } from "../modules/numbering/numbering.service.js";
+import { PrismaNumberingRepository } from "./prisma-numbering.repository.js";
 
 export class PrismaReorderRepository implements ReorderRepository {
+  // Lückenlose Belegnummern (BE-JAHR-NNNN) statt roher Timestamp-Nummern (Bucket A / GoBD).
+  constructor(private readonly numbering: NumberingService = new NumberingService(new PrismaNumberingRepository())) {}
+
   /** Offener Bedarf: variantenbezogene Positionen aus angelegten Aufträgen + aktiven Muster-Leihen. */
   async openDemand(): Promise<DemandItem[]> {
     const orderLines = await prisma.orderLine.findMany({
@@ -74,13 +79,16 @@ export class PrismaReorderRepository implements ReorderRepository {
   }
 
   async createPurchaseOrders(groups: SupplierReorder[]): Promise<CreatedReorderPo[]> {
+    // Belegnummern vorab lückenlos reservieren (BE-JAHR-NNNN) — sequenziell, kollisionsfrei.
+    const numbers: string[] = [];
+    for (const _g of groups) numbers.push(await this.numbering.next("PURCHASE_ORDER"));
     return prisma.$transaction(async (tx) => {
       const out: CreatedReorderPo[] = [];
-      for (const g of groups) {
-        const number = `BV-${Date.now()}-${g.supplierId.slice(0, 6)}`;
+      for (let i = 0; i < groups.length; i++) {
+        const g = groups[i]!;
         const po = await tx.purchaseOrder.create({
           data: {
-            number,
+            number: numbers[i]!,
             supplierId: g.supplierId,
             status: "BESTELLT",
             lines: { create: g.lines.map((l) => ({ variantId: l.variantId, qty: l.orderQty, ekCents: l.ekCents })) },

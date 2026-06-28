@@ -22,9 +22,20 @@ export interface ConfirmShippedResult {
   trackingNumber: string;
 }
 
+/** Versandbereiter Auftrag, der wegen eines Gates NICHT in der Versandliste erscheint. */
+export interface BlockedShipment {
+  id: string;
+  number: string;
+  companyName: string;
+  /** Lesbare Gründe (Lieferadresse fehlt / Liefersperre / QS offen) — Versand-Gate sichtbar. */
+  reasons: string[];
+}
+
 export interface ShipmentRepository {
   /** Aufträge im Status VERSANDBEREIT mit hinterlegter Lieferadresse. */
   listShippable(limit: number): Promise<ShippableOrder[]>;
+  /** VERSANDBEREITE Aufträge, die ein Gate blockiert (fehlende Adresse / Liefersperre / QS). */
+  listBlocked(limit: number): Promise<BlockedShipment[]>;
   /**
    * Setzt den Auftrag auf VERSENDET + Trackingnummer und reiht — in derselben
    * Transaktion — ein Outbox-Event `order.status.update` ein (Shop-Rückmeldung).
@@ -40,6 +51,11 @@ export class ShipmentService {
 
   listShippable(limit: number): Promise<ShippableOrder[]> {
     return this.repo.listShippable(limit);
+  }
+
+  /** Versandbereite Aufträge, die ein Gate blockiert — macht „Keine Daten" erklärbar (T-06). */
+  listBlocked(limit: number): Promise<BlockedShipment[]> {
+    return this.repo.listBlocked(limit);
   }
 
   async confirmShipped(input: { orderId: string; trackingNumber: string; carrier?: Carrier }): Promise<ConfirmShippedResult> {

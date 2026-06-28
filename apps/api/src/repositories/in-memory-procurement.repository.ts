@@ -6,7 +6,9 @@ import type { ProcurementRepository, ProductionRef } from "../modules/procuremen
 export class InMemoryProcurementRepository implements ProcurementRepository {
   constructor(
     private readonly required: Record<string, RequiredComponent[]>,
-    private readonly received: Record<string, GoodsReceiptLine[]>
+    private readonly received: Record<string, GoodsReceiptLine[]>,
+    /** Optionale lesbare Bezeichnungen je Komponente (sonst Fallback auf IDs im Service). */
+    private readonly refs: Record<string, Array<{ variantId: string; label: string; supplierName: string }>> = {}
   ) {}
 
   async listProductions(): Promise<ProductionRef[]> {
@@ -24,5 +26,9 @@ export class InMemoryProcurementRepository implements ProcurementRepository {
 
   async receivedComponents(productionId: string): Promise<GoodsReceiptLine[]> {
     return this.received[productionId] ?? [];
+  }
+
+  async componentRefs(productionId: string): Promise<Array<{ variantId: string; label: string; supplierName: string }>> {
+    return this.refs[productionId] ?? [];
   }
 }

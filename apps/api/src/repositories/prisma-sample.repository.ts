@@ -23,9 +23,21 @@ export class PrismaSampleLoanRepository implements SampleLoanRepository {
   async list(): Promise<SampleLoanRow[]> {
     const rows = await prisma.sampleLoan.findMany({
       orderBy: { ausgegebenAm: "desc" },
-      select: { id: true, companyId: true, variantId: true, menge: true, zweck: true, ausgegebenAm: true, status: true, invoiceId: true, quoteId: true, lines: { select: { description: true, variantId: true, supplierId: true, menge: true } } },
+      select: {
+        id: true, companyId: true, variantId: true, menge: true, zweck: true, ausgegebenAm: true, status: true, invoiceId: true, quoteId: true,
+        company: { select: { name: true } },
+        variant: { select: { sku: true, article: { select: { name: true } } } },
+        lines: { select: { description: true, variantId: true, supplierId: true, menge: true } },
+      },
     });
-    return rows.map((r) => ({ ...r, lines: r.lines as LoanLine[] }));
+    // Bucket A: rohe cuids durch Firmen-/Artikelnamen ersetzen.
+    return rows.map((r) => ({
+      id: r.id, companyId: r.companyId, variantId: r.variantId, menge: r.menge, zweck: r.zweck,
+      ausgegebenAm: r.ausgegebenAm, status: r.status, invoiceId: r.invoiceId, quoteId: r.quoteId,
+      companyName: r.company?.name ?? null,
+      articleLabel: r.variant ? `${r.variant.article.name} (${r.variant.sku})` : null,
+      lines: r.lines as LoanLine[],
+    }));
   }
 
   async issueMulti(input: { companyId: string; zweck: string | null; ausgegebenAm: Date; lines: LoanLine[]; quoteId?: string | null }): Promise<{ id: string }> {
