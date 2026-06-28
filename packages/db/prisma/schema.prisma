@@ -1442,6 +1442,9 @@ model GoodsReceiptLine {
   variantId      String
   variant        Variant @relation(fields: [variantId], references: [id])
   receivedQty    Int
+  // EK je Stück laut Lieferschein/Eingang (Kap. 9.6): Abgleich gegen den Bestell-EK
+  // (PurchaseOrderLine.ekCents). null = kein EK am Eingang erfasst.
+  ekCents        Int?
 
   @@index([goodsReceiptId])
 }

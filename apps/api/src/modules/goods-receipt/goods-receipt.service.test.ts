@@ -9,8 +9,8 @@ function setup() {
     {
       id: "po1", number: "BE-2026-0001", supplierName: "FHB", status: "BESTELLT", productionId: "pa1",
       lines: [
-        { variantId: "v1", label: "Polo rot (POLO-1)", orderedQty: 100 },
-        { variantId: "v2", label: "Cap (CAP-1)", orderedQty: 50 },
+        { variantId: "v1", label: "Polo rot (POLO-1)", orderedQty: 100, ekCents: 500 },
+        { variantId: "v2", label: "Cap (CAP-1)", orderedQty: 50, ekCents: 300 },
       ],
     },
   ]);
@@ -48,5 +48,28 @@ describe("GoodsReceiptService.record (T-05/Kap. 6.3)", () => {
     const { svc } = setup();
     await expect(svc.record({ purchaseOrderId: "po1", lines: [{ variantId: "v1", receivedQty: 0 }] })).rejects.toBeInstanceOf(GoodsReceiptError);
     await expect(svc.record({ purchaseOrderId: "po1", lines: [{ variantId: "vX", receivedQty: 5 }] })).rejects.toBeInstanceOf(GoodsReceiptError);
+  });
+});
+
+describe("EK-Abgleich beim Wareneingang gegen die Bestellung (Kap. 9.6)", () => {
+  it("kein Eingangs-EK erfasst → kein Abgleich (ekCheck null)", async () => {
+    const { svc } = setup();
+    const r = await svc.record({ purchaseOrderId: "po1", lines: [{ variantId: "v1", receivedQty: 100 }] });
+    expect(r.ekCheck).toBeNull();
+  });
+
+  it("Eingangs-EK = Bestell-EK → OK", async () => {
+    const { svc } = setup();
+    const r = await svc.record({ purchaseOrderId: "po1", lines: [{ variantId: "v1", receivedQty: 100, ekCents: 500 }] });
+    expect(r.ekCheck?.overall).toBe("OK");
+    expect(r.ekCheck?.lines[0]).toMatchObject({ verdict: "OK", masterEkCents: 500 });
+  });
+
+  it("Eingangs-EK über Toleranz → ABWEICHUNG (Wareneingang wird trotzdem gebucht)", async () => {
+    const { svc } = setup();
+    const r = await svc.record({ purchaseOrderId: "po1", lines: [{ variantId: "v1", receivedQty: 100, ekCents: 560 }] }); // +12 %
+    expect(r.status).toBe("TEILWEISE_ERHALTEN"); // Buchung erfolgt
+    expect(r.ekCheck?.overall).toBe("ABWEICHUNG");
+    expect(r.ekCheck?.lines[0]?.diffCents).toBe(60);
   });
 });

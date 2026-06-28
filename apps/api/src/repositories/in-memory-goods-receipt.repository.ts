@@ -12,7 +12,7 @@ interface MemPo {
   supplierName: string;
   status: PurchaseOrderStatus;
   productionId: string | null;
-  lines: Array<{ variantId: string; label: string; orderedQty: number }>;
+  lines: Array<{ variantId: string; label: string; orderedQty: number; ekCents: number }>;
 }
 
 export class InMemoryGoodsReceiptRepository implements GoodsReceiptRepository {
@@ -30,17 +30,17 @@ export class InMemoryGoodsReceiptRepository implements GoodsReceiptRepository {
       .filter((p) => p.status !== "ERHALTEN")
       .map((p) => ({
         id: p.id, number: p.number, supplierName: p.supplierName, status: p.status, productionId: p.productionId,
-        lines: p.lines.map((l) => ({ variantId: l.variantId, label: l.label, orderedQty: l.orderedQty, receivedQty: this.receivedFor(p.id, l.variantId) })),
+        lines: p.lines.map((l) => ({ variantId: l.variantId, label: l.label, orderedQty: l.orderedQty, receivedQty: this.receivedFor(p.id, l.variantId), ekCents: l.ekCents })),
       }));
   }
 
-  async purchaseOrderLines(purchaseOrderId: string): Promise<Array<{ variantId: string; orderedQty: number; receivedQty: number }>> {
+  async purchaseOrderLines(purchaseOrderId: string): Promise<Array<{ variantId: string; orderedQty: number; receivedQty: number; ekCents: number }>> {
     const po = this.pos.find((p) => p.id === purchaseOrderId);
     if (!po) return [];
-    return po.lines.map((l) => ({ variantId: l.variantId, orderedQty: l.orderedQty, receivedQty: this.receivedFor(purchaseOrderId, l.variantId) }));
+    return po.lines.map((l) => ({ variantId: l.variantId, orderedQty: l.orderedQty, receivedQty: this.receivedFor(purchaseOrderId, l.variantId), ekCents: l.ekCents }));
   }
 
-  async recordReceipt(purchaseOrderId: string, lines: Array<{ variantId: string; receivedQty: number }>, newStatus: PurchaseOrderStatus): Promise<{ goodsReceiptId: string }> {
+  async recordReceipt(purchaseOrderId: string, lines: Array<{ variantId: string; receivedQty: number; ekCents?: number | null }>, newStatus: PurchaseOrderStatus): Promise<{ goodsReceiptId: string }> {
     for (const l of lines) {
       this.received.set(this.key(purchaseOrderId, l.variantId), this.receivedFor(purchaseOrderId, l.variantId) + l.receivedQty);
     }

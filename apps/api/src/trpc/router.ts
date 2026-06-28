@@ -743,7 +743,7 @@ export const appRouter = router({
     record: roleProcedure("ADMIN", "BUERO")
       .input(z.object({
         purchaseOrderId: z.string().min(1),
-        lines: z.array(z.object({ variantId: z.string().min(1), receivedQty: z.number().int().nonnegative() })).min(1),
+        lines: z.array(z.object({ variantId: z.string().min(1), receivedQty: z.number().int().nonnegative(), ekCents: z.number().int().nonnegative().nullish() })).min(1),
       }))
       .mutation(async ({ input, ctx }) => {
         try { return await ctx.goodsReceipts.record(input); } catch (e) { throw toTrpcError(e); }

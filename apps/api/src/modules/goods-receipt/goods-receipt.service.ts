@@ -4,6 +4,7 @@
 // Multi-Lieferant-Produktionsstart-Gate (procurement.productionStartStatus). GoBD-Audit.
 // Repository als Interface → testbar ohne DB.
 
+import { reconcileEk, type EkInvoiceLine, type EkLineResult, type EkOverall } from "@texma/shared";
 import { buildEntry, type AuditSink } from "@texma/audit";
 
 export type PurchaseOrderStatus = "ENTWURF" | "BESTELLT" | "TEILWEISE_ERHALTEN" | "ERHALTEN";
@@ -14,6 +15,8 @@ export interface PurchaseOrderLineView {
   label: string;
   orderedQty: number;
   receivedQty: number;
+  /** Bestell-EK je Stück (für den EK-Abgleich beim Wareneingang). */
+  ekCents: number;
 }
 
 export interface OpenPurchaseOrder {
@@ -27,23 +30,33 @@ export interface OpenPurchaseOrder {
 
 export interface RecordReceiptInput {
   purchaseOrderId: string;
-  lines: Array<{ variantId: string; receivedQty: number }>;
+  /** ekCents = EK je Stück laut Lieferschein (optional → EK-Abgleich gegen den Bestell-EK). */
+  lines: Array<{ variantId: string; receivedQty: number; ekCents?: number | null }>;
 }
 
 export interface GoodsReceiptRepository {
   /** Offene Bestellungen (Status ≠ ERHALTEN) mit Positionen + bisher gebuchter Menge. */
   listOpenPurchaseOrders(): Promise<OpenPurchaseOrder[]>;
-  /** Bestellpositionen mit Bestell- und bisheriger Eingangsmenge (für die Statusberechnung). */
-  purchaseOrderLines(purchaseOrderId: string): Promise<Array<{ variantId: string; orderedQty: number; receivedQty: number }>>;
-  /** Legt den Wareneingangsbeleg + Positionen an und setzt den Bestellstatus. */
-  recordReceipt(purchaseOrderId: string, lines: Array<{ variantId: string; receivedQty: number }>, newStatus: PurchaseOrderStatus): Promise<{ goodsReceiptId: string }>;
+  /** Bestellpositionen mit Bestell-EK, Bestell- und bisheriger Eingangsmenge. */
+  purchaseOrderLines(purchaseOrderId: string): Promise<Array<{ variantId: string; orderedQty: number; receivedQty: number; ekCents: number }>>;
+  /** Legt den Wareneingangsbeleg + Positionen (inkl. EK) an und setzt den Bestellstatus. */
+  recordReceipt(purchaseOrderId: string, lines: Array<{ variantId: string; receivedQty: number; ekCents?: number | null }>, newStatus: PurchaseOrderStatus): Promise<{ goodsReceiptId: string }>;
 }
 
 export class GoodsReceiptError extends Error {}
 
+/** EK-Abgleich Wareneingang ↔ Bestellung (nur Positionen mit erfasstem Eingangs-EK). */
+export interface ReceiptEkCheck {
+  overall: EkOverall;
+  maxAbsDiffPercent: number;
+  lines: EkLineResult[];
+}
+
 export interface RecordReceiptResult {
   goodsReceiptId: string;
   status: PurchaseOrderStatus;
+  /** null = kein Eingangs-EK erfasst (kein Abgleich). */
+  ekCheck: ReceiptEkCheck | null;
 }
 
 export class GoodsReceiptService {
@@ -74,11 +87,22 @@ export class GoodsReceiptService {
     const any = poLines.some((l) => (received.get(l.variantId) ?? 0) > 0);
     const newStatus: PurchaseOrderStatus = fully ? "ERHALTEN" : any ? "TEILWEISE_ERHALTEN" : "BESTELLT";
 
+    // EK-Abgleich (Kap. 9.6): erfasster Eingangs-EK je Stück ↔ Bestell-EK (PurchaseOrderLine).
+    // Reuse derselben Abgleich-Logik wie die Eingangsrechnung (reconcileEk, Toleranz 2 %/2 ct).
+    // Der Wareneingang wird NICHT blockiert (Ware ist physisch da); Abweichungen werden geflaggt.
+    const ekMaster = new Map(poLines.map((l) => [l.variantId, l.ekCents]));
+    const ekLines: EkInvoiceLine[] = lines
+      .filter((l) => l.ekCents != null)
+      .map((l) => ({ ref: l.variantId, variantId: l.variantId, qty: l.receivedQty, invoiceUnitEkCents: l.ekCents! }));
+    const ekCheck: ReceiptEkCheck | null = ekLines.length > 0
+      ? (() => { const r = reconcileEk(ekLines, ekMaster); return { overall: r.overall, maxAbsDiffPercent: r.maxAbsDiffPercent, lines: r.lines }; })()
+      : null;
+
     const res = await this.repo.recordReceipt(input.purchaseOrderId, lines, newStatus);
     await this.audit.append(buildEntry({
       entity: "GoodsReceipt", entityId: res.goodsReceiptId, action: "CREATE",
-      after: { purchaseOrderId: input.purchaseOrderId, lines, status: newStatus },
+      after: { purchaseOrderId: input.purchaseOrderId, lines, status: newStatus, ekCheck: ekCheck ? { overall: ekCheck.overall, maxAbsDiffPercent: ekCheck.maxAbsDiffPercent } : null },
     }));
-    return { goodsReceiptId: res.goodsReceiptId, status: newStatus };
+    return { goodsReceiptId: res.goodsReceiptId, status: newStatus, ekCheck };
   }
 }

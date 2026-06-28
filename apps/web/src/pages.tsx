@@ -6391,16 +6391,34 @@ function WareneingangPo({ po, onBooked, onErr }: {
 }): JSX.Element {
   const [qty, setQty] = useState<Record<string, number>>(() =>
     Object.fromEntries(po.lines.map((l) => [l.variantId, Math.max(0, l.orderedQty - l.receivedQty)])));
+  // EK je Stück laut Lieferschein (€) — vorbelegt mit dem Bestell-EK; Abweichung wird geprüft.
+  const [ek, setEk] = useState<Record<string, number | "">>(() =>
+    Object.fromEntries(po.lines.map((l) => [l.variantId, l.ekCents / 100])));
   const [busy, setBusy] = useState(false);
   const statusColor = po.status === "TEILWEISE_ERHALTEN" ? "yellow" : po.status === "ERHALTEN" ? "teal" : "blue";
 
+  // Live-Abweichung EK Eingang ↔ Bestell-EK (Δ%): rot ab > 2 %, dezent darunter.
+  const ekDiffPct = (l: { variantId: string; ekCents: number }): number | null => {
+    const v = ek[l.variantId];
+    if (v === "" || v == null || l.ekCents === 0) return null;
+    return ((Math.round(Number(v) * 100) - l.ekCents) / l.ekCents) * 100;
+  };
+
   const book = async (): Promise<void> => {
-    const lines = po.lines.map((l) => ({ variantId: l.variantId, receivedQty: qty[l.variantId] ?? 0 })).filter((l) => l.receivedQty > 0);
+    const lines = po.lines.map((l) => {
+      const e = ek[l.variantId];
+      return { variantId: l.variantId, receivedQty: qty[l.variantId] ?? 0, ...(e !== "" && e != null ? { ekCents: Math.round(Number(e) * 100) } : {}) };
+    }).filter((l) => l.receivedQty > 0);
     if (lines.length === 0) { onErr("Keine Eingangsmenge erfasst."); return; }
     setBusy(true);
     try {
       const r = await trpc.goodsReceipts.record.mutate({ purchaseOrderId: po.id, lines });
-      onBooked(`Wareneingang gebucht — ${po.number}: Status ${r.status}.`);
+      const ekNote = r.ekCheck
+        ? r.ekCheck.overall === "ABWEICHUNG"
+          ? ` ⚠ EK-Abweichung zur Bestellung (max. ${r.ekCheck.maxAbsDiffPercent.toFixed(1)}%) — bitte prüfen.`
+          : r.ekCheck.overall === "OK" ? " EK stimmt mit der Bestellung überein." : " EK teilweise nicht prüfbar."
+        : "";
+      onBooked(`Wareneingang gebucht — ${po.number}: Status ${r.status}.${ekNote}`);
     } catch (e) { onErr(errMsg(e)); } finally { setBusy(false); }
   };
 
@@ -6414,10 +6432,13 @@ function WareneingangPo({ po, onBooked, onErr }: {
         <Table.Thead><Table.Tr>
           <Table.Th>Artikel</Table.Th><Table.Th ta="right">Bestellt</Table.Th><Table.Th ta="right">Erhalten</Table.Th>
           <Table.Th ta="right">Offen</Table.Th><Table.Th>Jetzt erhalten</Table.Th>
+          <Table.Th ta="right">EK Bestellung</Table.Th><Table.Th>EK Eingang</Table.Th><Table.Th ta="right">Δ%</Table.Th>
         </Table.Tr></Table.Thead>
         <Table.Tbody>
           {po.lines.map((l) => {
             const open = Math.max(0, l.orderedQty - l.receivedQty);
+            const dp = ekDiffPct(l);
+            const over = dp != null && Math.abs(dp) > 2;
             return (
               <Table.Tr key={l.variantId}>
                 <Table.Td>{l.label}</Table.Td>
@@ -6428,6 +6449,12 @@ function WareneingangPo({ po, onBooked, onErr }: {
                   <NumberInput size="xs" w={100} min={0} value={qty[l.variantId] ?? 0}
                     onChange={(v) => setQty((s) => ({ ...s, [l.variantId]: Number(v) || 0 }))} />
                 </Table.Td>
+                <Table.Td ta="right" style={numTd}>{euro(l.ekCents)}</Table.Td>
+                <Table.Td>
+                  <MoneyInput size="xs" w={110} min={0} value={ek[l.variantId] ?? ""}
+                    onChange={(v) => setEk((s) => ({ ...s, [l.variantId]: v === "" ? "" : Number(v) }))} />
+                </Table.Td>
+                <Table.Td ta="right">{dp == null ? <Text component="span" c="dimmed">—</Text> : <Text component="span" c={over ? "red.7" : "dimmed"} fw={over ? 600 : 400}>{dp > 0 ? "+" : ""}{dp.toFixed(1)}%</Text>}</Table.Td>
               </Table.Tr>
             );
           })}

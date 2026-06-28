@@ -24,7 +24,7 @@ export class PrismaGoodsReceiptRepository implements GoodsReceiptRepository {
       select: {
         id: true, number: true, status: true, productionId: true,
         supplier: { select: { name: true } },
-        lines: { select: { variantId: true, qty: true, variant: { select: { sku: true, article: { select: { name: true } } } } } },
+        lines: { select: { variantId: true, qty: true, ekCents: true, variant: { select: { sku: true, article: { select: { name: true } } } } } },
         goodsReceipts: { select: { lines: { select: { variantId: true, receivedQty: true } } } },
       },
     });
@@ -37,28 +37,29 @@ export class PrismaGoodsReceiptRepository implements GoodsReceiptRepository {
           label: `${l.variant.article.name} (${l.variant.sku})`,
           orderedQty: l.qty,
           receivedQty: recv.get(l.variantId) ?? 0,
+          ekCents: l.ekCents,
         })),
       };
     });
   }
 
-  async purchaseOrderLines(purchaseOrderId: string): Promise<Array<{ variantId: string; orderedQty: number; receivedQty: number }>> {
+  async purchaseOrderLines(purchaseOrderId: string): Promise<Array<{ variantId: string; orderedQty: number; receivedQty: number; ekCents: number }>> {
     const po = await prisma.purchaseOrder.findUnique({
       where: { id: purchaseOrderId },
       select: {
-        lines: { select: { variantId: true, qty: true } },
+        lines: { select: { variantId: true, qty: true, ekCents: true } },
         goodsReceipts: { select: { lines: { select: { variantId: true, receivedQty: true } } } },
       },
     });
     if (!po) return [];
     const recv = receivedByVariant(po.goodsReceipts);
-    return po.lines.map((l) => ({ variantId: l.variantId, orderedQty: l.qty, receivedQty: recv.get(l.variantId) ?? 0 }));
+    return po.lines.map((l) => ({ variantId: l.variantId, orderedQty: l.qty, receivedQty: recv.get(l.variantId) ?? 0, ekCents: l.ekCents }));
   }
 
-  async recordReceipt(purchaseOrderId: string, lines: Array<{ variantId: string; receivedQty: number }>, newStatus: PurchaseOrderStatus): Promise<{ goodsReceiptId: string }> {
+  async recordReceipt(purchaseOrderId: string, lines: Array<{ variantId: string; receivedQty: number; ekCents?: number | null }>, newStatus: PurchaseOrderStatus): Promise<{ goodsReceiptId: string }> {
     return prisma.$transaction(async (tx) => {
       const gr = await tx.goodsReceipt.create({
-        data: { purchaseOrderId, lines: { create: lines.map((l) => ({ variantId: l.variantId, receivedQty: l.receivedQty })) } },
+        data: { purchaseOrderId, lines: { create: lines.map((l) => ({ variantId: l.variantId, receivedQty: l.receivedQty, ekCents: l.ekCents ?? null })) } },
         select: { id: true },
       });
       await tx.purchaseOrder.update({ where: { id: purchaseOrderId }, data: { status: newStatus } });
