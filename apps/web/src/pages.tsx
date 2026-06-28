@@ -116,7 +116,7 @@ const COL_LABELS: Record<string, string> = {
   zahlungszielTage: "Zahlungsziel (T)", netCents: "Netto", taxCents: "MwSt.", grossCents: "Brutto",
   openCents: "Offen", ekCents: "EK", unitNetCents: "Einzel netto", totalNetCents: "Summe",
   qty: "Menge", menge: "Menge", position: "Pos.", description: "Beschreibung", sku: "SKU",
-  vorlage: "Vorlage", subject: "Betreff", key: "Schlüssel",
+  vorlage: "Vorlage", verwendung: "Verwendung", subject: "Betreff", key: "Schlüssel",
   supplierSku: "Lief.-SKU", availableQty: "Verfügbar", variantCount: "Varianten",
   createdAt: "Erstellt", updatedAt: "Geändert", ausgegebenAm: "Ausgegeben", dueDate: "Fällig",
   gueltigBisAm: "Gültig bis", zugesagterLiefertermin: "Liefertermin", lieferstatus: "Lieferstatus", fakturastatus: "Fakturastatus", externalNumber: "Shop-Nr.", employeeNote: "Vermerk",
@@ -832,7 +832,8 @@ export const DunningPage = (): JSX.Element => (
 );
 
 // Mahnung je Posten: Download (PDF) und Mailversand — verfügbar, sobald ein Mahnbeleg
-// existiert (nach dem Mahnlauf). Empfänger über Prompt (Kundenadresse).
+// existiert (nach dem Mahnlauf). Empfänger (Kundenadresse) und die stufenspezifische
+// Mailvorlage (beleg.mahnung.<stufe>) werden serverseitig über die Mahnstufe aufgelöst.
 function DunningRowActions({ noticeId }: { noticeId: string | null }): JSX.Element {
   const [err, setErr] = useState<string | null>(null);
   if (!noticeId) return <Text size="xs" c="dimmed">noch keine Mahnung</Text>;
@@ -5194,6 +5195,22 @@ export function DashboardsPage(): JSX.Element {
 // Lesbare Vorlagennamen je Schlüssel (Belegtypen + Mahnstufen) für die Vorlagen-Liste.
 const BELEG_TEMPLATE_LABEL = new Map(EMAIL_TEMPLATE_DEFAULTS.map((t) => [t.key, t.label]));
 
+// Verknüpfung jeder Vorlage zum auslösenden Workflow (sichtbar machen, WO sie wirkt):
+// Mahnwesen nutzt die Mahnstufen-Vorlagen je DunningNotice.stufe, die Rechnungsstellung
+// die Rechnungs-/Gutschriftvorlage — gesendet als „In Outlook"/Mailversand am jeweiligen Beleg.
+const TEMPLATE_USAGE: Record<string, string> = {
+  "beleg.quote": "Vertrieb · Angebot",
+  "beleg.auftragsbestaetigung": "Auftrag · Auftragsbestätigung",
+  "beleg.invoice": "Rechnungsstellung · Rechnung",
+  "beleg.gutschrift": "Rechnungsstellung · Gutschrift",
+  "beleg.lieferschein": "Versand · Lieferschein",
+  "beleg.leihgut": "Muster · Leihgut-Lieferschein",
+  "beleg.mahnung": "Mahnwesen · Mahnung (generisch)",
+  "beleg.mahnung.1": "Mahnwesen · Zahlungserinnerung (Stufe 1)",
+  "beleg.mahnung.2": "Mahnwesen · 1. Mahnung (Stufe 2)",
+  "beleg.mahnung.3": "Mahnwesen · 2. Mahnung (Stufe 3)",
+};
+
 export function EmailTemplatesPage(): JSX.Element {
   const [list, setList] = useState<Row[]>([]);
   const [key, setKey] = useState("");
@@ -5209,6 +5226,7 @@ export function EmailTemplatesPage(): JSX.Element {
       // Belegvorlagen lesbar machen: Vorlage-Label + Quelle (Standard vs. angepasst).
       setList(rows.map((t) => ({
         vorlage: BELEG_TEMPLATE_LABEL.get(String(t.key)) ?? "—",
+        verwendung: TEMPLATE_USAGE[String(t.key)] ?? "—",
         ...t,
         quelle: String(t.id).startsWith("default:") ? "Standard" : "Angepasst",
       })));
@@ -5221,9 +5239,11 @@ export function EmailTemplatesPage(): JSX.Element {
     <>
       <DocListHeader module="Einstellungen" title="E-Mail-Vorlagen" />
       <Text size="sm" c="dimmed" mt={4}>
-        Betreff &amp; Text für jeden Belegtyp (Angebot, Auftragsbestätigung, Rechnung, Lieferschein, Gutschrift, Mahnung, Leihgut)
-        — diese werden beim E-Mail-Versand und im Outlook-Entwurf verwendet. Platzhalter in doppelten geschweiften Klammern,
-        z. B. <b>belegnr</b>. „Standard"-Vorlagen sind voreingestellt und werden beim Bearbeiten zu einer eigenen Fassung (G-5).
+        Betreff &amp; Text je Beleg- und Mahnstufe — verknüpft mit den Workflows (Spalte <b>Verwendung</b>): die
+        <b> Rechnungsstellung</b> nutzt die Rechnungs-/Gutschriftvorlage, das <b>Mahnwesen</b> automatisch die Vorlage der
+        jeweiligen Mahnstufe (Zahlungserinnerung → 1. Mahnung → 2. Mahnung). Gesendet werden sie als „In Outlook"-Entwurf
+        bzw. Mailversand am jeweiligen Beleg. Platzhalter in doppelten geschweiften Klammern, z. B. <b>belegnr</b>.
+        „Standard"-Vorlagen sind voreingestellt und werden beim Bearbeiten zu einer eigenen Fassung (G-5).
       </Text>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
       <AutoTable rows={list} hide={["id", "updatedAt", "body"]} action={(t) => (
