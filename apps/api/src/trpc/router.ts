@@ -1,6 +1,6 @@
 // tRPC-AppRouter: Auth (Login/2FA/RBAC) + Shop-Order-Ingest/Liste.
 import { TRPCError } from "@trpc/server";
-import { ProductionSheetIncompleteError, redactOrderForRole, canViewFinancials, SubProductionTransitionError, scheduleBackward, backwardStart, orderStatusLabel, type LeadStage } from "@texma/shared";
+import { ProductionSheetIncompleteError, redactOrderForRole, canViewFinancials, SubProductionTransitionError, scheduleBackward, backwardStart, orderStatusLabel, belegTemplateKey, belegTemplateByKind, renderTemplate, type LeadStage } from "@texma/shared";
 import { ReklamationValidationError } from "../modules/reklamation/reklamation.service.js";
 import { z } from "zod";
 import { AuthError, SESSION_TTL_SECONDS } from "../modules/auth/auth.service.js";
@@ -47,33 +47,26 @@ function toTrpcError(err: unknown): never {
   throw err;
 }
 
-/**
- * Beleg-Mail-Metadaten je Belegtyp: Label (Betreff) + Anschreibe-Formulierung („Ihre/unser …").
- * Eine Quelle für SMTP-Versand (mail.sendBeleg) UND Outlook-Entwurf (mail.buildDraft), damit
- * Betreff/Text überall identisch sind.
- */
-const BELEG_MAIL_META: Record<BelegMailKind, { label: string; satz: string }> = {
-  QUOTE: { label: "Angebot", satz: "unser Angebot" },
-  AUFTRAGSBESTAETIGUNG: { label: "Auftragsbestätigung", satz: "unsere Auftragsbestätigung" },
-  INVOICE: { label: "Rechnung", satz: "Ihre Rechnung" },
-  LIEFERSCHEIN: { label: "Lieferschein", satz: "Ihren Lieferschein" },
-  GUTSCHRIFT: { label: "Gutschrift", satz: "Ihre Gutschrift" },
-  MAHNUNG: { label: "Mahnung", satz: "unsere Zahlungserinnerung" },
-  LEIHGUT: { label: "Leihgut-Lieferschein", satz: "den Lieferschein zum Muster-Leihgut" },
-};
-
 /** Belegnummer aus dem PDF-Dateinamen (z. B. „Angebot-AN-0001.pdf" → „AN-0001"). */
 function belegNummerAusDateiname(filename: string): string {
   return filename.replace(/\.pdf$/, "").replace(/^[^-]+-/, "");
 }
 
-/** Standard-Betreff/-Text eines Kunden-Belegs (gemeinsam für SMTP + Outlook-Entwurf). */
-function belegMailText(kind: BelegMailKind, filename: string): { subject: string; body: string } {
-  const meta = BELEG_MAIL_META[kind];
-  return {
-    subject: `${meta.label} ${belegNummerAusDateiname(filename)}`,
-    body: `Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie ${meta.satz} als PDF.\n\nMit freundlichen Grüßen\nTEXMA Textilmarketing GmbH`,
-  };
+/**
+ * Betreff/Text eines Kunden-Belegs für SMTP-Versand UND Outlook-Entwurf.
+ * Liest die auf der Vorlagen-Seite (#emailtemplates) GEPFLEGTE Vorlage (Schlüssel „beleg.<typ>")
+ * und füllt {{ belegnr }}; ohne gepflegte Vorlage greift die Default-Vorlage aus @texma/shared.
+ * So wirkt sich die Vorlagenpflege tatsächlich auf den Versand aus (G-5).
+ */
+async function belegMailText(ctx: Context, kind: BelegMailKind, filename: string): Promise<{ subject: string; body: string }> {
+  const belegnr = belegNummerAusDateiname(filename);
+  try {
+    return await ctx.emailTemplates.render(belegTemplateKey(kind), { belegnr });
+  } catch {
+    // Defensive: sollte nicht eintreten (Defaults sind registriert) — direkt aus dem Default rendern.
+    const def = belegTemplateByKind(kind);
+    return { subject: renderTemplate(def.subject, { belegnr }), body: renderTemplate(def.body, { belegnr }) };
+  }
 }
 
 /** Das passende Beleg-PDF je Kind erzeugen (gemeinsam für SMTP-Versand + Outlook-Entwurf). */
@@ -2046,7 +2039,7 @@ export const appRouter = router({
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) throw new TRPCError({ code: "BAD_REQUEST", message: `„${to}" ist keine gültige E-Mail-Adresse.` });
         try {
           const pdf = await belegPdf(ctx, input.kind, input.id);
-          const def = belegMailText(input.kind, pdf.filename);
+          const def = await belegMailText(ctx, input.kind, pdf.filename);
           const subject = input.subject ?? def.subject;
           const body = input.body ?? def.body;
           await ctx.mailSend.send({ to, subject, body, attachments: [{ filename: pdf.filename, contentBase64: pdf.base64, contentType: "application/pdf" }] });
@@ -2065,7 +2058,7 @@ export const appRouter = router({
       .query(async ({ input, ctx }) => {
         try {
           const pdf = await belegPdf(ctx, input.kind, input.id);
-          const { subject, body } = belegMailText(input.kind, pdf.filename);
+          const { subject, body } = await belegMailText(ctx, input.kind, pdf.filename);
           const to = (await ctx.print.recipientEmailForBeleg(input.kind, input.id))?.trim() ?? "";
           return { to, subject, body, pdf: { filename: pdf.filename, base64: pdf.base64 } };
         } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }

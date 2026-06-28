@@ -19,6 +19,7 @@ import { useUnsavedGuard } from "./use-unsaved-guard.js";
 import { downloadCsv } from "./export.js";
 import { openOutlookDraft } from "./outlook-draft.js";
 import { MoneyInput } from "./money-input.js";
+import { BELEG_MAIL_TEMPLATES } from "@texma/shared/beleg-templates";
 
 type Row = Record<string, unknown>;
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
@@ -115,6 +116,7 @@ const COL_LABELS: Record<string, string> = {
   zahlungszielTage: "Zahlungsziel (T)", netCents: "Netto", taxCents: "MwSt.", grossCents: "Brutto",
   openCents: "Offen", ekCents: "EK", unitNetCents: "Einzel netto", totalNetCents: "Summe",
   qty: "Menge", menge: "Menge", position: "Pos.", description: "Beschreibung", sku: "SKU",
+  vorlage: "Vorlage", subject: "Betreff", key: "Schlüssel",
   supplierSku: "Lief.-SKU", availableQty: "Verfügbar", variantCount: "Varianten",
   createdAt: "Erstellt", updatedAt: "Geändert", ausgegebenAm: "Ausgegeben", dueDate: "Fällig",
   gueltigBisAm: "Gültig bis", zugesagterLiefertermin: "Liefertermin", lieferstatus: "Lieferstatus", fakturastatus: "Fakturastatus", externalNumber: "Shop-Nr.", employeeNote: "Vermerk",
@@ -5189,25 +5191,40 @@ export function DashboardsPage(): JSX.Element {
 
 // E-Mail-/Text-Vorlagen (G-5): anlegen/bearbeiten + Vorschau-Rendering mit Variablen.
 // Platzhalter in doppelten geschweiften Klammern (z. B. name, nr).
+// Lesbare Belegnamen je Vorlagenschlüssel (für die Vorlagen-Liste).
+const BELEG_TEMPLATE_LABEL = new Map(BELEG_MAIL_TEMPLATES.map((t) => [t.key, t.label]));
+
 export function EmailTemplatesPage(): JSX.Element {
   const [list, setList] = useState<Row[]>([]);
   const [key, setKey] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
-  const [varsJson, setVarsJson] = useState('{ "name": "Max", "nr": "WC-1" }');
+  const [varsJson, setVarsJson] = useState('{ "belegnr": "AN-2026-0001" }');
   const [preview, setPreview] = useState<{ subject: string; body: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    try { setList((await trpc.emailTemplates.list.query()) as Row[]); setErr(null); }
-    catch (e) { setErr(errMsg(e)); }
+    try {
+      const rows = (await trpc.emailTemplates.list.query()) as Row[];
+      // Belegvorlagen lesbar machen: Vorlage-Label + Quelle (Standard vs. angepasst).
+      setList(rows.map((t) => ({
+        vorlage: BELEG_TEMPLATE_LABEL.get(String(t.key)) ?? "—",
+        ...t,
+        quelle: String(t.id).startsWith("default:") ? "Standard" : "Angepasst",
+      })));
+      setErr(null);
+    } catch (e) { setErr(errMsg(e)); }
   }, []);
   useEffect(() => { void load(); }, [load]);
 
   return (
     <>
       <DocListHeader module="Einstellungen" title="E-Mail-Vorlagen" />
-      <Text size="sm" c="dimmed" mt={4}>Vorlagen mit Platzhaltern (doppelte geschweifte Klammern), z. B. „name" oder „nr" (G-5).</Text>
+      <Text size="sm" c="dimmed" mt={4}>
+        Betreff &amp; Text für jeden Belegtyp (Angebot, Auftragsbestätigung, Rechnung, Lieferschein, Gutschrift, Mahnung, Leihgut)
+        — diese werden beim E-Mail-Versand und im Outlook-Entwurf verwendet. Platzhalter in doppelten geschweiften Klammern,
+        z. B. <b>belegnr</b>. „Standard"-Vorlagen sind voreingestellt und werden beim Bearbeiten zu einer eigenen Fassung (G-5).
+      </Text>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
       <AutoTable rows={list} hide={["id", "updatedAt", "body"]} action={(t) => (
         <Button size="compact-xs" variant="light" onClick={() => { setKey(String(t.key)); setSubject(String(t.subject)); setBody(String(t.body)); setPreview(null); }}>Bearbeiten</Button>

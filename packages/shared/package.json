@@ -22,6 +22,10 @@
       "types": "./dist/money.d.ts",
       "import": "./dist/money.js"
     },
+    "./beleg-templates": {
+      "types": "./dist/beleg-templates.d.ts",
+      "import": "./dist/beleg-templates.js"
+    },
     "./pain001": {
       "types": "./dist/pain001.d.ts",
       "import": "./dist/pain001.js"

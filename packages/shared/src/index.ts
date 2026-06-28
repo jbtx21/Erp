@@ -74,6 +74,7 @@ export * from "./scheduling.js";
 export * from "./holidays.js";
 export * from "./fulfillment.js";
 export * from "./templating.js";
+export * from "./beleg-templates.js";
 export * from "./privacy.js";
 export * from "./inquiry.js";
 export * from "./pos.js";

@@ -60,19 +60,40 @@ export interface EmailTemplateRepository {
 
 export class EmailTemplateError extends Error {}
 
-export class EmailTemplateService {
-  constructor(private readonly repo: EmailTemplateRepository) {}
+/** Default-Vorlage (z. B. Belegmails): wird auf der Pflegeseite gelistet und beim Versand
+ *  verwendet, solange keine gepflegte Vorlage den Schlüssel überschreibt. */
+export interface EmailTemplateDefault { key: string; subject: string; body: string; }
 
-  list(): Promise<EmailTemplateItem[]> {
-    return this.repo.list();
+export class EmailTemplateService {
+  constructor(
+    private readonly repo: EmailTemplateRepository,
+    /** Vordefinierte Vorlagen (Belegmails, G-5) — gelistet & als Fallback genutzt, ohne DB-Schreiben. */
+    private readonly defaults: ReadonlyArray<EmailTemplateDefault> = [],
+  ) {}
+
+  /** Gepflegte Vorlagen + nicht überschriebene Defaults (virtuelle Einträge, id „default:…"). */
+  async list(): Promise<EmailTemplateItem[]> {
+    const stored = await this.repo.list();
+    const storedKeys = new Set(stored.map((t) => t.key));
+    const virtual: EmailTemplateItem[] = this.defaults
+      .filter((d) => !storedKeys.has(d.key))
+      .map((d) => ({ id: `default:${d.key}`, key: d.key, subject: d.subject, body: d.body, updatedAt: new Date(0) }));
+    return [...stored, ...virtual].sort((a, b) => a.key.localeCompare(b.key));
   }
   async upsert(key: string, subject: string, body: string): Promise<EmailTemplateItem> {
     if (!key.trim() || !subject.trim() || !body.trim()) throw new EmailTemplateError("Schlüssel, Betreff und Text sind Pflicht.");
     return this.repo.upsert(key.trim(), subject, body);
   }
-  /** Rendert Betreff + Text einer Vorlage mit Variablen; wirft bei fehlender Vorlage. */
+  /** Gepflegte Vorlage, sonst Default, sonst null (ohne Rendering). */
+  async resolve(key: string): Promise<{ subject: string; body: string } | null> {
+    const stored = await this.repo.get(key);
+    if (stored) return { subject: stored.subject, body: stored.body };
+    const def = this.defaults.find((d) => d.key === key);
+    return def ? { subject: def.subject, body: def.body } : null;
+  }
+  /** Rendert Betreff + Text einer Vorlage mit Variablen; wirft bei unbekanntem Schlüssel. */
   async render(key: string, vars: Record<string, string | number>): Promise<{ subject: string; body: string }> {
-    const tpl = await this.repo.get(key);
+    const tpl = await this.resolve(key);
     if (!tpl) throw new EmailTemplateError(`Vorlage '${key}' nicht gefunden.`);
     return { subject: renderTemplate(tpl.subject, vars), body: renderTemplate(tpl.body, vars) };
   }
