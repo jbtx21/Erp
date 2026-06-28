@@ -70,3 +70,35 @@ describe("IncomingInvoiceService.receive (C4)", () => {
     }
   });
 });
+
+describe("Auto-Match-Toleranz (IIN-001)", () => {
+  function setupWithPo(po: { id: string; expectedNetCents: number } | null) {
+    const repo = new InMemoryIncomingInvoiceRepository([{ id: "sup_stoff", name: "Stoff Lieferant GmbH", vatId: "DE123456789" }]);
+    repo.findSoleOpenPoForSupplier = async () => po;
+    return new IncomingInvoiceService(repo, new MemoryAuditSink());
+  }
+
+  it("sperrt eine 10,99-€-Rechnung gegen eine 10-€-Bestellung (kein 10-%-Floor mehr)", async () => {
+    const service = setupWithPo({ id: "po1", expectedNetCents: 1000 });
+    const res = await service.receive(buildEInvoiceXml(model({ netCents: 1099, taxCents: 209, grossCents: 1308, lines: [{ id: "1", name: "Stoff", qty: 1, unitNetCents: 1099, lineNetCents: 1099, vatRatePercent: 19 }] })));
+    expect(res).toMatchObject({ status: "GESPERRT", matched: true });
+  });
+
+  it("prüft eine 10,10-€-Rechnung innerhalb realer 2 % gegen eine 10-€-Bestellung", async () => {
+    const service = setupWithPo({ id: "po1", expectedNetCents: 1000 }); // Δ=10 ct ≤ 2 % (20 ct)
+    const res = await service.receive(buildEInvoiceXml(model({ netCents: 1010, taxCents: 192, grossCents: 1202, lines: [{ id: "1", name: "Stoff", qty: 1, unitNetCents: 1010, lineNetCents: 1010, vatRatePercent: 19 }] })));
+    expect(res).toMatchObject({ status: "GEPRUEFT", matched: true });
+  });
+
+  it("deckelt die Toleranz bei Großbestellungen (CAP 500 €)", async () => {
+    const service = setupWithPo({ id: "po1", expectedNetCents: 10_000_000 }); // 100.000 €, Δ=600 € > 500 €
+    const res = await service.receive(buildEInvoiceXml(model({ netCents: 10_060_000, taxCents: 1_911_400, grossCents: 11_971_400, lines: [{ id: "1", name: "Stoff", qty: 1, unitNetCents: 10_060_000, lineNetCents: 10_060_000, vatRatePercent: 19 }] })));
+    expect(res).toMatchObject({ status: "GESPERRT", matched: true });
+  });
+
+  it("fängt reines Cent-Rundungsrauschen über den LOW_FLOOR ab (Δ ≤ 5 ct → GEPRUEFT)", async () => {
+    const service = setupWithPo({ id: "po1", expectedNetCents: 200 }); // 2 % = 4 ct, Floor 5 ct greift
+    const res = await service.receive(buildEInvoiceXml(model({ netCents: 204, taxCents: 39, grossCents: 243, lines: [{ id: "1", name: "Stoff", qty: 1, unitNetCents: 204, lineNetCents: 204, vatRatePercent: 19 }] })));
+    expect(res).toMatchObject({ status: "GEPRUEFT", matched: true });
+  });
+});

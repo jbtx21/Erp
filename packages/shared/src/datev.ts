@@ -42,6 +42,17 @@ export interface InvoiceForDatev {
   taxByRate: ReadonlyArray<{ rate: number; netCents: Cents }>;
 }
 
+export interface CreditNoteForDatev {
+  number: string;
+  issuedAt: Date;
+  /** Debitorenkonto des Kunden (identisch zur Originalrechnung). */
+  debitorKonto: string;
+  /** Originalrechnungs-Nummer (für den Buchungstext-Bezug). */
+  originalInvoiceNumber?: string;
+  /** Netto je Satz (aus buildInvoiceTotals.taxByRate der Gutschrift). */
+  taxByRate: ReadonlyArray<{ rate: number; netCents: Cents }>;
+}
+
 const BU_BY_RATE: Record<string, string> = {
   "0.19": "9", // 19% USt
   "0.07": "8", // 7% USt
@@ -67,6 +78,34 @@ export function buchungenFromInvoice(
       belegdatum: inv.issuedAt,
       belegfeld1: inv.number,
       buchungstext: `Rechnung ${inv.number}`,
+    };
+  });
+}
+
+/**
+ * Erzeugt Buchungssätze für eine Gutschrift/Storno (Kap. 9.1/20): wie die
+ * Originalrechnung, aber mit umgekehrter Richtung (sollHaben "H" — Storno der
+ * Forderung + Erlösminderung). Der Umsatz bleibt POSITIV; die Richtung trägt
+ * allein das Soll/Haben-Kennzeichen (genau deshalb ist `Math.abs` in datevAmount
+ * korrekt — DATEV-001/GoBD: kein stiller Vorzeichenverlust bei Gutschriften).
+ */
+export function buchungenFromCreditNote(
+  cn: CreditNoteForDatev,
+  erloes: ErloeskontoMap
+): DatevBuchung[] {
+  return cn.taxByRate.map((t) => {
+    const rateKey = t.rate.toFixed(2);
+    return {
+      umsatzCents: t.netCents,
+      sollHaben: "H" as const,
+      konto: cn.debitorKonto,
+      gegenkonto: t.rate >= 0.19 ? erloes.standard : erloes.reduced,
+      buSchluessel: BU_BY_RATE[rateKey] ?? "",
+      belegdatum: cn.issuedAt,
+      belegfeld1: cn.number,
+      buchungstext: cn.originalInvoiceNumber
+        ? `Gutschrift ${cn.number} zu ${cn.originalInvoiceNumber}`
+        : `Gutschrift ${cn.number}`,
     };
   });
 }

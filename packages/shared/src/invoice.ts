@@ -30,35 +30,39 @@ export interface InvoiceTotals {
 }
 
 /**
- * Berechnet die Rechnungssummen aus den Zeilen. Steuer wird je Zeile auf den
- * Zeilennetto gerundet und je Steuersatz aggregiert (saubere USt-Ausweisung).
+ * Berechnet die Rechnungssummen aus den Zeilen. Netto wird je Steuersatz
+ * aufsummiert und die Steuer **einmal je Satz** auf den Summen-Netto gerundet
+ * (USt zentral / je Satz aggregiert, nicht je Position). Die per-Zeilen-`taxCents`
+ * sind nur informativ (Anzeige) und fließen NICHT in die Summen — sonst entstehen
+ * akkumulierte Rundungsfehler (z. B. 100×1 ct @19 % → je Zeile round(0,19)=0 →
+ * Gesamt-Steuer fälschlich 0 statt 19 ct; INV-ROUND-100/GoBD).
  */
 export function buildInvoiceTotals(lines: ReadonlyArray<InvoiceLineInput>): InvoiceTotals {
   if (lines.length === 0) throw new Error("Rechnung ohne Positionen");
-  const byRate = new Map<number, { netCents: Cents; taxCents: Cents }>();
+  const netByRate = new Map<number, Cents>();
   const outLines: InvoiceLine[] = [];
 
   for (const l of lines) {
     const vatRate = l.vatRate ?? VAT_STANDARD;
     const netCents = lineNet(l.qty, l.unitNetCents);
+    // taxCents je Zeile nur informativ (Anzeige); fließt NICHT in die Summen.
     const taxCents = taxOnNet(netCents, vatRate);
     outLines.push({ ...l, vatRate, netCents, taxCents });
-    const acc = byRate.get(vatRate) ?? { netCents: 0, taxCents: 0 };
-    acc.netCents += netCents;
-    acc.taxCents += taxCents;
-    byRate.set(vatRate, acc);
+    netByRate.set(vatRate, (netByRate.get(vatRate) ?? 0) + netCents);
   }
 
-  const netTotal = outLines.reduce((s, l) => s + l.netCents, 0);
-  const taxTotal = outLines.reduce((s, l) => s + l.taxCents, 0);
+  const taxByRate = [...netByRate.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([rate, netCents]) => ({ rate, netCents, taxCents: taxOnNet(netCents, rate) }));
+
+  const netTotal = taxByRate.reduce((s, r) => s + r.netCents, 0);
+  const taxTotal = taxByRate.reduce((s, r) => s + r.taxCents, 0);
 
   return {
     lines: outLines,
     netCents: netTotal,
     taxCents: taxTotal,
     grossCents: netTotal + taxTotal,
-    taxByRate: [...byRate.entries()]
-      .sort((a, b) => a[0] - b[0])
-      .map(([rate, v]) => ({ rate, netCents: v.netCents, taxCents: v.taxCents })),
+    taxByRate,
   };
 }

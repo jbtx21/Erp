@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buchungenFromInvoice, toDatevCsv } from "./datev.js";
+import { buchungenFromCreditNote, buchungenFromInvoice, toDatevCsv } from "./datev.js";
 
 describe("DATEV-Export (T-07)", () => {
   const erloes = { standard: "8400", reduced: "8300" };
@@ -44,5 +44,23 @@ describe("DATEV-Export (T-07)", () => {
     const lines = csv.split("\r\n");
     expect(lines[0]).toContain("Umsatz;Soll/Haben-Kennzeichen");
     expect(lines[1]).toBe('100,00;S;10001;8400;9;0503;"RE-1";"Rechnung RE-1"');
+  });
+
+  it("Gutschrift: je Satz eine HABEN-Buchung (Storno der Forderung, DATEV-001)", () => {
+    const buchungen = buchungenFromCreditNote(
+      { number: "GU-2026-0001", issuedAt: new Date("2026-03-06T10:00:00Z"), debitorKonto: "10001", originalInvoiceNumber: "RE-2026-0001", taxByRate: [{ rate: 0.19, netCents: 10000 }] },
+      erloes
+    );
+    expect(buchungen).toHaveLength(1);
+    expect(buchungen[0]).toMatchObject({ umsatzCents: 10000, sollHaben: "H", konto: "10001", gegenkonto: "8400", buSchluessel: "9", belegfeld1: "GU-2026-0001" });
+    expect(buchungen[0]!.buchungstext).toBe("Gutschrift GU-2026-0001 zu RE-2026-0001");
+  });
+
+  it("Gutschrift: serialisiert mit H und positivem Betrag (Math.abs nur mit H-Flip korrekt)", () => {
+    const csv = toDatevCsv(buchungenFromCreditNote(
+      { number: "GU-1", issuedAt: new Date("2026-03-06T10:00:00Z"), debitorKonto: "10001", taxByRate: [{ rate: 0.19, netCents: 10000 }] },
+      erloes
+    ));
+    expect(csv.split("\r\n")[1]).toBe('100,00;H;10001;8400;9;0603;"GU-1";"Gutschrift GU-1"');
   });
 });

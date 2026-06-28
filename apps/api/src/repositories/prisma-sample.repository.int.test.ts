@@ -111,5 +111,15 @@ if (!dbConfigured) {
       const seqAfter = (await prisma.numberSequence.findUnique({ where: { key_year: { key: "INVOICE", year: 2026 } } }))!.next;
       expect(seqAfter - seqBefore).toBe(1);
     });
+
+    it("issueMulti: DueItem-Frist = Ausgabe + 21 Tage (Mehrartikel-Leihe, T-SAMPLE-002)", async () => {
+      await cleanup();
+      const ausgabe = new Date(Date.UTC(2026, 5, 1)); // 1.6.2026
+      const { id } = await service.issueMulti({ companyId: CO, zweck: "Anprobe", lines: [{ description: "Polo blau M", supplierId: "sup-x", menge: 2 }], at: ausgabe });
+      const due = await prisma.dueItem.findFirst({ where: { entity: "SampleLoan", entityId: id }, select: { dueDate: true, note: true } });
+      expect(due).not.toBeNull();
+      expect(due!.dueDate.getTime()).toBe(Date.UTC(2026, 5, 22)); // 1.6. + 21 Tage = 22.6.2026
+      expect(due!.note).toBe("Muster/Anprobe-Rückgabe");
+    });
   });
 }

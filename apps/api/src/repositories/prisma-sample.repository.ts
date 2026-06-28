@@ -7,6 +7,7 @@ import {
   isSampleOverdue,
   lineNet,
   resolvePrice,
+  sampleDueDate,
   type PriceGroupKind,
   type VariantPrice,
 } from "@texma/shared";
@@ -40,7 +41,9 @@ export class PrismaSampleLoanRepository implements SampleLoanRepository {
       for (const l of input.lines) {
         if (l.variantId) await tx.stockMove.create({ data: { variantId: l.variantId, deltaQty: -l.menge, grund: "MUSTER", lager: "MUSTER", warehouseId: "wh_muster", belegRef: `SampleLoan:${loan.id}` } });
       }
-      await tx.dueItem.create({ data: { entity: "SampleLoan", entityId: loan.id, dueDate: input.ausgegebenAm, note: "Muster/Anprobe-Rückgabe" } });
+      // Rückgabefrist = Ausgabe + 21 Tage (wie der Einzel-Ausgabepfad; T-SAMPLE-002:
+      // vorher fälschlich = Ausgabedatum → Sammel-Leihe sofort überfällig).
+      await tx.dueItem.create({ data: { entity: "SampleLoan", entityId: loan.id, dueDate: sampleDueDate(input.ausgegebenAm), note: "Muster/Anprobe-Rückgabe" } });
       return loan;
     });
   }

@@ -26,4 +26,15 @@ describe("Faktura — Rechnungssummen (Kap. 9.1)", () => {
   it("lehnt Rechnungen ohne Positionen ab", () => {
     expect(() => buildInvoiceTotals([])).toThrow();
   });
+
+  it("aggregiert USt je Satz auf den Summen-Netto — kein akkumulierter Rundungsfehler (INV-ROUND-100)", () => {
+    const lines = Array.from({ length: 100 }, () => ({ description: "Cent-Position", qty: 1, unitNetCents: 1, vatRate: VAT_STANDARD }));
+    const t = buildInvoiceTotals(lines);
+    expect(t.netCents).toBe(100);
+    expect(t.taxCents).toBe(19); // round(100 * 0,19), NICHT 100× round(0,19)=0
+    expect(t.grossCents).toBe(119);
+    expect(t.taxByRate).toEqual([{ rate: VAT_STANDARD, netCents: 100, taxCents: 19 }]);
+    // Gesamt-Steuer ist stets die Summe der Satz-Steuern (konsistent für DATEV/E-Rechnung).
+    expect(t.taxCents).toBe(t.taxByRate.reduce((s, r) => s + r.taxCents, 0));
+  });
 });
