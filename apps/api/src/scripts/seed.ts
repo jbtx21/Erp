@@ -19,10 +19,12 @@ async function main(): Promise<void> {
   const hasher = new Argon2Hasher();
   const demoPasswordHash = await hasher.hash("demo");
   const demoUsers: Array<{ id: string; email: string; name: string; role: "ADMIN" | "BUERO" | "PRODUKTION" | "BUCHHALTUNG" }> = [
-    { id: "demo-admin", email: "admin@texma.de", name: "Demo Admin", role: "ADMIN" },
-    { id: "demo-buero", email: "buero@texma.de", name: "Demo Büro", role: "BUERO" },
-    { id: "demo-produktion", email: "produktion@texma.de", name: "Demo Produktion", role: "PRODUKTION" },
-    { id: "demo-buchhaltung", email: "buchhaltung@texma.de", name: "Demo Buchhaltung", role: "BUCHHALTUNG" },
+    // E-Mails auf der TEXMA-Domain (AUTH_EMAIL_DOMAIN=texma-gmbh.de) — sonst widerspricht
+    // der Seed der Benutzeranlage-Validierung (man könnte die Konten nicht neu anlegen).
+    { id: "demo-admin", email: "admin@texma-gmbh.de", name: "Demo Admin", role: "ADMIN" },
+    { id: "demo-buero", email: "buero@texma-gmbh.de", name: "Demo Büro", role: "BUERO" },
+    { id: "demo-produktion", email: "produktion@texma-gmbh.de", name: "Demo Produktion", role: "PRODUKTION" },
+    { id: "demo-buchhaltung", email: "buchhaltung@texma-gmbh.de", name: "Demo Buchhaltung", role: "BUCHHALTUNG" },
   ];
   for (const u of demoUsers) {
     await prisma.user.upsert({
