@@ -28,4 +28,20 @@ describe("buildEml (Outlook-Entwurf .eml)", () => {
     const eml = buildEml({ ...draft, subject: "Auftragsbestätigung AB-0002" });
     expect(eml).toMatch(/Subject: =\?UTF-8\?B\?.+\?=/);
   });
+
+  it("hängt zusätzliche PDFs an (Mahnung + Original-Rechnung mitversenden)", () => {
+    const eml = buildEml({
+      to: "kunde@example.de",
+      subject: "Zahlungserinnerung MA-1-ABC123",
+      body: "Bitte den offenen Betrag begleichen.",
+      pdf: { filename: "Mahnung-MA-1-ABC123.pdf", base64: btoa("%PDF mahnung") },
+      extraPdfs: [{ filename: "Rechnung-RE-2026-0001.pdf", base64: btoa("%PDF rechnung") }],
+    });
+    // Beide Belege als eigene Anhänge — der Kunde sieht Mahnung UND die gemahnte Rechnung.
+    expect(eml).toContain('filename="Mahnung-MA-1-ABC123.pdf"');
+    expect(eml).toContain('filename="Rechnung-RE-2026-0001.pdf"');
+    expect(eml).toContain(btoa("%PDF rechnung"));
+    // Genau zwei application/pdf-Parts.
+    expect((eml.match(/Content-Type: application\/pdf/g) ?? []).length).toBe(2);
+  });
 });

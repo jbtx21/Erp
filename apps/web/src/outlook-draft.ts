@@ -7,11 +7,18 @@
 // mit `X-Unsent: 1` öffnet in Outlook als editierbarer Entwurf samt PDF-Anhang — plattform-
 // und kontounabhängig, ohne Postausgangsserver.
 
+export interface MailPdf {
+  filename: string;
+  base64: string;
+}
+
 export interface MailDraft {
   to: string;
   subject: string;
   body: string;
-  pdf: { filename: string; base64: string };
+  pdf: MailPdf;
+  /** Weitere PDF-Anhänge (z. B. Original-Rechnung bei einer Mahnung). */
+  extraPdfs?: MailPdf[];
 }
 
 /** UTF-8-sicheres Base64 (btoa kann nur Latin-1) — für Betreff/Text mit Umlauten. */
@@ -31,11 +38,24 @@ function chunk76(b64: string): string {
   return (b64.match(/.{1,76}/g) ?? []).join("\r\n");
 }
 
-/** RFC-822-Quelltext (multipart/mixed: text/plain + application/pdf). Exportiert für Tests. */
+/** Ein PDF-Anhangsteil (multipart/mixed-Part). */
+function pdfPart(boundary: string, pdf: MailPdf): string[] {
+  return [
+    `--${boundary}`,
+    `Content-Type: application/pdf; name="${pdf.filename}"`,
+    "Content-Transfer-Encoding: base64",
+    `Content-Disposition: attachment; filename="${pdf.filename}"`,
+    "",
+    chunk76(pdf.base64),
+    "",
+  ];
+}
+
+/** RFC-822-Quelltext (multipart/mixed: text/plain + ein oder mehrere application/pdf). Exportiert für Tests. */
 export function buildEml(draft: MailDraft): string {
   const boundary = `texma_${draft.pdf.filename.replace(/[^a-zA-Z0-9]/g, "").slice(0, 24)}_part`;
   const bodyB64 = chunk76(utf8ToBase64(draft.body));
-  const pdfB64 = chunk76(draft.pdf.base64);
+  const pdfs = [draft.pdf, ...(draft.extraPdfs ?? [])];
   return [
     `To: ${draft.to}`,
     `Subject: ${encodeHeader(draft.subject)}`,
@@ -49,13 +69,7 @@ export function buildEml(draft: MailDraft): string {
     "",
     bodyB64,
     "",
-    `--${boundary}`,
-    `Content-Type: application/pdf; name="${draft.pdf.filename}"`,
-    "Content-Transfer-Encoding: base64",
-    `Content-Disposition: attachment; filename="${draft.pdf.filename}"`,
-    "",
-    pdfB64,
-    "",
+    ...pdfs.flatMap((p) => pdfPart(boundary, p)),
     `--${boundary}--`,
     "",
   ].join("\r\n");

@@ -188,6 +188,14 @@ export class PrismaPrintRepository implements PrintRepository {
     return (await prisma.dunningNotice.findUnique({ where: { id }, select: { stufe: true } }))?.stufe ?? null;
   }
 
+  async invoiceIdForNotice(id: string): Promise<string | null> {
+    const n = await prisma.dunningNotice.findUnique({
+      where: { id },
+      select: { openItem: { select: { invoice: { select: { id: true } } } } },
+    });
+    return n?.openItem.invoice?.id ?? null;
+  }
+
   async mahnungForPrint(id: string): Promise<import("../modules/print/print.service.js").MahnungPrintData | null> {
     const n = await prisma.dunningNotice.findUnique({
       where: { id },

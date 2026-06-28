@@ -90,6 +90,19 @@ function belegPdf(ctx: Context, kind: BelegMailKind, id: string): Promise<{ file
 }
 
 /**
+ * Zusätzliche PDF-Anhänge zum Hauptbeleg (gemeinsam für SMTP + Outlook-Entwurf). Eine
+ * Zahlungserinnerung/Mahnung trägt die Original-Rechnung als zweiten Anhang bei — der Kunde
+ * hat die mahnende Forderung direkt belegt, ohne separate Mail (TEXMA-Wunsch „mitversenden").
+ * Best-effort: fehlt die Verknüpfung/Rechnung, wird nur der Hauptbeleg gesendet.
+ */
+async function belegExtraPdfs(ctx: Context, kind: BelegMailKind, id: string): Promise<Array<{ filename: string; base64: string }>> {
+  if (kind !== "MAHNUNG") return [];
+  const invoiceId = await ctx.print.invoiceIdForNotice(id).catch(() => null);
+  if (!invoiceId) return [];
+  try { return [await ctx.print.invoicePdf(invoiceId)]; } catch { return []; }
+}
+
+/**
  * Auto-Archivierung (GoBD, Kap. 10): schreibt einen finalisierten/versendeten Beleg server-
  * seitig, idempotent (SHA-256) und nicht-umgehbar ins WORM-Archiv. Best-effort: ein Archiv-
  * Fehler darf die bereits erfolgte Finalisierung (Rechnung/Versand …) NICHT zurückrollen —
@@ -2080,8 +2093,11 @@ export const appRouter = router({
           const def = await belegMailText(ctx, input.kind, input.id, pdf.filename);
           const subject = input.subject ?? def.subject;
           const body = input.body ?? def.body;
-          await ctx.mailSend.send({ to, subject, body, attachments: [{ filename: pdf.filename, contentBase64: pdf.base64, contentType: "application/pdf" }] });
-          return { ok: true as const, filename: pdf.filename };
+          // Mahnung/Zahlungserinnerung: Original-Rechnung als zweiten Anhang mitversenden.
+          const extras = await belegExtraPdfs(ctx, input.kind, input.id);
+          const attachments = [pdf, ...extras].map((p) => ({ filename: p.filename, contentBase64: p.base64, contentType: "application/pdf" }));
+          await ctx.mailSend.send({ to, subject, body, attachments });
+          return { ok: true as const, filename: pdf.filename, attachmentCount: attachments.length };
         } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
     // Empfänger-E-Mail eines Belegs (Firma) — zum Vorbefüllen des „Direkt senden"-Dialogs,
@@ -2103,7 +2119,9 @@ export const appRouter = router({
           const pdf = await belegPdf(ctx, input.kind, input.id);
           const { subject, body } = await belegMailText(ctx, input.kind, input.id, pdf.filename);
           const to = (await ctx.print.recipientEmailForBeleg(input.kind, input.id))?.trim() ?? "";
-          return { to, subject, body, pdf: { filename: pdf.filename, base64: pdf.base64 } };
+          // Mahnung/Zahlungserinnerung: Original-Rechnung als zweiten .eml-Anhang mitschicken.
+          const extras = await belegExtraPdfs(ctx, input.kind, input.id);
+          return { to, subject, body, pdf: { filename: pdf.filename, base64: pdf.base64 }, extraPdfs: extras.map((p) => ({ filename: p.filename, base64: p.base64 })) };
         } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
     // Outlook-Entwurf für den Veredelungsauftrag (an den Veredler). Empfänger default =

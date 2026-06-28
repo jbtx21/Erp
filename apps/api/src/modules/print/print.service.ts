@@ -129,6 +129,8 @@ export interface PrintRepository {
   mahnungForPrint(id: string): Promise<MahnungPrintData | null>;
   /** Mahnstufe (1..3) eines Mahnbelegs — steuert die stufenspezifische Mail-Vorlage; null wenn unbekannt. */
   dunningStufeForNotice(id: string): Promise<number | null>;
+  /** Original-Rechnungs-ID eines Mahnbelegs — für den Mitversand der Rechnung; null wenn unbekannt. */
+  invoiceIdForNotice(id: string): Promise<string | null>;
   /** Muster-Leihgut als Lieferschein-Daten (Empfänger + Positionen, ohne Preise). */
   sampleLoanForPrint(loanId: string): Promise<DeliveryNotePrintData | null>;
   invoiceForPrint(id: string): Promise<InvoicePrintData | null>;
@@ -180,6 +182,11 @@ export class PrintService {
   /** Mahnstufe eines Mahnbelegs (für die stufenspezifische Mail-Vorlage). */
   dunningStufeForNotice(id: string): Promise<number | null> {
     return this.repo.dunningStufeForNotice(id);
+  }
+
+  /** Original-Rechnungs-ID eines Mahnbelegs (für den Mitversand der Rechnung). */
+  invoiceIdForNotice(id: string): Promise<string | null> {
+    return this.repo.invoiceIdForNotice(id);
   }
 
   async deliveryNotePdf(id: string): Promise<PdfResult> {
