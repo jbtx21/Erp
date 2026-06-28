@@ -717,6 +717,17 @@ export const appRouter = router({
         try { return await ctx.payments.record({ ...input, bookedAt: input.bookedAt ? new Date(input.bookedAt) : undefined }); }
         catch (e) { throw toTrpcError(e); }
       }),
+    /** Bestehenden Zahlungseingang (aus Klärung) manuell einem offenen Posten zuordnen (Kap. 9.4). */
+    assign: roleProcedure(...supplierRoles)
+      .input(z.object({
+        paymentId: z.string().min(1),
+        openItemId: z.string().min(1),
+        amountCents: z.number().int().positive().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.payments.assign(input); }
+        catch (e) { throw toTrpcError(e); }
+      }),
   }),
 
   subproduction: router({

@@ -3,7 +3,7 @@
 // Bereiche mit wenig Code anbindbar sind. Interaktive Aktionen (Versand bestätigen,
 // Mahnlauf, Reorder→Bestellungen) sind je Seite ergänzt.
 import { Fragment, useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Alert, Anchor, Badge, Box, Button, Card, Checkbox, FileButton, Group, Image, Loader, Menu, Modal, NumberInput, Paper, PasswordInput, SegmentedControl, Select, SimpleGrid, Stack, Switch, Table, Tabs, TagsInput, Text, Textarea, TextInput, Title } from "@mantine/core";
+import { Alert, Anchor, Badge, Box, Button, Card, Checkbox, FileButton, Group, Image, Loader, Menu, Modal, NumberInput, Paper, PasswordInput, Popover, SegmentedControl, Select, SimpleGrid, Stack, Switch, Table, Tabs, TagsInput, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { validateVatId } from "@texma/shared/vat";
 import { buildTrackingUrl, type Carrier } from "@texma/shared/tracking";
@@ -6384,6 +6384,45 @@ const BUCKET_LABEL: Record<string, string> = {
   FAELLIG_61_90: "61–90 Tage", FAELLIG_90_PLUS: "> 90 Tage",
 };
 
+// Manuelle Zuordnung eines Zahlungseingangs (aus der Klärung) auf einen offenen Posten:
+// allokiert die BESTEHENDE Zahlung (keine Doppelbuchung) und nimmt sie aus der Klärung.
+function PaymentAssignControl({ paymentId, remainderCents, openItems, onDone }: {
+  paymentId: string;
+  remainderCents: number;
+  openItems: Array<{ id: string; invoiceNumber: string; companyName: string; openCents: number }>;
+  onDone: () => Promise<void>;
+}): JSX.Element {
+  const [open, setOpen] = useState(false);
+  const [oiId, setOiId] = useState<string | null>(null);
+  const [amount, setAmount] = useState<number | "">("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  return (
+    <Popover opened={open} onChange={setOpen} position="bottom-end" withArrow trapFocus width={300}>
+      <Popover.Target>
+        <Button size="xs" variant="light" onClick={() => setOpen((o) => !o)}>Zuordnen</Button>
+      </Popover.Target>
+      <Popover.Dropdown>
+        <Stack gap="xs">
+          <Text size="xs" c="dimmed">Nicht zugeordnet: <b>{euro(remainderCents)}</b></Text>
+          <Select label="Offener Posten" placeholder="Rechnung wählen" searchable value={oiId} onChange={setOiId}
+            data={openItems.map((o) => ({ value: o.id, label: `${o.invoiceNumber} · ${o.companyName} (${euro(o.openCents)})` }))} />
+          <MoneyInput label="Betrag (€)" placeholder="= offener Betrag" value={amount} onChange={(v) => setAmount(v === "" ? "" : Number(v))} min={0} />
+          {err && <Text size="xs" c="red">{err}</Text>}
+          <Button size="xs" loading={busy} disabled={!oiId} onClick={async () => {
+            if (!oiId) return;
+            setBusy(true); setErr(null);
+            try {
+              await trpc.payments.assign.mutate({ paymentId, openItemId: oiId, amountCents: amount === "" ? undefined : Math.round(Number(amount) * 100) });
+              setOpen(false); setOiId(null); setAmount(""); await onDone();
+            } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+          }}>Zuordnen</Button>
+        </Stack>
+      </Popover.Dropdown>
+    </Popover>
+  );
+}
+
 export function ZahlungsabgleichOverview({ onOpen }: { onOpen?: (k: string, id: string) => void } = {}): JSX.Element {
   const [data, setData] = useState<Awaited<ReturnType<typeof trpc.reconciliation.overview.query>> | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -6422,10 +6461,12 @@ export function ZahlungsabgleichOverview({ onOpen }: { onOpen?: (k: string, id: 
         <Table.Thead><Table.Tr>
           <Table.Th>Herkunft</Table.Th><Table.Th>Verwendungszweck</Table.Th>
           <Table.Th ta="right">Betrag</Table.Th><Table.Th ta="right">Zugeordnet</Table.Th>
-          <Table.Th>Status</Table.Th><Table.Th>Zuordnung</Table.Th>
+          <Table.Th>Status</Table.Th><Table.Th>Zuordnung</Table.Th><Table.Th ta="right">Aktion</Table.Th>
         </Table.Tr></Table.Thead>
         <Table.Tbody>
-          {matches.map((m) => (
+          {matches.map((m) => {
+            const remainder = m.amountCents - m.allocatedCents;
+            return (
             <Table.Tr key={m.id}>
               <Table.Td><Badge size="sm" variant="light" color={SOURCE_COLOR[m.source]}>{SOURCE_LABEL[m.source] ?? m.source}</Badge></Table.Td>
               <Table.Td>{m.reference ?? "—"}</Table.Td>
@@ -6445,9 +6486,13 @@ export function ZahlungsabgleichOverview({ onOpen }: { onOpen?: (k: string, id: 
                   ))}
                 </Group>
               )}</Table.Td>
+              <Table.Td ta="right">{remainder > 0 && openItems.length > 0
+                ? <PaymentAssignControl paymentId={m.id} remainderCents={remainder} openItems={openItems} onDone={load} />
+                : <Text size="xs" c="dimmed">—</Text>}</Table.Td>
             </Table.Tr>
-          ))}
-          {matches.length === 0 && <Table.Tr><Table.Td colSpan={6}><Text size="sm" c="dimmed">Keine Zahlungseingänge.</Text></Table.Td></Table.Tr>}
+            );
+          })}
+          {matches.length === 0 && <Table.Tr><Table.Td colSpan={7}><Text size="sm" c="dimmed">Keine Zahlungseingänge.</Text></Table.Td></Table.Tr>}
         </Table.Tbody>
       </Table>
 

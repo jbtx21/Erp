@@ -47,4 +47,39 @@ export class PrismaPaymentRepository implements PaymentRepository {
       return { newOpenCents: updated.openCents };
     });
   }
+
+  async getPaymentForAssign(paymentId: string): Promise<{ amountCents: number; allocatedCents: number } | null> {
+    const p = await prisma.payment.findUnique({
+      where: { id: paymentId },
+      select: { amountCents: true, allocations: { select: { amountCents: true } } },
+    });
+    if (!p) return null;
+    return { amountCents: p.amountCents, allocatedCents: p.allocations.reduce((s, a) => s + a.amountCents, 0) };
+  }
+
+  async assignPaymentToOpenItem(input: { paymentId: string; openItemId: string; amountCents: number }): Promise<{ newOpenCents: number; paymentFullyMatched: boolean }> {
+    return prisma.$transaction(async (tx) => {
+      // Doppelzuordnung derselben Zahlung auf denselben OP abfangen (klare Meldung statt P2002).
+      const dup = await tx.paymentAllocation.findUnique({
+        where: { paymentId_openItemId: { paymentId: input.paymentId, openItemId: input.openItemId } },
+        select: { id: true },
+      });
+      if (dup) throw new Error("Diese Zahlung ist diesem offenen Posten bereits zugeordnet.");
+
+      await tx.paymentAllocation.create({
+        data: { paymentId: input.paymentId, openItemId: input.openItemId, amountCents: input.amountCents },
+      });
+      const updated = await tx.openItem.update({
+        where: { id: input.openItemId },
+        data: { openCents: { decrement: input.amountCents } },
+        select: { openCents: true },
+      });
+      // matched neu bestimmen: vollständig zugeordnet, wenn die Allokationen den Zahlbetrag decken.
+      const pay = await tx.payment.findUnique({ where: { id: input.paymentId }, select: { amountCents: true, allocations: { select: { amountCents: true } } } });
+      const allocated = pay?.allocations.reduce((s, a) => s + a.amountCents, 0) ?? 0;
+      const paymentFullyMatched = !!pay && allocated >= pay.amountCents;
+      await tx.payment.update({ where: { id: input.paymentId }, data: { matched: paymentFullyMatched } });
+      return { newOpenCents: updated.openCents, paymentFullyMatched };
+    });
+  }
 }
