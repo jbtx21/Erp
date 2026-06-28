@@ -20,6 +20,7 @@ import {
 } from "@texma/shared/markup";
 import { trpc } from "./trpc.js";
 import { euro, numTd, statusMantineColor, statusOf } from "./theme.js";
+import { MoneyInput } from "./money-input.js";
 
 /** Ampel-Status als Badge: Farbe + Text (Skill erp-ui-design: Signal nie allein über Farbe). */
 function StatusBadge({ s }: { s: string }): JSX.Element {
@@ -309,7 +310,7 @@ function StickereiAusschreibungen({ logos, onDecided }: { logos: LogoOption[]; o
               {staffeln.map((s, i) => (
                 <Group key={i} mt="xs" gap="sm" align="end">
                   <NumberInput label={i === 0 ? "ab Menge" : undefined} w={120} min={1} value={s.minMenge} onChange={(v) => setStaffeln((rows) => rows.map((r, j) => j === i ? { ...r, minMenge: typeof v === "number" ? v : "" } : r))} />
-                  <NumberInput label={i === 0 ? "Stick-EK je Stück (€)" : undefined} w={180} min={0} decimalScale={2} value={s.euro} onChange={(v) => setStaffeln((rows) => rows.map((r, j) => j === i ? { ...r, euro: typeof v === "number" ? v : "" } : r))} />
+                  <MoneyInput label={i === 0 ? "Stick-EK je Stück (€)" : undefined} w={180} min={0} value={s.euro} onChange={(v) => setStaffeln((rows) => rows.map((r, j) => j === i ? { ...r, euro: typeof v === "number" ? v : "" } : r))} />
                   {staffeln.length > 1 && <Button size="compact-xs" variant="subtle" color="red" onClick={() => setStaffeln((rows) => rows.filter((_, j) => j !== i))}>entfernen</Button>}
                 </Group>
               ))}
@@ -872,8 +873,8 @@ export function Postcalc(): JSX.Element {
       <Group align="end" gap="sm" mt="xs">
         <TextInput label="PA-ID" placeholder="z. B. cuid…" w={180}
           value={productionId} onChange={(e) => setProductionId(e.currentTarget.value)} />
-        <NumberInput label="Umsatz (€)" w={110} hideControls value={revenueEuro} onChange={(v) => setRevenueEuro(Number(v) || 0)} />
-        <NumberInput label="Material (€)" w={110} hideControls value={materialEuro} onChange={(v) => setMaterialEuro(Number(v) || 0)} />
+        <MoneyInput label="Umsatz (€)" w={110} value={revenueEuro} onChange={(v) => setRevenueEuro(Number(v) || 0)} />
+        <MoneyInput label="Material (€)" w={110} value={materialEuro} onChange={(v) => setMaterialEuro(Number(v) || 0)} />
         <NumberInput label="Lohn (Min)" w={100} hideControls value={laborMinutes} onChange={(v) => setLaborMinutes(Number(v) || 0)} />
         <NumberInput label="Plan-Satz (ct/Min)" w={130} hideControls value={planRate} onChange={(v) => setPlanRate(Number(v) || 0)} />
         <NumberInput label="Ist-Satz (ct/Min)" w={130} hideControls value={istRate} onChange={(v) => setIstRate(Number(v) || 0)} />

@@ -18,6 +18,7 @@ import { OrderAmpelDetail, Auftragsampel } from "./StatusAmpel.js";
 import { useUnsavedGuard } from "./use-unsaved-guard.js";
 import { downloadCsv } from "./export.js";
 import { openOutlookDraft } from "./outlook-draft.js";
+import { MoneyInput } from "./money-input.js";
 
 type Row = Record<string, unknown>;
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
@@ -2058,13 +2059,13 @@ function LogoArticleDialog({ onClose, onCreated }: { onClose: () => void; onCrea
           description="z. B. 2-farbiger Transferdruck im Haus — erzeugt keine Fremdvergabe" />
         {!inhouse && <SupplierPicker label={method === "DRUCK" ? "Siebdruck-Lieferant" : "Veredler"} value={veredlerId} onChange={setVeredlerId} w={240} />}
         {inhouse && <SupplierPicker label="Material-Dienstleister (optional)" value={materialLieferantId} onChange={setMaterialLieferantId} w={240} />}
-        <NumberInput label={inhouse ? (materialLieferantId ? "EK Material je Stück (€)" : "EK/Kosten je Stück (€)") : "EK beim Veredler (€)"} value={ek} onChange={(v) => { const n = typeof v === "number" ? v : ""; setEk(n); if (typeof n === "number") setTiers((ts) => prefillTiers(n, ts)); }} min={0} decimalScale={2} w={170} placeholder="je Logo abweichend" title="VK je Staffelstufe wird automatisch über den Aufschlagsfaktor vorbelegt (überschreibbar)" />
+        <MoneyInput label={inhouse ? (materialLieferantId ? "EK Material je Stück (€)" : "EK/Kosten je Stück (€)") : "EK beim Veredler (€)"} value={ek} onChange={(v) => { const n = typeof v === "number" ? v : ""; setEk(n); if (typeof n === "number") setTiers((ts) => prefillTiers(n, ts)); }} min={0} w={170} placeholder="je Logo abweichend" title="VK je Staffelstufe wird automatisch über den Aufschlagsfaktor vorbelegt (überschreibbar)" />
       </Group>
       <Title order={6} mt="md">Mengenstaffel (VK je Stück)</Title>
       {tiers.map((t, i) => (
         <Group key={i} gap="xs" mt={4} align="end">
           <NumberInput label={i === 0 ? "ab Menge" : undefined} value={t.minMenge} onChange={(v) => setTier(i, { minMenge: Number(v) || 1 })} min={1} w={110} />
-          <NumberInput label={i === 0 ? "VK (€)" : undefined} value={t.euro} onChange={(v) => setTier(i, { euro: Number(v) || 0 })} min={0} decimalScale={2} w={120} />
+          <MoneyInput label={i === 0 ? "VK (€)" : undefined} value={t.euro} onChange={(v) => setTier(i, { euro: Number(v) || 0 })} min={0} w={120} />
           <Button size="compact-sm" variant="subtle" color="red" disabled={tiers.length === 1} onClick={() => setTiers((ts) => ts.filter((_, j) => j !== i))}>✕</Button>
         </Group>
       ))}
@@ -2284,8 +2285,8 @@ export function LinesEditor({ lines, onChange, quoteMode = false, companyId, tax
           <NumberInput label={i === 0 ? "Menge" : undefined} value={l.qty} onChange={(v) => set(i, { qty: Number(v) || 1 })}
             onBlur={() => { if (companyId && l.variantId) void resolve(l.variantId, l.qty).then((p) => { if (p.euro !== undefined || p.ekEuro !== undefined) set(i, p); }); }}
             min={1} w={70} />
-          <NumberInput label={i === 0 ? "EK (€)" : undefined} value={l.ekEuro ?? ""} onChange={(v) => applyEk(i, l, v)} min={0} decimalScale={2} w={90} placeholder="—" title="Einkaufspreis — VK wird bei freien Positionen automatisch über den Aufschlagsfaktor berechnet" />
-          <NumberInput label={i === 0 ? "VK (€)" : undefined} value={l.euro} onChange={(v) => set(i, { euro: Number(v) || 0, vkManual: true })} min={0} decimalScale={2} w={90} />
+          <MoneyInput label={i === 0 ? "EK (€)" : undefined} value={l.ekEuro ?? ""} onChange={(v) => applyEk(i, l, v)} min={0} w={90} placeholder="—" title="Einkaufspreis — VK wird bei freien Positionen automatisch über den Aufschlagsfaktor berechnet" />
+          <MoneyInput label={i === 0 ? "VK (€)" : undefined} value={l.euro} onChange={(v) => set(i, { euro: Number(v) || 0, vkManual: true })} min={0} w={90} />
           <NumberInput label={i === 0 ? "Rabatt %" : undefined} value={l.rabattPct ?? ""} onChange={(v) => set(i, { rabattPct: v === "" ? undefined : Math.min(100, Math.max(0, Number(v))) })} min={0} max={100} decimalScale={1} w={80} placeholder="0" />
           {hasRabatt && <Text size="xs" c="dimmed" title="Netto-Einzelpreis nach Rabatt">= {euro(Math.round(effEuro * 100))}</Text>}
           {db !== null && <Badge color={db >= 0 ? "teal" : "red"} variant="light" size="sm" title="Deckungsbeitrag (VK nach Rabatt − EK) × Menge">DB {euro(db)}{margePct !== null ? ` · ${(margePct * 100).toFixed(0)}%` : ""}</Badge>}
@@ -3452,7 +3453,7 @@ function OrderAbschlaege({ orderId }: { orderId: string }): JSX.Element {
         <NumberInput label="Abschlag %" value={pct} onChange={(v) => setPct(v === "" ? "" : Number(v))} min={1} max={100} w={110} />
         <Button variant="light" disabled={pct === "" || s.restNetCents <= 0} onClick={() => void create({ percent: Number(pct) })}>% anlegen</Button>
         <Text c="dimmed">oder</Text>
-        <NumberInput label="Festbetrag (€ netto)" value={fix} onChange={(v) => setFix(v === "" ? "" : Number(v))} min={0} decimalScale={2} w={150} />
+        <MoneyInput label="Festbetrag (€ netto)" value={fix} onChange={(v) => setFix(v === "" ? "" : Number(v))} min={0} w={150} />
         <Button variant="light" disabled={fix === "" || Number(fix) <= 0 || s.restNetCents <= 0} onClick={() => void create({ netCents: Math.round(Number(fix) * 100) })}>Festbetrag anlegen</Button>
       </Group>
 
@@ -4038,7 +4039,7 @@ function CompanyStammdaten({ company, onSaved }: { company: CompanyDetail; onSav
       </Group>
       <Group gap="xs" align="end" wrap="wrap" mt={6}>
         <TextInput size="xs" label="Lieferbedingung" w={220} value={f.lieferbedingung} onChange={(e) => set("lieferbedingung")(e.currentTarget.value)} />
-        <NumberInput size="xs" label="Kreditlimit (€)" w={140} min={0} value={f.kreditEuro === "" ? "" : Number(f.kreditEuro)} onChange={(v) => set("kreditEuro")(v === "" ? "" : String(v))} />
+        <MoneyInput size="xs" label="Kreditlimit (€)" w={140} min={0} value={f.kreditEuro === "" ? "" : Number(f.kreditEuro)} onChange={(v) => set("kreditEuro")(v === "" ? "" : String(v))} />
         <TextInput size="xs" label="Notiz" w={280} value={f.notiz} onChange={(e) => set("notiz")(e.currentTarget.value)} />
       </Group>
       <Text size="xs" fw={700} tt="uppercase" c="dimmed" mt="sm" mb={4}>Sperren &amp; Zuordnung</Text>
@@ -5403,7 +5404,7 @@ export function PricingPage(): JSX.Element {
           </Table>
           <Group align="flex-end" gap="sm" mt="sm">
             <NumberInput label="ab Menge" w={110} min={1} value={newMin} onChange={(v) => setNewMin(typeof v === "number" ? v : 1)} />
-            <NumberInput label="Netto/Stück (€)" w={160} min={0} decimalScale={2} step={0.1} value={newNet / 100} onChange={(v) => setNewNet(Math.round((typeof v === "number" ? v : 0) * 100))} />
+            <MoneyInput label="Netto/Stück (€)" w={160} min={0} value={newNet / 100} onChange={(v) => setNewNet(Math.round((typeof v === "number" ? v : 0) * 100))} />
             <Button variant="light" onClick={async () => {
               setErr(null);
               try { await trpc.pricing.addGroupTier.mutate({ companyId, variantId, minMenge: newMin, netCents: newNet }); await loadTiers(); }
@@ -5476,7 +5477,7 @@ export const ReklamationPage = (): JSX.Element => {
             data={[{ value: "LIEFERANT", label: "Lieferant" }, { value: "INTERN", label: "Intern" }, { value: "EXTERN_VEREDLER", label: "Externer Veredler" }]} />
           <Select label="Folgevorgang" value={followUp} onChange={(v) => v && setFollowUp(v)} w={190}
             data={[{ value: "NACHPRODUKTION", label: "Nachproduktion" }, { value: "EXPRESS_NACHPRODUKTION", label: "Express-Nachproduktion" }, { value: "GUTSCHRIFT", label: "Gutschrift" }, { value: "KEINE", label: "Keine" }]} />
-          <NumberInput label="Kosten (€)" value={costEuro} onChange={(v) => setCostEuro(Number(v) || 0)} min={0} w={110} />
+          <MoneyInput label="Kosten (€)" value={costEuro} onChange={(v) => setCostEuro(Number(v) || 0)} min={0} w={110} />
           <Button disabled={!lineId} onClick={async () => {
             setErr(null); setStatus(null);
             try {
@@ -6202,7 +6203,7 @@ function ZahlungZeile({ oi, onBooked, onErr }: {
       <Table.Td c={overdue ? "orange" : undefined}>{new Date(oi.dueDate).toLocaleDateString("de-DE")}{oi.dunningLevel > 0 ? ` · M${oi.dunningLevel}` : ""}</Table.Td>
       <Table.Td>
         <Group gap={6} wrap="nowrap" justify="flex-end">
-          <NumberInput size="xs" w={110} min={0} step={0.01} decimalScale={2} value={euroVal} onChange={(v) => setEuroVal(Number(v) || 0)} />
+          <MoneyInput size="xs" w={110} min={0} value={euroVal} onChange={(v) => setEuroVal(Number(v) || 0)} />
           <TextInput size="xs" w={130} placeholder="Verwendungszweck" value={reference} onChange={(e) => setReference(e.currentTarget.value)} />
           <Button size="compact-xs" loading={busy} onClick={() => void book()}>Buchen</Button>
         </Group>
@@ -6442,7 +6443,7 @@ export function OpportunitiesPage(): JSX.Element {
         <TextInput label="Titel" value={title} onChange={(e) => setTitle(e.currentTarget.value)} w={220} />
         <TextInput label="Firmen-ID (optional)" value={company} onChange={(e) => setCompany(e.currentTarget.value)} w={150} />
         <Select label="Phase" value={stage} onChange={(v) => v && setStage(v)} data={OPP_STAGES.map((s) => ({ value: s.value, label: s.label }))} w={150} />
-        <NumberInput label="Wert (€)" value={euro} onChange={(v) => setEuro(Number(v) || 0)} min={0} w={120} />
+        <MoneyInput label="Wert (€)" value={euro} onChange={(v) => setEuro(Number(v) || 0)} min={0} w={120} />
         <Button disabled={!title.trim()} onClick={() => void act(async () => {
           await trpc.opportunities.create.mutate({ title, companyId: company || undefined, stage: stage as "QUALIFIZIERUNG", valueCents: Math.round(euro * 100) });
           setTitle(""); setCompany(""); setEuro(0);
@@ -6813,7 +6814,7 @@ export function AdminPage(): JSX.Element {
 
       <Group gap="md" align="end" mt="md" wrap="wrap">
         <NumberInput label="Max. Rabatt ohne Freigabe (%)" value={maxDiscount} onChange={(v) => setMaxDiscount(v === "" ? "" : Number(v))} min={0} max={100} w={220} />
-        <NumberInput label="Max. Auftragswert ohne Freigabe (€)" value={maxOrderValue} onChange={(v) => setMaxOrderValue(v === "" ? "" : Number(v))} min={0} w={260} />
+        <MoneyInput label="Max. Auftragswert ohne Freigabe (€)" value={maxOrderValue} onChange={(v) => setMaxOrderValue(v === "" ? "" : Number(v))} min={0} w={260} />
         <NumberInput label="Aufschlagsfaktor" value={markup} onChange={(v) => setMarkup(Number(v) || 1.88)} min={0.01} step={0.01} decimalScale={2} w={160} />
         <NumberInput label="USt-Satz global (%)" value={taxRate} onChange={(v) => setTaxRate(Number(v) || 0)} min={0} max={100} w={160} title="Gilt für alle Positionen in Angebot/Auftrag (zentral statt je Position)" />
       </Group>
@@ -8578,7 +8579,7 @@ export function GutscheinePage(): JSX.Element {
           <Text size="sm" fw={600} mb="xs">Gutschein anlegen</Text>
           <Group gap="xs" align="end" wrap="wrap">
             <TextInput label="Code" value={code} onChange={(e) => setCode(e.currentTarget.value)} placeholder="SOMMER25" w={150} />
-            <NumberInput label="Wert (€)" value={wert} onChange={(v) => setWert(Number(v) || 0)} min={0} decimalScale={2} w={120} />
+            <MoneyInput label="Wert (€)" value={wert} onChange={(v) => setWert(Number(v) || 0)} min={0} w={120} />
             <TextInput label="Gültig bis (optional)" type="date" value={validUntil} onChange={(e) => setValidUntil(e.currentTarget.value)} w={170} />
             <Button disabled={!code.trim() || wert <= 0} onClick={() => void create()}>Anlegen</Button>
           </Group>
@@ -8587,7 +8588,7 @@ export function GutscheinePage(): JSX.Element {
           <Text size="sm" fw={600} mb="xs">Einlösen</Text>
           <Group gap="xs" align="end" wrap="wrap">
             <TextInput label="Code" value={redeemCode} onChange={(e) => setRedeemCode(e.currentTarget.value)} w={150} />
-            <NumberInput label="Betrag (€)" value={redeemEuro} onChange={(v) => setRedeemEuro(Number(v) || 0)} min={0} decimalScale={2} w={120} />
+            <MoneyInput label="Betrag (€)" value={redeemEuro} onChange={(v) => setRedeemEuro(Number(v) || 0)} min={0} w={120} />
             <Button color="teal" disabled={!redeemCode.trim() || redeemEuro <= 0} onClick={() => void redeem()}>Einlösen</Button>
           </Group>
         </Box>

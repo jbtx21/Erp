@@ -2,10 +2,11 @@
 // Matching-Pipeline) und SEPA-Überweisungen auslösen (PIS, pain.001). Eine Provider-
 // Abstraktion im Backend kapselt die Unterschiede; hier die Bedienoberfläche dazu.
 import { useCallback, useEffect, useState } from "react";
-import { Badge, Button, Card, Group, NumberInput, Select, Table, Tabs, Text, Textarea, TextInput, Title } from "@mantine/core";
+import { Badge, Button, Card, Group, Select, Table, Tabs, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { ibanIsValid } from "@texma/shared/pain001";
 import { trpc } from "./trpc.js";
 import { euro, numTd } from "./theme.js";
+import { MoneyInput } from "./money-input.js";
 
 function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -386,7 +387,7 @@ function Payments(): JSX.Element {
               <Table.Tr key={i}>
                 <Table.Td><TextInput size="xs" w={170} value={r.creditorName} onChange={(e) => setRow(i, { creditorName: e.currentTarget.value })} /></Table.Td>
                 <Table.Td><TextInput size="xs" w={230} value={r.creditorIban} error={ibanBad} onChange={(e) => setRow(i, { creditorIban: e.currentTarget.value })} /></Table.Td>
-                <Table.Td style={numTd}><NumberInput size="xs" w={110} hideControls min={0} step={0.01} decimalScale={2} value={r.amountEuro} onChange={(v) => setRow(i, { amountEuro: Number(v) || 0 })} /></Table.Td>
+                <Table.Td style={numTd}><MoneyInput size="xs" w={110} min={0} value={r.amountEuro} onChange={(v) => setRow(i, { amountEuro: Number(v) || 0 })} /></Table.Td>
                 <Table.Td><TextInput size="xs" w={180} value={r.remittance} onChange={(e) => setRow(i, { remittance: e.currentTarget.value })} /></Table.Td>
                 <Table.Td ta="right"><Button size="compact-xs" variant="subtle" color="red" onClick={() => removeRow(i)}>✕</Button></Table.Td>
               </Table.Tr>

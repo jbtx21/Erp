@@ -13,6 +13,7 @@ export default defineConfig({
     alias: {
       "@texma/shared/stickerei": src("stickerei.ts"),
       "@texma/shared/markup": src("markup.ts"),
+      "@texma/shared/money": src("money.ts"),
       "@texma/shared/pain001": src("pain001.ts"),
       "@texma/shared/order": src("order.ts"),
       "@texma/shared/tracking": src("tracking.ts"),

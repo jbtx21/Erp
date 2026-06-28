@@ -18,6 +18,10 @@
       "types": "./dist/markup.d.ts",
       "import": "./dist/markup.js"
     },
+    "./money": {
+      "types": "./dist/money.d.ts",
+      "import": "./dist/money.js"
+    },
     "./pain001": {
       "types": "./dist/pain001.d.ts",
       "import": "./dist/pain001.js"
