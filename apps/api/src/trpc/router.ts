@@ -542,6 +542,23 @@ export const appRouter = router({
       .query(async ({ input, ctx }) => ctx.incomingInvoices.listRecent(input?.limit ?? 50)),
   }),
 
+  // Ausgangs-E-Rechnung (XRechnung/ZUGFeRD-CII, Kap. 19): erzeugt das EN16931-XML zu einer
+  // Ausgangsrechnung. Verkäufer + USt-Satz aus den Einstellungen. Finanzdaten → kein PRODUKTION.
+  einvoice: router({
+    forInvoice: roleProcedure(...supplierRoles)
+      .input(z.object({ invoiceId: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try {
+          const s = await ctx.settings.get();
+          const p = s.companyProfile;
+          return await ctx.einvoice.buildForInvoice(input.invoiceId, {
+            seller: { name: p.name, ...(p.ustId ? { vatId: p.ustId } : {}), country: "DE" },
+            taxRatePercent: s.defaultTaxRatePct,
+          });
+        } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+  }),
+
   shipments: router({
     /** Versandbereite Aufträge (mit Lieferadresse) für den DPD-Label-Worker (T-06). */
     listShippable: roleProcedure("ADMIN", "BUERO")

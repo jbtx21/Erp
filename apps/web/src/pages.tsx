@@ -107,6 +107,18 @@ async function sendBelegDirect(kind: BelegMailKind, id: string, label: string): 
   if (typeof window !== "undefined") window.alert(`„${label}" wurde an ${target.trim()} gesendet (${res.filename}).`);
 }
 
+// Ausgangs-E-Rechnung (XRechnung/ZUGFeRD-CII, Kap. 19) zu einer Rechnung erzeugen und als
+// XML laden. Eine nicht EN16931-konforme E-Rechnung wird mit den Gründen gemeldet (z. B.
+// fehlende USt-IdNr.), statt sie still auszugeben. Wirft bei Backend-Fehlern (Caller fängt).
+async function downloadEInvoiceXml(invoiceId: string): Promise<void> {
+  const res = await trpc.einvoice.forInvoice.mutate({ invoiceId });
+  if (!res.valid) {
+    if (typeof window !== "undefined") window.alert(`E-Rechnung ist nicht EN16931-konform und wurde nicht erzeugt:\n\n${res.errors.join("\n")}\n\nBitte die Stammdaten prüfen (z. B. USt-IdNr. in den Einstellungen).`);
+    return;
+  }
+  downloadText(res.filename, res.xml, "application/xml");
+}
+
 // Beleg-PDF je Kind herunterladen (spiegelt belegPdf/buildDraft im Backend). Eine Quelle für
 // alle „PDF herunterladen"-Aktionen, damit jede Liste denselben Pfad nutzt (Konsistenz).
 async function printBeleg(kind: BelegMailKind, id: string): Promise<void> {
@@ -655,6 +667,7 @@ export function InvoicesPage({ onOpen }: { onOpen?: (k: string, id: string) => v
           ...(onOpen ? [{ label: "Kunde öffnen", group: "Allgemein", onClick: () => onOpen("companies", String(r.companyId)) }] : []),
           ...(onOpen && r.orderId ? [{ label: "Auftrag öffnen", group: "Allgemein", onClick: () => onOpen("orders", String(r.orderId)) }] : []),
           ...belegDocActions("INVOICE", String(r.id), "Rechnung", (m) => window.alert(m)),
+          { label: "E-Rechnung (XRechnung XML)", group: "Dokumente", onClick: () => { void downloadEInvoiceXml(String(r.id)).catch((e) => window.alert(errMsg(e))); } },
         ]} />
       )} />
   );
@@ -3917,6 +3930,7 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
           // Rechnung (sobald fakturiert) als PDF + Outlook-Entwurf — Konsistenz mit Angeboten.
           ...(String(r.status) !== "ANGELEGT" ? belegDocActions("AUFTRAGSBESTAETIGUNG", String(r.id), "Auftragsbestätigung", setErr) : []),
           ...(r.invoiceId ? belegDocActions("INVOICE", String(r.invoiceId), "Rechnung", setErr) : []),
+          ...(r.invoiceId ? [{ label: "E-Rechnung (XRechnung XML)", group: "Dokumente", onClick: () => { void downloadEInvoiceXml(String(r.invoiceId)).catch((e) => setErr(errMsg(e))); } }] : []),
         ];
         return (
           // Eil-Stern bleibt inline (Status-Signal: gefüllt = priorisiert); übrige Aktionen im Menü.
