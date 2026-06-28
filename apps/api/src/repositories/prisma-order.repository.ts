@@ -140,6 +140,18 @@ export class PrismaOrderRepository
     await prisma.order.update({ where: { id: orderId }, data: { status: status as never } });
   }
 
+  async approvalFacts(orderId: string): Promise<{ orderValueCents: number; discountPct: number } | null> {
+    const o = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: { lines: { select: { qty: true, unitNetCents: true, rabattPct: true } } },
+    });
+    if (!o) return null;
+    return {
+      orderValueCents: o.lines.reduce((s, l) => s + l.qty * l.unitNetCents, 0),
+      discountPct: o.lines.reduce((m, l) => Math.max(m, l.rabattPct ?? 0), 0),
+    };
+  }
+
   async setDeliveryDate(orderId: string, date: Date | null): Promise<void> {
     await prisma.order.update({ where: { id: orderId }, data: { zugesagterLiefertermin: date } });
   }

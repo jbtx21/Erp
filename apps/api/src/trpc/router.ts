@@ -340,7 +340,18 @@ export const appRouter = router({
             const gate = await ctx.procurement.startGateForOrder(input.orderId);
             if (gate.blocked) throw new TRPCError({ code: "CONFLICT", message: gate.reason ?? "Produktionsstart gesperrt." });
           }
-          const res = await ctx.orderWorkflow.transition(input.orderId, input.to);
+          // Freigabe-Gate (K-10, Kap. 12.1): die verbindliche Auftragsaktivierung (→ IN_BEARBEITUNG)
+          // greift gegen die gepflegten Schwellen — auch für Handelsaufträge ohne Produktion. Über
+          // der Rabatt-/Wertgrenze nur durch die Geschäftsleitung (ADMIN).
+          let releaseOpts: { role?: string; thresholds?: { maxDiscountPct: number | null; maxOrderValueCents: number | null } } = {};
+          if (input.to === "IN_BEARBEITUNG") {
+            const s = await ctx.settings.get();
+            releaseOpts = {
+              role: ctx.user.role,
+              thresholds: { maxDiscountPct: s.maxDiscountPct, maxOrderValueCents: s.maxOrderValueEuro === null ? null : Math.round(s.maxOrderValueEuro * 100) },
+            };
+          }
+          const res = await ctx.orderWorkflow.transition(input.orderId, input.to, releaseOpts);
           // Versand-Verkettung: → VERSENDET erzeugt automatisch einen Lieferschein über alle
           // offenen Restmengen (bucht Bestandsabgang + setzt lieferstatus). Kein „versendet
           // ohne Lieferung" mehr. Best-effort: ein bereits voll gelieferter Auftrag → null.

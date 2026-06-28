@@ -111,6 +111,12 @@ export class InMemoryOrderRepository
     if (o) { o.lieferstatus = lieferstatus; o.fakturastatus = fakturastatus; }
   }
 
+  async approvalFacts(orderId: string): Promise<{ orderValueCents: number; discountPct: number } | null> {
+    const o = this.orders.find((x) => x.id === orderId);
+    // In-Memory verfolgt keine Positionsrabatte → konservativ 0 % (Gate greift nur über Wert).
+    return o ? { orderValueCents: o.totalNetCents, discountPct: 0 } : null;
+  }
+
   async listRecent(limit: number): Promise<OrderListItem[]> {
     return this.orders
       .slice(-limit)

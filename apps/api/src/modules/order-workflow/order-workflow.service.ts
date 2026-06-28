@@ -2,7 +2,7 @@
 // (orderStatusMachine) — illegale Übergänge werden blockiert. Ändert nur den Status;
 // inhaltliche Änderungen ab IN_BEARBEITUNG laufen über Storno/Neuanlage (GoBD).
 
-import { orderStatusMachine, fulfillmentStatus, type FulfillmentStatus, type OrderStatus } from "@texma/shared";
+import { orderStatusMachine, fulfillmentStatus, checkApproval, type ApprovalThresholds, type FulfillmentStatus, type OrderStatus } from "@texma/shared";
 import { buildEntry, type AuditSink } from "@texma/audit";
 
 /** Eingaben zur Ableitung des Teil-Status (G-4). */
@@ -26,7 +26,22 @@ export interface OrderWorkflowRepository {
   loadFulfillmentInput(orderId: string): Promise<FulfillmentInput | null>;
   /** Persistiert Liefer-/Fakturastatus (G-4). */
   setFulfillment(orderId: string, lieferstatus: FulfillmentStatus, fakturastatus: FulfillmentStatus): Promise<void>;
+  /** Kennzahlen für das Freigabe-Gate (K-10): Auftragswert + höchster Positionsrabatt. */
+  approvalFacts(orderId: string): Promise<{ orderValueCents: number; discountPct: number } | null>;
 }
+
+/** Optionen des Statuswechsels: GL-Freigabe-Gate gegen die Schwellen (K-10, Kap. 12.1). */
+export interface TransitionOptions {
+  /** Rolle des Auslösenden; nur ADMIN (Geschäftsleitung) darf über den Schwellen aktivieren. */
+  role?: string;
+  /** Freigabeschwellen (aus den Einstellungen); ohne Angabe greift kein Gate. */
+  thresholds?: ApprovalThresholds;
+}
+
+const APPROVAL_REASON_TEXT: Record<string, string> = {
+  RABATT_UEBER_SCHWELLE: "Rabatt über der Freigabegrenze",
+  AUFTRAGSWERT_UEBER_SCHWELLE: "Auftragswert über der Freigabegrenze",
+};
 
 // Lieferstatus (G-4) jetzt REAL aus gelieferter vs. bestellter Menge (Mehrfach-Teillieferung).
 
@@ -39,10 +54,23 @@ export class OrderWorkflowService {
   ) {}
 
   /** Schaltet einen Auftrag auf den nächsten Status (F2-geprüft). */
-  async transition(orderId: string, to: OrderStatus): Promise<{ status: OrderStatus; number: string | null }> {
+  async transition(orderId: string, to: OrderStatus, opts: TransitionOptions = {}): Promise<{ status: OrderStatus; number: string | null }> {
     const current = await this.repo.getStatus(orderId);
     if (!current) throw new OrderWorkflowError(`Auftrag ${orderId} nicht gefunden.`);
     orderStatusMachine.assert(current as OrderStatus, to); // wirft bei illegalem Übergang
+    // Freigabe-Gate (K-10, Kap. 12.1): die verbindliche Auftragsaktivierung (→ IN_BEARBEITUNG)
+    // ist der universelle Engpass — er greift auch für Handelsaufträge ohne Produktion (die nie
+    // production.release durchlaufen). Über der Rabatt-/Wertgrenze nur durch die Geschäftsleitung.
+    if (to === "IN_BEARBEITUNG" && opts.thresholds && opts.role !== "ADMIN") {
+      const facts = await this.repo.approvalFacts(orderId);
+      if (facts) {
+        const chk = checkApproval(facts, opts.thresholds);
+        if (chk.required) {
+          const why = chk.reasons.map((r) => APPROVAL_REASON_TEXT[r] ?? r).join(", ");
+          throw new OrderWorkflowError(`Freigabe nur durch die Geschäftsleitung (${why}).`);
+        }
+      }
+    }
     await this.repo.setStatus(orderId, to);
     await this.audit.append(
       buildEntry({ entity: "Order", entityId: orderId, action: "UPDATE", after: { status: to, from: current } })

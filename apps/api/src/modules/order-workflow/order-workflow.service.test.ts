@@ -38,6 +38,10 @@ class FakeOrderRepo implements OrderWorkflowRepository {
   async setFulfillment(id: string, lieferstatus: string, fakturastatus: string): Promise<void> {
     this.fulfillment.set(id, { lieferstatus, fakturastatus });
   }
+  facts: { orderValueCents: number; discountPct: number } = { orderValueCents: 10000, discountPct: 0 };
+  async approvalFacts(id: string): Promise<{ orderValueCents: number; discountPct: number } | null> {
+    return this.status.has(id) ? this.facts : null;
+  }
 }
 
 function setup(): { repo: FakeOrderRepo; audit: MemoryAuditSink; svc: OrderWorkflowService } {
@@ -63,6 +67,59 @@ describe("OrderWorkflowService.transition (F2, Kap. 35.2)", () => {
   it("wirft bei unbekanntem Auftrag", async () => {
     const { svc } = setup();
     await expect(svc.transition("nope", "IN_BEARBEITUNG")).rejects.toBeInstanceOf(OrderWorkflowError);
+  });
+});
+
+describe("OrderWorkflowService.transition — Freigabe-Gate (K-10, Kap. 12.1)", () => {
+  const thresholds = { maxDiscountPct: 10, maxOrderValueCents: 500000 };
+
+  it("blockiert die Aktivierung über der Rabattgrenze für BÜRO", async () => {
+    const { repo, svc } = setup();
+    repo.facts = { orderValueCents: 10000, discountPct: 99 };
+    await expect(
+      svc.transition("o1", "IN_BEARBEITUNG", { role: "BUERO", thresholds })
+    ).rejects.toThrow(/Geschäftsleitung/);
+    expect(repo.status.get("o1")).toBe("ANGELEGT"); // kein stiller Statuswechsel
+  });
+
+  it("blockiert die Aktivierung über der Wertgrenze für BÜRO", async () => {
+    const { repo, svc } = setup();
+    repo.facts = { orderValueCents: 600000, discountPct: 0 };
+    await expect(
+      svc.transition("o1", "IN_BEARBEITUNG", { role: "BUERO", thresholds })
+    ).rejects.toBeInstanceOf(OrderWorkflowError);
+  });
+
+  it("lässt die Geschäftsleitung (ADMIN) über den Schwellen aktivieren", async () => {
+    const { repo, svc } = setup();
+    repo.facts = { orderValueCents: 9999999, discountPct: 99 };
+    const res = await svc.transition("o1", "IN_BEARBEITUNG", { role: "ADMIN", thresholds });
+    expect(res.status).toBe("IN_BEARBEITUNG");
+  });
+
+  it("greift nicht innerhalb der Schwellen", async () => {
+    const { repo, svc } = setup();
+    repo.facts = { orderValueCents: 100000, discountPct: 5 };
+    const res = await svc.transition("o1", "IN_BEARBEITUNG", { role: "BUERO", thresholds });
+    expect(res.status).toBe("IN_BEARBEITUNG");
+  });
+
+  it("greift nicht, solange keine Schwelle gepflegt ist (K-10 offen)", async () => {
+    const { repo, svc } = setup();
+    repo.facts = { orderValueCents: 9999999, discountPct: 99 };
+    const res = await svc.transition("o1", "IN_BEARBEITUNG", {
+      role: "BUERO",
+      thresholds: { maxDiscountPct: null, maxOrderValueCents: null },
+    });
+    expect(res.status).toBe("IN_BEARBEITUNG");
+  });
+
+  it("gilt nur für die Aktivierung, nicht für spätere Übergänge", async () => {
+    const { repo, svc } = setup();
+    repo.status.set("o1", "IN_PRODUKTION");
+    repo.facts = { orderValueCents: 9999999, discountPct: 99 };
+    const res = await svc.transition("o1", "VERSANDBEREIT", { role: "BUERO", thresholds });
+    expect(res.status).toBe("VERSANDBEREIT");
   });
 });
 
