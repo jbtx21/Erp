@@ -29,6 +29,8 @@ export class InMemoryPrintRepository implements PrintRepository {
   async invoiceForPrint(id: string): Promise<InvoicePrintData | null> { return this.invoices[id] ?? null; }
   async laufzettelForPrint(orderId: string): Promise<LaufzettelPrintData | null> { return this.laufzettel[orderId] ?? null; }
   async quoteForPrint(id: string): Promise<QuotePrintData | null> { return this.quotes[id] ?? null; }
+  inquiries: Record<string, QuotePrintData> = {};
+  async inquiryForPrint(id: string): Promise<QuotePrintData | null> { return this.inquiries[id] ?? null; }
   async orderConfirmationForPrint(orderId: string): Promise<OrderConfirmationPrintData | null> { return this.orderConfirmations[orderId] ?? null; }
   async veredelungsauftragForPrint(subProductionId: string): Promise<VeredelungsauftragPrintData | null> { return this.veredelungsauftraege[subProductionId] ?? null; }
   async briefkopf(): Promise<string[]> { return this.briefkopfLines; }

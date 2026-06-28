@@ -282,6 +282,25 @@ export class PrismaPrintRepository implements PrintRepository {
     return { number: q.number, datum: q.createdAt, empfaenger: recipientLines(q.company, null), positionen, ...totals(positionen), gueltigBis: q.gueltigBisAm, meta: await this.buildMeta(q.company) };
   }
 
+  async inquiryForPrint(id: string): Promise<QuotePrintData | null> {
+    const l = await prisma.crmLead.findUnique({
+      where: { id },
+      select: {
+        name: true, createdAt: true, lines: true,
+        company: { select: { name: true, street: true, zip: true, city: true, country: true, vatId: true, customerNumber: true, betreuer: true } },
+      },
+    });
+    if (!l) return null;
+    const raw = Array.isArray(l.lines) ? (l.lines as Array<{ description: string; qty: number; unitNetCents: number; variantId?: string | null }>) : [];
+    const vmap = await loadVariantDetails(raw.map((x) => x.variantId ?? null));
+    const positionen: PricePrintLine[] = raw.map((x) => ({ menge: x.qty, bezeichnung: x.description, einzelpreisCents: x.unitNetCents, ...lineExtras(x.variantId ?? null, vmap) }));
+    const empfaenger = l.company ? recipientLines(l.company, null) : [l.name];
+    return {
+      number: `AF-${id.slice(-6).toUpperCase()}`, datum: l.createdAt, empfaenger, positionen,
+      ...totals(positionen), gueltigBis: null, meta: l.company ? await this.buildMeta(l.company) : undefined,
+    };
+  }
+
   async orderConfirmationForPrint(orderId: string): Promise<OrderConfirmationPrintData | null> {
     const o = await prisma.order.findUnique({
       where: { id: orderId },

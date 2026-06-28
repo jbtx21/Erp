@@ -336,6 +336,27 @@ export function angebotDokument(input: AngebotInput): BelegDokument {
   };
 }
 
+/** Anfrage (Vertriebspipeline) — erfasste Positionen einer konkreten Kundenanfrage, exportierbar.
+ *  Preise sind unverbindliche Erst-Einschätzungen (kein Angebot/keine Bindefrist). */
+export function anfrageDokument(input: AngebotInput): BelegDokument {
+  return {
+    typ: "ANGEBOT",
+    titel: "Anfrage",
+    nummer: input.nummer,
+    datum: formatDatum(input.datum),
+    absender: briefkopf(input.absender),
+    empfaenger: input.empfaenger,
+    positionen: preisPositionen(input.positionen),
+    summen: preisSummen(input.netCents, input.taxCents, input.grossCents),
+    hinweise: input.hinweise ?? [
+      "Erfasste Anfrage-Positionen — unverbindliche Vorab-Einschätzung, kein Angebot.",
+      "Verbindliche Preise und Liefertermine folgen mit dem Angebot.",
+    ],
+    zeigePreise: true,
+    ...briefFelder(input),
+  };
+}
+
 export interface AuftragsbestaetigungInput extends BelegBriefFelder {
   nummer: string;
   datum: Date;

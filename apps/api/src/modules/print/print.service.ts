@@ -2,7 +2,7 @@
 // Belegen. Die Datenform wird vom Repository geliefert; das reine Inhaltsmodell baut
 // @texma/shared, gerendert wird mit pdf-lib (beleg-pdf). Rückgabe = Dateiname + Base64.
 
-import { angebotDokument, auftragsbestaetigungDokument, gutschriftDokument, kundenStammblatt, laufzettelDokument, lieferantenStammblatt, lieferscheinDokument, mahnungDokument, rechnungDokument, veredelungsauftragDokument, type BelegAnsprechpartner, type BelegMetaZeile, type FirmenProfil, type KundenStammblattInput, type LieferantenStammblattInput, type PositionKind, type VeredelungMotivLine, type VeredelungTextilLine } from "@texma/shared";
+import { anfrageDokument, angebotDokument, auftragsbestaetigungDokument, gutschriftDokument, kundenStammblatt, laufzettelDokument, lieferantenStammblatt, lieferscheinDokument, mahnungDokument, rechnungDokument, veredelungsauftragDokument, type BelegAnsprechpartner, type BelegMetaZeile, type FirmenProfil, type KundenStammblattInput, type LieferantenStammblattInput, type PositionKind, type VeredelungMotivLine, type VeredelungTextilLine } from "@texma/shared";
 import { renderBelegPdf } from "../../pdf/beleg-pdf.js";
 import { renderVeredelungsauftragPdf } from "../../pdf/veredelungsauftrag-pdf.js";
 import { TEXMA_LOGO_B64 } from "../../pdf/texma-logo.js";
@@ -130,6 +130,8 @@ export interface PrintRepository {
   invoiceForPrint(id: string): Promise<InvoicePrintData | null>;
   laufzettelForPrint(orderId: string): Promise<LaufzettelPrintData | null>;
   quoteForPrint(id: string): Promise<QuotePrintData | null>;
+  /** Anfrage (CRM) als druckbare Daten (Empfänger + erfasste Positionen); null wenn unbekannt. */
+  inquiryForPrint(id: string): Promise<QuotePrintData | null>;
   orderConfirmationForPrint(orderId: string): Promise<OrderConfirmationPrintData | null>;
   /** Veredelungsauftrag (Werkstattblatt) einer Fremdvergabe-/Inhouse-Stufe; null, wenn unbekannt. */
   veredelungsauftragForPrint(subProductionId: string): Promise<VeredelungsauftragPrintData | null>;
@@ -253,6 +255,18 @@ export class PrintService {
       ...brief, einleitung: "herzlichen Dank für Ihre Anfrage. Gerne unterbreiten wir Ihnen folgendes Angebot:",
     }));
     return { filename: `Angebot-${q.number}.pdf`, base64: Buffer.from(bytes).toString("base64") };
+  }
+
+  /** Anfrage-PDF (Vertriebspipeline): erfasste Positionen einer konkreten Kundenanfrage, exportierbar. */
+  async inquiryPdf(id: string): Promise<PdfResult> {
+    const q = await this.repo.inquiryForPrint(id);
+    if (!q) throw new PrintError(`Anfrage ${id} nicht gefunden.`);
+    const brief = await this.briefFelder(q.number, q.meta);
+    const bytes = await renderBelegPdf(anfrageDokument({
+      nummer: q.number, datum: q.datum, empfaenger: q.empfaenger, positionen: q.positionen,
+      netCents: q.netCents, taxCents: q.taxCents, grossCents: q.grossCents, ...brief,
+    }));
+    return { filename: `Anfrage-${q.number}.pdf`, base64: Buffer.from(bytes).toString("base64") };
   }
 
   /** Auftragsbestätigungs-PDF (bestätigte Positionen, Liefertermin, Bestellbezug). */

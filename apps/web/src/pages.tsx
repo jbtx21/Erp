@@ -4619,6 +4619,8 @@ export function CrmPipelinePage({ onOpen }: { onNavigate?: (k: string) => void; 
     return (
       <Group gap={4} justify="flex-end" wrap="nowrap">
         <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setEditRow(rows.find((x) => String(x.id) === id) ?? null)}>Bearbeiten</Button>
+        {/* Anfrage als PDF exportieren (erfasste Positionen, unverbindliche Vorab-Einschätzung). */}
+        <Button size="compact-xs" variant="subtle" onClick={async () => { setErr(null); try { const r = await trpc.print.inquiry.query({ id }); downloadBase64(r.filename, r.base64, "application/pdf"); } catch (e) { setErr(errMsg(e)); } }}>PDF</Button>
         {stage === "NEU" && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.crm.advance.mutate({ id, to: "KONTAKTIERT" }))}>→ Kontaktiert</Button>}
         {stage === "KONTAKTIERT" && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.crm.advance.mutate({ id, to: "QUALIFIZIERT" }))}>→ Qualifiziert</Button>}
         {CRM_CONVERTIBLE.has(stage) && (

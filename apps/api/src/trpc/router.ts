@@ -2227,6 +2227,13 @@ export const appRouter = router({
         try { return await ctx.print.quotePdf(input.quoteId); }
         catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
       }),
+    // Anfrage-PDF (Vertriebspipeline): erfasste Positionen einer Kundenanfrage exportieren (mit Preisen → kein PRODUKTION).
+    inquiry: roleProcedure(...supplierRoles)
+      .input(z.object({ id: z.string().min(1) }))
+      .query(async ({ input, ctx }) => {
+        try { return await ctx.print.inquiryPdf(input.id); }
+        catch (e) { throw new TRPCError({ code: "NOT_FOUND", message: (e as Error).message }); }
+      }),
     // Auftragsbestätigungs-PDF (mit Preisen → kein PRODUKTION).
     auftragsbestaetigung: roleProcedure(...supplierRoles)
       .input(z.object({ orderId: z.string().min(1) }))
