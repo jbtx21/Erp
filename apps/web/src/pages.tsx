@@ -2326,7 +2326,7 @@ export function LinesEditor({ lines, onChange, quoteMode = false, companyId, tax
             <Badge color="gray" variant="light" size="sm" title="Freiposition ohne Katalogbezug — erzeugt KEINEN Lieferantenbedarf (Procure-to-Order). Für Beschaffung einen Katalogartikel/Variante wählen.">ohne Artikelbezug</Badge>
           )}
           {l.variantId && <Button size="compact-xs" variant={l.isBundle ? "light" : "subtle"} color="grape" onClick={() => { if (l.isBundle) setShown((s) => ({ ...s, [i]: !s[i] })); else setBundleFor(i); }} title="Stückliste anzeigen/bearbeiten">⊟ Stückliste</Button>}
-          {quoteMode && <Switch size="xs" label="Alt." checked={!!l.isAlternative} onChange={(e) => set(i, { isAlternative: e.currentTarget.checked })} title="Alternativposition — wird beim Wandeln in den Auftrag nicht übernommen" />}
+          {quoteMode && <Switch size="xs" label="Alt." tabIndex={-1} checked={!!l.isAlternative} onChange={(e) => set(i, { isAlternative: e.currentTarget.checked })} title="Alternativposition — wird beim Wandeln in den Auftrag nicht übernommen" />}
           <Button size="compact-sm" variant="subtle" color="red" disabled={lines.length === 1} onClick={() => onChange(lines.filter((_, j) => j !== i))}>✕</Button>
         </Group>
         );
@@ -6396,7 +6396,7 @@ export function ZahlungsabgleichOverview({ onOpen }: { onOpen?: (k: string, id: 
               <Table.Td>{oi.invoiceNumber}</Table.Td>
               <Table.Td>{oi.companyName}</Table.Td>
               <Table.Td ta="right" style={numTd}>{euro(oi.openCents)}</Table.Td>
-              <Table.Td ta="right">{oi.overdueDays > 0 ? <Text component="span" c="orange.8">+{oi.overdueDays} T</Text> : `${-oi.overdueDays} T`}</Table.Td>
+              <Table.Td ta="right">{oi.overdueDays > 0 ? <Text component="span" c="orange.8">{oi.overdueDays} T überfällig</Text> : oi.overdueDays === 0 ? "heute fällig" : `fällig in ${-oi.overdueDays} T`}</Table.Td>
               <Table.Td>{BUCKET_LABEL[oi.bucket] ?? oi.bucket}</Table.Td>
               <Table.Td ta="right">{oi.dunningLevel > 0 ? <Badge size="sm" color="orange" variant="light">M{oi.dunningLevel}</Badge> : "—"}</Table.Td>
             </Table.Tr>
