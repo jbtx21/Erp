@@ -38,6 +38,8 @@ export * from "./procurement.js";
 export * from "./subproduction.js";
 export * from "./banking-match.js";
 export * from "./payment-reconciliation.js";
+export * from "./payment-terms.js";
+export * from "./ek-reconciliation.js";
 export * from "./dunning.js";
 export * from "./three-way-match.js";
 export * from "./postcalc.js";
