@@ -120,7 +120,7 @@ export class InMemoryIncomingInvoiceRepository
       .reverse()
       .map((i) => ({
         id: i.id, supplierId: i.supplierId, supplierName: this.supplier(i.supplierId)?.name ?? "—", number: i.number,
-        netCents: i.netCents, taxCents: i.taxCents, grossCents: i.grossCents, status: i.status, ekCheckStatus: i.ekCheckStatus,
+        netCents: i.netCents, taxCents: i.taxCents, grossCents: i.grossCents, status: i.status, source: i.source, ekCheckStatus: i.ekCheckStatus,
         dueDate: i.dueDate, skontoUntil: i.skontoUntil, receivedAt: i.receivedAt,
       }));
   }

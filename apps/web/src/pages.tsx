@@ -635,12 +635,169 @@ export function SuppliersPage({ focusId }: { focusId?: string } = {}): JSX.Eleme
   );
 }
 
+// Eingangsrechnungs-Status + EK-Abgleich-Status als farbige Badges (Xentral-Vorbild).
+const II_STATUS_COLOR: Record<string, string> = { ERFASST: "gray", GEPRUEFT: "blue", GESPERRT: "red", FREIGEGEBEN: "teal", BEZAHLT: "green" };
+const II_STATUS_LABEL: Record<string, string> = { ERFASST: "Erfasst", GEPRUEFT: "Geprüft", GESPERRT: "Gesperrt", FREIGEGEBEN: "Freigegeben", BEZAHLT: "Bezahlt" };
+const EK_COLOR: Record<string, string> = { OFFEN: "gray", OK: "green", ABWEICHUNG: "red", PRUEFUNG: "orange" };
+const EK_LABEL: Record<string, string> = { OFFEN: "offen", OK: "OK", ABWEICHUNG: "Abweichung", PRUEFUNG: "Prüfung" };
+const II_SOURCE_LABEL: Record<string, string> = { E_RECHNUNG: "E-Rechnung", OCR: "OCR/Scan", MANUAL: "Manuell" };
+
+// Eingangsrechnungs-Workspace (GetMyInvoices-Vorbild, Kap. 9.4): zentraler Beleg-Eingang
+// (E-/X-Rechnung + OCR), EK-Abgleich gegen die Artikelstammdaten, Freigabe und Zahlung
+// (Skonto/Fälligkeit) — prüfen → freigeben → zahlen, jeweils dem Beleg zugeordnet.
 export function IncomingInvoicesPage({ onOpen }: { onOpen?: (k: string, id: string) => void } = {}): JSX.Element {
+  type IIRow = Awaited<ReturnType<typeof trpc.incomingInvoices.list.query>>[number];
   const supplierNames = useSupplierNames();
+  const [rows, setRows] = useState<IIRow[]>([]);
+  const [err, setErr] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [ocrOpen, setOcrOpen] = useState(false);
+  const [ocrText, setOcrText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [detailId, setDetailId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try { setRows(await trpc.incomingInvoices.list.query({ limit: 100 })); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
   return (
-    <ListPage module="Einkauf / Eingangsrechnungen" title="Eingangsrechnungen" hint="Erfasste Kreditorenrechnungen (3-Wege-Match, Kap. 9)."
-      load={() => trpc.incomingInvoices.list.query({ limit: 100 }) as Promise<Row[]>}
-      cellRender={(c, v) => c === "supplierId" ? <SupplierRef id={v ? String(v) : null} names={supplierNames} onOpen={onOpen} /> : undefined} />
+    <>
+      <Group justify="space-between" align="center">
+        <Box>
+          <DocListHeader module="Einkauf" title="Eingangsrechnungen" />
+          <Text size="sm" c="dimmed" mt={2}>Zentraler Beleg-Eingang (E-/X-Rechnung + OCR/Scan), EK-Abgleich gegen die Artikelstammdaten, Freigabe und Zahlung mit Skonto/Fälligkeit (Kap. 9.4). Workflow: prüfen → freigeben → zahlen.</Text>
+        </Box>
+        <Button onClick={() => { setOcrText(""); setOcrOpen(true); }}>Beleg erfassen (OCR/Text)</Button>
+      </Group>
+      {err && <Alert color="red" mt="sm">{err}</Alert>}
+      {msg && <Alert color="green" mt="sm" withCloseButton onClose={() => setMsg(null)}>{msg}</Alert>}
+
+      <Table striped highlightOnHover withTableBorder verticalSpacing="xs" fz="sm" mt="md">
+        <Table.Thead><Table.Tr>
+          <Table.Th>Lieferant</Table.Th><Table.Th>Nummer</Table.Th><Table.Th>Quelle</Table.Th>
+          <Table.Th ta="right">Brutto</Table.Th><Table.Th>Status</Table.Th><Table.Th>EK-Abgleich</Table.Th>
+          <Table.Th ta="right">Fällig</Table.Th><Table.Th ta="right">Skonto bis</Table.Th>
+        </Table.Tr></Table.Thead>
+        <Table.Tbody>
+          {rows.map((r) => (
+            <Table.Tr key={r.id} style={{ cursor: "pointer" }} onClick={() => setDetailId(r.id)}>
+              <Table.Td>{r.supplierName}</Table.Td>
+              <Table.Td>{r.number}</Table.Td>
+              <Table.Td><Text size="xs" c="dimmed">{II_SOURCE_LABEL[r.source] ?? r.source}</Text></Table.Td>
+              <Table.Td ta="right" style={numTd}>{euro(r.grossCents)}</Table.Td>
+              <Table.Td><Badge size="sm" variant="light" color={II_STATUS_COLOR[r.status] ?? "gray"}>{II_STATUS_LABEL[r.status] ?? r.status}</Badge></Table.Td>
+              <Table.Td><Badge size="sm" variant="light" color={EK_COLOR[r.ekCheckStatus] ?? "gray"}>{EK_LABEL[r.ekCheckStatus] ?? r.ekCheckStatus}</Badge></Table.Td>
+              <Table.Td ta="right">{r.dueDate ? new Date(r.dueDate).toLocaleDateString("de-DE") : "—"}</Table.Td>
+              <Table.Td ta="right">{r.skontoUntil ? <Text component="span" c="teal.7">{new Date(r.skontoUntil).toLocaleDateString("de-DE")}</Text> : "—"}</Table.Td>
+            </Table.Tr>
+          ))}
+          {rows.length === 0 && <Table.Tr><Table.Td colSpan={8}><Text size="sm" c="dimmed">Noch keine Eingangsrechnungen. „Beleg erfassen" lädt einen Scan/Text per OCR.</Text></Table.Td></Table.Tr>}
+        </Table.Tbody>
+      </Table>
+
+      <Modal opened={ocrOpen} onClose={() => setOcrOpen(false)} title="Beleg erfassen (OCR / Text)" size="lg">
+        <Text size="sm" c="dimmed" mb="xs">Erkannten/eingefügten Rechnungstext einfügen (Lieferant, USt-IdNr., Rechnungsnummer, Datum, Netto/USt/Brutto + Positionen „10 x Artikel @ 10,00 [SKU]"). Der Lieferant wird über USt-IdNr./Name aufgelöst — unbekannte gehen in die Klärung.</Text>
+        <Textarea autosize minRows={8} value={ocrText} onChange={(e) => setOcrText(e.currentTarget.value)} placeholder={"Lieferant: Garn & Co GmbH\nUSt-IdNr: DE123456789\nRechnungsnummer: ER-2026-0042\nDatum: 05.03.2026\nNetto: 100,00\nUSt: 19,00\nBrutto: 119,00\n10 x Garnrolle @ 10,00 [GARN-SW]"} />
+        <Group justify="flex-end" mt="md">
+          <Button variant="default" onClick={() => setOcrOpen(false)}>Abbrechen</Button>
+          <Button loading={busy} disabled={!ocrText.trim()} onClick={async () => {
+            setBusy(true); setErr(null); setMsg(null);
+            try {
+              const res = await trpc.incomingInvoices.receiveOcr.mutate({ text: ocrText });
+              if (res.status === "KLAERUNG") { setErr(`Klärung (${res.reason}): ${res.details.join(", ")}`); }
+              else { setMsg(`Beleg erfasst (${II_STATUS_LABEL[res.status] ?? res.status}). Bitte EK-Abgleich durchführen.`); setOcrOpen(false); await load(); }
+            } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+          }}>Erfassen</Button>
+        </Group>
+      </Modal>
+
+      {detailId && <IncomingInvoiceDetailModal id={detailId} onClose={() => setDetailId(null)} onChanged={load} onOpen={onOpen} supplierNames={supplierNames} />}
+    </>
+  );
+}
+
+// Detail + EK-Abgleich + Freigabe + Zahlung eines Eingangsbelegs (prüfen → freigeben → zahlen).
+function IncomingInvoiceDetailModal({ id, onClose, onChanged, onOpen, supplierNames }: {
+  id: string; onClose: () => void; onChanged: () => Promise<void>; onOpen?: (k: string, id: string) => void; supplierNames: Map<string, string>;
+}): JSX.Element {
+  const [d, setD] = useState<Awaited<ReturnType<typeof trpc.incomingInvoices.detail.query>> | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  void supplierNames;
+
+  const reload = useCallback(async () => {
+    try { setD(await trpc.incomingInvoices.detail.query({ invoiceId: id })); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
+  }, [id]);
+  useEffect(() => { void reload(); }, [reload]);
+
+  const run = (fn: () => Promise<string>) => async () => {
+    setBusy(true); setErr(null); setMsg(null);
+    try { setMsg(await fn()); await reload(); await onChanged(); }
+    catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+
+  return (
+    <Modal opened onClose={onClose} size="xl" title={d ? `Eingangsrechnung ${d.number}` : "Eingangsrechnung"}>
+      {err && <Alert color="red" mb="sm">{err}</Alert>}
+      {msg && <Alert color="green" mb="sm">{msg}</Alert>}
+      {!d ? <Group gap="xs"><Loader size="sm" /><Text size="sm">lädt…</Text></Group> : (
+        <>
+          <Group gap="lg" wrap="wrap" mb="sm">
+            <Box><Text size="xs" c="dimmed">Lieferant</Text><Text fw={600}>{onOpen ? <Anchor onClick={() => onOpen("suppliers", d.supplierId)}>{d.supplierName} ↗</Anchor> : d.supplierName}</Text></Box>
+            <Box><Text size="xs" c="dimmed">Status</Text><Badge variant="light" color={II_STATUS_COLOR[d.status] ?? "gray"}>{II_STATUS_LABEL[d.status] ?? d.status}</Badge></Box>
+            <Box><Text size="xs" c="dimmed">EK-Abgleich</Text><Badge variant="light" color={EK_COLOR[d.ekCheckStatus] ?? "gray"}>{EK_LABEL[d.ekCheckStatus] ?? d.ekCheckStatus}</Badge></Box>
+            <Box><Text size="xs" c="dimmed">Brutto</Text><Text fw={600}>{euro(d.grossCents)}</Text></Box>
+            <Box><Text size="xs" c="dimmed">Fällig</Text><Text>{d.dueDate ? new Date(d.dueDate).toLocaleDateString("de-DE") : "—"}</Text></Box>
+            <Box><Text size="xs" c="dimmed">Skonto</Text><Text>{d.skontoPercent ? `${d.skontoPercent}% bis ${d.skontoUntil ? new Date(d.skontoUntil).toLocaleDateString("de-DE") : "—"}` : "—"}</Text></Box>
+            {d.paidAt && <Box><Text size="xs" c="dimmed">Bezahlt</Text><Text c="green.7">{euro(d.paymentAmountCents ?? d.grossCents)} · {new Date(d.paidAt).toLocaleDateString("de-DE")}</Text></Box>}
+          </Group>
+
+          <Text fw={600} size="sm" mb={4}>Positionen — EK-Abgleich gegen die Artikelstammdaten</Text>
+          <Table withTableBorder striped fz="sm" mb="md">
+            <Table.Thead><Table.Tr>
+              <Table.Th>Artikel / Ref</Table.Th><Table.Th ta="right">Menge</Table.Th>
+              <Table.Th ta="right">EK Rechnung</Table.Th><Table.Th ta="right">Stamm-EK</Table.Th>
+              <Table.Th ta="right">Δ %</Table.Th><Table.Th>Bewertung</Table.Th>
+            </Table.Tr></Table.Thead>
+            <Table.Tbody>
+              {d.lines.map((l, i) => {
+                const has = l.masterEkCents != null;
+                const diffPct = has && l.masterEkCents ? ((l.unitEkCents - l.masterEkCents) / l.masterEkCents) * 100 : 0;
+                const verdict = !l.variantId ? "nicht zugeordnet" : !has ? "kein Stamm-EK" : Math.abs(diffPct) <= 2 ? "OK" : "Abweichung";
+                const vc = verdict === "OK" ? "green.7" : verdict === "Abweichung" ? "red.7" : "orange.8";
+                return (
+                  <Table.Tr key={i}>
+                    <Table.Td>{l.ref}</Table.Td>
+                    <Table.Td ta="right" style={numTd}>{l.qty}</Table.Td>
+                    <Table.Td ta="right" style={numTd}>{euro(l.unitEkCents)}</Table.Td>
+                    <Table.Td ta="right" style={numTd}>{has ? euro(l.masterEkCents) : "—"}</Table.Td>
+                    <Table.Td ta="right" style={numTd}>{has ? <Text component="span" c={vc}>{diffPct > 0 ? "+" : ""}{diffPct.toFixed(1)}%</Text> : "—"}</Table.Td>
+                    <Table.Td><Text component="span" size="xs" c={vc}>{verdict}</Text></Table.Td>
+                  </Table.Tr>
+                );
+              })}
+              {d.lines.length === 0 && <Table.Tr><Table.Td colSpan={6}><Text size="sm" c="dimmed">Keine Positionen erfasst (Kopf-Rechnung).</Text></Table.Td></Table.Tr>}
+            </Table.Tbody>
+          </Table>
+
+          <Group justify="flex-end">
+            <Button variant="default" loading={busy} disabled={d.status === "BEZAHLT"}
+              onClick={run(async () => { const r = await trpc.incomingInvoices.runEkCheck.mutate({ invoiceId: id }); return `EK-Abgleich: ${EK_LABEL[r.overall] ?? r.overall} (max. ${r.result.maxAbsDiffPercent.toFixed(1)}% Abweichung).`; })}>
+              EK-Abgleich</Button>
+            <Button color="teal" loading={busy} disabled={d.status === "FREIGEGEBEN" || d.status === "BEZAHLT" || d.ekCheckStatus === "OFFEN"}
+              onClick={run(async () => { await trpc.incomingInvoices.freigeben.mutate({ invoiceId: id }); return "Zur Zahlung freigegeben."; })}>
+              Freigeben</Button>
+            <Button color="green" loading={busy} disabled={d.status !== "FREIGEGEBEN"}
+              onClick={run(async () => { const r = await trpc.incomingInvoices.pay.mutate({ invoiceId: id }); return `Bezahlt: ${euro(r.amountCents)}${r.withSkonto ? " (mit Skonto)" : ""}.`; })}>
+              Bezahlen</Button>
+          </Group>
+        </>
+      )}
+    </Modal>
   );
 }
 

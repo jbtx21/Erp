@@ -132,13 +132,13 @@ export class PrismaIncomingInvoiceRepository
       take: limit,
       select: {
         id: true, supplierId: true, number: true, netCents: true, taxCents: true, grossCents: true,
-        status: true, ekCheckStatus: true, dueDate: true, skontoUntil: true, receivedAt: true,
+        status: true, source: true, ekCheckStatus: true, dueDate: true, skontoUntil: true, receivedAt: true,
         supplier: { select: { name: true } },
       },
     });
     return rows.map((r) => ({
       id: r.id, supplierId: r.supplierId, supplierName: r.supplier.name, number: r.number,
-      netCents: r.netCents, taxCents: r.taxCents, grossCents: r.grossCents, status: r.status, ekCheckStatus: r.ekCheckStatus,
+      netCents: r.netCents, taxCents: r.taxCents, grossCents: r.grossCents, status: r.status, source: r.source, ekCheckStatus: r.ekCheckStatus,
       dueDate: r.dueDate, skontoUntil: r.skontoUntil, receivedAt: r.receivedAt,
     }));
   }

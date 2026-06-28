@@ -145,6 +145,8 @@ export interface IncomingInvoiceListItem {
   taxCents: number;
   grossCents: number;
   status: string;
+  /** Herkunft (E_RECHNUNG/OCR/MANUAL). */
+  source: string;
   /** EK-Abgleich-Status (OFFEN/OK/ABWEICHUNG/PRUEFUNG). */
   ekCheckStatus: string;
   /** Nettofälligkeit + Skonto-Frist (Zahlungssteuerung). */
