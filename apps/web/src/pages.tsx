@@ -8518,6 +8518,9 @@ export function GuVReportPage(): JSX.Element {
   const [invoices, setInvoices] = useState<Awaited<ReturnType<typeof trpc.incomingInvoices.list.query>>>([]);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [datevYear, setDatevYear] = useState(2026); // Geschäftsjahr für den DATEV-Buchungsstapel
+  const [datevBusy, setDatevBusy] = useState(false);
+  const [datevMsg, setDatevMsg] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -8660,6 +8663,35 @@ export function GuVReportPage(): JSX.Element {
           </Table.Tr>
         </Table.Tbody>
       </Table>
+
+      {/* DATEV-Buchungsstapel-Export (Kap. 9.2, T-07): Ausgangsrechnungen (SOLL) + Gutschriften
+          (HABEN) einer Periode als EXTF-CSV für die Fibu/ADDISON. Kontenrahmen = obige Auswahl. */}
+      <Card withBorder radius="md" mt="lg" maw={640}>
+        <Title order={5}>DATEV-Buchungsstapel exportieren</Title>
+        <Text size="xs" c="dimmed" mt={2}>
+          Belege des Geschäftsjahres als DATEV-CSV (EXTF-Buchungsstapel): Rechnungen als Debitor-an-Erlös (SOLL),
+          Gutschriften als Erlösminderung (HABEN). Konten nach {KONTENRAHMEN_LABEL[kr]}. Der Export wird protokolliert (GoBD).
+        </Text>
+        <Group gap="md" align="end" mt="md" wrap="wrap">
+          <NumberInput label="Geschäftsjahr" value={datevYear} onChange={(v) => setDatevYear(Number(v) || datevYear)} min={2000} max={2100} w={140} hideControls={false} allowDecimal={false} />
+          <TextInput label="Kontenrahmen" value={KONTENRAHMEN_LABEL[kr]} readOnly w={220} />
+          <Button
+            loading={datevBusy}
+            onClick={async () => {
+              setDatevBusy(true); setDatevMsg(null); setErr(null);
+              try {
+                const from = new Date(Date.UTC(datevYear, 0, 1, 0, 0, 0)).toISOString();
+                const to = new Date(Date.UTC(datevYear, 11, 31, 23, 59, 59)).toISOString();
+                const res = await trpc.datev.export.mutate({ from, to, kontenrahmen: kr });
+                if (res.buchungCount === 0) { setDatevMsg(`Keine Belege im Geschäftsjahr ${datevYear} gefunden.`); return; }
+                downloadText(res.filename, res.csv, "text/csv");
+                setDatevMsg(`${res.buchungCount} Buchungssätze (${res.invoiceCount} Rechnungen, ${res.creditNoteCount} Gutschriften) exportiert.`);
+              } catch (e) { setErr(errMsg(e)); } finally { setDatevBusy(false); }
+            }}
+          >DATEV-CSV exportieren</Button>
+        </Group>
+        {datevMsg && <Text size="sm" c="teal.7" mt="xs">{datevMsg}</Text>}
+      </Card>
 
       <Title order={5} mt="lg">Kontenrahmen {kr} (Standardkonten)</Title>
       <Text size="xs" c="dimmed" mt={2}>Die für TEXMA relevanten Sachkonten des gewählten Rahmens. Vollständige doppelte Buchführung (Buchungsjournal je Konto) folgt als eigene Slice.</Text>

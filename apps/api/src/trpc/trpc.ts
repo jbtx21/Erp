@@ -30,6 +30,7 @@ import type { ProductionSheetService } from "../modules/production-sheet/product
 import type { ProductionService } from "../modules/production/production.service.js";
 import type { QualityService } from "../modules/quality/quality.service.js";
 import type { ReportingService } from "../modules/reporting/reporting.service.js";
+import type { DatevExportService } from "../modules/datev-export/datev-export.service.js";
 import type { ProductionReportingService } from "../modules/production-reporting/production-reporting.service.js";
 import type { CostCenterService } from "../modules/cost-center/cost-center.service.js";
 import type { LeadService } from "../modules/lead/lead.service.js";
@@ -122,6 +123,7 @@ export interface Context {
   production: ProductionService;
   quality: QualityService;
   reporting: ReportingService;
+  datevExport: DatevExportService;
   productionReporting: ProductionReportingService;
   costCenters: CostCenterService;
   leads: LeadService;

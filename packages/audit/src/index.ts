@@ -2,7 +2,7 @@
 // Grundsatz: finalisierte Belege sind unveränderbar. Korrektur nur über eine
 // neue Version (Storno/Gutschrift), niemals In-place-Update.
 
-export type AuditAction = "CREATE" | "UPDATE" | "FINALIZE" | "STORNO";
+export type AuditAction = "CREATE" | "UPDATE" | "FINALIZE" | "STORNO" | "EXPORT";
 
 export interface AuditEntry {
   userId?: string;

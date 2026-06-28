@@ -52,6 +52,8 @@ import { PrismaProductionRepository } from "./repositories/prisma-production.rep
 import { QualityService } from "./modules/quality/quality.service.js";
 import { PrismaQualityRepository } from "./repositories/prisma-quality.repository.js";
 import { ReportingService } from "./modules/reporting/reporting.service.js";
+import { DatevExportService } from "./modules/datev-export/datev-export.service.js";
+import { PrismaDatevExportRepository } from "./repositories/prisma-datev-export.repository.js";
 import { AnthropicReportClient } from "./modules/reporting/anthropic-report-client.js";
 import { ProductionReportingService } from "./modules/production-reporting/production-reporting.service.js";
 import { PrismaSessionRepository, PrismaUserRepository, PrismaPasswordResetRepository } from "./repositories/prisma-auth.repository.js";
@@ -255,6 +257,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const quality = new QualityService(new PrismaQualityRepository(), new PrismaAuditSink());
   // KI-Reporting nutzt Claude nur, wenn ein API-Schlüssel hinterlegt ist (sonst Heuristik).
   const reporting = new ReportingService(new PrismaReportingRepository(), AnthropicReportClient.fromEnv());
+  const datevExport = new DatevExportService(new PrismaDatevExportRepository(), new PrismaAuditSink());
   const productionReporting = new ProductionReportingService(new PrismaProductionReportingRepository());
   const costCenters = new CostCenterService(new PrismaCostCenterRepository(), new PrismaAuditSink());
   const leads = new LeadService(new PrismaLeadRepository(), new PrismaAuditSink(), new NumberingService(new PrismaNumberingRepository()));
@@ -525,6 +528,7 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           production,
           quality,
           reporting,
+          datevExport,
           productionReporting,
           costCenters,
           leads,

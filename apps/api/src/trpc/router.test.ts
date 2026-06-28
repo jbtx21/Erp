@@ -121,6 +121,8 @@ import { InMemoryNumberingRepository } from "../repositories/in-memory-numbering
 import { ProductionSheetService } from "../modules/production-sheet/production-sheet.service.js";
 import { ProductionService } from "../modules/production/production.service.js";
 import { ReportingService } from "../modules/reporting/reporting.service.js";
+import { DatevExportService } from "../modules/datev-export/datev-export.service.js";
+import { InMemoryDatevExportRepository } from "../repositories/in-memory-datev-export.repository.js";
 import { ProductionReportingService } from "../modules/production-reporting/production-reporting.service.js";
 import { InMemoryOrderRepository } from "../repositories/in-memory-order.repository.js";
 import { InMemorySupplierRepository } from "../repositories/in-memory-supplier.repository.js";
@@ -339,6 +341,7 @@ function setup(user: AuthUser | null = BUERO) {
     production,
     quality,
     reporting,
+    datevExport: new DatevExportService(new InMemoryDatevExportRepository(), new MemoryAuditSink()),
     productionReporting,
     costCenters: new CostCenterService(new InMemoryCostCenterRepository(), new MemoryAuditSink()),
     leads: new LeadService(new InMemoryLeadRepository(), new MemoryAuditSink(), new NumberingService(new InMemoryNumberingRepository())),
@@ -482,6 +485,7 @@ describe("tRPC RBAC — Produktion ohne Preis-/Kundenzugriff (Kap. 12)", () => {
       production: {} as Context["production"],
       quality: {} as Context["quality"],
       reporting: {} as Context["reporting"],
+      datevExport: {} as Context["datevExport"],
       productionReporting: {} as Context["productionReporting"],
       costCenters: {} as Context["costCenters"],
       leads: {} as Context["leads"],

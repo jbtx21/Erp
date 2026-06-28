@@ -110,6 +110,56 @@ export function buchungenFromCreditNote(
   });
 }
 
+/** Norm-USt-Sätze (DE): steuerfrei, 7 %, 19 %. */
+const STANDARD_RATES = [0, 0.07, 0.19] as const;
+
+/**
+ * Snappt einen effektiven USt-Satz (taxCents/netCents) auf den nächsten Normsatz.
+ * Rundungsdifferenzen aus der Cent-Arithmetik dürfen den Steuerschlüssel nicht verschieben.
+ */
+export function snapTaxRate(effective: number): number {
+  return STANDARD_RATES.reduce((best, r) =>
+    Math.abs(r - effective) < Math.abs(best - effective) ? r : best, STANDARD_RATES[0]);
+}
+
+/** Netto-je-Satz einer Ausgangsrechnung aus Netto/Steuer-Summe (zentrale USt, ein Satz). */
+export function invoiceTaxByRate(netCents: Cents, taxCents: Cents): Array<{ rate: number; netCents: Cents }> {
+  const rate = netCents > 0 ? snapTaxRate(taxCents / netCents) : 0;
+  return [{ rate, netCents }];
+}
+
+/**
+ * Netto-je-Satz einer Gutschrift: deren `amountCents` ist BRUTTO (grossCents − bereits
+ * gutgeschrieben). Der Satz stammt aus der Originalrechnung; das Netto wird zurückgerechnet
+ * (net = brutto / (1+satz)). Bei Vollgutschrift = exakt der Rechnungs-Netto.
+ */
+export function creditNoteTaxByRate(
+  grossCents: Cents,
+  invoiceNetCents: Cents,
+  invoiceTaxCents: Cents
+): Array<{ rate: number; netCents: Cents }> {
+  const rate = invoiceNetCents > 0 ? snapTaxRate(invoiceTaxCents / invoiceNetCents) : 0;
+  return [{ rate, netCents: Math.round(grossCents / (1 + rate)) }];
+}
+
+export interface DatevStapelInput {
+  invoices: ReadonlyArray<InvoiceForDatev>;
+  creditNotes: ReadonlyArray<CreditNoteForDatev>;
+  erloes: ErloeskontoMap;
+}
+
+/**
+ * Baut den vollständigen DATEV-Buchungsstapel einer Periode: erst alle Ausgangsrechnungen
+ * (Debitor an Erlös, SOLL), dann alle Gutschriften (Erlösminderung, HABEN). Reine Komposition
+ * der Einzel-Builder — die CSV-Serialisierung übernimmt `toDatevCsv`.
+ */
+export function buildDatevStapel(input: DatevStapelInput): DatevBuchung[] {
+  return [
+    ...input.invoices.flatMap((i) => buchungenFromInvoice(i, input.erloes)),
+    ...input.creditNotes.flatMap((c) => buchungenFromCreditNote(c, input.erloes)),
+  ];
+}
+
 function ttmm(d: Date): string {
   const dd = String(d.getDate()).padStart(2, "0");
   const mm = String(d.getMonth() + 1).padStart(2, "0");

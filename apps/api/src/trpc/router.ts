@@ -1244,6 +1244,22 @@ export const appRouter = router({
       }),
   }),
 
+  // DATEV-Buchungsstapel-Export (Kap. 9.2, T-07): Periode → CSV (Rechnungen SOLL +
+  // Gutschriften HABEN). Finanzdaten → kein PRODUKTION-Zugriff (Kap. 12).
+  datev: router({
+    export: roleProcedure("ADMIN", "BUCHHALTUNG")
+      .input(z.object({
+        from: z.string().datetime(),
+        to: z.string().datetime(),
+        kontenrahmen: z.enum(["SKR03", "SKR04"]),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try {
+          return await ctx.datevExport.export({ from: new Date(input.from), to: new Date(input.to), kontenrahmen: input.kontenrahmen });
+        } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+  }),
+
   productionReporting: router({
     /** Durchlaufzeit je Periode + Kennzahlen (operativ, auch für PRODUKTION). */
     leadTime: protectedProcedure

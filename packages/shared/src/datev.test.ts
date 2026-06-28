@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { buchungenFromCreditNote, buchungenFromInvoice, toDatevCsv } from "./datev.js";
+import {
+  buchungenFromCreditNote,
+  buchungenFromInvoice,
+  buildDatevStapel,
+  creditNoteTaxByRate,
+  invoiceTaxByRate,
+  snapTaxRate,
+  toDatevCsv,
+} from "./datev.js";
 
 describe("DATEV-Export (T-07)", () => {
   const erloes = { standard: "8400", reduced: "8300" };
@@ -62,5 +70,38 @@ describe("DATEV-Export (T-07)", () => {
       erloes
     ));
     expect(csv.split("\r\n")[1]).toBe('100,00;H;10001;8400;9;0603;"GU-1";"Gutschrift GU-1"');
+  });
+});
+
+describe("DATEV-Periodenstapel (Rechnungen + Gutschriften)", () => {
+  const erloes = { standard: "8400", reduced: "8300" };
+
+  it("snapTaxRate rundet Cent-Rundungsdifferenzen auf den Normsatz", () => {
+    expect(snapTaxRate(1900 / 10000)).toBe(0.19);
+    expect(snapTaxRate(699 / 10000)).toBe(0.07); // 6,99 % → 7 %
+    expect(snapTaxRate(0)).toBe(0);
+  });
+
+  it("invoiceTaxByRate leitet den Satz aus Netto/Steuer ab", () => {
+    expect(invoiceTaxByRate(10000, 1900)).toEqual([{ rate: 0.19, netCents: 10000 }]);
+    expect(invoiceTaxByRate(0, 0)).toEqual([{ rate: 0, netCents: 0 }]);
+  });
+
+  it("creditNoteTaxByRate rechnet das Brutto über den Originalsatz auf Netto zurück", () => {
+    // Vollgutschrift einer 100,00-€-netto-19%-Rechnung (119,00 € brutto) → 100,00 € netto.
+    expect(creditNoteTaxByRate(11900, 10000, 1900)).toEqual([{ rate: 0.19, netCents: 10000 }]);
+    // Teilgutschrift 59,50 € brutto → 50,00 € netto.
+    expect(creditNoteTaxByRate(5950, 10000, 1900)).toEqual([{ rate: 0.19, netCents: 5000 }]);
+  });
+
+  it("buildDatevStapel reiht Rechnungen (SOLL) vor Gutschriften (HABEN)", () => {
+    const stapel = buildDatevStapel({
+      invoices: [{ number: "RE-1", issuedAt: new Date("2026-03-05T10:00:00Z"), debitorKonto: "10001", taxByRate: invoiceTaxByRate(10000, 1900) }],
+      creditNotes: [{ number: "GU-1", issuedAt: new Date("2026-03-06T10:00:00Z"), debitorKonto: "10001", originalInvoiceNumber: "RE-1", taxByRate: creditNoteTaxByRate(11900, 10000, 1900) }],
+      erloes,
+    });
+    expect(stapel.map((b) => b.sollHaben)).toEqual(["S", "H"]);
+    expect(stapel[0]).toMatchObject({ belegfeld1: "RE-1", konto: "10001", gegenkonto: "8400" });
+    expect(stapel[1]).toMatchObject({ belegfeld1: "GU-1", buchungstext: "Gutschrift GU-1 zu RE-1" });
   });
 });
