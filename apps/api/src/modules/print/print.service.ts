@@ -55,6 +55,8 @@ export interface QuotePrintData {
   grossCents: number;
   gueltigBis: Date | null;
   meta?: LetterMeta;
+  /** Freitext-Bedarf der Anfrage (CrmLead.text) — wird im Anfrage-PDF als Einleitung übernommen. */
+  bedarf?: string | null;
 }
 
 export interface OrderConfirmationPrintData {
@@ -269,9 +271,13 @@ export class PrintService {
     const q = await this.repo.inquiryForPrint(id);
     if (!q) throw new PrintError(`Anfrage ${id} nicht gefunden.`);
     const brief = await this.briefFelder(q.number, q.meta);
+    // Freitext-Bedarf der Anfrage als Einleitung ins PDF übernehmen (auch wenn keine
+    // Positionen erfasst sind — sonst ginge der eigentliche Kundenwunsch verloren).
+    const bedarf = q.bedarf?.trim();
     const bytes = await renderBelegPdf(anfrageDokument({
       nummer: q.number, datum: q.datum, empfaenger: q.empfaenger, positionen: q.positionen,
       netCents: q.netCents, taxCents: q.taxCents, grossCents: q.grossCents, ...brief,
+      ...(bedarf ? { einleitung: `Ihr Bedarf laut Anfrage:\n${bedarf}` } : {}),
     }));
     return { filename: `Anfrage-${q.number}.pdf`, base64: Buffer.from(bytes).toString("base64") };
   }

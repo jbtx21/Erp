@@ -290,7 +290,7 @@ export class PrismaPrintRepository implements PrintRepository {
     const l = await prisma.crmLead.findUnique({
       where: { id },
       select: {
-        name: true, createdAt: true, lines: true,
+        name: true, text: true, createdAt: true, lines: true,
         company: { select: { name: true, street: true, zip: true, city: true, country: true, vatId: true, customerNumber: true, betreuer: true } },
       },
     });
@@ -301,7 +301,7 @@ export class PrismaPrintRepository implements PrintRepository {
     const empfaenger = l.company ? recipientLines(l.company, null) : [l.name];
     return {
       number: `AF-${id.slice(-6).toUpperCase()}`, datum: l.createdAt, empfaenger, positionen,
-      ...totals(positionen), gueltigBis: null, meta: l.company ? await this.buildMeta(l.company) : undefined,
+      ...totals(positionen), gueltigBis: null, bedarf: l.text, meta: l.company ? await this.buildMeta(l.company) : undefined,
     };
   }
 
