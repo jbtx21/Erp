@@ -4616,21 +4616,20 @@ export function CrmPipelinePage({ onOpen }: { onNavigate?: (k: string) => void; 
       const lostReason = typeof window !== "undefined" ? window.prompt("Verloren — Grund?") : null;
       if (lostReason) void act(() => trpc.crm.advance.mutate({ id, to: "VERLOREN", lostReason }));
     };
+    const exportPdf = async () => { setErr(null); try { const r = await trpc.print.inquiry.query({ id }); downloadBase64(r.filename, r.base64, "application/pdf"); } catch (e) { setErr(errMsg(e)); } };
+    const actions: Array<DocAction | false> = [
+      { label: "Bearbeiten / Positionen", group: "Allgemein", onClick: () => setEditRow(rows.find((x) => String(x.id) === id) ?? null) },
+      { label: "Anfrage – PDF", group: "Allgemein", onClick: () => void exportPdf() },
+      Boolean(quoteId && onOpen) && { label: "Angebot öffnen", group: "Allgemein", onClick: () => onOpen!("quotes", quoteId!) },
+      stage === "NEU" && { label: "→ Kontaktiert", group: "Status & Folgeaktion", onClick: () => void act(() => trpc.crm.advance.mutate({ id, to: "KONTAKTIERT" })) },
+      stage === "KONTAKTIERT" && { label: "→ Qualifiziert", group: "Status & Folgeaktion", onClick: () => void act(() => trpc.crm.advance.mutate({ id, to: "QUALIFIZIERT" })) },
+      CRM_CONVERTIBLE.has(stage) && { label: "→ In Angebot wandeln", group: "Status & Folgeaktion", color: "green", disabled: !hasCompany, title: hasCompany ? undefined : "Firma zuordnen, um ein Angebot zu erzeugen", onClick: () => convertAndOpen(id) },
+      stage === "ANGEBOT" && { label: "Gewonnen", group: "Status & Folgeaktion", color: "teal", onClick: () => void act(() => trpc.crm.advance.mutate({ id, to: "GEWONNEN" })) },
+      CRM_OPEN_STAGES.has(stage) && { label: "Verloren", group: "Status & Folgeaktion", color: "red", onClick: lost },
+    ];
     return (
-      <Group gap={4} justify="flex-end" wrap="nowrap">
-        <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setEditRow(rows.find((x) => String(x.id) === id) ?? null)}>Bearbeiten</Button>
-        {/* Anfrage als PDF exportieren (erfasste Positionen, unverbindliche Vorab-Einschätzung). */}
-        <Button size="compact-xs" variant="subtle" onClick={async () => { setErr(null); try { const r = await trpc.print.inquiry.query({ id }); downloadBase64(r.filename, r.base64, "application/pdf"); } catch (e) { setErr(errMsg(e)); } }}>PDF</Button>
-        {stage === "NEU" && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.crm.advance.mutate({ id, to: "KONTAKTIERT" }))}>→ Kontaktiert</Button>}
-        {stage === "KONTAKTIERT" && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.crm.advance.mutate({ id, to: "QUALIFIZIERT" }))}>→ Qualifiziert</Button>}
-        {CRM_CONVERTIBLE.has(stage) && (
-          <Button size="compact-xs" color="green" disabled={!hasCompany} title={hasCompany ? undefined : "Firma zuordnen, um ein Angebot zu erzeugen"}
-            onClick={() => convertAndOpen(id)}>→ Angebot</Button>
-        )}
-        {/* Verknüpftes Angebot direkt öffnen (sichtbare Lead↔Angebot-Verbindung). */}
-        {quoteId && onOpen && <Button size="compact-xs" variant="light" color="violet" onClick={() => onOpen("quotes", quoteId)}>Angebot öffnen</Button>}
-        {stage === "ANGEBOT" && <Button size="compact-xs" color="teal" onClick={() => void act(() => trpc.crm.advance.mutate({ id, to: "GEWONNEN" }))}>Gewonnen</Button>}
-        {CRM_OPEN_STAGES.has(stage) && <Button size="compact-xs" color="red" variant="light" onClick={lost}>Verloren</Button>}
+      <Group gap={6} justify="flex-end" wrap="nowrap" onClick={(e) => e.stopPropagation()}>
+        <DocActionMenu actions={actions} />
       </Group>
     );
   };
