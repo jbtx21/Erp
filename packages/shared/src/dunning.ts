@@ -98,11 +98,12 @@ export interface DunningLevelPolicy {
   textVorlage: string;
 }
 
-/** Standard-Mahnstufen: Erinnerung (gebührenfrei) → 1. Mahnung → 2. Mahnung. */
+/** Standard-Mahnstufen: Erinnerung → 1. Mahnung → 2. Mahnung. TEXMA erhebt KEINE
+ *  Mahngebühren (Geschäftsentscheidung) — alle Stufen gebührenfrei. */
 export const DEFAULT_DUNNING_LEVELS: Record<number, DunningLevelPolicy> = {
   1: { gebuehrCents: 0, textVorlage: "Zahlungserinnerung — bitte begleichen Sie den offenen Betrag." },
-  2: { gebuehrCents: 500, textVorlage: "1. Mahnung — wir bitten um umgehende Zahlung; Mahngebühr fällig." },
-  3: { gebuehrCents: 1000, textVorlage: "2. Mahnung — letzte Aufforderung vor weiteren Schritten." },
+  2: { gebuehrCents: 0, textVorlage: "1. Mahnung — wir bitten um umgehende Zahlung." },
+  3: { gebuehrCents: 0, textVorlage: "2. Mahnung — letzte Aufforderung vor weiteren Schritten." },
 };
 
 export interface DunningNoticeDraft {

@@ -1,6 +1,6 @@
 // tRPC-AppRouter: Auth (Login/2FA/RBAC) + Shop-Order-Ingest/Liste.
 import { TRPCError } from "@trpc/server";
-import { ProductionSheetIncompleteError, redactOrderForRole, canViewFinancials, SubProductionTransitionError, scheduleBackward, backwardStart, orderStatusLabel, belegTemplateKey, belegTemplateByKind, renderTemplate, type LeadStage } from "@texma/shared";
+import { ProductionSheetIncompleteError, redactOrderForRole, canViewFinancials, SubProductionTransitionError, scheduleBackward, backwardStart, orderStatusLabel, belegTemplateKey, belegTemplateByKind, mahnungTemplateKey, renderTemplate, type LeadStage } from "@texma/shared";
 import { ReklamationValidationError } from "../modules/reklamation/reklamation.service.js";
 import { z } from "zod";
 import { AuthError, SESSION_TTL_SECONDS } from "../modules/auth/auth.service.js";
@@ -58,15 +58,22 @@ function belegNummerAusDateiname(filename: string): string {
  * und füllt {{ belegnr }}; ohne gepflegte Vorlage greift die Default-Vorlage aus @texma/shared.
  * So wirkt sich die Vorlagenpflege tatsächlich auf den Versand aus (G-5).
  */
-async function belegMailText(ctx: Context, kind: BelegMailKind, filename: string): Promise<{ subject: string; body: string }> {
+async function belegMailText(ctx: Context, kind: BelegMailKind, id: string, filename: string): Promise<{ subject: string; body: string }> {
   const belegnr = belegNummerAusDateiname(filename);
-  try {
-    return await ctx.emailTemplates.render(belegTemplateKey(kind), { belegnr });
-  } catch {
-    // Defensive: sollte nicht eintreten (Defaults sind registriert) — direkt aus dem Default rendern.
-    const def = belegTemplateByKind(kind);
-    return { subject: renderTemplate(def.subject, { belegnr }), body: renderTemplate(def.body, { belegnr }) };
+  // Vorlagenschlüssel in Prioritätsreihenfolge probieren. Mahnung: stufenspezifische
+  // Vorlage „beleg.mahnung.<stufe>" (Zahlungserinnerung/1./2. Mahnung), sonst generisch.
+  const keys: string[] = [];
+  if (kind === "MAHNUNG") {
+    const stufe = await ctx.print.dunningStufeForNotice(id).catch(() => null);
+    if (stufe != null) keys.push(mahnungTemplateKey(stufe));
   }
+  keys.push(belegTemplateKey(kind));
+  for (const key of keys) {
+    try { return await ctx.emailTemplates.render(key, { belegnr }); } catch { /* nächste Vorlage versuchen */ }
+  }
+  // Defensive: sollte nicht eintreten (Defaults sind registriert) — direkt aus dem Default rendern.
+  const def = belegTemplateByKind(kind);
+  return { subject: renderTemplate(def.subject, { belegnr }), body: renderTemplate(def.body, { belegnr }) };
 }
 
 /** Das passende Beleg-PDF je Kind erzeugen (gemeinsam für SMTP-Versand + Outlook-Entwurf). */
@@ -2039,7 +2046,7 @@ export const appRouter = router({
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) throw new TRPCError({ code: "BAD_REQUEST", message: `„${to}" ist keine gültige E-Mail-Adresse.` });
         try {
           const pdf = await belegPdf(ctx, input.kind, input.id);
-          const def = await belegMailText(ctx, input.kind, pdf.filename);
+          const def = await belegMailText(ctx, input.kind, input.id, pdf.filename);
           const subject = input.subject ?? def.subject;
           const body = input.body ?? def.body;
           await ctx.mailSend.send({ to, subject, body, attachments: [{ filename: pdf.filename, contentBase64: pdf.base64, contentType: "application/pdf" }] });
@@ -2058,7 +2065,7 @@ export const appRouter = router({
       .query(async ({ input, ctx }) => {
         try {
           const pdf = await belegPdf(ctx, input.kind, input.id);
-          const { subject, body } = await belegMailText(ctx, input.kind, pdf.filename);
+          const { subject, body } = await belegMailText(ctx, input.kind, input.id, pdf.filename);
           const to = (await ctx.print.recipientEmailForBeleg(input.kind, input.id))?.trim() ?? "";
           return { to, subject, body, pdf: { filename: pdf.filename, base64: pdf.base64 } };
         } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }

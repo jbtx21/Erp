@@ -184,6 +184,10 @@ export class PrismaPrintRepository implements PrintRepository {
     };
   }
 
+  async dunningStufeForNotice(id: string): Promise<number | null> {
+    return (await prisma.dunningNotice.findUnique({ where: { id }, select: { stufe: true } }))?.stufe ?? null;
+  }
+
   async mahnungForPrint(id: string): Promise<import("../modules/print/print.service.js").MahnungPrintData | null> {
     const n = await prisma.dunningNotice.findUnique({
       where: { id },

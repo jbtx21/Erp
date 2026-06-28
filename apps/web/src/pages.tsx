@@ -19,7 +19,7 @@ import { useUnsavedGuard } from "./use-unsaved-guard.js";
 import { downloadCsv } from "./export.js";
 import { openOutlookDraft } from "./outlook-draft.js";
 import { MoneyInput } from "./money-input.js";
-import { BELEG_MAIL_TEMPLATES } from "@texma/shared/beleg-templates";
+import { EMAIL_TEMPLATE_DEFAULTS } from "@texma/shared/beleg-templates";
 
 type Row = Record<string, unknown>;
 const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
@@ -5191,8 +5191,8 @@ export function DashboardsPage(): JSX.Element {
 
 // E-Mail-/Text-Vorlagen (G-5): anlegen/bearbeiten + Vorschau-Rendering mit Variablen.
 // Platzhalter in doppelten geschweiften Klammern (z. B. name, nr).
-// Lesbare Belegnamen je Vorlagenschlüssel (für die Vorlagen-Liste).
-const BELEG_TEMPLATE_LABEL = new Map(BELEG_MAIL_TEMPLATES.map((t) => [t.key, t.label]));
+// Lesbare Vorlagennamen je Schlüssel (Belegtypen + Mahnstufen) für die Vorlagen-Liste.
+const BELEG_TEMPLATE_LABEL = new Map(EMAIL_TEMPLATE_DEFAULTS.map((t) => [t.key, t.label]));
 
 export function EmailTemplatesPage(): JSX.Element {
   const [list, setList] = useState<Row[]>([]);

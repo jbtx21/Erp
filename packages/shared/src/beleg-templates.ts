@@ -43,6 +43,45 @@ export const BELEG_MAIL_TEMPLATES: readonly BelegTemplateDefault[] = [
   { kind: "LEIHGUT", key: "beleg.leihgut", label: "Leihgut-Lieferschein", subject: "Leihgut-Lieferschein {{ belegnr }}", body: anschreiben("den Lieferschein zum Muster-Leihgut") },
 ] as const;
 
+/**
+ * Mahnstufen-Vorlagen (Kap. 9.5): je Eskalationsstufe ein eigener Text. Die Mahnstufe
+ * (DunningNotice.stufe = 1..3) steuert beim Versand, welche Vorlage gezogen wird:
+ *  - Stufe 1 = Zahlungserinnerung (gebührenfrei)
+ *  - Stufe 2 = 1. Mahnung (Mahngebühr)
+ *  - Stufe 3 = 2. Mahnung (letzte Aufforderung)
+ * Schlüssel „beleg.mahnung.<stufe>"; ohne stufenspezifische Vorlage greift „beleg.mahnung".
+ */
+export interface MahnungStufeTemplate extends BelegTemplateDefault { stufe: number; }
+
+export const MAHNUNG_STUFE_TEMPLATES: readonly MahnungStufeTemplate[] = [
+  {
+    stufe: 1, kind: "MAHNUNG", key: "beleg.mahnung.1", label: "Zahlungserinnerung (Mahnstufe 1)",
+    subject: "Zahlungserinnerung {{ belegnr }}",
+    body: `Sehr geehrte Damen und Herren,\n\nsicher ist es Ihrer Aufmerksamkeit entgangen — die anbei als PDF beigefügte Zahlungserinnerung {{ belegnr }} ist noch offen. Wir bitten Sie, den Betrag zeitnah auszugleichen. Sollten Sie die Zahlung bereits veranlasst haben, betrachten Sie dieses Schreiben als gegenstandslos.\n\n${SIGNATUR}`,
+  },
+  {
+    stufe: 2, kind: "MAHNUNG", key: "beleg.mahnung.2", label: "1. Mahnung (Mahnstufe 2)",
+    subject: "1. Mahnung {{ belegnr }}",
+    body: `Sehr geehrte Damen und Herren,\n\ntrotz unserer Zahlungserinnerung ist die anbei als PDF beigefügte 1. Mahnung {{ belegnr }} weiterhin offen. Wir bitten um umgehenden Ausgleich des offenen Betrags.\n\n${SIGNATUR}`,
+  },
+  {
+    stufe: 3, kind: "MAHNUNG", key: "beleg.mahnung.3", label: "2. Mahnung (Mahnstufe 3)",
+    subject: "2. Mahnung {{ belegnr }}",
+    body: `Sehr geehrte Damen und Herren,\n\nleider blieben unsere bisherigen Schreiben ohne Ausgleich. Mit der anbei als PDF beigefügten 2. Mahnung {{ belegnr }} fordern wir Sie letztmalig auf, den offenen Betrag innerhalb der genannten Frist zu begleichen. Andernfalls behalten wir uns weitere Schritte vor.\n\n${SIGNATUR}`,
+  },
+] as const;
+
+/** Vorlagenschlüssel für eine Mahnstufe (z. B. „beleg.mahnung.2"). */
+export function mahnungTemplateKey(stufe: number): string {
+  return `beleg.mahnung.${stufe}`;
+}
+
+/** Alle Default-E-Mail-Vorlagen (Belegtypen + Mahnstufen) — für Service-Defaults und UI. */
+export const EMAIL_TEMPLATE_DEFAULTS: readonly { key: string; label: string; subject: string; body: string }[] = [
+  ...BELEG_MAIL_TEMPLATES.map((t) => ({ key: t.key, label: t.label, subject: t.subject, body: t.body })),
+  ...MAHNUNG_STUFE_TEMPLATES.map((t) => ({ key: t.key, label: t.label, subject: t.subject, body: t.body })),
+];
+
 const BY_KIND = new Map<BelegMailKind, BelegTemplateDefault>(BELEG_MAIL_TEMPLATES.map((t) => [t.kind, t]));
 
 /** Vorlagenschlüssel für einen Belegtyp (z. B. „beleg.invoice"). */

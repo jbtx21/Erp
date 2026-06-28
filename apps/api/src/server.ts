@@ -8,7 +8,7 @@ import {
 } from "@trpc/server/adapters/fastify";
 import Fastify, { type FastifyInstance } from "fastify";
 import { prisma } from "@texma/db";
-import { FixedWindowRateLimiter, BELEG_MAIL_TEMPLATES } from "@texma/shared";
+import { FixedWindowRateLimiter, EMAIL_TEMPLATE_DEFAULTS } from "@texma/shared";
 import { PrismaAuditSink } from "./audit/prisma-audit-sink.js";
 import { AuthService, type AuthUser } from "./modules/auth/auth.service.js";
 import { JoseOidcVerifier, type IdentityVerifier } from "./modules/auth/oidc.js";
@@ -286,10 +286,10 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const collaboration = new CollaborationService(new PrismaCollaborationRepository(), new PrismaAuditSink());
   const search = new SearchService(new PrismaSearchRepository());
   const notifications = new NotificationService(new PrismaNotificationRepository());
-  // Belegvorlagen (G-5) als Defaults registrieren → auf #emailtemplates pflegbar + im Versand genutzt.
+  // Beleg- + Mahnstufen-Vorlagen (G-5) als Defaults registrieren → auf #emailtemplates pflegbar + im Versand genutzt.
   const emailTemplates = new EmailTemplateService(
     new PrismaEmailTemplateRepository(),
-    BELEG_MAIL_TEMPLATES.map((t) => ({ key: t.key, subject: t.subject, body: t.body })),
+    EMAIL_TEMPLATE_DEFAULTS.map((t) => ({ key: t.key, subject: t.subject, body: t.body })),
   );
   const dashboards = new DashboardService(new PrismaDashboardRepository(), new PrismaMetricRepository());
   const deliveries = new DeliveryService(new PrismaDeliveryRepository(), new PrismaAuditSink());

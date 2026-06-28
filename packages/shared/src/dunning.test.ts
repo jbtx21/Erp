@@ -59,15 +59,16 @@ describe("Mahnwesen (T-14)", () => {
 });
 
 describe("Mahnbeleg: Gebühr + Text je Stufe (B10)", () => {
-  it("baut den Beleg mit Gebühr und Textvorlage der Zielstufe", () => {
+  it("baut den Beleg mit Textvorlage der Zielstufe (gebührenfrei)", () => {
     const notice = buildDunningNotice({ itemId: "oi-1", fromLevel: 1, toLevel: 2, daysOverdue: 20 });
-    expect(notice).toMatchObject({ itemId: "oi-1", stufe: 2, gebuehrCents: 500 });
+    expect(notice).toMatchObject({ itemId: "oi-1", stufe: 2, gebuehrCents: 0 });
     expect(notice.textVorlage).toContain("1. Mahnung");
   });
 
-  it("Stufe 1 ist gebührenfrei, Stufe 3 trägt die höchste Gebühr", () => {
+  it("alle Stufen sind gebührenfrei (TEXMA erhebt keine Mahngebühren)", () => {
     expect(buildDunningNotice({ itemId: "x", fromLevel: 0, toLevel: 1, daysOverdue: 1 }).gebuehrCents).toBe(0);
-    expect(buildDunningNotice({ itemId: "x", fromLevel: 2, toLevel: 3, daysOverdue: 40 }).gebuehrCents).toBe(1000);
+    expect(buildDunningNotice({ itemId: "x", fromLevel: 1, toLevel: 2, daysOverdue: 20 }).gebuehrCents).toBe(0);
+    expect(buildDunningNotice({ itemId: "x", fromLevel: 2, toLevel: 3, daysOverdue: 40 }).gebuehrCents).toBe(0);
   });
 
   it("wirft bei unbekannter Stufe", () => {
