@@ -382,8 +382,9 @@ export class PrismaPrintRepository implements PrintRepository {
     });
     if (!o) return null;
     const vmap = await loadVariantDetails(o.lines.map((l) => l.variantId));
-    const smap = await loadStaffeln(o.lines.map((l) => l.variantId));
-    const positionen: PricePrintLine[] = o.lines.map((l) => ({ menge: l.qty, bezeichnung: l.description, einzelpreisCents: l.unitNetCents, listenpreisCents: l.listNetCents, rabattPct: l.rabattPct, ...lineExtras(l.variantId, vmap), ...lineStruct(l), ...staffelFor(l.variantId, smap) }));
+    // Ab Auftrag KEINE Mengenstaffel mehr: die Menge steht fest (Veredelungsmenge = Summe der
+    // verknüpften Textilpositionen). Die Staffel ist ein Angebots-Werkzeug für die offene Menge.
+    const positionen: PricePrintLine[] = o.lines.map((l) => ({ menge: l.qty, bezeichnung: l.description, einzelpreisCents: l.unitNetCents, listenpreisCents: l.listNetCents, rabattPct: l.rabattPct, ...lineExtras(l.variantId, vmap), ...lineStruct(l) }));
     return {
       number: o.number, datum: o.createdAt, empfaenger: recipientLines(o.company, o.deliveryAddress),
       positionen, ...totals(positionen), liefertermin: o.zugesagterLiefertermin, bestellreferenz: o.externalNumber,
