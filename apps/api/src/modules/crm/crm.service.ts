@@ -17,6 +17,9 @@ export interface CrmLine {
   bezugPositionen?: number[];
   lineType?: import("@texma/shared").LineType;
   placement?: string | null;
+  positionType?: string | null;
+  positionSide?: string | null;
+  positionId?: string | null;
   motiv?: string | null;
   motivGroesse?: string | null;
   farbton?: string | null;

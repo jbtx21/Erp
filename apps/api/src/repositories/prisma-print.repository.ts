@@ -1,7 +1,7 @@
 // Prisma-Druckdaten: liest Lieferschein/Rechnung samt Positionen + Empfängeradresse.
 
 import { prisma } from "@texma/db";
-import { FIRMA_DEFAULT, lineNet, taxOnNet, VAT_STANDARD, type FirmenProfil, type LineType, type PositionKind } from "@texma/shared";
+import { FIRMA_DEFAULT, lineNet, taxOnNet, VAT_STANDARD, type FirmenProfil, type GarmentType, type LineType, type PositionKind } from "@texma/shared";
 import type { BelegMailKind, CompanyDataSheetData, DeliveryNotePrintData, InvoicePrintData, LaufzettelPrintData, LetterMeta, OrderConfirmationPrintData, PrintRepository, PricePrintLine, QuotePrintData, SupplierDataSheetData } from "../modules/print/print.service.js";
 
 /** Schlüssel im AppSetting-Speicher (gespiegelt aus settings.service). */
@@ -355,7 +355,7 @@ export class PrismaPrintRepository implements PrintRepository {
             order: {
               select: {
                 number: true, company: { select: { name: true } },
-                lines: { orderBy: { position: "asc" }, select: { position: true, description: true, qty: true, kind: true, bezugPositionen: true, variantId: true, placement: true, motiv: true, motivGroesse: true, farbton: true, platzierungsdetails: true, sonstiges: true } },
+                lines: { orderBy: { position: "asc" }, select: { position: true, description: true, qty: true, kind: true, bezugPositionen: true, variantId: true, placement: true, positionType: true, positionSide: true, positionId: true, motiv: true, motivGroesse: true, farbton: true, platzierungsdetails: true, sonstiges: true } },
               },
             },
           },
@@ -395,6 +395,9 @@ export class PrismaPrintRepository implements PrintRepository {
       .map((l) => ({
         description: l.description, bezugPositionen: l.bezugPositionen, menge: l.qty,
         ...(l.placement ? { platzierung: l.placement } : {}),
+        ...(l.positionType ? { positionType: l.positionType as GarmentType } : {}),
+        ...(l.positionSide ? { positionSide: l.positionSide } : {}),
+        ...(l.positionId ? { positionId: l.positionId } : {}),
         ...(l.motiv ? { motiv: l.motiv } : {}),
         ...(l.motivGroesse ? { motivGroesse: l.motivGroesse } : {}),
         ...(l.farbton ? { farbton: l.farbton } : {}),

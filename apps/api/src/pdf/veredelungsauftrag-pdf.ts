@@ -23,7 +23,7 @@ import {
   HOSE_FRONT_B64,
   SHIRT_BACK_B64,
   SHIRT_FRONT_B64,
-} from "./veredelung-assets.js";
+} from "@texma/shared/garment-assets";
 
 const PW = 595, PH = 841, ML = 40, MR = 40, CW = PW - ML - MR;
 const P = 12; // globales Padding (wie in der Vorlage)

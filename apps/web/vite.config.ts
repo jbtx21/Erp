@@ -22,6 +22,8 @@ export default defineConfig({
       "@texma/shared/kontenrahmen": src("kontenrahmen.ts"),
       "@texma/shared/import-mapping": src("import-mapping.ts"),
       "@texma/shared/positions-model": src("positions-model.ts"),
+      "@texma/shared/veredelungsauftrag": src("veredelungsauftrag.ts"),
+      "@texma/shared/garment-assets": src("garment-assets.ts"),
       "@texma/shared": src("index.ts"),
     },
   },

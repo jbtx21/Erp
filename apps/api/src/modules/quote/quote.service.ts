@@ -41,7 +41,7 @@ export interface CreateQuoteInput {
   interneBezeichnung?: string | null;
   kommission?: string | null;
   wunschLiefertermin?: Date | null;
-  lines: Array<{ description: string; qty: number; unitNetCents: number; listNetCents?: number | null; rabattPct?: number | null; taxRatePct?: number | null; kind?: import("@texma/shared").PositionKind; articleId?: string | null; variantId?: string | null; isAlternative?: boolean; dbCents?: number | null; bezugPositionen?: number[]; lineType?: import("@texma/shared").LineType; placement?: string | null; motiv?: string | null; motivGroesse?: string | null; farbton?: string | null; platzierungsdetails?: string | null; sonstiges?: string | null; altPreisText?: string | null; imPdfAusblenden?: boolean }>;
+  lines: Array<{ description: string; qty: number; unitNetCents: number; listNetCents?: number | null; rabattPct?: number | null; taxRatePct?: number | null; kind?: import("@texma/shared").PositionKind; articleId?: string | null; variantId?: string | null; isAlternative?: boolean; dbCents?: number | null; bezugPositionen?: number[]; lineType?: import("@texma/shared").LineType; placement?: string | null; positionType?: string | null; positionSide?: string | null; positionId?: string | null; motiv?: string | null; motivGroesse?: string | null; farbton?: string | null; platzierungsdetails?: string | null; sonstiges?: string | null; altPreisText?: string | null; imPdfAusblenden?: boolean }>;
 }
 
 export type QuoteTransition = "VERSENDET" | "NACHFASSEN" | "ANGENOMMEN";
@@ -62,6 +62,9 @@ export interface QuoteEditLine {
   bezugPositionen: number[];
   lineType: import("@texma/shared").LineType;
   placement: string | null;
+  positionType: string | null;
+  positionSide: string | null;
+  positionId: string | null;
   motiv: string | null;
   motivGroesse: string | null;
   farbton: string | null;

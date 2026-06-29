@@ -930,6 +930,12 @@ model QuoteLine {
   lineType    String  @default("ARTIKEL")
   // Veredelungs-Platzierung am Textil (z. B. "Brust links", "Rücken") — speist das Werkstattblatt.
   placement   String?
+  // Explizite Platzierungs-Skizze aus dem SVG-Positions-Picker (T-04): Kleidungstyp
+  // (shirt|cap|hose), Ansicht (front|back|links|rechts|hinten) und Markerpunkt-Id (z. B. "bl").
+  // Haben Vorrang vor der Heuristik in resolveGarmentPlacement; null = aus Text ableiten.
+  positionType String?
+  positionSide String?
+  positionId   String?
   // Veredelungs-Detailfelder (Werkstattblatt-Karte): Motiv/Logo, Motivgröße, Farbton,
   // ausführliche Platzierungsbeschreibung, Sonstiges. Alle aus der Veredelungsposition erfasst.
   motiv             String?
@@ -1038,6 +1044,10 @@ model OrderLine {
   // Positions-/Strukturzeile (Positionsmaske): ARTIKEL | GRUPPE | ZWISCHENSUMME | GRUPPENSUMME.
   lineType    String  @default("ARTIKEL")
   placement   String? // Veredelungs-Platzierung (z. B. "Brust links") — speist das Werkstattblatt
+  // Explizite Platzierungs-Skizze aus dem SVG-Positions-Picker (T-04): Vorrang vor der Heuristik.
+  positionType String? // shirt | cap | hose
+  positionSide String? // front | back | links | rechts | hinten
+  positionId   String? // Markerpunkt-Id (z. B. "bl" = Brust links)
   // Veredelungs-Detailfelder (Werkstattblatt-Karte): Motiv/Logo, Größe, Farbton, Platzierungsdetails, Sonstiges.
   motiv             String?
   motivGroesse      String?

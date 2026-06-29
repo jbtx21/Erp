@@ -1,7 +1,6 @@
-// Eingebettete Kleidungs-Hint-Bilder (base64) für das Veredelungsauftrag-Werkstattblatt.
-// Übernommen aus dem TEXMA-Veredlungsauftrag-Generator (Renderer-Vorlage): Shirt vorne/
-// hinten als JPEG, Cap-Ansichten + Hose als PNG. Dienen als Platzierungs-Skizze mit
-// Positionsmarker (siehe POSITION_POINTS in @texma/shared). Kein Geschäftslogik-Code.
+// Eingebettete Kleidungs-Skizzen (base64) — EINE Quelle für PDF (Werkstattblatt) UND
+// Web (interaktiver Positions-Picker). Shirt vorne/hinten als JPEG, Cap-Ansichten +
+// Hose als PNG. Koordinaten der Markerpunkte siehe POSITION_POINTS (veredelungsauftrag.ts).
 /* eslint-disable */
 
 export const SHIRT_FRONT_B64 =

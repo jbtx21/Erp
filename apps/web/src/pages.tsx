@@ -20,6 +20,7 @@ import { useUnsavedGuard } from "./use-unsaved-guard.js";
 import { downloadCsv } from "./export.js";
 import { openOutlookDraft } from "./outlook-draft.js";
 import { MoneyInput } from "./money-input.js";
+import { GarmentPositionModal } from "./garment-position-picker.js";
 import { EMAIL_TEMPLATE_DEFAULTS } from "@texma/shared/beleg-templates";
 
 type Row = Record<string, unknown>;
@@ -2058,7 +2059,7 @@ export type PositionKind = "TEXTIL" | "VEREDELUNG" | "SONSTIGE";
 // Hauptartikel (articleId, Farbe×Größe noch offen) verweisen; isAlternative kennzeichnet
 // ein unverbindliches Alternativangebot (wird beim Wandeln in den Auftrag weggelassen).
 export type LineType = "ARTIKEL" | "GRUPPE" | "ZWISCHENSUMME" | "GRUPPENSUMME";
-export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind; variantId?: string; articleId?: string; articleNumber?: string; articleName?: string; isAlternative?: boolean; ekEuro?: number; isBundle?: boolean; rabattPct?: number; taxRatePct?: number; vkManual?: boolean; bezugPositionen?: number[]; lineType?: LineType; placement?: string; motiv?: string; motivGroesse?: string; farbton?: string; platzierungsdetails?: string; sonstiges?: string; altPreisText?: string; imPdfAusblenden?: boolean }
+export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind; variantId?: string; articleId?: string; articleNumber?: string; articleName?: string; isAlternative?: boolean; ekEuro?: number; isBundle?: boolean; rabattPct?: number; taxRatePct?: number; vkManual?: boolean; bezugPositionen?: number[]; lineType?: LineType; placement?: string; motiv?: string; motivGroesse?: string; farbton?: string; platzierungsdetails?: string; sonstiges?: string; altPreisText?: string; imPdfAusblenden?: boolean; positionType?: string; positionSide?: string; positionId?: string }
 
 // Artikel-Picker: durchsuchbare Auswahl aus dem Artikelstamm (ERPNext „Link field").
 // Bei Auswahl wird eine Position vorbefüllt (Bezeichnung, Standardpreis, Variante).
@@ -2632,6 +2633,7 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
   useEffect(() => { void trpc.products.veredelungCatalog.query().then(setVeredelungen).catch(() => undefined); }, []);
   const placementsFor = (variantId?: string): string[] => (variantId ? veredelungen.find((x) => x.variantId === variantId)?.placements ?? [] : []);
   const [detailFor, setDetailFor] = useState<number | null>(null);
+  const [pickerFor, setPickerFor] = useState<number | null>(null);
   const [bundleFor, setBundleFor] = useState<number | null>(null);
   const [logoOpen, setLogoOpen] = useState(false);
   const [mengenOpen, setMengenOpen] = useState(false);
@@ -2781,6 +2783,15 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
       </Group>
       {logoOpen && <LogoArticleDialog onClose={() => setLogoOpen(false)} onCreated={(e) => { appendVeredelung(e); setLogoOpen(false); }} />}
       {mengenOpen && <MengenMatrixDialog onClose={() => setMengenOpen(false)} onAdd={(a) => { addManyVariants(a.articleId, a.articleName, a.baseEuro, a.rows); setMengenOpen(false); }} />}
+      {pickerFor !== null && (
+        <GarmentPositionModal
+          opened
+          onClose={() => setPickerFor(null)}
+          value={lines[pickerFor]}
+          onSelect={(sel) => { const i = pickerFor; setPickerFor(null); set(i, { positionType: sel.positionType, positionSide: sel.positionSide, positionId: sel.positionId, ...(lines[i]?.placement?.trim() ? {} : { placement: sel.label }) }); }}
+          onClear={() => { const i = pickerFor; setPickerFor(null); set(i, { positionType: undefined, positionSide: undefined, positionId: undefined }); }}
+        />
+      )}
 
       <Table.ScrollContainer minWidth={880}>
         <Table verticalSpacing={4} fz="sm" highlightOnHover withTableBorder stickyHeader>
@@ -2877,6 +2888,9 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
                         <Group gap="md" align="end" wrap="wrap" py={4}>
                           {l.kind === "VEREDELUNG" && (
                             <Autocomplete size="xs" label="Platzierung" w={170} placeholder="z. B. Brust links" data={placementsFor(l.variantId)} value={l.placement ?? ""} onChange={(v) => set(i, { placement: v || undefined })} />
+                          )}
+                          {l.kind === "VEREDELUNG" && (
+                            <Button size="xs" variant={l.positionId ? "light" : "default"} color="grape" onClick={() => setPickerFor(i)} title="Position per Klick auf der Kleidungs-Skizze wählen (Shirt/Cap/Hose)">⌖ Skizze{l.positionId ? " ✓" : ""}</Button>
                           )}
                           {l.kind === "VEREDELUNG" && (
                             <TextInput size="xs" label="Motiv / Logo" w={170} placeholder="z. B. Logo Autohaus Weeber" value={l.motiv ?? ""} onChange={(e) => set(i, { motiv: e.currentTarget.value || undefined })} />
@@ -2982,9 +2996,12 @@ export const lineHasContent = (l: EditorLine): boolean =>
 const lineDesc = (l: EditorLine): string => l.description.trim() || l.articleName?.trim() || l.articleNumber?.trim() || "Position";
 
 // Positions-Strukturfelder (Positionsmaske) in das API-Format spreaden — nur wenn gesetzt.
-const lineStructFields = (l: EditorLine): { lineType?: LineType; placement?: string; motiv?: string; motivGroesse?: string; farbton?: string; platzierungsdetails?: string; sonstiges?: string; altPreisText?: string; imPdfAusblenden?: boolean } => ({
+const lineStructFields = (l: EditorLine): { lineType?: LineType; placement?: string; motiv?: string; motivGroesse?: string; farbton?: string; platzierungsdetails?: string; sonstiges?: string; altPreisText?: string; imPdfAusblenden?: boolean; positionType?: string; positionSide?: string; positionId?: string } => ({
   ...(l.lineType && l.lineType !== "ARTIKEL" ? { lineType: l.lineType } : {}),
   ...(l.placement?.trim() ? { placement: l.placement.trim() } : {}),
+  ...(l.positionType ? { positionType: l.positionType } : {}),
+  ...(l.positionSide ? { positionSide: l.positionSide } : {}),
+  ...(l.positionId ? { positionId: l.positionId } : {}),
   ...(l.motiv?.trim() ? { motiv: l.motiv.trim() } : {}),
   ...(l.motivGroesse?.trim() ? { motivGroesse: l.motivGroesse.trim() } : {}),
   ...(l.farbton?.trim() ? { farbton: l.farbton.trim() } : {}),
@@ -2994,7 +3011,7 @@ const lineStructFields = (l: EditorLine): { lineType?: LineType; placement?: str
   ...(l.imPdfAusblenden ? { imPdfAusblenden: true } : {}),
 });
 
-export const toApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; variantId?: string; bezugPositionen?: number[]; dbCents?: number; lineType?: LineType; placement?: string; motiv?: string; motivGroesse?: string; farbton?: string; platzierungsdetails?: string; sonstiges?: string; altPreisText?: string; imPdfAusblenden?: boolean }[] =>
+export const toApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; variantId?: string; bezugPositionen?: number[]; dbCents?: number; lineType?: LineType; placement?: string; motiv?: string; motivGroesse?: string; farbton?: string; platzierungsdetails?: string; sonstiges?: string; altPreisText?: string; imPdfAusblenden?: boolean; positionType?: string; positionSide?: string; positionId?: string }[] =>
   lines.filter(lineHasContent).map((l) => ({
     description: lineDesc(l), qty: l.qty, kind: l.kind, ...lineMoney(l), ...(l.variantId ? { variantId: l.variantId } : {}),
     // USt-Satz der Position mitschicken (eingefroren); so bleibt die Steuerbefreiung (0 %)
@@ -3006,7 +3023,7 @@ export const toApiLines = (lines: EditorLine[]): { description: string; qty: num
   }));
 
 // Wie toApiLines, aber inkl. Artikel-/Varianten-Referenz und Alternativ-Kennzeichen (Angebot).
-export const toQuoteApiLines = (lines: EditorLine[], taxRatePct = 19): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; articleId?: string; variantId?: string; isAlternative?: boolean; bezugPositionen?: number[]; dbCents?: number; lineType?: LineType; placement?: string; motiv?: string; motivGroesse?: string; farbton?: string; platzierungsdetails?: string; sonstiges?: string; altPreisText?: string; imPdfAusblenden?: boolean }[] =>
+export const toQuoteApiLines = (lines: EditorLine[], taxRatePct = 19): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; articleId?: string; variantId?: string; isAlternative?: boolean; bezugPositionen?: number[]; dbCents?: number; lineType?: LineType; placement?: string; motiv?: string; motivGroesse?: string; farbton?: string; platzierungsdetails?: string; sonstiges?: string; altPreisText?: string; imPdfAusblenden?: boolean; positionType?: string; positionSide?: string; positionId?: string }[] =>
   lines.filter(lineHasContent).map((l) => ({
     description: lineDesc(l), qty: l.qty, kind: l.kind, ...lineMoney(l), taxRatePct,
     ...(l.articleId ? { articleId: l.articleId } : {}), ...(l.variantId ? { variantId: l.variantId } : {}), ...(l.isAlternative ? { isAlternative: true } : {}),
@@ -3016,7 +3033,7 @@ export const toQuoteApiLines = (lines: EditorLine[], taxRatePct = 19): { descrip
 
 // Rekonstruiert die Erfassungs-Positionen aus gespeicherten Angebots-/Auftragszeilen
 // (für die Bearbeitung): VK = Listenpreis, Rabatt, EK = effektiver Netto − DB.
-type StoredLine = { description: string; qty: number; kind: PositionKind; unitNetCents: number; listNetCents: number | null; rabattPct: number | null; taxRatePct?: number | null; dbCents: number | null; articleId?: string | null; variantId?: string | null; isAlternative?: boolean; bezugPositionen?: number[] | null; lineType?: string | null; placement?: string | null; motiv?: string | null; motivGroesse?: string | null; farbton?: string | null; platzierungsdetails?: string | null; sonstiges?: string | null; altPreisText?: string | null; imPdfAusblenden?: boolean };
+type StoredLine = { description: string; qty: number; kind: PositionKind; unitNetCents: number; listNetCents: number | null; rabattPct: number | null; taxRatePct?: number | null; dbCents: number | null; articleId?: string | null; variantId?: string | null; isAlternative?: boolean; bezugPositionen?: number[] | null; lineType?: string | null; placement?: string | null; positionType?: string | null; positionSide?: string | null; positionId?: string | null; motiv?: string | null; motivGroesse?: string | null; farbton?: string | null; platzierungsdetails?: string | null; sonstiges?: string | null; altPreisText?: string | null; imPdfAusblenden?: boolean };
 export const fromStoredLines = (ls: StoredLine[]): EditorLine[] =>
   ls.map((l) => ({
     description: l.description, qty: l.qty, kind: l.kind,
@@ -3030,6 +3047,9 @@ export const fromStoredLines = (ls: StoredLine[]): EditorLine[] =>
     ...(l.bezugPositionen?.length ? { bezugPositionen: l.bezugPositionen } : {}),
     ...(l.lineType && l.lineType !== "ARTIKEL" ? { lineType: l.lineType as LineType } : {}),
     ...(l.placement ? { placement: l.placement } : {}),
+    ...(l.positionType ? { positionType: l.positionType } : {}),
+    ...(l.positionSide ? { positionSide: l.positionSide } : {}),
+    ...(l.positionId ? { positionId: l.positionId } : {}),
     ...(l.motiv ? { motiv: l.motiv } : {}),
     ...(l.motivGroesse ? { motivGroesse: l.motivGroesse } : {}),
     ...(l.farbton ? { farbton: l.farbton } : {}),
@@ -5173,12 +5193,15 @@ function CrmEditModal({ lead, onClose, onSaved }: { lead: CrmRow | null; onClose
     setValueEur(lead.valueCents != null ? String(lead.valueCents / 100) : "");
     setExpectedCloseAt(lead.expectedCloseAt ? String(lead.expectedCloseAt).slice(0, 10) : "");
     // Gespeicherte Anfrage-Positionen → Editor-Zeilen (Freitext/Variante/Veredelung).
-    const stored = (lead.lines ?? []) as Array<{ description: string; qty: number; unitNetCents: number; taxRatePct?: number | null; kind: PositionKind; variantId?: string | null; bezugPositionen?: number[] | null }>;
+    const stored = (lead.lines ?? []) as Array<{ description: string; qty: number; unitNetCents: number; taxRatePct?: number | null; kind: PositionKind; variantId?: string | null; bezugPositionen?: number[] | null; positionType?: string | null; positionSide?: string | null; positionId?: string | null }>;
     setLines(stored.map((l) => ({
       description: l.description, qty: l.qty, euro: l.unitNetCents / 100, kind: l.kind,
       ...(l.variantId ? { variantId: l.variantId } : {}),
       ...(l.taxRatePct != null ? { taxRatePct: l.taxRatePct } : {}),
       ...(l.bezugPositionen?.length ? { bezugPositionen: l.bezugPositionen } : {}),
+      ...(l.positionType ? { positionType: l.positionType } : {}),
+      ...(l.positionSide ? { positionSide: l.positionSide } : {}),
+      ...(l.positionId ? { positionId: l.positionId } : {}),
     })));
     setText(lead.text ?? ""); setErr(null);
   }, [lead]);

@@ -18,7 +18,7 @@ export interface SalesLine {
   bezugPositionen?: number[]; // Veredelungsbezug: Positionsnummern der Textilpositionen (Kap. 5.4/11)
   dbCents?: number | null; // Deckungsbeitrag je Stück (VK − EK), Kap. 4.4
   lineType?: import("@texma/shared").LineType; // ARTIKEL | GRUPPE | ZWISCHENSUMME | GRUPPENSUMME
-  placement?: string | null; motiv?: string | null; motivGroesse?: string | null; farbton?: string | null; platzierungsdetails?: string | null; sonstiges?: string | null; // Veredelungs-Detailfelder (Werkstattblatt-Karte)
+  placement?: string | null; positionType?: string | null; positionSide?: string | null; positionId?: string | null; motiv?: string | null; motivGroesse?: string | null; farbton?: string | null; platzierungsdetails?: string | null; sonstiges?: string | null; // Veredelungs-Detailfelder (Werkstattblatt-Karte) + Positions-Skizze (T-04)
   altPreisText?: string | null; // Alternativtext statt Euro-Betrag im PDF
   imPdfAusblenden?: boolean; // Position im Beleg-PDF ausblenden
   /**
@@ -59,6 +59,9 @@ export interface ConversionPlanLine {
   dbCents: number | null; // Deckungsbeitrag je Stück (aus dem Angebot übernommen)
   lineType: import("@texma/shared").LineType;
   placement: string | null;
+  positionType: string | null;
+  positionSide: string | null;
+  positionId: string | null;
   motiv: string | null;
   motivGroesse: string | null;
   farbton: string | null;
@@ -90,6 +93,9 @@ export interface OrderEditLine {
   bezugPositionen: number[]; // Veredelungsbezug (Positionsnummern der Textilpositionen)
   lineType: import("@texma/shared").LineType;
   placement: string | null;
+  positionType: string | null;
+  positionSide: string | null;
+  positionId: string | null;
   motiv: string | null;
   motivGroesse: string | null;
   farbton: string | null;
@@ -202,7 +208,7 @@ export class SalesOrderService {
         const skuSuffix = entries.length > 1 ? `-${k + 1}` : "";
         built.push({ originPos: l.position, line: {
           description: l.description, qty: e.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents, rabattPct: l.rabattPct, taxRatePct: l.taxRatePct, kind: l.kind, variantId: e.variantId, bezugPositionen: l.bezugPositionen, dbCents: l.dbCents,
-          lineType: l.lineType, placement: l.placement, motiv: l.motiv, motivGroesse: l.motivGroesse, farbton: l.farbton, platzierungsdetails: l.platzierungsdetails, sonstiges: l.sonstiges, altPreisText: l.altPreisText, imPdfAusblenden: l.imPdfAusblenden,
+          lineType: l.lineType, placement: l.placement, positionType: l.positionType, positionSide: l.positionSide, positionId: l.positionId, motiv: l.motiv, motivGroesse: l.motivGroesse, farbton: l.farbton, platzierungsdetails: l.platzierungsdetails, sonstiges: l.sonstiges, altPreisText: l.altPreisText, imPdfAusblenden: l.imPdfAusblenden,
           ...(materialize ? { materializeArticle: { sku: `${number}-P${l.position}${skuSuffix}`, name: l.description.trim(), description: l.description.trim(), isVeredelung: l.kind === "VEREDELUNG" } } : {}),
         } });
       });

@@ -8,6 +8,9 @@ export * from "./import-mapping.js";
 export * from "./quote-report.js";
 export * from "./beleg.js";
 export * from "./veredelungsauftrag.js";
+// garment-assets (große base64-Bilder) bewusst NICHT im Barrel — nur via Subpfad
+// "@texma/shared/garment-assets" importieren, damit der Web-Bundle den Node-only-
+// Krypto-Zweig des Barrels nicht mit einzieht (Browser-Build). Siehe vite.config.
 export * from "./transfer-sourcing.js";
 export * from "./stammblatt.js";
 export * from "./mail.js";
