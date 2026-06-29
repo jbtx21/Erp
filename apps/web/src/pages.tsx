@@ -4298,6 +4298,79 @@ function OrderDocumentsTab({ orderId }: { orderId: string }): JSX.Element {
   );
 }
 
+// Versand-Dialog (QA Finding 12): erfasst je Auftragsposition die zu versendende Menge
+// (Teillieferung möglich, Default = offene Restmenge), bucht einen Lieferschein über genau
+// diese Mengen und schaltet den Auftrag dann auf „Versendet" (skipAutoDelivery → kein
+// automatisches Voll-Ausliefern serverseitig). „Nur Status" überspringt die Lieferung.
+function DeliveryDialog({ orderId, orderNumber, onClose, onDone }: { orderId: string; orderNumber: string; onClose: () => void; onDone: (msg: string) => void }): JSX.Element {
+  const [lines, setLines] = useState<Awaited<ReturnType<typeof trpc.deliveries.remaining.query>>>([]);
+  const [qty, setQty] = useState<Record<string, number>>({});
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    void trpc.deliveries.remaining.query({ orderId })
+      .then((r) => { setLines(r); setQty(Object.fromEntries(r.map((l) => [l.orderLineId, l.remainingQty]))); })
+      .catch((e) => setErr(errMsg(e)));
+  }, [orderId]);
+  const openTotal = lines.reduce((s, l) => s + l.remainingQty, 0);
+  const shipTotal = lines.reduce((s, l) => s + (qty[l.orderLineId] ?? 0), 0);
+  const submit = async (withDelivery: boolean): Promise<void> => {
+    setBusy(true); setErr(null);
+    try {
+      let info = "";
+      if (withDelivery) {
+        const dl = lines
+          .map((l) => ({ orderLineId: l.orderLineId, qty: Math.max(0, Math.min(Math.round(qty[l.orderLineId] ?? 0), l.remainingQty)) }))
+          .filter((l) => l.qty > 0);
+        if (dl.length > 0) {
+          const dn = await trpc.deliveries.create.mutate({ orderId, lines: dl });
+          info = ` · Lieferschein ${dn.number} (${dn.lieferstatus === "VOLL" ? "Volllieferung" : "Teillieferung"})`;
+        }
+      }
+      await trpc.shopOrders.transition.mutate({ orderId, to: "VERSENDET", skipAutoDelivery: true });
+      onDone(`Auftrag ${orderNumber} → Versendet${info}.`);
+    } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+  return (
+    <Modal opened onClose={onClose} size="lg" title={`Versand erfassen — ${orderNumber}`}>
+      <Stack gap="sm">
+        {err && <Text c="red" size="sm">{err}</Text>}
+        <Text size="sm" c="dimmed">Menge je Position prüfen — Teillieferung möglich. Über die erfassten Mengen wird ein Lieferschein gebucht; der Lieferstatus (teilweise/voll) ergibt sich automatisch.</Text>
+        <Table verticalSpacing={4} fz="sm" withTableBorder>
+          <Table.Thead>
+            <Table.Tr><Table.Th>Pos</Table.Th><Table.Th>Beschreibung</Table.Th><Table.Th ta="right">Bestellt</Table.Th><Table.Th ta="right">Geliefert</Table.Th><Table.Th ta="right">Offen</Table.Th><Table.Th ta="right">Versenden</Table.Th></Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {lines.length === 0 && <Table.Tr><Table.Td colSpan={6}><Text size="sm" c="dimmed">Keine offenen Positionen — bereits vollständig geliefert.</Text></Table.Td></Table.Tr>}
+            {lines.map((l) => (
+              <Table.Tr key={l.orderLineId}>
+                <Table.Td>{l.position}</Table.Td>
+                <Table.Td>{l.description}</Table.Td>
+                <Table.Td style={numTd}>{l.orderedQty}</Table.Td>
+                <Table.Td style={numTd}>{l.deliveredQty}</Table.Td>
+                <Table.Td style={numTd}>{l.remainingQty}</Table.Td>
+                <Table.Td ta="right">
+                  <NumberInput size="xs" w={90} min={0} max={l.remainingQty} disabled={l.remainingQty === 0}
+                    value={qty[l.orderLineId] ?? 0}
+                    onChange={(v) => setQty((q) => ({ ...q, [l.orderLineId]: Math.max(0, Math.min(Number(v) || 0, l.remainingQty)) }))} />
+                </Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+        <Group justify="space-between" align="center">
+          <Text size="sm">Offen gesamt: {openTotal} · Versand jetzt: <b>{shipTotal}</b></Text>
+          <Group gap="xs">
+            <Button variant="default" onClick={onClose} disabled={busy}>Abbrechen</Button>
+            <Button variant="subtle" color="gray" onClick={() => void submit(false)} disabled={busy} title="Status auf Versendet setzen, ohne einen Lieferschein zu buchen">Nur Status</Button>
+            <Button onClick={() => void submit(true)} loading={busy} disabled={shipTotal === 0}>Versand buchen ({shipTotal})</Button>
+          </Group>
+        </Group>
+      </Stack>
+    </Modal>
+  );
+}
+
 export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: string; onOpen?: (k: string, id: string) => void }): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [loaded, setLoaded] = useState(false); // erster Ladevorgang abgeschlossen → kein „Keine Daten"-Flackern
@@ -4311,6 +4384,7 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
   // Manuelle Auftragserstellung (ADMIN/BUERO).
   const [showCreate, setShowCreate] = useState(false);
   const [editOrderId, setEditOrderId] = useState<string | null>(null); // gesetzt = Auftrag bearbeiten
+  const [deliverFor, setDeliverFor] = useState<{ orderId: string; orderNumber: string } | null>(null); // Versand-Dialog (QA Finding 12)
   const [newCompany, setNewCompany] = useState("");
   const [newLines, setNewLines] = useState<EditorLine[]>([]);
   const [dirty, setDirty] = useState(false); // ungespeicherte Änderungen im Auftrags-Editor
@@ -4388,6 +4462,7 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
       />
       {err && <Alert color="red" mt="sm" withCloseButton onClose={() => setErr(null)}>{err}</Alert>}
       {msg && <Alert color="green" mt="sm" withCloseButton onClose={() => setMsg(null)}>{msg}</Alert>}
+      {deliverFor && <DeliveryDialog orderId={deliverFor.orderId} orderNumber={deliverFor.orderNumber} onClose={() => setDeliverFor(null)} onDone={(m) => { setDeliverFor(null); setMsg(m); void load(); }} />}
       {canAct && !showCreate && <ManualShopFetch onDone={() => void load()} />}
       {canAct && showCreate && (
         <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
@@ -4479,11 +4554,24 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
         // Fallback auf die geteilte Maschine. So bietet die UI nie einen illegalen Übergang an.
         const next = (r.allowedTransitions as string[] | undefined) ?? orderStatusMachine.next(String(r.status) as OrderStatus);
         const runTransition = (to: string) => async () => {
-          // Bestätigung vor weitreichenden/außenwirksamen Statuswechseln (QA Finding 6):
-          // Faktura erzeugt eine echte Rechnung, Versand bucht Lieferschein, Storno gibt frei.
+          // #11 (warnen + bestätigen): vor weitreichenden Vorwärts-Schritten bei Ampel-Problemen
+          // die konkreten Mängel zeigen und bestätigen lassen — nicht hart blocken.
+          const forward = to === "VERSANDBEREIT" || to === "VERSENDET" || to === "FAKTURIERT";
+          if (forward && (r.ampel === "ROT" || r.ampel === "GELB")) {
+            let probs: string[] = [];
+            try {
+              const det = await trpc.ampel.auftragDetail.query({ orderId: String(r.id) });
+              probs = (det?.checks ?? []).filter((c) => c.lamp === "ROT" || c.lamp === "GELB").map((c) => `• ${c.label}: ${c.hint}`);
+            } catch { /* Ampel-Abruf best-effort */ }
+            const head = r.ampel === "ROT" ? "Die Auftragsampel meldet PROBLEME:" : "Die Auftragsampel meldet Hinweise:";
+            if (!window.confirm(`${head}\n${probs.join("\n") || "(Details siehe Ampel-Tab)"}\n\nTrotzdem „${prettyStatus(to)}" ausführen?`)) return;
+          }
+          // #12 Versand mit Teillieferung: Mengen je Position im Dialog erfassen, statt automatisch
+          // alles auf einmal auszuliefern. Der Dialog bucht den Lieferschein + schaltet auf Versendet.
+          if (to === "VERSENDET") { setDeliverFor({ orderId: String(r.id), orderNumber: String(r.number ?? r.id) }); return; }
+          // Übrige weitreichende Schritte: einfache Bestätigung (QA Finding 6).
           const confirmMsg: Record<string, string> = {
             FAKTURIERT: "Auftrag fakturieren? Es wird eine echte Rechnung (RE-Nr., USt, offener Posten) erzeugt.",
-            VERSENDET: "Auftrag als versendet markieren? Über die offenen Restmengen wird automatisch ein Lieferschein gebucht.",
             STORNIERT: "Auftrag wirklich stornieren? Reservierter Bestand wird wieder freigegeben.",
           };
           if (confirmMsg[to] && !window.confirm(confirmMsg[to])) return;

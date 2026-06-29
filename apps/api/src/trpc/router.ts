@@ -344,6 +344,9 @@ export const appRouter = router({
       .input(z.object({
         orderId: z.string().min(1),
         to: z.enum(["IN_BEARBEITUNG", "IN_PRODUKTION", "VERSANDBEREIT", "VERSENDET", "FAKTURIERT", "ABGESCHLOSSEN", "STORNIERT"]),
+        // Die UI erfasst Teillieferungen selbst (Versand-Dialog, QA Finding 12) und unterdrückt
+        // damit die automatische Voll-Auslieferung. Automations-/Importpfade liefern weiter voll.
+        skipAutoDelivery: z.boolean().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         try {
@@ -383,9 +386,10 @@ export const appRouter = router({
           // Versand-Verkettung: → VERSENDET erzeugt automatisch einen Lieferschein über alle
           // offenen Restmengen (bucht Bestandsabgang + setzt lieferstatus). Kein „versendet
           // ohne Lieferung" mehr. Best-effort: ein bereits voll gelieferter Auftrag → null.
-          if (input.to === "VERSENDET") {
+          if (input.to === "VERSENDET" && !input.skipAutoDelivery) {
             // Best-effort: schlägt die Auto-Lieferung fehl, bleibt der bereits gebuchte
             // Statuswechsel bestehen (lieferstatus dann unverändert, manuell nachholbar).
+            // skipAutoDelivery=true: die UI hat die (Teil-)Lieferung bereits explizit gebucht.
             try { await ctx.deliveries.deliverRemaining(input.orderId); } catch { /* nicht blockierend */ }
           }
           if (input.to === "STORNIERT") {
