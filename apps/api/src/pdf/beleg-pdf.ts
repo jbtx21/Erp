@@ -80,14 +80,23 @@ async function renderTexmaLetter(beleg: BelegDokument, firma: FirmenProfil): Pro
   tableHeader();
   // Positionen
   for (const p of beleg.positionen) {
-    const detail = (p.detail ?? []).flatMap((d) => wrap(d, font, 9, cols.preis - cols.bez - 8));
+    // Interne Position im Beleg-PDF ausblenden (Xentral „im PDF ausblenden").
+    if (p.imPdfAusblenden) continue;
+    // Platzierung (Brust/Rücken) als erste Zusatzzeile unter der Bezeichnung.
+    const detailSrc = [...(p.platzierung ? [`Platzierung: ${p.platzierung}`] : []), ...(p.detail ?? [])];
+    const detail = detailSrc.flatMap((d) => wrap(d, font, 9, cols.preis - cols.bez - 8));
     ensure(14 + detail.length * 11 + (p.alternativ ? 12 : 0) + 8);
     if (p.alternativ) { page.drawText("Alternativ :", { x: cols.art, y, size: 8.5, font: bold, color: GREY }); y -= 12; }
     if (p.artNr) page.drawText(p.artNr, { x: cols.art, y, size: 9, font });
     page.drawText(String(p.menge), { x: cols.menge, y, size: 9, font });
     page.drawText(p.bezeichnung.slice(0, 48), { x: cols.bez, y, size: 9.5, font: bold });
-    if (beleg.zeigePreise && p.einzelpreis) page.drawText(p.einzelpreis, { x: cols.preis, y, size: 9, font });
-    if (beleg.zeigePreise && p.gesamt) page.drawText(p.gesamt, { x: cols.summe, y, size: 9, font });
+    // Alternativtext („nach Aufwand") überdruckt den Euro-Betrag; sonst Einzelpreis + Summe.
+    if (beleg.zeigePreise && p.altPreisText) {
+      page.drawText(p.altPreisText.slice(0, 22), { x: cols.preis, y, size: 9, font, color: GREY });
+    } else {
+      if (beleg.zeigePreise && p.einzelpreis) page.drawText(p.einzelpreis, { x: cols.preis, y, size: 9, font });
+      if (beleg.zeigePreise && p.gesamt) page.drawText(p.gesamt, { x: cols.summe, y, size: 9, font });
+    }
     y -= 12;
     for (const d of detail) { page.drawText(d, { x: cols.bez, y, size: 9, font, color: rgb(0.25, 0.25, 0.25) }); y -= 11; }
     y -= 8;

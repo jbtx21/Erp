@@ -19,6 +19,12 @@ export interface BelegPosition {
   detail?: string[];
   /** Alternativposition — mit „Alternativ :"-Label, zählt nicht zur Summe. */
   alternativ?: boolean;
+  /** Veredelungs-Platzierung ("Brust links" …) — als Zusatzzeile unter der Bezeichnung. */
+  platzierung?: string;
+  /** Alternativtext statt Euro-Betrag ("nach Aufwand") — überdruckt Einzelpreis/Summe. */
+  altPreisText?: string;
+  /** Position im PDF ausblenden (interne Position). */
+  imPdfAusblenden?: boolean;
 }
 
 /** Ansprechpartner-Block (Innendienst) im Belegkopf. */
@@ -234,6 +240,12 @@ export interface PreisPosition {
   listenpreisCents?: Cents | null;
   /** Positionsrabatt in Prozent (0..100); nur gesetzt, wenn gewährt. */
   rabattPct?: number | null;
+  /** Veredelungs-Platzierung ("Brust links" …) — als Zusatzzeile. */
+  platzierung?: string | null;
+  /** Alternativtext statt Euro-Betrag ("nach Aufwand"). */
+  altPreisText?: string | null;
+  /** Position im PDF ausblenden (interne Position). */
+  imPdfAusblenden?: boolean;
 }
 
 /**
@@ -269,6 +281,9 @@ function preisPositionen(ps: PreisPosition[]): BelegPosition[] {
     ...(p.artNr ? { artNr: p.artNr } : {}),
     ...(p.detail && p.detail.length > 0 ? { detail: p.detail.map(redactKundenbezeichnung) } : {}),
     ...(p.alternativ ? { alternativ: true } : {}),
+    ...(p.platzierung ? { platzierung: p.platzierung } : {}),
+    ...(p.altPreisText ? { altPreisText: p.altPreisText } : {}),
+    ...(p.imPdfAusblenden ? { imPdfAusblenden: true } : {}),
   }));
 }
 
