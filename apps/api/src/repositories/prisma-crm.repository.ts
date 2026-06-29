@@ -83,6 +83,7 @@ export class PrismaCrmRepository implements CrmRepository {
           quoteId: quote.id, position: i + 1, description: l.description.trim(), qty: l.qty,
           unitNetCents: l.unitNetCents, taxRatePct: l.taxRatePct ?? 19, kind: l.kind,
           variantId: l.variantId ?? null, bezugPosition: l.bezugPosition ?? null,
+          lineType: l.lineType ?? "ARTIKEL", placement: l.placement ?? null, altPreisText: l.altPreisText ?? null, imPdfAusblenden: l.imPdfAusblenden ?? false,
         })) });
       } else {
         const text = input.text.trim();

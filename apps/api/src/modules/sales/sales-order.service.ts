@@ -17,6 +17,10 @@ export interface SalesLine {
   variantId?: string;
   bezugPosition?: number | null; // Veredelungsbezug: Positionsnummer der Textilposition (Kap. 5.4/11)
   dbCents?: number | null; // Deckungsbeitrag je Stück (VK − EK), Kap. 4.4
+  lineType?: import("@texma/shared").LineType; // ARTIKEL | GRUPPE | ZWISCHENSUMME | GRUPPENSUMME
+  placement?: string | null; // Veredelungs-Platzierung ("Brust links" …)
+  altPreisText?: string | null; // Alternativtext statt Euro-Betrag im PDF
+  imPdfAusblenden?: boolean; // Position im Beleg-PDF ausblenden
   /**
    * Materialisierung: temporär (frei) erfasste Produktposition beim Wandeln in einen
    * festen Artikel überführen (Article+Variant anlegen, STANDARD-Preis = VK). Der Repo
@@ -53,6 +57,10 @@ export interface ConversionPlanLine {
   isAlternative: boolean;
   bezugPosition: number | null; // Veredelungsbezug aus dem Angebot (Positionsnummer der Textilposition)
   dbCents: number | null; // Deckungsbeitrag je Stück (aus dem Angebot übernommen)
+  lineType: import("@texma/shared").LineType;
+  placement: string | null;
+  altPreisText: string | null;
+  imPdfAusblenden: boolean;
   /** true, wenn ein Hauptartikel ohne Variante (Farbe×Größe muss gewählt werden). */
   needsVariant: boolean;
 }
@@ -75,6 +83,10 @@ export interface OrderEditLine {
   dbCents: number | null;
   variantId: string | null;
   bezugPosition: number | null; // Veredelungsbezug (Positionsnummer der Textilposition)
+  lineType: import("@texma/shared").LineType;
+  placement: string | null;
+  altPreisText: string | null;
+  imPdfAusblenden: boolean;
 }
 
 export interface OrderEditData {
@@ -180,6 +192,7 @@ export class SalesOrderService {
         const skuSuffix = entries.length > 1 ? `-${k + 1}` : "";
         built.push({ originPos: l.position, line: {
           description: l.description, qty: e.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents, rabattPct: l.rabattPct, taxRatePct: l.taxRatePct, kind: l.kind, variantId: e.variantId, bezugPosition: l.bezugPosition, dbCents: l.dbCents,
+          lineType: l.lineType, placement: l.placement, altPreisText: l.altPreisText, imPdfAusblenden: l.imPdfAusblenden,
           ...(materialize ? { materializeArticle: { sku: `${number}-P${l.position}${skuSuffix}`, name: l.description.trim(), isVeredelung: l.kind === "VEREDELUNG" } } : {}),
         } });
       });

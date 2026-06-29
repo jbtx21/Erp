@@ -12,6 +12,7 @@ export * from "./transfer-sourcing.js";
 export * from "./stammblatt.js";
 export * from "./mail.js";
 export * from "./positions.js";
+export * from "./positions-model.js";
 export * from "./newsletter.js";
 export * from "./opportunity.js";
 export * from "./calendar.js";

@@ -15,6 +15,10 @@ export interface CrmLine {
   kind: "TEXTIL" | "VEREDELUNG" | "SONSTIGE";
   variantId?: string | null;
   bezugPosition?: number | null;
+  lineType?: import("@texma/shared").LineType;
+  placement?: string | null;
+  altPreisText?: string | null;
+  imPdfAusblenden?: boolean;
 }
 
 export interface CrmLeadRecord {

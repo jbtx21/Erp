@@ -919,6 +919,15 @@ model QuoteLine {
   bezugPosition Int?
   // Alternativposition (Kunde wählt eine Variante) — wird bei der Auftragswandlung NICHT übernommen.
   isAlternative Boolean @default(false)
+  // Positions-/Strukturzeile (Positionsmaske, Xentral-Vorbild): ARTIKEL | GRUPPE |
+  // ZWISCHENSUMME | GRUPPENSUMME. Strukturzeilen tragen weder Menge/Preis noch zählen sie.
+  lineType    String  @default("ARTIKEL")
+  // Veredelungs-Platzierung am Textil (z. B. "Brust links", "Rücken") — speist das Werkstattblatt.
+  placement   String?
+  // Alternativtext statt Euro-Betrag im Beleg-PDF (z. B. "nach Aufwand").
+  altPreisText String?
+  // Position im Beleg-PDF ausblenden (interne Position, Xentral "im PDF ausblenden").
+  imPdfAusblenden Boolean @default(false)
 }
 
 enum OrderStatus {
@@ -1011,6 +1020,13 @@ model OrderLine {
   variantId   String? // optionale Artikel-/Variantenverknüpfung (Bedarfsermittlung)
   rawPayload  Json? // Roh-Shopzeile für Replay/Traceability (Kap. 3)
   deliveryLines DeliveryNoteLine[] // gelieferte Teilmengen (Mehrfach-Teillieferung)
+  // Alternativposition aus dem Angebot — am Auftrag eingefroren (GoBD), zählt nicht in die Summe.
+  isAlternative Boolean @default(false)
+  // Positions-/Strukturzeile (Positionsmaske): ARTIKEL | GRUPPE | ZWISCHENSUMME | GRUPPENSUMME.
+  lineType    String  @default("ARTIKEL")
+  placement   String? // Veredelungs-Platzierung (z. B. "Brust links") — speist das Werkstattblatt
+  altPreisText String? // Alternativtext statt Euro-Betrag im Beleg-PDF ("nach Aufwand")
+  imPdfAusblenden Boolean @default(false) // Position im Beleg-PDF ausblenden
 }
 
 // Positionsart: Basistextil vs. Veredelung (Druck/Stick) vs. Sonstiges (Versand,

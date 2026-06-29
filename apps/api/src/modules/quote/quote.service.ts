@@ -37,7 +37,7 @@ export interface CreateQuoteInput {
   zahlungszielTage?: number | null;
   incoterm?: string | null;
   versandregel?: string | null;
-  lines: Array<{ description: string; qty: number; unitNetCents: number; listNetCents?: number | null; rabattPct?: number | null; taxRatePct?: number | null; kind?: import("@texma/shared").PositionKind; articleId?: string | null; variantId?: string | null; isAlternative?: boolean; dbCents?: number | null; bezugPosition?: number | null }>;
+  lines: Array<{ description: string; qty: number; unitNetCents: number; listNetCents?: number | null; rabattPct?: number | null; taxRatePct?: number | null; kind?: import("@texma/shared").PositionKind; articleId?: string | null; variantId?: string | null; isAlternative?: boolean; dbCents?: number | null; bezugPosition?: number | null; lineType?: import("@texma/shared").LineType; placement?: string | null; altPreisText?: string | null; imPdfAusblenden?: boolean }>;
 }
 
 export type QuoteTransition = "VERSENDET" | "NACHFASSEN" | "ANGENOMMEN";
@@ -56,6 +56,10 @@ export interface QuoteEditLine {
   variantId: string | null;
   isAlternative: boolean;
   bezugPosition: number | null;
+  lineType: import("@texma/shared").LineType;
+  placement: string | null;
+  altPreisText: string | null;
+  imPdfAusblenden: boolean;
 }
 
 export interface QuoteEditData {

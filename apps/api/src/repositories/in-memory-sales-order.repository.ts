@@ -53,7 +53,7 @@ export class InMemorySalesOrderRepository implements SalesOrderRepository {
     return {
       id: o.id, number: o.number, companyId: o.companyId, status: lock.status ?? "ANGELEGT",
       invoiced: !!lock.invoiced, inProduction: !!lock.inProduction, delivered: !!lock.delivered || delivered,
-      lines: o.lines.map((l) => ({ description: l.description, qty: l.qty, kind: l.kind ?? "TEXTIL", unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, taxRatePct: l.taxRatePct ?? 19, dbCents: l.dbCents ?? null, variantId: l.variantId ?? null, bezugPosition: l.bezugPosition ?? null })),
+      lines: o.lines.map((l) => ({ description: l.description, qty: l.qty, kind: l.kind ?? "TEXTIL", unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, taxRatePct: l.taxRatePct ?? 19, dbCents: l.dbCents ?? null, variantId: l.variantId ?? null, bezugPosition: l.bezugPosition ?? null, lineType: l.lineType ?? "ARTIKEL", placement: l.placement ?? null, altPreisText: l.altPreisText ?? null, imPdfAusblenden: l.imPdfAusblenden ?? false })),
     };
   }
   async updateOrder(orderId: string, companyId: string, lines: SalesLine[]): Promise<void> {
@@ -91,6 +91,10 @@ export class InMemorySalesOrderRepository implements SalesOrderRepository {
         isAlternative: l.isAlternative ?? false,
         bezugPosition: l.bezugPosition ?? null,
         dbCents: l.dbCents ?? null,
+        lineType: "ARTIKEL",
+        placement: null,
+        altPreisText: null,
+        imPdfAusblenden: false,
         needsVariant: !!l.articleId && !l.variantId && !l.isAlternative,
       })),
     };
