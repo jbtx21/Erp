@@ -2813,7 +2813,9 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
   // binden (variantId + Bezeichnung/SKU + VK), sodass aus der Freiposition ein echter
   // Stammartikel wird (fromCatalog = true). Veredelungskatalog für die Platzierungs-Hints neu laden.
   const bindRowToCatalog = (i: number, e: { label: string; variantId: string; unitNetCents: number; sku?: string; articleName?: string }): void => {
-    set(i, { variantId: e.variantId, articleNumber: e.sku ?? lines[i]?.articleNumber, articleName: e.articleName ?? lines[i]?.articleName ?? e.label, euro: e.unitNetCents / 100 });
+    // Hat der neue Stammartikel einen Preis (Staffel/STANDARD > 0), den übernehmen; sonst den
+    // bereits in der Position erfassten VK behalten (Textil-Quick-Create trägt keinen Preis).
+    set(i, { variantId: e.variantId, articleNumber: e.sku ?? lines[i]?.articleNumber, articleName: e.articleName ?? lines[i]?.articleName ?? e.label, ...(e.unitNetCents > 0 ? { euro: e.unitNetCents / 100 } : {}) });
     void trpc.products.catalog.query().then(setCatalog).catch(() => undefined);
     void trpc.products.veredelungCatalog.query().then(setVeredelungen).catch(() => undefined);
   };

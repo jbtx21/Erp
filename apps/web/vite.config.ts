@@ -1,6 +1,8 @@
 import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "vite";
+// vitest/config: defineConfig akzeptiert zusätzlich den `test`-Schlüssel (Vitest) und
+// bleibt voll kompatibel zu `vite build` — eine Quelle für Dev/Build + Unit-Tests.
+import { defineConfig } from "vitest/config";
 
 // @texma/shared-Unterpfade direkt aus dem Quellcode auflösen (statt aus dem gebauten
 // dist über "exports"). So läuft `pnpm dev:web` OHNE vorheriges Bauen des shared-Pakets
@@ -31,4 +33,7 @@ export default defineConfig({
     // tRPC-Aufrufe + Logo-Datei-Downloads im Dev an den API-Prozess (Fastify) weiterreichen.
     proxy: { "/trpc": "http://localhost:3000", "/logos": "http://localhost:3000" },
   },
+  // Vitest (Unit) NICHT die Playwright-E2E-Specs einsammeln lassen — die laufen über
+  // `pnpm test:e2e` gegen den echten Stack (eigener Runner), nicht über vitest.
+  test: { exclude: ["e2e/**", "**/node_modules/**", "**/dist/**"] },
 });

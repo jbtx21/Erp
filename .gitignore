@@ -14,3 +14,8 @@ data/pricats/**/PRICAT_ITEM_EU_*.xlsx
 *-PRICAT_ITEM_EU_*.xlsx
 # Redis-Runtime-Dump (BullMQ-Queue-State) — gehört nicht ins Repo
 dump.rdb
+
+# Playwright e2e
+/test-results/
+/playwright-report/
+/.pwtmp/

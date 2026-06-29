@@ -1530,7 +1530,14 @@ export const appRouter = router({
         attributes: z.array(z.object({ name: z.string().min(1), value: z.string().min(1) })).optional(),
       }))
       .mutation(async ({ input, ctx }) => {
-        try { return await ctx.products.quickCreateCatalogEntry(input); } catch (e) { throw toTrpcError(e); }
+        try { return await ctx.products.quickCreateCatalogEntry(input); }
+        catch (e) {
+          // Doppelte SKU (Prisma P2002) → sauberer 409 CONFLICT statt 500 (analog createVeredelung).
+          if ((e as { code?: string }).code === "P2002") {
+            throw new TRPCError({ code: "CONFLICT", message: `Artikel-Nr. „${input.sku}" existiert bereits — bitte eine andere SKU wählen.` });
+          }
+          throw toTrpcError(e);
+        }
       }),
     createVariant: roleProcedure("ADMIN", "BUERO")
       .input(z.object({
