@@ -2647,7 +2647,8 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
     if (fresh.length > 0) onChange([...lines, ...fresh]);
   };
   const appendVeredelung = (e: { label: string; variantId: string; unitNetCents: number }): void => {
-    const textilIdx = lines.findIndex((l) => l.kind === "TEXTIL" && l.qty > 0);
+    // Bezug auf die erste ECHTE Textilposition (nicht auf eine leere Erfassungszeile) — Fix Geister-Bezug.
+    const textilIdx = lines.findIndex((l) => l.kind === "TEXTIL" && lineHasContent(l));
     const textilQty = textilIdx >= 0 ? lines[textilIdx]!.qty : 1;
     onChange([...lines, { description: e.label, qty: textilQty, euro: e.unitNetCents / 100, kind: "VEREDELUNG", variantId: e.variantId, ...(textilIdx >= 0 ? { bezugPosition: textilIdx + 1 } : {}) }]);
   };
@@ -3053,7 +3054,7 @@ export function QuotesPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k:
   const [err, setErr] = useState<string | null>(null);
   // Anlage-Formular
   const [companyId, setCompanyId] = useState("");
-  const [lines, setLines] = useState<EditorLine[]>([{ description: "", qty: 10, euro: 0, kind: "TEXTIL" }]);
+  const [lines, setLines] = useState<EditorLine[]>([]);
   const datum = new Date().toISOString().slice(0, 10);
   const [gueltigBis, setGueltigBis] = useState<string>(() => new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10));
   const [orderType, setOrderType] = useState("SALES");
@@ -3118,7 +3119,7 @@ export function QuotesPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k:
   };
 
   const resetForm = (): void => {
-    setLines([{ description: "", qty: 10, euro: 0, kind: "TEXTIL" }]); setCompanyId(""); setTerms(""); setEditId(null);
+    setLines([]); setCompanyId(""); setTerms(""); setEditId(null);
     setZahlungszielTage(""); setIncoterm(""); setVersandregel(""); setExempt(false); setDirty(false);
   };
   const startEdit = async (id: string): Promise<void> => {
@@ -4164,7 +4165,7 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
   const [showCreate, setShowCreate] = useState(false);
   const [editOrderId, setEditOrderId] = useState<string | null>(null); // gesetzt = Auftrag bearbeiten
   const [newCompany, setNewCompany] = useState("");
-  const [newLines, setNewLines] = useState<EditorLine[]>([{ description: "", qty: 10, euro: 0, kind: "TEXTIL" }]);
+  const [newLines, setNewLines] = useState<EditorLine[]>([]);
   const [dirty, setDirty] = useState(false); // ungespeicherte Änderungen im Auftrags-Editor
   useUnsavedGuard(showCreate && dirty);
 
@@ -4200,7 +4201,7 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
     const pre = sessionStorage.getItem("texma:newOrderCompany");
     if (pre) { sessionStorage.removeItem("texma:newOrderCompany"); setNewCompany(pre); setEditOrderId(null); setShowCreate(true); }
   }, []);
-  const resetOrderForm = (): void => { setNewLines([{ description: "", qty: 10, euro: 0, kind: "TEXTIL" }]); setEditOrderId(null); setShowCreate(false); setDirty(false); };
+  const resetOrderForm = (): void => { setNewLines([]); setEditOrderId(null); setShowCreate(false); setDirty(false); };
   const startEditOrder = async (id: string): Promise<void> => {
     setErr(null);
     try {
