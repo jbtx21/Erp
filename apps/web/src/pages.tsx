@@ -2633,6 +2633,13 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
     const idx = addLine({ description: e.label, qty: 1, euro: e.unitNetCents / 100, kind: "TEXTIL", variantId: e.variantId, isBundle: e.isBundle, articleNumber: e.sku, articleName: e.articleName, articleId: e.articleId });
     void resolve(e.variantId, 1).then((p) => { if (p.euro !== undefined || p.ekEuro !== undefined) set(idx, p); });
   };
+  // Katalogartikel INLINE in eine bestehende (freie) Zeile binden — über den Autocomplete-Treffer.
+  const bindCatalogToRow = (i: number, label: string): void => {
+    const c = catalog.find((x) => x.label === label);
+    if (!c) return;
+    set(i, { variantId: c.variantId, articleId: c.articleId, articleNumber: c.sku, articleName: c.articleName, description: c.articleName, isBundle: c.isBundle, euro: c.unitNetCents / 100 });
+    void resolve(c.variantId, lines[i]?.qty ?? 1).then((p) => { if (p.euro !== undefined || p.ekEuro !== undefined) set(i, p); });
+  };
   const addHauptartikel = (e: { articleId: string; articleName: string; unitNetCents: number; sku?: string }): void =>
     void addLine({ description: e.articleName, qty: 1, euro: e.unitNetCents / 100, kind: "TEXTIL", articleId: e.articleId, articleNumber: e.sku, articleName: e.articleName });
   const addManyVariants = (articleId: string, articleName: string, baseEuro: number, picked: { variantId: string; label: string; sku?: string; qty: number }[]): void => {
@@ -2761,10 +2768,16 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
                         ? <Select size="xs" variant="unstyled" searchable placeholder="Veredelung aus Stamm…" value={null} clearable={false}
                             data={veredelungen.map((x) => ({ value: x.variantId, label: x.label }))}
                             onChange={(v) => v && pickVeredelung(i, l, v)} nothingFoundMessage="Keine Veredelung im Stamm" />
-                        : <TextInput size="xs" variant="unstyled" placeholder="Beschreibung (Freiposition)" value={l.description} onChange={(e) => set(i, { description: e.currentTarget.value })} />}
+                        : <Autocomplete size="xs" variant="unstyled" placeholder="Artikel-Nr./Name suchen oder Freitext…" limit={20}
+                            data={catalog.map((c) => c.label)} value={l.description}
+                            onChange={(v) => set(i, { description: v })} onOptionSubmit={(label) => bindCatalogToRow(i, label)} />}
                     </Table.Td>
                     <Table.Td>
-                      {artVariants && artVariants.length > 0
+                      {l.kind === "VEREDELUNG"
+                        ? <Select size="xs" variant="unstyled" clearable placeholder="Bezug Textil…" value={l.bezugPosition != null ? String(l.bezugPosition) : null}
+                            data={textilPositionen.map(({ line, pos }) => ({ value: String(pos), label: `Pos. ${pos} — ${(line.articleName || line.description || "Textil").slice(0, 16)}` }))}
+                            onChange={(v) => set(i, { bezugPosition: v ? Number(v) : undefined })} />
+                        : artVariants && artVariants.length > 0
                         ? <Select size="xs" variant="unstyled" searchable placeholder="Farbe×Größe" value={l.variantId ?? null} data={artVariants.map((c) => ({ value: c.variantId, label: c.label }))} onChange={(v) => v && pickVariant(i, l, v)} />
                         : l.variantId ? <Text size="xs" c="dimmed">gewählt</Text>
                         : (caps.alternative && l.articleId) ? <Badge size="xs" color="orange" variant="light" title="Farbe & Größe beim Wandeln in den Auftrag">offen</Badge>
