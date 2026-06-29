@@ -17,6 +17,11 @@ export interface CrmLine {
   bezugPosition?: number | null;
   lineType?: import("@texma/shared").LineType;
   placement?: string | null;
+  motiv?: string | null;
+  motivGroesse?: string | null;
+  farbton?: string | null;
+  platzierungsdetails?: string | null;
+  sonstiges?: string | null;
   altPreisText?: string | null;
   imPdfAusblenden?: boolean;
 }

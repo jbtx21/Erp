@@ -923,6 +923,13 @@ model QuoteLine {
   lineType    String  @default("ARTIKEL")
   // Veredelungs-Platzierung am Textil (z. B. "Brust links", "Rücken") — speist das Werkstattblatt.
   placement   String?
+  // Veredelungs-Detailfelder (Werkstattblatt-Karte): Motiv/Logo, Motivgröße, Farbton,
+  // ausführliche Platzierungsbeschreibung, Sonstiges. Alle aus der Veredelungsposition erfasst.
+  motiv             String?
+  motivGroesse      String?
+  farbton           String?
+  platzierungsdetails String?
+  sonstiges         String?
   // Alternativtext statt Euro-Betrag im Beleg-PDF (z. B. "nach Aufwand").
   altPreisText String?
   // Position im Beleg-PDF ausblenden (interne Position, Xentral "im PDF ausblenden").
@@ -1024,6 +1031,12 @@ model OrderLine {
   // Positions-/Strukturzeile (Positionsmaske): ARTIKEL | GRUPPE | ZWISCHENSUMME | GRUPPENSUMME.
   lineType    String  @default("ARTIKEL")
   placement   String? // Veredelungs-Platzierung (z. B. "Brust links") — speist das Werkstattblatt
+  // Veredelungs-Detailfelder (Werkstattblatt-Karte): Motiv/Logo, Größe, Farbton, Platzierungsdetails, Sonstiges.
+  motiv             String?
+  motivGroesse      String?
+  farbton           String?
+  platzierungsdetails String?
+  sonstiges         String?
   altPreisText String? // Alternativtext statt Euro-Betrag im Beleg-PDF ("nach Aufwand")
   imPdfAusblenden Boolean @default(false) // Position im Beleg-PDF ausblenden
 }

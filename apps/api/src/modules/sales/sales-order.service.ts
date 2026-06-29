@@ -18,7 +18,7 @@ export interface SalesLine {
   bezugPosition?: number | null; // Veredelungsbezug: Positionsnummer der Textilposition (Kap. 5.4/11)
   dbCents?: number | null; // Deckungsbeitrag je Stück (VK − EK), Kap. 4.4
   lineType?: import("@texma/shared").LineType; // ARTIKEL | GRUPPE | ZWISCHENSUMME | GRUPPENSUMME
-  placement?: string | null; // Veredelungs-Platzierung ("Brust links" …)
+  placement?: string | null; motiv?: string | null; motivGroesse?: string | null; farbton?: string | null; platzierungsdetails?: string | null; sonstiges?: string | null; // Veredelungs-Detailfelder (Werkstattblatt-Karte)
   altPreisText?: string | null; // Alternativtext statt Euro-Betrag im PDF
   imPdfAusblenden?: boolean; // Position im Beleg-PDF ausblenden
   /**
@@ -59,6 +59,11 @@ export interface ConversionPlanLine {
   dbCents: number | null; // Deckungsbeitrag je Stück (aus dem Angebot übernommen)
   lineType: import("@texma/shared").LineType;
   placement: string | null;
+  motiv: string | null;
+  motivGroesse: string | null;
+  farbton: string | null;
+  platzierungsdetails: string | null;
+  sonstiges: string | null;
   altPreisText: string | null;
   imPdfAusblenden: boolean;
   /** true, wenn ein Hauptartikel ohne Variante (Farbe×Größe muss gewählt werden). */
@@ -85,6 +90,11 @@ export interface OrderEditLine {
   bezugPosition: number | null; // Veredelungsbezug (Positionsnummer der Textilposition)
   lineType: import("@texma/shared").LineType;
   placement: string | null;
+  motiv: string | null;
+  motivGroesse: string | null;
+  farbton: string | null;
+  platzierungsdetails: string | null;
+  sonstiges: string | null;
   altPreisText: string | null;
   imPdfAusblenden: boolean;
 }
@@ -192,7 +202,7 @@ export class SalesOrderService {
         const skuSuffix = entries.length > 1 ? `-${k + 1}` : "";
         built.push({ originPos: l.position, line: {
           description: l.description, qty: e.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents, rabattPct: l.rabattPct, taxRatePct: l.taxRatePct, kind: l.kind, variantId: e.variantId, bezugPosition: l.bezugPosition, dbCents: l.dbCents,
-          lineType: l.lineType, placement: l.placement, altPreisText: l.altPreisText, imPdfAusblenden: l.imPdfAusblenden,
+          lineType: l.lineType, placement: l.placement, motiv: l.motiv, motivGroesse: l.motivGroesse, farbton: l.farbton, platzierungsdetails: l.platzierungsdetails, sonstiges: l.sonstiges, altPreisText: l.altPreisText, imPdfAusblenden: l.imPdfAusblenden,
           ...(materialize ? { materializeArticle: { sku: `${number}-P${l.position}${skuSuffix}`, name: l.description.trim(), description: l.description.trim(), isVeredelung: l.kind === "VEREDELUNG" } } : {}),
         } });
       });

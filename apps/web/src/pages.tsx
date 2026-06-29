@@ -2058,7 +2058,7 @@ export type PositionKind = "TEXTIL" | "VEREDELUNG" | "SONSTIGE";
 // Hauptartikel (articleId, Farbe×Größe noch offen) verweisen; isAlternative kennzeichnet
 // ein unverbindliches Alternativangebot (wird beim Wandeln in den Auftrag weggelassen).
 export type LineType = "ARTIKEL" | "GRUPPE" | "ZWISCHENSUMME" | "GRUPPENSUMME";
-export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind; variantId?: string; articleId?: string; articleNumber?: string; articleName?: string; isAlternative?: boolean; ekEuro?: number; isBundle?: boolean; rabattPct?: number; taxRatePct?: number; vkManual?: boolean; bezugPosition?: number; lineType?: LineType; placement?: string; altPreisText?: string; imPdfAusblenden?: boolean }
+export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind; variantId?: string; articleId?: string; articleNumber?: string; articleName?: string; isAlternative?: boolean; ekEuro?: number; isBundle?: boolean; rabattPct?: number; taxRatePct?: number; vkManual?: boolean; bezugPosition?: number; lineType?: LineType; placement?: string; motiv?: string; motivGroesse?: string; farbton?: string; platzierungsdetails?: string; sonstiges?: string; altPreisText?: string; imPdfAusblenden?: boolean }
 
 // Artikel-Picker: durchsuchbare Auswahl aus dem Artikelstamm (ERPNext „Link field").
 // Bei Auswahl wird eine Position vorbefüllt (Bezeichnung, Standardpreis, Variante).
@@ -2816,6 +2816,21 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
                             <Autocomplete size="xs" label="Platzierung" w={170} placeholder="z. B. Brust links" data={placementsFor(l.variantId)} value={l.placement ?? ""} onChange={(v) => set(i, { placement: v || undefined })} />
                           )}
                           {l.kind === "VEREDELUNG" && (
+                            <TextInput size="xs" label="Motiv / Logo" w={170} placeholder="z. B. Logo Autohaus Weeber" value={l.motiv ?? ""} onChange={(e) => set(i, { motiv: e.currentTarget.value || undefined })} />
+                          )}
+                          {l.kind === "VEREDELUNG" && (
+                            <TextInput size="xs" label="Motivgröße" w={130} placeholder="z. B. 8 x 2 cm" value={l.motivGroesse ?? ""} onChange={(e) => set(i, { motivGroesse: e.currentTarget.value || undefined })} />
+                          )}
+                          {l.kind === "VEREDELUNG" && (
+                            <TextInput size="xs" label="Farbton" w={130} placeholder="z. B. 1918 helleres Grau" value={l.farbton ?? ""} onChange={(e) => set(i, { farbton: e.currentTarget.value || undefined })} />
+                          )}
+                          {l.kind === "VEREDELUNG" && (
+                            <TextInput size="xs" label="Platzierungsdetails" w={240} placeholder="z. B. Brust rechts linksbündig unter dem Logo" value={l.platzierungsdetails ?? ""} onChange={(e) => set(i, { platzierungsdetails: e.currentTarget.value || undefined })} />
+                          )}
+                          {l.kind === "VEREDELUNG" && (
+                            <TextInput size="xs" label="Sonstiges" w={200} placeholder="z. B. Einzelname S. Beer" value={l.sonstiges ?? ""} onChange={(e) => set(i, { sonstiges: e.currentTarget.value || undefined })} />
+                          )}
+                          {l.kind === "VEREDELUNG" && (
                             <Select size="xs" label="Bezug (Textil-Pos.)" w={190} clearable placeholder="—" value={l.bezugPosition != null ? String(l.bezugPosition) : null}
                               data={textilPositionen.map(({ line, pos }) => ({ value: String(pos), label: `Pos. ${pos} — ${(line.articleName || line.description || "Textil").slice(0, 22)}` }))}
                               onChange={(v) => set(i, { bezugPosition: v ? Number(v) : undefined })} />
@@ -2900,14 +2915,19 @@ export const lineHasContent = (l: EditorLine): boolean =>
 const lineDesc = (l: EditorLine): string => l.description.trim() || l.articleName?.trim() || l.articleNumber?.trim() || "Position";
 
 // Positions-Strukturfelder (Positionsmaske) in das API-Format spreaden — nur wenn gesetzt.
-const lineStructFields = (l: EditorLine): { lineType?: LineType; placement?: string; altPreisText?: string; imPdfAusblenden?: boolean } => ({
+const lineStructFields = (l: EditorLine): { lineType?: LineType; placement?: string; motiv?: string; motivGroesse?: string; farbton?: string; platzierungsdetails?: string; sonstiges?: string; altPreisText?: string; imPdfAusblenden?: boolean } => ({
   ...(l.lineType && l.lineType !== "ARTIKEL" ? { lineType: l.lineType } : {}),
   ...(l.placement?.trim() ? { placement: l.placement.trim() } : {}),
+  ...(l.motiv?.trim() ? { motiv: l.motiv.trim() } : {}),
+  ...(l.motivGroesse?.trim() ? { motivGroesse: l.motivGroesse.trim() } : {}),
+  ...(l.farbton?.trim() ? { farbton: l.farbton.trim() } : {}),
+  ...(l.platzierungsdetails?.trim() ? { platzierungsdetails: l.platzierungsdetails.trim() } : {}),
+  ...(l.sonstiges?.trim() ? { sonstiges: l.sonstiges.trim() } : {}),
   ...(l.altPreisText?.trim() ? { altPreisText: l.altPreisText.trim() } : {}),
   ...(l.imPdfAusblenden ? { imPdfAusblenden: true } : {}),
 });
 
-export const toApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; variantId?: string; bezugPosition?: number; dbCents?: number; lineType?: LineType; placement?: string; altPreisText?: string; imPdfAusblenden?: boolean }[] =>
+export const toApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; variantId?: string; bezugPosition?: number; dbCents?: number; lineType?: LineType; placement?: string; motiv?: string; motivGroesse?: string; farbton?: string; platzierungsdetails?: string; sonstiges?: string; altPreisText?: string; imPdfAusblenden?: boolean }[] =>
   lines.filter(lineHasContent).map((l) => ({
     description: lineDesc(l), qty: l.qty, kind: l.kind, ...lineMoney(l), ...(l.variantId ? { variantId: l.variantId } : {}),
     // USt-Satz der Position mitschicken (eingefroren); so bleibt die Steuerbefreiung (0 %)
@@ -2919,7 +2939,7 @@ export const toApiLines = (lines: EditorLine[]): { description: string; qty: num
   }));
 
 // Wie toApiLines, aber inkl. Artikel-/Varianten-Referenz und Alternativ-Kennzeichen (Angebot).
-export const toQuoteApiLines = (lines: EditorLine[], taxRatePct = 19): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; articleId?: string; variantId?: string; isAlternative?: boolean; bezugPosition?: number; dbCents?: number; lineType?: LineType; placement?: string; altPreisText?: string; imPdfAusblenden?: boolean }[] =>
+export const toQuoteApiLines = (lines: EditorLine[], taxRatePct = 19): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; articleId?: string; variantId?: string; isAlternative?: boolean; bezugPosition?: number; dbCents?: number; lineType?: LineType; placement?: string; motiv?: string; motivGroesse?: string; farbton?: string; platzierungsdetails?: string; sonstiges?: string; altPreisText?: string; imPdfAusblenden?: boolean }[] =>
   lines.filter(lineHasContent).map((l) => ({
     description: lineDesc(l), qty: l.qty, kind: l.kind, ...lineMoney(l), taxRatePct,
     ...(l.articleId ? { articleId: l.articleId } : {}), ...(l.variantId ? { variantId: l.variantId } : {}), ...(l.isAlternative ? { isAlternative: true } : {}),
@@ -2929,7 +2949,7 @@ export const toQuoteApiLines = (lines: EditorLine[], taxRatePct = 19): { descrip
 
 // Rekonstruiert die Erfassungs-Positionen aus gespeicherten Angebots-/Auftragszeilen
 // (für die Bearbeitung): VK = Listenpreis, Rabatt, EK = effektiver Netto − DB.
-type StoredLine = { description: string; qty: number; kind: PositionKind; unitNetCents: number; listNetCents: number | null; rabattPct: number | null; taxRatePct?: number | null; dbCents: number | null; articleId?: string | null; variantId?: string | null; isAlternative?: boolean; bezugPosition?: number | null; lineType?: string | null; placement?: string | null; altPreisText?: string | null; imPdfAusblenden?: boolean };
+type StoredLine = { description: string; qty: number; kind: PositionKind; unitNetCents: number; listNetCents: number | null; rabattPct: number | null; taxRatePct?: number | null; dbCents: number | null; articleId?: string | null; variantId?: string | null; isAlternative?: boolean; bezugPosition?: number | null; lineType?: string | null; placement?: string | null; motiv?: string | null; motivGroesse?: string | null; farbton?: string | null; platzierungsdetails?: string | null; sonstiges?: string | null; altPreisText?: string | null; imPdfAusblenden?: boolean };
 export const fromStoredLines = (ls: StoredLine[]): EditorLine[] =>
   ls.map((l) => ({
     description: l.description, qty: l.qty, kind: l.kind,
@@ -2943,6 +2963,11 @@ export const fromStoredLines = (ls: StoredLine[]): EditorLine[] =>
     ...(l.bezugPosition != null ? { bezugPosition: l.bezugPosition } : {}),
     ...(l.lineType && l.lineType !== "ARTIKEL" ? { lineType: l.lineType as LineType } : {}),
     ...(l.placement ? { placement: l.placement } : {}),
+    ...(l.motiv ? { motiv: l.motiv } : {}),
+    ...(l.motivGroesse ? { motivGroesse: l.motivGroesse } : {}),
+    ...(l.farbton ? { farbton: l.farbton } : {}),
+    ...(l.platzierungsdetails ? { platzierungsdetails: l.platzierungsdetails } : {}),
+    ...(l.sonstiges ? { sonstiges: l.sonstiges } : {}),
     ...(l.altPreisText ? { altPreisText: l.altPreisText } : {}),
     ...(l.imPdfAusblenden ? { imPdfAusblenden: true } : {}),
   }));

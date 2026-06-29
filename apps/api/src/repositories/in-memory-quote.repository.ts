@@ -67,7 +67,7 @@ export class InMemoryQuoteRepository implements QuoteRepository {
         description: l.description, qty: l.qty, kind: l.kind ?? "TEXTIL", unitNetCents: l.unitNetCents,
         listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, taxRatePct: l.taxRatePct ?? 19, dbCents: l.dbCents ?? null,
         articleId: l.articleId ?? null, variantId: l.variantId ?? null, isAlternative: l.isAlternative ?? false, bezugPosition: l.bezugPosition ?? null,
-        lineType: l.lineType ?? "ARTIKEL", placement: l.placement ?? null, altPreisText: l.altPreisText ?? null, imPdfAusblenden: l.imPdfAusblenden ?? false,
+        lineType: l.lineType ?? "ARTIKEL", placement: l.placement ?? null, motiv: l.motiv ?? null, motivGroesse: l.motivGroesse ?? null, farbton: l.farbton ?? null, platzierungsdetails: l.platzierungsdetails ?? null, sonstiges: l.sonstiges ?? null, altPreisText: l.altPreisText ?? null, imPdfAusblenden: l.imPdfAusblenden ?? false,
       })),
     };
   }

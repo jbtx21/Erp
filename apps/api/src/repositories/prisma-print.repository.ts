@@ -355,7 +355,7 @@ export class PrismaPrintRepository implements PrintRepository {
             order: {
               select: {
                 number: true, company: { select: { name: true } },
-                lines: { orderBy: { position: "asc" }, select: { position: true, description: true, qty: true, kind: true, bezugPosition: true, variantId: true, placement: true } },
+                lines: { orderBy: { position: "asc" }, select: { position: true, description: true, qty: true, kind: true, bezugPosition: true, variantId: true, placement: true, motiv: true, motivGroesse: true, farbton: true, platzierungsdetails: true, sonstiges: true } },
               },
             },
           },
@@ -390,7 +390,15 @@ export class PrismaPrintRepository implements PrintRepository {
     // Veredelungspositionen (Motive) mit Bezug auf die beigestellten Textilpositionen.
     const motive = order.lines
       .filter((l) => l.kind === "VEREDELUNG" && (scope.size === 0 || inScope(l.bezugPosition)))
-      .map((l) => ({ description: l.description, bezugPosition: l.bezugPosition, ...(l.placement ? { platzierung: l.placement } : {}) }));
+      .map((l) => ({
+        description: l.description, bezugPosition: l.bezugPosition, menge: l.qty,
+        ...(l.placement ? { platzierung: l.placement } : {}),
+        ...(l.motiv ? { motiv: l.motiv } : {}),
+        ...(l.motivGroesse ? { motivGroesse: l.motivGroesse } : {}),
+        ...(l.farbton ? { farbton: l.farbton } : {}),
+        ...(l.platzierungsdetails ? { platzierungsdetails: l.platzierungsdetails } : {}),
+        ...(l.sonstiges ? { sonstiges: l.sonstiges } : {}),
+      }));
 
     return {
       nummer: sub.number, datum: new Date(),
