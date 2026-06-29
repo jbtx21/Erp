@@ -54,6 +54,8 @@ export interface PricingRepository {
   bestEkCents(variantId: string): Promise<number | null>;
   /** Basis-Staffel der Preisgruppe STANDARD (z. B. die Logo-/Veredelungs-Staffel, B4). */
   listStandardTiers(variantId: string): Promise<PriceTier[]>;
+  /** EK-Mengenstaffel je Variante (Stick-EK je Stück gestaffelt); leer = nur flacher EK. */
+  ekTiers(variantId: string): Promise<{ minMenge: number; ekCents: number }[]>;
 }
 
 /** Anzeige-Staffel je Position: VK+EK+DB je Mengenstufe (C+D) + bester EK. */
@@ -105,12 +107,13 @@ export class PricingService {
    * VK samt EK direkt im Angebot bei Veredelungen sichtbar.
    */
   async staffelpreise(companyId: string, variantId: string): Promise<StaffelView> {
-    const [view, standardTiers, ekCents] = await Promise.all([
+    const [view, standardTiers, ekCents, ekTiers] = await Promise.all([
       this.repo.listTiers(companyId, variantId),
       this.repo.listStandardTiers(variantId),
       this.repo.bestEkCents(variantId),
+      this.repo.ekTiers(variantId),
     ]);
-    const staffeln = buildStaffelLadder({ standardTiers, groupTiers: view.groupTiers, customerTiers: view.customerTiers, ekCents });
+    const staffeln = buildStaffelLadder({ standardTiers, groupTiers: view.groupTiers, customerTiers: view.customerTiers, ekCents, ekTiers });
     return { ekCents, staffeln };
   }
 

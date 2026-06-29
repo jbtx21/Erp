@@ -1575,7 +1575,7 @@ export const appRouter = router({
         // Material-Dienstleister bei Inhouse (z. B. Transfer-Lieferant) → Beschaffungsbedarf.
         materialLieferantId: z.string().optional(),
         ekCents: z.number().int().nonnegative().optional(),
-        tiers: z.array(z.object({ minMenge: z.number().int().positive(), vkCents: z.number().int().nonnegative() })).optional(),
+        tiers: z.array(z.object({ minMenge: z.number().int().positive(), vkCents: z.number().int().nonnegative(), ekCents: z.number().int().nonnegative().optional() })).optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         try { return await ctx.products.createVeredelungArticle(input); }

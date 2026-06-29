@@ -94,4 +94,12 @@ export class PrismaPricingRepository implements PricingRepository {
       orderBy: { minMenge: "asc" },
     });
   }
+
+  async ekTiers(variantId: string): Promise<{ minMenge: number; ekCents: number }[]> {
+    return prisma.variantEkTier.findMany({
+      where: { variantId },
+      select: { minMenge: true, ekCents: true },
+      orderBy: { minMenge: "asc" },
+    });
+  }
 }

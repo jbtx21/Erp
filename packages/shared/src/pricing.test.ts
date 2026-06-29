@@ -120,6 +120,34 @@ describe("buildStaffelLadder (B4/D — VK+EK+DB je Stufe)", () => {
     expect(ladder[0]!.dbMargePct).toBeNull();
     expect(ladder[0]!.ekCents).toBeNull();
   });
+
+  it("nutzt die EK-Staffel je Stufe (Stufenfunktion) statt eines flachen EK", () => {
+    // Stick-EK-Staffel: 1=437, 10=402, 25=353, 50=321, 100=304, 250=287 (Cent).
+    const ekTiers = [
+      { minMenge: 1, ekCents: 437 }, { minMenge: 10, ekCents: 402 }, { minMenge: 25, ekCents: 353 },
+      { minMenge: 50, ekCents: 321 }, { minMenge: 100, ekCents: 304 }, { minMenge: 250, ekCents: 287 },
+    ];
+    const ladder = buildStaffelLadder({
+      standardTiers: ekTiers.map((t) => ({ minMenge: t.minMenge, netCents: Math.round(t.ekCents * 1.88) })),
+      groupTiers: [], customerTiers: [], ekCents: 437, ekTiers,
+    });
+    // Je Stufe gilt der gestaffelte EK (nicht der flache 437).
+    expect(ladder.map((s) => [s.minMenge, s.ekCents])).toEqual([
+      [1, 437], [10, 402], [25, 353], [50, 321], [100, 304], [250, 287],
+    ]);
+    // DB = VK − stufen-EK; bei 250: round(287*1.88)=539 − 287 = 252.
+    expect(ladder.at(-1)!.dbCents).toBe(Math.round(287 * 1.88) - 287);
+  });
+
+  it("füllt fehlende EK-Stufen per Stufenfunktion (größte minMenge ≤ Menge)", () => {
+    const ladder = buildStaffelLadder({
+      standardTiers: [{ minMenge: 1, netCents: 1000 }, { minMenge: 30, netCents: 900 }, { minMenge: 100, netCents: 800 }],
+      groupTiers: [], customerTiers: [], ekCents: null,
+      ekTiers: [{ minMenge: 1, ekCents: 400 }, { minMenge: 50, ekCents: 300 }],
+    });
+    // 30 → noch EK-Stufe 1 (400); 100 → EK-Stufe 50 (300).
+    expect(ladder.map((s) => [s.minMenge, s.ekCents])).toEqual([[1, 400], [30, 400], [100, 300]]);
+  });
 });
 
 describe("money (Kap. 9)", () => {

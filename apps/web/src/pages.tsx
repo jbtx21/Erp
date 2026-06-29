@@ -2395,7 +2395,7 @@ function BundlePreview({ variantId, positionQty }: { variantId: string; position
 // Logo/Veredelung als wiederverwendbaren Artikel anlegen (Kap. 5.4/11): Pflicht-Veredler
 // (analog Textil-„Hersteller"), eigener EK beim Veredler + eigene Mengenstaffel. Beim
 // Siebdruck den festen Siebdruck-Lieferanten wählen. Direkt als Angebotsposition übernommen.
-interface TierRow { minMenge: number; euro: number }
+interface TierRow { minMenge: number; euro: number; ek: number }
 // `initial` befüllt den Dialog aus einer frei erfassten Veredelungsposition vor (Inline-
 // Katalogspeicherung mitten im Walkthrough): Bezeichnung, SKU, Platzierung, Veredler, EK
 // werden übernommen, der/die Anwender:in ergänzt nur noch fehlende Stammdaten und speichert.
@@ -2412,16 +2412,19 @@ function LogoArticleDialog({ onClose, onCreated, initial, title = "Logo / Verede
   // über die Beschaffung bestellt wird; die Applikation läuft inhouse.
   const [materialLieferantId, setMaterialLieferantId] = useState("");
   const [ek, setEk] = useState<number | "">(initial?.ekEuro ?? "");
-  const [tiers, setTiers] = useState<TierRow[]>([{ minMenge: 1, euro: initial?.vkEuro ?? 0 }]);
+  const [tiers, setTiers] = useState<TierRow[]>([{ minMenge: 1, euro: initial?.vkEuro ?? 0, ek: initial?.ekEuro ?? 0 }]);
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
   // Aufschlagsfaktor (Kap. 4.4) für die automatische Staffel-VK-Vorbelegung aus dem EK.
   const [markupCfg, setMarkupCfg] = useState<MarkupConfig | null>(null);
   useEffect(() => { void trpc.stickerei.markup.getConfig.query().then((c) => setMarkupCfg(c as MarkupConfig)).catch(() => undefined); }, []);
-  // Staffel-VK = EK × Aufschlagsfaktor (je Stufe nach Menge), nur für noch nicht von Hand
-  // gesetzte Stufen (euro===0) — überschreibbar. Wird bei EK-Eingabe ausgelöst.
+  // Staffel-VK = EK × Aufschlagsfaktor (je Stufe nach Menge): der EK kann je Stufe abweichen
+  // (Stick-EK gestaffelt) — der VK wird daraus berechnet (überschreibbar).
+  const vkFromEk = (ekEuro: number, menge: number): number =>
+    ekEuro > 0 ? Math.round(ekEuro * resolveMarkupFactor(markupCfg ?? DEFAULT_MARKUP_CONFIG, { menge, ekCents: Math.round(ekEuro * 100) }).factor * 100) / 100 : 0;
+  // Globaler EK-Default: füllt leere Stufen-EKs und belegt deren VK vor (nur euro===0).
   const prefillTiers = (ekEuro: number, ts: TierRow[]): TierRow[] =>
     ekEuro > 0
-      ? ts.map((t) => (t.euro === 0 ? { ...t, euro: Math.round(ekEuro * resolveMarkupFactor(markupCfg ?? DEFAULT_MARKUP_CONFIG, { menge: t.minMenge, ekCents: Math.round(ekEuro * 100) }).factor * 100) / 100 } : t))
+      ? ts.map((t) => (t.ek === 0 ? { ...t, ek: ekEuro, euro: t.euro === 0 ? vkFromEk(ekEuro, t.minMenge) : t.euro } : t))
       : ts;
   // Standard-Siebdruck-Veredler: bei Veredelungsart Siebdruck vorbelegen (sofern noch leer).
   const [siebdruckDefault, setSiebdruckDefault] = useState<string | null>(null);
@@ -2432,7 +2435,7 @@ function LogoArticleDialog({ onClose, onCreated, initial, title = "Logo / Verede
   const create = async (): Promise<void> => {
     setBusy(true); setErr(null);
     try {
-      const cleanTiers = tiers.filter((t) => t.minMenge > 0).map((t) => ({ minMenge: t.minMenge, vkCents: Math.round(t.euro * 100) }));
+      const cleanTiers = tiers.filter((t) => t.minMenge > 0).map((t) => ({ minMenge: t.minMenge, vkCents: Math.round(t.euro * 100), ...(t.ek > 0 ? { ekCents: Math.round(t.ek * 100) } : (ek !== "" ? { ekCents: Math.round(Number(ek) * 100) } : {})) }));
       const e = await trpc.products.createVeredelung.mutate({
         name: name.trim(), sku: sku.trim(), method, ...(placements.length > 0 ? { placements } : {}),
         ...(inhouse || !veredlerId ? {} : { veredlerId }),
@@ -2461,15 +2464,21 @@ function LogoArticleDialog({ onClose, onCreated, initial, title = "Logo / Verede
         {inhouse && <SupplierPicker label="Material-Dienstleister (optional)" value={materialLieferantId} onChange={setMaterialLieferantId} w={240} />}
         <MoneyInput label={inhouse ? (materialLieferantId ? "EK Material je Stück (€)" : "EK/Kosten je Stück (€)") : "EK beim Veredler (€)"} value={ek} onChange={(v) => { const n = typeof v === "number" ? v : ""; setEk(n); if (typeof n === "number") setTiers((ts) => prefillTiers(n, ts)); }} min={0} w={170} placeholder="je Logo abweichend" title="VK je Staffelstufe wird automatisch über den Aufschlagsfaktor vorbelegt (überschreibbar)" />
       </Group>
-      <Title order={6} mt="md">Mengenstaffel (VK je Stück)</Title>
-      {tiers.map((t, i) => (
-        <Group key={i} gap="xs" mt={4} align="end">
-          <NumberInput label={i === 0 ? "ab Menge" : undefined} value={t.minMenge} onChange={(v) => setTier(i, { minMenge: Number(v) || 1 })} min={1} w={110} />
-          <MoneyInput label={i === 0 ? "VK (€)" : undefined} value={t.euro} onChange={(v) => setTier(i, { euro: Number(v) || 0 })} min={0} w={120} />
-          <Button size="compact-sm" variant="subtle" color="red" disabled={tiers.length === 1} onClick={() => setTiers((ts) => ts.filter((_, j) => j !== i))}>✕</Button>
-        </Group>
-      ))}
-      <Button size="compact-xs" variant="light" mt="xs" onClick={() => setTiers((ts) => prefillTiers(typeof ek === "number" ? ek : 0, [...ts, { minMenge: (ts.at(-1)?.minMenge ?? 0) + 10, euro: 0 }]))}>+ Staffelstufe</Button>
+      <Title order={6} mt="md">Mengenstaffel (EK + VK je Stück)</Title>
+      <Text size="xs" c="dimmed" mb={4}>EK je Stufe (Stickerei-VK an uns); VK wird über den Aufschlagsfaktor vorbelegt und ist überschreibbar.</Text>
+      {tiers.map((t, i) => {
+        const db = t.ek > 0 ? Math.round((t.euro - t.ek) * 100) / 100 : null;
+        return (
+          <Group key={i} gap="xs" mt={4} align="end">
+            <NumberInput label={i === 0 ? "ab Menge" : undefined} value={t.minMenge} onChange={(v) => setTier(i, { minMenge: Number(v) || 1 })} min={1} w={100} />
+            <MoneyInput label={i === 0 ? "EK (€)" : undefined} value={t.ek || ""} onChange={(v) => { const n = typeof v === "number" ? v : 0; setTier(i, { ek: n, euro: t.euro === 0 || t.euro === vkFromEk(t.ek, t.minMenge) ? vkFromEk(n, t.minMenge) : t.euro }); }} min={0} w={110} placeholder="EK" />
+            <MoneyInput label={i === 0 ? "VK (€)" : undefined} value={t.euro} onChange={(v) => setTier(i, { euro: Number(v) || 0 })} min={0} w={110} />
+            <Text size="xs" c={db == null ? "dimmed" : db >= 0 ? "teal" : "red"} mb={6} w={70} style={{ textAlign: "right" }}>{db == null ? "DB —" : `DB ${db.toFixed(2)}`}</Text>
+            <Button size="compact-sm" variant="subtle" color="red" disabled={tiers.length === 1} onClick={() => setTiers((ts) => ts.filter((_, j) => j !== i))}>✕</Button>
+          </Group>
+        );
+      })}
+      <Button size="compact-xs" variant="light" mt="xs" onClick={() => setTiers((ts) => { const baseEk = typeof ek === "number" ? ek : 0; const minMenge = (ts.at(-1)?.minMenge ?? 0) + 10; return [...ts, { minMenge, ek: baseEk, euro: vkFromEk(baseEk, minMenge) }]; })}>+ Staffelstufe</Button>
       <Group justify="flex-end" mt="lg" align="center">
         {(() => {
           const fehlt = [!name.trim() && "Bezeichnung", !sku.trim() && "Artikel-Nr. (SKU)", (!inhouse && !veredlerId) && "Veredler", ek === "" && "EK"].filter(Boolean);

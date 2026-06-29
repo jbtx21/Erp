@@ -103,10 +103,12 @@ export interface ComponentInput {
   componentVariantId?: string | null;
 }
 
-/** Mengenstaffel-Stufe eines Veredelungs-/Logo-Artikels (ab minMenge gilt vkCents). */
+/** Mengenstaffel-Stufe eines Veredelungs-/Logo-Artikels (ab minMenge gilt vkCents).
+ * `ekCents` optional je Stufe (Stick-EK gestaffelt nach Menge) → VariantEkTier. */
 export interface VeredelungTier {
   minMenge: number;
   vkCents: number;
+  ekCents?: number | null;
 }
 
 /** Anlage eines Veredelungs-/Logo-Artikels mit Pflicht-Veredler + eigener Staffel. */

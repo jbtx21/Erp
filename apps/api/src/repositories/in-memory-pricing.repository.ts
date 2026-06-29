@@ -7,6 +7,7 @@ export class InMemoryPricingRepository implements PricingRepository {
   private readonly contexts = new Map<string, PriceContext>();
   private readonly ek = new Map<string, number>();
   private readonly standardTiers = new Map<string, PriceTier[]>();
+  private readonly ekTiersByVariant = new Map<string, { minMenge: number; ekCents: number }[]>();
 
   set(companyId: string, variantId: string, ctx: PriceContext): void {
     this.contexts.set(`${companyId}:${variantId}`, ctx);
@@ -18,6 +19,10 @@ export class InMemoryPricingRepository implements PricingRepository {
 
   setStandardTiers(variantId: string, tiers: PriceTier[]): void {
     this.standardTiers.set(variantId, tiers);
+  }
+
+  setEkTiers(variantId: string, tiers: { minMenge: number; ekCents: number }[]): void {
+    this.ekTiersByVariant.set(variantId, tiers);
   }
 
   private ensure(companyId: string, variantId: string): PriceContext {
@@ -57,5 +62,9 @@ export class InMemoryPricingRepository implements PricingRepository {
 
   async listStandardTiers(variantId: string): Promise<PriceTier[]> {
     return this.standardTiers.get(variantId) ?? [];
+  }
+
+  async ekTiers(variantId: string): Promise<{ minMenge: number; ekCents: number }[]> {
+    return this.ekTiersByVariant.get(variantId) ?? [];
   }
 }

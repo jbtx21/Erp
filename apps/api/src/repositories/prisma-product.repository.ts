@@ -267,6 +267,13 @@ export class PrismaProductRepository implements ProductRepository {
           data: input.tiers.map((t) => ({ variantId, priceGroupId: standard.id, minMenge: t.minMenge, netCents: t.vkCents })),
         });
       }
+      // EK-Mengenstaffel (Stick-EK je Stück gestaffelt) — Quelle für den DB je Stufe im Angebot.
+      const ekTiers = input.tiers.filter((t) => t.ekCents != null);
+      if (ekTiers.length > 0) {
+        await tx.variantEkTier.createMany({
+          data: ekTiers.map((t) => ({ variantId, minMenge: t.minMenge, ekCents: t.ekCents as number })),
+        });
+      }
       const baseVk = input.tiers[0]?.vkCents ?? 0;
       return { variantId, articleId: article.id, articleName: article.name, sku: input.sku, description: "", label: `${article.name} (${input.sku})`, unitNetCents: baseVk, isBundle: false };
     });

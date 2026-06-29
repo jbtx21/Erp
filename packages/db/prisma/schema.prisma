@@ -591,6 +591,21 @@ model PriceGroupPriceTier {
   @@unique([variantId, priceGroupId, minMenge])
 }
 
+// EK-Mengenstaffel je Variante (vor allem Veredelung/Stick): die Stickerei gibt uns ihren
+// VK (= unseren EK) je Stück gestaffelt nach Bestellmenge. Anders als der flache
+// SupplierItem.ekCents trägt diese Staffel je Stufe einen eigenen EK — Quelle für den
+// Deckungsbeitrag je Stufe im Angebot (buildStaffelLadder). variantId als reine Spalte
+// (wie OrderLine.variantId), kein Prisma-Relations-Zwang.
+model VariantEkTier {
+  id        String @id @default(cuid())
+  variantId String
+  minMenge  Int // untere Staffelgrenze in Stück (1, 10, 25, 50, 100, 250 …)
+  ekCents   Int // EK je Stück in Cent (VK der Stickerei an uns) ab dieser Menge
+
+  @@unique([variantId, minMenge])
+  @@index([variantId])
+}
+
 // Kundenindividuelle Basispreis-Staffel (B4). Höchste Präzedenz — sticht vor der
 // Preisgruppen-Staffel und dem Einzelpreis.
 model CustomerPriceTier {

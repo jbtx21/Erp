@@ -92,4 +92,18 @@ describe("PricingService.staffelpreise (C+D — Anzeige-Staffel VK+EK+DB)", () =
       [100, 700, "STANDARD", 100],
     ]);
   });
+
+  it("nutzt die EK-Staffel je Stufe statt des flachen EK (Stick-EK gestaffelt)", async () => {
+    const repo = new InMemoryPricingRepository();
+    const svc = new PricingService(repo, new MemoryAuditSink());
+    repo.setStandardTiers("vstick", [{ minMenge: 1, netCents: 821 }, { minMenge: 50, netCents: 603 }, { minMenge: 250, netCents: 539 }]);
+    repo.setEk("vstick", 437); // flacher Fallback
+    repo.setEkTiers("vstick", [{ minMenge: 1, ekCents: 437 }, { minMenge: 50, ekCents: 321 }, { minMenge: 250, ekCents: 287 }]);
+    const { staffeln } = await svc.staffelpreise("co1", "vstick");
+    expect(staffeln.map((s) => [s.minMenge, s.ekCents, s.dbCents])).toEqual([
+      [1, 437, 821 - 437],
+      [50, 321, 603 - 321],
+      [250, 287, 539 - 287],
+    ]);
+  });
 });

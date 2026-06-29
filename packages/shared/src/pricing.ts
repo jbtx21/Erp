@@ -116,30 +116,49 @@ export interface StaffelLadderInput {
   customerTiers: ReadonlyArray<PriceTier>;
   /** Bester Lieferanten-EK je Stück (null = kein EK hinterlegt → DB unbekannt). */
   ekCents: Cents | null;
+  /**
+   * Optionale EK-Mengenstaffel (z. B. Stick-EK je Stück gestaffelt nach Menge). Je VK-Stufe
+   * gilt die EK-Stufe mit der größten `minMenge` ≤ Stufenmenge (Stufenfunktion). Leer/fehlend
+   * → Rückfall auf den flachen `ekCents` für alle Stufen.
+   */
+  ekTiers?: ReadonlyArray<{ minMenge: number; ekCents: Cents }>;
+}
+
+/** EK für eine Mengengrenze aus der EK-Staffel (größte minMenge ≤ menge); sonst Fallback. */
+function ekForMenge(ekTiers: ReadonlyArray<{ minMenge: number; ekCents: Cents }>, menge: number, fallback: Cents | null): Cents | null {
+  let best: Cents | null = fallback;
+  let bestMin = -1;
+  for (const t of ekTiers) {
+    if (t.minMenge <= menge && t.minMenge > bestMin) { best = t.ekCents; bestMin = t.minMenge; }
+  }
+  return best;
 }
 
 /**
  * Baut die Anzeige-Staffel (Mengenstaffel mit VK+EK+DB je Stufe) für die Positionsmaske
- * (B4/D, C+D): je Mengengrenze sticht KUNDE > GRUPPE > STANDARD. EK ist (mangels eigener
- * EK-Staffel) der beste Lieferanten-EK und gilt für alle Stufen; der DB variiert mit dem VK.
- * Aufsteigend nach minMenge sortiert.
+ * (B4/D, C+D): je Mengengrenze sticht KUNDE > GRUPPE > STANDARD. Liegt eine EK-Staffel vor
+ * (`ekTiers`), gilt je Stufe der gestaffelte EK (Stufenfunktion), sonst der flache `ekCents`;
+ * der DB variiert mit VK und EK. Aufsteigend nach minMenge sortiert.
  */
 export function buildStaffelLadder(input: StaffelLadderInput): StaffelStufe[] {
   const byMenge = new Map<number, { vkCents: Cents; quelle: StaffelStufe["quelle"] }>();
   for (const t of input.standardTiers) byMenge.set(t.minMenge, { vkCents: t.netCents, quelle: "STANDARD" });
   for (const t of input.groupTiers) byMenge.set(t.minMenge, { vkCents: t.netCents, quelle: "GRUPPE" });
   for (const t of input.customerTiers) byMenge.set(t.minMenge, { vkCents: t.netCents, quelle: "KUNDE" });
-  const ek = input.ekCents;
+  const ekTiers = input.ekTiers ?? [];
   return [...byMenge.entries()]
     .sort((a, b) => a[0] - b[0])
-    .map(([minMenge, v]) => ({
-      minMenge,
-      vkCents: v.vkCents,
-      ekCents: ek,
-      dbCents: ek === null ? null : deckungsbeitrag(v.vkCents, ek),
-      dbMargePct: ek === null ? null : dbMarge(v.vkCents, ek),
-      quelle: v.quelle,
-    }));
+    .map(([minMenge, v]) => {
+      const ek = ekForMenge(ekTiers, minMenge, input.ekCents);
+      return {
+        minMenge,
+        vkCents: v.vkCents,
+        ekCents: ek,
+        dbCents: ek === null ? null : deckungsbeitrag(v.vkCents, ek),
+        dbMargePct: ek === null ? null : dbMarge(v.vkCents, ek),
+        quelle: v.quelle,
+      };
+    });
 }
 
 export interface BasePriceSources {
