@@ -101,20 +101,33 @@ async function renderTexmaLetter(beleg: BelegDokument, firma: FirmenProfil): Pro
     // Platzierung (Brust/Rücken) als erste Zusatzzeile unter der Bezeichnung.
     const detailSrc = [...(p.platzierung ? [`Platzierung: ${p.platzierung}`] : []), ...(p.detail ?? [])];
     const detail = detailSrc.flatMap((d) => wrap(d, font, 9, cols.preis - cols.bez - 8));
-    ensure(14 + detail.length * 11 + (p.alternativ ? 12 : 0) + 8);
+    // Kundenseitige Mengenstaffel (nur VK) als eigener Zusatzblock unter der Position.
+    const staffel = p.staffel ?? [];
+    ensure(14 + detail.length * 11 + (staffel.length > 0 ? (staffel.length + 1) * 11 : 0) + (p.alternativ ? 12 : 0) + 8);
     if (p.alternativ) { page.drawText("Alternativ :", { x: cols.art, y, size: 8.5, font: bold, color: GREY }); y -= 12; }
-    if (p.artNr) page.drawText(p.artNr, { x: cols.art, y, size: 9, font });
+    // Spaltenbreiten respektieren, damit Art-Nr./Bezeichnung nicht in die Nachbarspalte laufen.
+    if (p.artNr) page.drawText(fit(p.artNr, font, 9, cols.menge - cols.art - 6), { x: cols.art, y, size: 9, font });
     page.drawText(String(p.menge), { x: cols.menge, y, size: 9, font });
-    page.drawText(p.bezeichnung.slice(0, 48), { x: cols.bez, y, size: 9.5, font: bold });
+    page.drawText(fit(p.bezeichnung, bold, 9.5, cols.preis - cols.bez - 8), { x: cols.bez, y, size: 9.5, font: bold });
     // Alternativtext („nach Aufwand") überdruckt den Euro-Betrag; sonst Einzelpreis + Summe.
     if (beleg.zeigePreise && p.altPreisText) {
-      page.drawText(p.altPreisText.slice(0, 22), { x: cols.preis, y, size: 9, font, color: GREY });
+      page.drawText(fit(p.altPreisText, font, 9, cols.summe - cols.preis - 4), { x: cols.preis, y, size: 9, font, color: GREY });
     } else {
       if (beleg.zeigePreise && p.einzelpreis) page.drawText(p.einzelpreis, { x: cols.preis, y, size: 9, font });
       if (beleg.zeigePreise && p.gesamt) page.drawText(p.gesamt, { x: cols.summe, y, size: 9, font });
     }
     y -= 12;
     for (const d of detail) { page.drawText(d, { x: cols.bez, y, size: 9, font, color: rgb(0.25, 0.25, 0.25) }); y -= 11; }
+    // Mengenstaffel: „ab N Stück: P €/Stück" je Stufe (Kunde sieht nur den VK).
+    if (beleg.zeigePreise && staffel.length > 0) {
+      page.drawText("Mengenstaffel (Preis je Stück):", { x: cols.bez, y, size: 8.5, font: bold, color: GREY });
+      y -= 11;
+      for (const st of staffel) {
+        page.drawText(`ab ${st.abMenge} Stück`, { x: cols.bez + 6, y, size: 8.5, font, color: rgb(0.3, 0.3, 0.3) });
+        page.drawText(st.preis, { x: cols.preis, y, size: 8.5, font, color: rgb(0.3, 0.3, 0.3) });
+        y -= 11;
+      }
+    }
     y -= 8;
   }
   // Summenblock
@@ -157,6 +170,18 @@ function footerBand(page: PDFPage, font: PDFFont, bold: PDFFont, f: FirmenProfil
     let yy = top + h - 12;
     for (const l of lines) { page.drawText(l, { x, y: yy, size: 5.6, font, color: GREY }); yy -= 8; }
   }
+}
+
+// Text auf eine Spaltenbreite kürzen (mit „…"), damit er nicht in die Nachbarspalte läuft.
+function fit(txt: string, font: PDFFont, size: number, max: number): string {
+  const s = String(txt);
+  if (font.widthOfTextAtSize(s, size) <= max) return s;
+  let lo = 0, hi = s.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (font.widthOfTextAtSize(s.slice(0, mid) + "…", size) <= max) lo = mid; else hi = mid - 1;
+  }
+  return s.slice(0, lo).trimEnd() + "…";
 }
 
 function wrap(txt: string, font: PDFFont, size: number, max: number): string[] {

@@ -26,6 +26,9 @@ export interface BelegPosition {
   altPreisText?: string;
   /** Position im PDF ausblenden (interne Position). */
   imPdfAusblenden?: boolean;
+  /** Kundenseitige Mengenstaffel (z. B. Stick-VK je Stück gestaffelt) — nur VK, kein EK.
+   *  Wird als Zusatzblock unter der Position gerendert. */
+  staffel?: Array<{ abMenge: number; preis: string }>;
   /** Strukturzeile (Xentral-Spezialfeld): Gruppenüberschrift / Zwischen- / Gruppensumme.
    *  Wenn gesetzt, rendert der Beleg-Renderer KEINE normale Positionszeile, sondern die
    *  Überschrift bzw. eine Summenzeile (strukturBetrag). */
@@ -255,6 +258,16 @@ export interface PreisPosition {
   imPdfAusblenden?: boolean;
   /** Strukturzeile (Xentral-Spezialfeld): GRUPPE/ZWISCHENSUMME/GRUPPENSUMME. Fehlend = ARTIKEL. */
   lineType?: LineType | null;
+  /** Kundenseitige Mengenstaffel (VK je Stück je Mengengrenze) — nur VK, kein EK. */
+  staffel?: Array<{ abMenge: number; vkCents: Cents }> | null;
+}
+
+/** Entfernt einen anhängenden „(SKU)"-Klammerzusatz, wenn er die Art-Nr. doppelt (sonst
+ *  steht die SKU im Beleg zweimal: in der Art-Nr.-Spalte und in der Bezeichnung). */
+function stripArtNrSuffix(bezeichnung: string, artNr?: string): string {
+  if (!artNr) return bezeichnung;
+  const suffix = ` (${artNr})`;
+  return bezeichnung.endsWith(suffix) ? bezeichnung.slice(0, -suffix.length).trimEnd() : bezeichnung;
 }
 
 /**
@@ -307,7 +320,7 @@ function preisPositionen(ps: PreisPosition[]): BelegPosition[] {
     }
     return {
       menge: p.menge,
-      bezeichnung: redactKundenbezeichnung(p.bezeichnung),
+      bezeichnung: stripArtNrSuffix(redactKundenbezeichnung(p.bezeichnung), p.artNr ?? undefined),
       // Einzelpreis = VK-Liste (vor Rabatt), sonst der effektive Netto; Zeilenbetrag = effektiver Netto × Menge.
       einzelpreis: formatEur(p.listenpreisCents ?? p.einzelpreisCents),
       ...(p.rabattPct ? { rabatt: `${p.rabattPct} %` } : {}),
@@ -318,6 +331,8 @@ function preisPositionen(ps: PreisPosition[]): BelegPosition[] {
       ...(p.platzierung ? { platzierung: p.platzierung } : {}),
       ...(p.altPreisText ? { altPreisText: p.altPreisText } : {}),
       ...(p.imPdfAusblenden ? { imPdfAusblenden: true } : {}),
+      // Mengenstaffel (nur wenn mehr als eine Stufe) als Zusatzblock unter der Position.
+      ...(p.staffel && p.staffel.length > 1 ? { staffel: p.staffel.map((s) => ({ abMenge: s.abMenge, preis: formatEur(s.vkCents) })) } : {}),
     };
   });
 }

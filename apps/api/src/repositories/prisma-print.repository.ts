@@ -37,6 +37,28 @@ function lineExtras(variantId: string | null, map: VariantDetailMap): { artNr?: 
   return { artNr: variant.sku, ...(detail.length ? { detail } : {}) };
 }
 
+/** Kundenseitige VK-Mengenstaffel (STANDARD-Preisgruppe) je Variante — z. B. der Stick-VK
+ *  gestaffelt nach Menge. Nur VK (kein EK); wird im Angebot/AB als Staffel-Block gezeigt. */
+type StaffelMap = Map<string, { abMenge: number; vkCents: number }[]>;
+async function loadStaffeln(variantIds: (string | null)[]): Promise<StaffelMap> {
+  const ids = [...new Set(variantIds.filter((v): v is string => !!v))];
+  if (ids.length === 0) return new Map();
+  const std = await prisma.priceGroup.findFirst({ where: { kind: "STANDARD" }, select: { id: true } });
+  if (!std) return new Map();
+  const tiers = await prisma.priceGroupPriceTier.findMany({
+    where: { variantId: { in: ids }, priceGroupId: std.id },
+    select: { variantId: true, minMenge: true, netCents: true },
+    orderBy: { minMenge: "asc" },
+  });
+  const m: StaffelMap = new Map();
+  for (const t of tiers) { const arr = m.get(t.variantId) ?? []; arr.push({ abMenge: t.minMenge, vkCents: t.netCents }); m.set(t.variantId, arr); }
+  return m;
+}
+function staffelFor(variantId: string | null, map: StaffelMap): { staffel?: { abMenge: number; vkCents: number }[] } {
+  const s = variantId ? map.get(variantId) : undefined;
+  return s && s.length > 1 ? { staffel: s } : {};
+}
+
 // Positions-Strukturfelder (Positionsmaske) → Belegposition: Platzierung, Alt-Preistext, PDF-ausblenden.
 function lineStruct(l: { placement?: string | null; altPreisText?: string | null; imPdfAusblenden?: boolean; lineType?: string | null }): { platzierung?: string; altPreisText?: string; imPdfAusblenden?: boolean; lineType?: LineType } {
   return {
@@ -324,7 +346,8 @@ export class PrismaPrintRepository implements PrintRepository {
     });
     if (!q) return null;
     const vmap = await loadVariantDetails(q.lines.map((l) => l.variantId));
-    const positionen: PricePrintLine[] = q.lines.map((l) => ({ menge: l.qty, bezeichnung: l.description, einzelpreisCents: l.unitNetCents, listenpreisCents: l.listNetCents, rabattPct: l.rabattPct, ...lineExtras(l.variantId, vmap), ...lineStruct(l) }));
+    const smap = await loadStaffeln(q.lines.map((l) => l.variantId));
+    const positionen: PricePrintLine[] = q.lines.map((l) => ({ menge: l.qty, bezeichnung: l.description, einzelpreisCents: l.unitNetCents, listenpreisCents: l.listNetCents, rabattPct: l.rabattPct, ...lineExtras(l.variantId, vmap), ...lineStruct(l), ...staffelFor(l.variantId, smap) }));
     return { number: q.number, datum: q.createdAt, empfaenger: recipientLines(q.company, null), positionen, ...totals(positionen), gueltigBis: q.gueltigBisAm, meta: await this.buildMeta(q.company) };
   }
 
@@ -359,7 +382,8 @@ export class PrismaPrintRepository implements PrintRepository {
     });
     if (!o) return null;
     const vmap = await loadVariantDetails(o.lines.map((l) => l.variantId));
-    const positionen: PricePrintLine[] = o.lines.map((l) => ({ menge: l.qty, bezeichnung: l.description, einzelpreisCents: l.unitNetCents, listenpreisCents: l.listNetCents, rabattPct: l.rabattPct, ...lineExtras(l.variantId, vmap), ...lineStruct(l) }));
+    const smap = await loadStaffeln(o.lines.map((l) => l.variantId));
+    const positionen: PricePrintLine[] = o.lines.map((l) => ({ menge: l.qty, bezeichnung: l.description, einzelpreisCents: l.unitNetCents, listenpreisCents: l.listNetCents, rabattPct: l.rabattPct, ...lineExtras(l.variantId, vmap), ...lineStruct(l), ...staffelFor(l.variantId, smap) }));
     return {
       number: o.number, datum: o.createdAt, empfaenger: recipientLines(o.company, o.deliveryAddress),
       positionen, ...totals(positionen), liefertermin: o.zugesagterLiefertermin, bestellreferenz: o.externalNumber,
