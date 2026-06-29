@@ -2472,11 +2472,11 @@ function LogoArticleDialog({ onClose, onCreated, initial, title = "Logo / Verede
       <Button size="compact-xs" variant="light" mt="xs" onClick={() => setTiers((ts) => prefillTiers(typeof ek === "number" ? ek : 0, [...ts, { minMenge: (ts.at(-1)?.minMenge ?? 0) + 10, euro: 0 }]))}>+ Staffelstufe</Button>
       <Group justify="flex-end" mt="lg" align="center">
         {(() => {
-          const fehlt = [!name.trim() && "Bezeichnung", !sku.trim() && "Artikel-Nr. (SKU)", (!inhouse && !veredlerId) && "Veredler"].filter(Boolean);
+          const fehlt = [!name.trim() && "Bezeichnung", !sku.trim() && "Artikel-Nr. (SKU)", (!inhouse && !veredlerId) && "Veredler", ek === "" && "EK"].filter(Boolean);
           return fehlt.length > 0 ? <Text size="xs" c="dimmed">Bitte ausfüllen: {fehlt.join(", ")}</Text> : null;
         })()}
         <Button variant="default" onClick={onClose}>Abbrechen</Button>
-        <Button loading={busy} disabled={!name.trim() || !sku.trim() || (!inhouse && !veredlerId)} onClick={() => void create()}>Anlegen &amp; übernehmen</Button>
+        <Button loading={busy} disabled={!name.trim() || !sku.trim() || (!inhouse && !veredlerId) || ek === ""} onClick={() => void create()}>Anlegen &amp; übernehmen</Button>
       </Group>
     </Modal>
   );
@@ -2485,11 +2485,17 @@ function LogoArticleDialog({ onClose, onCreated, initial, title = "Logo / Verede
 // Textilartikel (frei erfasst) als wiederverwendbaren Stammartikel speichern — inline aus
 // der Positionszeile heraus, mitten im Walkthrough. Bezeichnung/SKU/Beschreibung +
 // optional Farbe/Größe (Basis-Variante). Nach Anlage wird die Zeile an die Variante gebunden.
-function TextilCatalogDialog({ onClose, onCreated, initial }: { onClose: () => void; onCreated: (e: { label: string; variantId: string; unitNetCents: number; sku?: string; articleName?: string }) => void; initial?: { name?: string; sku?: string; description?: string } }): JSX.Element {
+function TextilCatalogDialog({ onClose, onCreated, initial }: { onClose: () => void; onCreated: (e: { label: string; variantId: string; unitNetCents: number; sku?: string; articleName?: string }) => void; initial?: { name?: string; sku?: string; description?: string; ekEuro?: number; vkEuro?: number } }): JSX.Element {
   const [name, setName] = useState(initial?.name ?? "");
   const [sku, setSku] = useState(initial?.sku ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [farbe, setFarbe] = useState(""); const [groesse, setGroesse] = useState("");
+  // EK ist Pflicht (Lieferanten-EK trägt den Deckungsbeitrag/die Nachbestellung); EK braucht
+  // einen Lieferant, an dem er als SupplierItem hängt. VK = STANDARD-Preis (überschreibt den
+  // erfassten VK der Position nicht, wenn leer).
+  const [lieferantId, setLieferantId] = useState("");
+  const [ek, setEk] = useState<number | "">(initial?.ekEuro ?? "");
+  const [vk, setVk] = useState<number | "">(initial?.vkEuro ?? "");
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
   const create = async (): Promise<void> => {
     setBusy(true); setErr(null);
@@ -2498,10 +2504,16 @@ function TextilCatalogDialog({ onClose, onCreated, initial }: { onClose: () => v
         ...(farbe.trim() ? [{ name: "Farbe", value: farbe.trim() }] : []),
         ...(groesse.trim() ? [{ name: "Größe", value: groesse.trim() }] : []),
       ];
-      const e = await trpc.products.quickCreate.mutate({ sku: sku.trim(), name: name.trim(), ...(description.trim() ? { description: description.trim() } : {}), attributes });
+      const e = await trpc.products.quickCreate.mutate({
+        sku: sku.trim(), name: name.trim(), ...(description.trim() ? { description: description.trim() } : {}), attributes,
+        ...(typeof ek === "number" ? { ekCents: Math.round(ek * 100) } : {}),
+        ...(lieferantId ? { supplierId: lieferantId } : {}),
+        ...(typeof vk === "number" ? { vkCents: Math.round(vk * 100) } : {}),
+      });
       onCreated({ label: e.label, variantId: e.variantId, unitNetCents: e.unitNetCents, sku: sku.trim(), articleName: name.trim() });
     } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
   };
+  const fehlt = [!name.trim() && "Bezeichnung", !sku.trim() && "Artikel-Nr.", ek === "" && "EK", !lieferantId && "Lieferant"].filter(Boolean);
   return (
     <Modal opened onClose={onClose} title="Textilartikel in Katalog speichern" size="md">
       {err && <Alert color="red" mb="sm">{err}</Alert>}
@@ -2511,12 +2523,18 @@ function TextilCatalogDialog({ onClose, onCreated, initial }: { onClose: () => v
       </Group>
       <TextInput label="Beschreibung" placeholder="Material, Schnitt …" mt="sm" value={description} onChange={(e) => setDescription(e.currentTarget.value)} />
       <Group gap="md" align="end" wrap="wrap" mt="sm">
-        <TextInput label="Farbe" placeholder="optional" w={140} value={farbe} onChange={(e) => setFarbe(e.currentTarget.value)} />
-        <TextInput label="Größe" placeholder="optional" w={120} value={groesse} onChange={(e) => setGroesse(e.currentTarget.value)} />
+        <TextInput label="Farbe" placeholder="optional" w={120} value={farbe} onChange={(e) => setFarbe(e.currentTarget.value)} />
+        <TextInput label="Größe" placeholder="optional" w={100} value={groesse} onChange={(e) => setGroesse(e.currentTarget.value)} />
       </Group>
-      <Group justify="flex-end" mt="lg">
+      <Group gap="md" align="end" wrap="wrap" mt="sm">
+        <SupplierPicker label="Lieferant (für EK)" value={lieferantId} onChange={setLieferantId} w={220} />
+        <MoneyInput label="EK je Stück (€)" withAsterisk value={ek} onChange={(v) => setEk(typeof v === "number" ? v : "")} min={0} w={140} placeholder="Pflicht" />
+        <MoneyInput label="VK je Stück (€)" value={vk} onChange={(v) => setVk(typeof v === "number" ? v : "")} min={0} w={140} placeholder="optional" />
+      </Group>
+      <Group justify="flex-end" mt="lg" align="center">
+        {fehlt.length > 0 && <Text size="xs" c="dimmed">Bitte ausfüllen: {fehlt.join(", ")}</Text>}
         <Button variant="default" onClick={onClose}>Abbrechen</Button>
-        <Button loading={busy} disabled={!name.trim() || !sku.trim()} onClick={() => void create()}>Speichern &amp; übernehmen</Button>
+        <Button loading={busy} disabled={fehlt.length > 0} onClick={() => void create()}>Speichern &amp; übernehmen</Button>
       </Group>
     </Modal>
   );
@@ -2869,7 +2887,7 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
       {/* Inline-Katalogspeicherung einer frei erfassten TEXTIL-Position: schlankes Stamm-Formular. */}
       {textilSaveFor !== null && lines[textilSaveFor] && (
         <TextilCatalogDialog
-          initial={{ name: lines[textilSaveFor]!.articleName?.trim() || lines[textilSaveFor]!.description.trim(), sku: lines[textilSaveFor]!.articleNumber?.trim() || "", description: lines[textilSaveFor]!.description.trim() }}
+          initial={{ name: lines[textilSaveFor]!.articleName?.trim() || lines[textilSaveFor]!.description.trim(), sku: lines[textilSaveFor]!.articleNumber?.trim() || "", description: lines[textilSaveFor]!.description.trim(), ...(lines[textilSaveFor]!.ekEuro !== undefined ? { ekEuro: lines[textilSaveFor]!.ekEuro } : {}), vkEuro: lines[textilSaveFor]!.euro }}
           onClose={() => setTextilSaveFor(null)}
           onCreated={(e) => { bindRowToCatalog(textilSaveFor, e); setTextilSaveFor(null); }}
         />

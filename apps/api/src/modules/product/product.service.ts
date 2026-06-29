@@ -157,6 +157,9 @@ export interface ProductRepository {
   setComponents(variantId: string, components: ComponentInput[]): Promise<void>;
   /** Prüft, ob ein Lieferant (Veredler) existiert. */
   supplierExists(id: string): Promise<boolean>;
+  /** Hängt EK (SupplierItem beim Lieferant) und/oder VK (STANDARD-Preisgruppe) an eine frisch
+   * angelegte Variante — für die Inline-Schnellanlage aus dem Positionseditor. */
+  setVariantPricing(variantId: string, pricing: { supplierId?: string | null; ekCents?: number | null; vkCents?: number | null }): Promise<void>;
   /** Legt einen Veredelungs-/Logo-Artikel mit (optionalem) Veredler, EK und Mengenstaffel an. */
   createVeredelungArticle(input: Required<Pick<CreateVeredelungInput, "name" | "sku" | "method">> & { veredlerId: string | null; materialSupplierId: string | null; placements: string[]; ekCents: number | null; tiers: VeredelungTier[] }): Promise<CatalogEntry>;
 }
@@ -271,16 +274,25 @@ export class ProductService {
     name: string;
     description?: string;
     attributes?: Array<{ name: string; value: string }>;
+    // Inline-Bepreisung: EK beim (Textil-)Lieferant + VK als STANDARD-Preis. EK braucht einen
+    // Lieferant, sonst kann er nicht am Stamm hängen (SupplierItem).
+    ekCents?: number | null;
+    supplierId?: string | null;
+    vkCents?: number | null;
   }): Promise<CatalogEntry> {
     const attributes = (input.attributes ?? []).filter((a) => a.name.trim() && a.value.trim());
     const description = input.description?.trim() ?? "";
+    const supplierId = input.supplierId?.trim() || null;
+    if (input.ekCents != null && !supplierId) throw new ProductError("Für den EK-Preis ist ein Lieferant nötig.");
+    if (supplierId && !(await this.repo.supplierExists(supplierId))) throw new ProductError("Unbekannter Lieferant.");
     const art = await this.createArticle(input.sku, input.name, description);
     const baseSku = input.sku.trim();
     const variantSku = attributes.length ? `${baseSku}-${attributes.map((a) => a.value.trim()).join("-")}` : baseSku;
     const v = await this.createVariant({ articleId: art.id, sku: variantSku, attributes });
+    await this.repo.setVariantPricing(v.id, { supplierId, ekCents: input.ekCents ?? null, vkCents: input.vkCents ?? null });
     const attrText = attributes.map((a) => a.value.trim()).join(" / ");
     const label = `${input.name.trim()}${attrText ? ` — ${attrText}` : ""} (${variantSku})`;
-    return { variantId: v.id, articleId: art.id, articleName: input.name.trim(), sku: variantSku, description, label, unitNetCents: 0, isBundle: false };
+    return { variantId: v.id, articleId: art.id, articleName: input.name.trim(), sku: variantSku, description, label, unitNetCents: input.vkCents ?? 0, isBundle: false };
   }
 
   /** Stückliste (Komponenten) einer Set-Variante (Kap. 5.1). */

@@ -228,6 +228,18 @@ export class PrismaProductRepository implements ProductRepository {
     return (await prisma.supplier.count({ where: { id } })) > 0;
   }
 
+  async setVariantPricing(variantId: string, pricing: { supplierId?: string | null; ekCents?: number | null; vkCents?: number | null }): Promise<void> {
+    // EK als Lieferanten-Artikel (Hauptlieferant, priority 1) — nur mit Lieferant.
+    if (pricing.ekCents != null && pricing.supplierId) {
+      await prisma.supplierItem.create({ data: { supplierId: pricing.supplierId, variantId, ekCents: pricing.ekCents, priority: 1 } });
+    }
+    // VK als flacher STANDARD-Preis (Basis-Preisgruppe); Staffeln kommen ggf. separat dazu.
+    if (pricing.vkCents != null) {
+      const std = await prisma.priceGroup.findFirst({ where: { kind: "STANDARD" }, select: { id: true } });
+      if (std) await prisma.priceGroupPrice.create({ data: { variantId, priceGroupId: std.id, netCents: pricing.vkCents } });
+    }
+  }
+
   async createVeredelungArticle(input: { name: string; sku: string; method: "STICK" | "DRUCK" | "DRUCK_DIGITAL" | "TRANSFER"; placements: string[]; veredlerId: string | null; materialSupplierId: string | null; ekCents: number | null; tiers: VeredelungTier[] }): Promise<CatalogEntry> {
     // VK-Staffel des Logos liegt unter der Basis-Preisgruppe STANDARD (Preisgruppe ≠ Mengenstaffel).
     const standard = input.tiers.length > 0 ? await prisma.priceGroup.findFirst({ where: { kind: "STANDARD" }, select: { id: true } }) : null;

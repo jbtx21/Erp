@@ -154,6 +154,11 @@ export class InMemoryProductRepository implements ProductRepository {
 
   async supplierExists(id: string): Promise<boolean> { return this.suppliers.has(id); }
 
+  readonly variantPricing = new Map<string, { supplierId: string | null; ekCents: number | null; vkCents: number | null }>();
+  async setVariantPricing(variantId: string, pricing: { supplierId?: string | null; ekCents?: number | null; vkCents?: number | null }): Promise<void> {
+    this.variantPricing.set(variantId, { supplierId: pricing.supplierId ?? null, ekCents: pricing.ekCents ?? null, vkCents: pricing.vkCents ?? null });
+  }
+
   async createVeredelungArticle(input: { name: string; sku: string; method: "STICK" | "DRUCK" | "DRUCK_DIGITAL" | "TRANSFER"; placements: string[]; veredlerId: string | null; materialSupplierId: string | null; ekCents: number | null; tiers: VeredelungTier[] }): Promise<CatalogEntry> {
     const articleId = `art_${++this.seq}`;
     this.articles.set(articleId, { id: articleId, sku: input.sku, name: input.name, ...emptyPim });

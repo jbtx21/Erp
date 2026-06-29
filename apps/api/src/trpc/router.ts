@@ -1528,6 +1528,10 @@ export const appRouter = router({
         name: z.string().min(1),
         description: z.string().optional(),
         attributes: z.array(z.object({ name: z.string().min(1), value: z.string().min(1) })).optional(),
+        // Inline-Bepreisung beim Anlegen aus dem Positionseditor (EK braucht einen Lieferant).
+        ekCents: z.number().int().nonnegative().optional(),
+        supplierId: z.string().optional(),
+        vkCents: z.number().int().nonnegative().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         try { return await ctx.products.quickCreateCatalogEntry(input); }

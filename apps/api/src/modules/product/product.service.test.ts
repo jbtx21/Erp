@@ -73,6 +73,20 @@ describe("ProductService — PIM-Vollständigkeit + Bearbeitung", () => {
     await expect(svc.quickCreateCatalogEntry({ sku: "  ", name: "X" })).rejects.toBeInstanceOf(ProductError);
     await expect(svc.quickCreateCatalogEntry({ sku: "X-1", name: "  " })).rejects.toBeInstanceOf(ProductError);
   });
+
+  it("Schnellanlage hängt EK (Lieferant) + VK (STANDARD) an die Variante", async () => {
+    const { svc, repo } = await setup();
+    repo.addSupplier("sup_textil");
+    const entry = await svc.quickCreateCatalogEntry({ sku: "CAP-1", name: "Cap 6-Panel", ekCents: 350, supplierId: "sup_textil", vkCents: 790 });
+    expect(entry.unitNetCents).toBe(790); // VK fließt zurück (Bindung der Position)
+    expect(repo.variantPricing.get(entry.variantId)).toMatchObject({ supplierId: "sup_textil", ekCents: 350, vkCents: 790 });
+  });
+
+  it("Schnellanlage lehnt EK ohne Lieferant und unbekannten Lieferant ab", async () => {
+    const { svc } = await setup();
+    await expect(svc.quickCreateCatalogEntry({ sku: "CAP-2", name: "Cap", ekCents: 350 })).rejects.toBeInstanceOf(ProductError);
+    await expect(svc.quickCreateCatalogEntry({ sku: "CAP-3", name: "Cap", ekCents: 350, supplierId: "sup_unbekannt" })).rejects.toBeInstanceOf(ProductError);
+  });
 });
 
 describe("ProductService — Katalogsuche (skalierbarer Picker)", () => {
