@@ -133,7 +133,9 @@ async function renderTexmaLetter(beleg: BelegDokument, firma: FirmenProfil): Pro
   // Summenblock
   if (beleg.summen.length > 0) {
     ensure(60);
-    page.drawLine({ start: { x: cols.preis - 10, y: y + 4 }, end: { x: A4.width - MARGIN, y: y + 4 }, thickness: 0.5, color: GREY });
+    y -= 4; // etwas Luft, damit die Trennlinie nicht in die erste Summenzeile (Nettowert) ragt.
+    // Trennlinie ÜBER der ersten Zeile (oberhalb der Textoberkante), nicht durch den Text.
+    page.drawLine({ start: { x: cols.preis - 10, y: y + 13 }, end: { x: A4.width - MARGIN, y: y + 13 }, thickness: 0.5, color: GREY });
     for (const s of beleg.summen) {
       const end = s.label === "Brutto";
       page.drawText(end ? "Endbetrag  EUR" : s.label === "Netto" ? "Nettowert" : s.label, { x: cols.preis, y, size: end ? 10 : 9, font: end ? bold : font });
