@@ -17,15 +17,25 @@ export interface VeredelungTextilLine {
   menge: number;
 }
 
-/** Eine Veredelungsleistung (Motiv) am Textil. */
+/** Eine Veredelungsleistung (Motiv) am Textil — eine Karte je Veredelung auf dem Werkstattblatt. */
 export interface VeredelungMotivLine {
   /** Leistungs-/Motivbeschreibung (z. B. „Logo Brust links, 2-farbig Siebdruck"). */
   description: string;
   /** Bezogene Textilposition (Auftrags-Positionsnummer); null = unspezifisch. */
   bezugPosition: number | null;
+  /** Platzierung als Karten-Titel (z. B. „Brust rechts"). */
   platzierung?: string;
+  /** Motivname/Logo (z. B. „Logo Autohaus Weeber"); Fallback = description. */
+  motiv?: string;
+  /** Stückzahl dieser Veredelung (Karten-Menge „5x"). */
+  menge?: number;
   farbton?: string;
+  /** Motivgröße (z. B. „8 x 2 cm"). */
   motivGroesse?: string;
+  /** Ausführliche Platzierungsbeschreibung (z. B. „Brust rechts linksbündig unter dem Logo"). */
+  platzierungsdetails?: string;
+  /** Sonstiges (z. B. Einzelname, Sondertext). */
+  sonstiges?: string;
 }
 
 export interface VeredelungsauftragInput {

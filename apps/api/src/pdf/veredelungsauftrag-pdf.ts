@@ -50,6 +50,17 @@ function clip(s: string, font: PDFFont, size: number, max: number): string {
   return out + "…";
 }
 
+/** Kleidungs-Hint mit Platzierungspunkt (Brust links/rechts/Rücken) für die Veredelungskarte. */
+function drawPlacementHint(page: PDFPage, x: number, y: number, w: number, h: number, placement: string, dot: ReturnType<typeof rgb>, border: ReturnType<typeof rgb>): void {
+  page.drawRectangle({ x, y, width: w, height: h, color: rgb(0.95, 0.95, 0.95), borderColor: border, borderWidth: 0.5 });
+  const p = placement.toLowerCase();
+  // Punktposition (relativ 0..1): x links/rechts, y oben (Brust) vs. mittig (Rücken).
+  let fx = 0.5, fy = 0.66;
+  if (/links/.test(p)) fx = 0.36; else if (/rechts/.test(p)) fx = 0.64;
+  if (/r(ü|ue)ck/.test(p)) { fx = 0.5; fy = 0.58; }
+  page.drawEllipse({ x: x + w * fx, y: y + h * fy, xScale: 4.5, yScale: 4.5, color: dot });
+}
+
 export async function renderVeredelungsauftragPdf(doc: VeredelungsauftragDokument): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   pdf.setTitle(`Veredelungsauftrag ${doc.nummer}`);
@@ -149,34 +160,55 @@ export async function renderVeredelungsauftragPdf(doc: VeredelungsauftragDokumen
   page.drawText(`Gesamt beigestellt: ${doc.beistellGesamt} Stück`, { x: xBez, y, size: 8.5, font: bold });
   y -= 22;
 
-  // ── Veredelungspositionen ───────────────────────────────────────────────────
+  // ── Veredelungspositionen (Karten je Veredelung) ────────────────────────────
   ensure(40);
-  page.drawText("Veredelungspositionen", { x: MARGIN, y, size: 10, font: bold, color: DARK });
-  y -= 16;
-  const pMotivW = 250, pPlatzW = 120, pGroesseW = 70;
-  const pxMotiv = MARGIN, pxPlatz = pxMotiv + pMotivW, pxGroesse = pxPlatz + pPlatzW, pxFarbton = pxGroesse + pGroesseW;
-  page.drawRectangle({ x: MARGIN - 3, y: y - 4, width: tableW + 6, height: 16, color: HEAD });
-  page.drawText("Motiv / Leistung", { x: pxMotiv, y, size: 8, font: bold });
-  page.drawText("Platzierung", { x: pxPlatz, y, size: 8, font: bold });
-  page.drawText("Motivgröße", { x: pxGroesse, y, size: 8, font: bold });
-  page.drawText("Farbton", { x: pxFarbton, y, size: 8, font: bold });
-  y -= 16;
+  page.drawRectangle({ x: MARGIN - 5, y: y - 4, width: A4.width - 2 * (MARGIN - 5), height: 16, color: DARK });
+  page.drawText("VEREDELUNGSPOSITIONEN", { x: MARGIN, y, size: 9, font: bold, color: rgb(1, 1, 1) });
+  y -= 22;
   if (doc.positionen.length === 0) {
-    page.drawText("— keine Veredelungspositionen —", { x: pxMotiv, y, size: 8, font, color: GREY });
+    page.drawText("— keine Veredelungspositionen —", { x: MARGIN, y, size: 8, font, color: GREY });
     y -= 14;
   }
-  for (const p of doc.positionen) {
-    ensure(18);
-    const motiv = p.bezugPosition != null ? `${p.description}  (zu Pos. ${p.bezugPosition})` : p.description;
-    page.drawText(clip(motiv, font, 8, pMotivW - 4), { x: pxMotiv, y, size: 8, font });
-    page.drawText(clip(p.platzierung ?? "", font, 8, pPlatzW - 4), { x: pxPlatz, y, size: 8, font });
-    page.drawText(clip(p.motivGroesse ?? "", font, 8, pGroesseW - 4), { x: pxGroesse, y, size: 8, font });
-    page.drawText(clip(p.farbton ?? "", font, 8, tableW - (pxFarbton - MARGIN) - 4), { x: pxFarbton, y, size: 8, font });
-    y -= 5;
-    page.drawLine({ start: { x: MARGIN - 3, y }, end: { x: MARGIN + tableW + 3, y }, thickness: 0.4, color: LINE });
-    y -= 9;
-  }
-  y -= 12;
+  doc.positionen.forEach((p, i) => {
+    const hasSonstiges = !!(p.sonstiges && p.sonstiges.trim());
+    const cardH = hasSonstiges ? 92 : 74;
+    ensure(cardH + 8);
+    const cardTop = y;
+    const cardBottom = cardTop - cardH;
+    // Karten-Rahmen
+    page.drawRectangle({ x: MARGIN - 3, y: cardBottom, width: tableW + 6, height: cardH, borderColor: LINE, borderWidth: 0.8 });
+    let cy = cardTop - 14;
+    // Nummern-Badge + Platzierung-Titel + Menge rechts
+    page.drawRectangle({ x: MARGIN + 2, y: cy - 2, width: 12, height: 12, color: GREEN });
+    page.drawText(String(i + 1), { x: MARGIN + 5.5, y: cy + 0.5, size: 8, font: bold, color: rgb(1, 1, 1) });
+    page.drawText(clip(p.platzierung || "Veredelung", bold, 11, 280), { x: MARGIN + 20, y: cy, size: 11, font: bold, color: DARK });
+    if (p.menge && p.menge > 0) page.drawText(`${p.menge}x`, { x: A4.width - MARGIN - 90, y: cy, size: 11, font: bold, color: GREEN });
+    // Platzierungs-Skizze (rechts): Rahmen + Punkt nach Platzierung
+    drawPlacementHint(page, A4.width - MARGIN - 64, cardBottom + 8, 58, cardH - 18, p.platzierung ?? "", GREEN, LINE);
+    cy -= 18;
+    // Detailspalten: Motiv | Größe | Farbton
+    const cols: Array<[string, string, number]> = [
+      ["Motiv", p.motiv || p.description, MARGIN + 2],
+      ["Größe", p.motivGroesse ?? "", MARGIN + 165],
+      ["Farbton", p.farbton ?? "", MARGIN + 280],
+    ];
+    for (const [label, value, cx] of cols) {
+      page.drawText(label, { x: cx, y: cy, size: 6.5, font, color: GREY });
+      page.drawText(clip(value, font, 8.5, 150), { x: cx, y: cy - 11, size: 8.5, font });
+    }
+    cy -= 28;
+    // Platzierungsdetails
+    page.drawText("Platzierungsdetails", { x: MARGIN + 2, y: cy, size: 6.5, font, color: GREY });
+    page.drawText(clip(p.platzierungsdetails || p.platzierung || "", font, 8.5, 380), { x: MARGIN + 2, y: cy - 11, size: 8.5, font });
+    cy -= 24;
+    // Sonstiges (optional)
+    if (hasSonstiges) {
+      page.drawText("Sonstiges", { x: MARGIN + 2, y: cy, size: 6.5, font, color: GREY });
+      page.drawText(clip(p.sonstiges!, font, 8.5, 380), { x: MARGIN + 2, y: cy - 11, size: 8.5, font });
+    }
+    y = cardBottom - 10;
+  });
+  y -= 2;
 
   // Hinweise
   if (doc.hinweise.length > 0) {

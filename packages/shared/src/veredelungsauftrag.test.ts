@@ -31,6 +31,20 @@ describe("veredelungsauftrag (Werkstattblatt-Aufbereitung)", () => {
     expect(f.transfer).toBe(false);
   });
 
+  it("reicht die Karten-Detailfelder je Veredelungsposition durch (Motiv/Größe/Farbton/Platzierungsdetails/Sonstiges/Menge)", () => {
+    const doc = veredelungsauftragDokument({
+      nummer: "56827", datum: new Date("2026-06-22"), veredler: "Stickerei Maurer", kunde: "Autohaus Weeber GmbH",
+      textilien: [{ position: 1, artNr: "6666112010W43445", bezeichnung: "Greiff Hemd", farbe: "schwarz", groesse: "44", menge: 5 }],
+      motive: [{ description: "Logo", bezugPosition: 1, platzierung: "Brust rechts", motiv: "Logo Autohaus Weeber", menge: 5, motivGroesse: "8 x 2 cm", farbton: "1918 helleres Grau", platzierungsdetails: "Brust rechts", sonstiges: "= S. Beer" }],
+    });
+    const p = doc.positionen[0]!;
+    expect(p.motiv).toBe("Logo Autohaus Weeber");
+    expect(p.menge).toBe(5);
+    expect(p.motivGroesse).toBe("8 x 2 cm");
+    expect(p.platzierungsdetails).toBe("Brust rechts");
+    expect(p.sonstiges).toBe("= S. Beer");
+  });
+
   it("markiert Inhouse, wenn kein Veredler gesetzt ist", () => {
     const doc = veredelungsauftragDokument({
       nummer: "PA-1-b", datum: new Date("2026-06-01"), veredler: null, kunde: "Muster GmbH",
