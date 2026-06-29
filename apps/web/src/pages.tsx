@@ -2655,7 +2655,9 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
     // Bezug auf die erste ECHTE Textilposition (nicht auf eine leere Erfassungszeile) — Fix Geister-Bezug.
     const textilIdx = lines.findIndex((l) => l.kind === "TEXTIL" && lineHasContent(l));
     const textilQty = textilIdx >= 0 ? lines[textilIdx]!.qty : 1;
-    onChange([...lines, { description: e.label, qty: textilQty, euro: e.unitNetCents / 100, kind: "VEREDELUNG", variantId: e.variantId, ...(textilIdx >= 0 ? { bezugPosition: textilIdx + 1 } : {}) }]);
+    onChange([...lines, { description: e.label, qty: textilQty, euro: e.unitNetCents / 100, kind: "VEREDELUNG", variantId: e.variantId, motiv: e.label, ...(textilIdx >= 0 ? { bezugPosition: textilIdx + 1 } : {}) }]);
+    // Veredelungsdetails (Motiv/Größe/Farbton/Platzierungsdetails/Sonstiges) direkt sichtbar machen.
+    setDetailFor(lines.length);
   };
   const pickVariant = async (i: number, l: EditorLine, variantId: string): Promise<void> => {
     const v = catalog.find((c) => c.variantId === variantId);
@@ -2670,7 +2672,8 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
     if (!v) return;
     const onePlacement = v.placements.length === 1 ? v.placements[0] : undefined;
     const p = await resolve(variantId, l.qty);
-    set(i, { variantId, articleNumber: v.sku, articleName: v.articleName, description: v.articleName, kind: "VEREDELUNG", euro: p.euro ?? v.unitNetCents / 100, ...(p.ekEuro !== undefined ? { ekEuro: p.ekEuro } : {}), ...(onePlacement ? { placement: onePlacement } : {}) });
+    set(i, { variantId, articleNumber: v.sku, articleName: v.articleName, description: v.articleName, motiv: v.articleName, kind: "VEREDELUNG", euro: p.euro ?? v.unitNetCents / 100, ...(p.ekEuro !== undefined ? { ekEuro: p.ekEuro } : {}), ...(onePlacement ? { placement: onePlacement } : {}) });
+    setDetailFor(i); // Veredelungsdetails direkt aufklappen
   };
   const textilPositionen = lines.map((t, j) => ({ line: t, pos: j + 1 })).filter(({ line }) => line.kind === "TEXTIL");
   // Spezialfeld-Zeile (Gruppenüberschrift / Zwischen- / Gruppensumme) anhängen.
@@ -2801,7 +2804,9 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
                       <Group gap={2} wrap="nowrap" justify="flex-end">
                         {l.isAlternative && <Badge size="xs" color="gray" variant="light">Alt.</Badge>}
                         {l.placement && <Badge size="xs" color="grape" variant="light" title={l.placement}>⌖</Badge>}
-                        <ActionIcon size="sm" variant={open ? "light" : "subtle"} color="gray" onClick={() => setDetailFor(open ? null : i)} title="Details (Platzierung, Bezug, Optional …)">✎</ActionIcon>
+                        {l.kind === "VEREDELUNG"
+                          ? <Button size="compact-xs" variant={open ? "filled" : "light"} color="grape" onClick={() => setDetailFor(open ? null : i)} title="Veredelungsdetails: Motiv, Größe, Farbton, Platzierung, Sonstiges">{open ? "▾ Details" : "Veredelungsdetails"}</Button>
+                          : <ActionIcon size="sm" variant={open ? "light" : "subtle"} color="gray" onClick={() => setDetailFor(open ? null : i)} title="Details (Platzierung, Bezug, Optional …)">✎</ActionIcon>}
                         <ActionIcon size="sm" variant="subtle" color="gray" disabled={i === 0} onClick={() => move(i, -1)} title="nach oben">↑</ActionIcon>
                         <ActionIcon size="sm" variant="subtle" color="gray" disabled={i === lines.length - 1} onClick={() => move(i, 1)} title="nach unten">↓</ActionIcon>
                         <ActionIcon size="sm" variant="subtle" color="red" onClick={() => removeAt(i)} title="Position entfernen">✕</ActionIcon>
