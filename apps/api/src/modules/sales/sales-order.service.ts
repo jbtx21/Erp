@@ -15,7 +15,7 @@ export interface SalesLine {
   taxRatePct?: number | null; // USt-Satz der Position (eingefroren); 0 = steuerbefreit. Default 19.
   kind?: PositionKind;
   variantId?: string;
-  bezugPosition?: number | null; // Veredelungsbezug: Positionsnummer der Textilposition (Kap. 5.4/11)
+  bezugPositionen?: number[]; // Veredelungsbezug: Positionsnummern der Textilpositionen (Kap. 5.4/11)
   dbCents?: number | null; // Deckungsbeitrag je Stück (VK − EK), Kap. 4.4
   lineType?: import("@texma/shared").LineType; // ARTIKEL | GRUPPE | ZWISCHENSUMME | GRUPPENSUMME
   placement?: string | null; motiv?: string | null; motivGroesse?: string | null; farbton?: string | null; platzierungsdetails?: string | null; sonstiges?: string | null; // Veredelungs-Detailfelder (Werkstattblatt-Karte)
@@ -55,7 +55,7 @@ export interface ConversionPlanLine {
   articleName: string | null;
   variantId: string | null;
   isAlternative: boolean;
-  bezugPosition: number | null; // Veredelungsbezug aus dem Angebot (Positionsnummer der Textilposition)
+  bezugPositionen: number[]; // Veredelungsbezug aus dem Angebot (Positionsnummern der Textilpositionen)
   dbCents: number | null; // Deckungsbeitrag je Stück (aus dem Angebot übernommen)
   lineType: import("@texma/shared").LineType;
   placement: string | null;
@@ -87,7 +87,7 @@ export interface OrderEditLine {
   taxRatePct: number; // USt-Satz der Position (Round-Trip bei Bearbeitung)
   dbCents: number | null;
   variantId: string | null;
-  bezugPosition: number | null; // Veredelungsbezug (Positionsnummer der Textilposition)
+  bezugPositionen: number[]; // Veredelungsbezug (Positionsnummern der Textilpositionen)
   lineType: import("@texma/shared").LineType;
   placement: string | null;
   motiv: string | null;
@@ -201,7 +201,7 @@ export class SalesOrderService {
         const materialize = !e.variantId && !l.articleId && (l.kind === "TEXTIL" || l.kind === "VEREDELUNG");
         const skuSuffix = entries.length > 1 ? `-${k + 1}` : "";
         built.push({ originPos: l.position, line: {
-          description: l.description, qty: e.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents, rabattPct: l.rabattPct, taxRatePct: l.taxRatePct, kind: l.kind, variantId: e.variantId, bezugPosition: l.bezugPosition, dbCents: l.dbCents,
+          description: l.description, qty: e.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents, rabattPct: l.rabattPct, taxRatePct: l.taxRatePct, kind: l.kind, variantId: e.variantId, bezugPositionen: l.bezugPositionen, dbCents: l.dbCents,
           lineType: l.lineType, placement: l.placement, motiv: l.motiv, motivGroesse: l.motivGroesse, farbton: l.farbton, platzierungsdetails: l.platzierungsdetails, sonstiges: l.sonstiges, altPreisText: l.altPreisText, imPdfAusblenden: l.imPdfAusblenden,
           ...(materialize ? { materializeArticle: { sku: `${number}-P${l.position}${skuSuffix}`, name: l.description.trim(), description: l.description.trim(), isVeredelung: l.kind === "VEREDELUNG" } } : {}),
         } });
@@ -213,7 +213,11 @@ export class SalesOrderService {
     built.forEach((b, i) => { if (!firstNewPos.has(b.originPos)) firstNewPos.set(b.originPos, i + 1); });
     const lines: SalesLine[] = built.map((b) => ({
       ...b.line,
-      bezugPosition: b.line.bezugPosition != null ? firstNewPos.get(b.line.bezugPosition) ?? null : null,
+      // Jede bezogene Quote-Position auf ihre erste neue Auftragsposition ummappen; entfallene
+      // (z. B. nicht übernommene Alternativen) fallen still raus.
+      bezugPositionen: (b.line.bezugPositionen ?? [])
+        .map((p) => firstNewPos.get(p))
+        .filter((p): p is number => p != null),
     }));
     validateLines(lines);
     const { id } = await this.repo.createOrder({ number, companyId: plan.companyId, quoteId, lines });

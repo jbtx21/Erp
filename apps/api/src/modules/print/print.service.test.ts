@@ -80,7 +80,7 @@ describe("PrintService.veredelungsauftragPdf", () => {
         { position: 1, artNr: "816-RT", bezeichnung: "Poloshirt Mikralinar", farbe: "Rot", groesse: "M", menge: 10 },
         { position: 2, artNr: "816-RT", bezeichnung: "Poloshirt Mikralinar", farbe: "Rot", groesse: "L", menge: 15 },
       ],
-      motive: [{ description: "Logo Brust links, 2-farbig Stick", bezugPosition: 1 }],
+      motive: [{ description: "Logo Brust links, 2-farbig Stick", bezugPositionen: [1] }],
       anlieferung: new Date("2026-06-25"), fertigstellung: new Date("2026-06-30"),
     };
     const res = await new PrintService(repo).veredelungsauftragPdf("sub-1");

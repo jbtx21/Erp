@@ -17,14 +17,14 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
         invoice: { select: { id: true } },
         production: { select: { id: true } },
         _count: { select: { deliveryNotes: true } },
-        lines: { orderBy: { position: "asc" }, select: { description: true, qty: true, kind: true, unitNetCents: true, listNetCents: true, rabattPct: true, taxRatePct: true, dbCents: true, variantId: true, bezugPosition: true, lineType: true, placement: true, motiv: true, motivGroesse: true, farbton: true, platzierungsdetails: true, sonstiges: true, altPreisText: true, imPdfAusblenden: true } },
+        lines: { orderBy: { position: "asc" }, select: { description: true, qty: true, kind: true, unitNetCents: true, listNetCents: true, rabattPct: true, taxRatePct: true, dbCents: true, variantId: true, bezugPositionen: true, lineType: true, placement: true, motiv: true, motivGroesse: true, farbton: true, platzierungsdetails: true, sonstiges: true, altPreisText: true, imPdfAusblenden: true } },
       },
     });
     if (!o) return null;
     return {
       id: o.id, number: o.number, companyId: o.companyId, status: String(o.status),
       invoiced: o.invoice !== null, inProduction: o.production !== null, delivered: o._count.deliveryNotes > 0,
-      lines: o.lines.map((l) => ({ description: l.description, qty: l.qty, kind: l.kind as PositionKind, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents, rabattPct: l.rabattPct, taxRatePct: l.taxRatePct, dbCents: l.dbCents, variantId: l.variantId, bezugPosition: l.bezugPosition, lineType: l.lineType as import("@texma/shared").LineType, placement: l.placement, motiv: l.motiv, motivGroesse: l.motivGroesse, farbton: l.farbton, platzierungsdetails: l.platzierungsdetails, sonstiges: l.sonstiges, altPreisText: l.altPreisText, imPdfAusblenden: l.imPdfAusblenden })),
+      lines: o.lines.map((l) => ({ description: l.description, qty: l.qty, kind: l.kind as PositionKind, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents, rabattPct: l.rabattPct, taxRatePct: l.taxRatePct, dbCents: l.dbCents, variantId: l.variantId, bezugPositionen: l.bezugPositionen, lineType: l.lineType as import("@texma/shared").LineType, placement: l.placement, motiv: l.motiv, motivGroesse: l.motivGroesse, farbton: l.farbton, platzierungsdetails: l.platzierungsdetails, sonstiges: l.sonstiges, altPreisText: l.altPreisText, imPdfAusblenden: l.imPdfAusblenden })),
     };
   }
 
@@ -39,7 +39,7 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
     const lineData = (l: SalesLine, i: number) => ({
       position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents,
       listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, taxRatePct: l.taxRatePct ?? 19, dbCents: l.dbCents ?? null,
-      kind: (l.kind ?? "TEXTIL") as never, variantId: l.variantId ?? null, bezugPosition: l.bezugPosition ?? null,
+      kind: (l.kind ?? "TEXTIL") as never, variantId: l.variantId ?? null, bezugPositionen: l.bezugPositionen ?? [],
       lineType: l.lineType ?? "ARTIKEL", placement: l.placement ?? null, motiv: l.motiv ?? null, motivGroesse: l.motivGroesse ?? null, farbton: l.farbton ?? null, platzierungsdetails: l.platzierungsdetails ?? null, sonstiges: l.sonstiges ?? null, altPreisText: l.altPreisText ?? null, imPdfAusblenden: l.imPdfAusblenden ?? false,
     });
 
@@ -93,7 +93,7 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
           companyId: input.companyId,
           quoteId: input.quoteId,
           status: "ANGELEGT",
-          lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, taxRatePct: l.taxRatePct ?? 19, dbCents: l.dbCents ?? null, kind: (l.kind ?? "TEXTIL") as never, variantId: l.variantId ?? variantByIndex.get(i) ?? null, bezugPosition: l.bezugPosition ?? null, lineType: l.lineType ?? "ARTIKEL", placement: l.placement ?? null, motiv: l.motiv ?? null, motivGroesse: l.motivGroesse ?? null, farbton: l.farbton ?? null, platzierungsdetails: l.platzierungsdetails ?? null, sonstiges: l.sonstiges ?? null, altPreisText: l.altPreisText ?? null, imPdfAusblenden: l.imPdfAusblenden ?? false })) },
+          lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, taxRatePct: l.taxRatePct ?? 19, dbCents: l.dbCents ?? null, kind: (l.kind ?? "TEXTIL") as never, variantId: l.variantId ?? variantByIndex.get(i) ?? null, bezugPositionen: l.bezugPositionen ?? [], lineType: l.lineType ?? "ARTIKEL", placement: l.placement ?? null, motiv: l.motiv ?? null, motivGroesse: l.motivGroesse ?? null, farbton: l.farbton ?? null, platzierungsdetails: l.platzierungsdetails ?? null, sonstiges: l.sonstiges ?? null, altPreisText: l.altPreisText ?? null, imPdfAusblenden: l.imPdfAusblenden ?? false })) },
         },
         select: { id: true },
       });
@@ -123,7 +123,7 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
         companyId: true,
         lines: {
           orderBy: { position: "asc" },
-          select: { position: true, description: true, qty: true, unitNetCents: true, listNetCents: true, rabattPct: true, taxRatePct: true, dbCents: true, kind: true, articleId: true, variantId: true, isAlternative: true, bezugPosition: true, lineType: true, placement: true, motiv: true, motivGroesse: true, farbton: true, platzierungsdetails: true, sonstiges: true, altPreisText: true, imPdfAusblenden: true },
+          select: { position: true, description: true, qty: true, unitNetCents: true, listNetCents: true, rabattPct: true, taxRatePct: true, dbCents: true, kind: true, articleId: true, variantId: true, isAlternative: true, bezugPositionen: true, lineType: true, placement: true, motiv: true, motivGroesse: true, farbton: true, platzierungsdetails: true, sonstiges: true, altPreisText: true, imPdfAusblenden: true },
         },
       },
     });
@@ -153,7 +153,7 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
         articleName: l.articleId ? nameById.get(l.articleId) ?? null : null,
         variantId: l.variantId ?? null,
         isAlternative: l.isAlternative,
-        bezugPosition: l.bezugPosition ?? null,
+        bezugPositionen: l.bezugPositionen,
         dbCents: l.dbCents ?? null,
         lineType: l.lineType as import("@texma/shared").LineType,
         placement: l.placement,

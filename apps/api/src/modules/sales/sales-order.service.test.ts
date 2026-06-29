@@ -52,10 +52,10 @@ describe("SalesOrderService (Auftragserstellung)", () => {
     // Veredelungsposition verweist auf die Textilposition 1 → Bezug bleibt beim Wandeln erhalten (Kap. 5.4/11).
     repo.addQuote({ id: "q-1", companyId: "co-1", accepted: false, lines: [
       { position: 1, description: "200 T-Shirts", qty: 200, unitNetCents: 500, kind: "TEXTIL" },
-      { position: 2, description: "Siebdruck Brust", qty: 200, unitNetCents: 150, kind: "VEREDELUNG", bezugPosition: 1 },
+      { position: 2, description: "Siebdruck Brust", qty: 200, unitNetCents: 150, kind: "VEREDELUNG", bezugPositionen: [1] },
     ] });
     await svc.convertQuote("q-1");
-    expect(repo.orders[0]?.lines[1]?.bezugPosition).toBe(1);
+    expect(repo.orders[0]?.lines[1]?.bezugPositionen).toEqual([1]);
   });
 
   it("verhindert doppelte Umwandlung desselben Angebots", async () => {
@@ -85,7 +85,7 @@ describe("SalesOrderService (Auftragserstellung)", () => {
       id: "q-1", companyId: "co-1", accepted: false,
       lines: [
         { position: 1, description: "T-Shirts Navy", qty: 200, unitNetCents: 500, articleId: "art-tshirt", articleName: "T-Shirt", kind: "TEXTIL" },
-        { position: 2, description: "Siebdruck", qty: 200, unitNetCents: 150, kind: "VEREDELUNG", bezugPosition: 1 },
+        { position: 2, description: "Siebdruck", qty: 200, unitNetCents: 150, kind: "VEREDELUNG", bezugPositionen: [1] },
       ],
     });
     // Stückzahlen je Größe (Navy S/M/L) aus der Varianten-Matrix nach der Anprobe.
@@ -98,7 +98,7 @@ describe("SalesOrderService (Auftragserstellung)", () => {
     expect(order.lines.slice(0, 3).map((l) => [l.variantId, l.qty])).toEqual([["v-navy-s", 50], ["v-navy-m", 80], ["v-navy-l", 70]]);
     // Veredelungsbezug auf die NEUE Position der ersten Größenzeile ummappen (Pos. 1).
     expect(order.lines[3]?.kind).toBe("VEREDELUNG");
-    expect(order.lines[3]?.bezugPosition).toBe(1);
+    expect(order.lines[3]?.bezugPositionen).toEqual([1]);
   });
 
   it("wandelt temporär erfasste Produktpositionen (TEXTIL/VEREDELUNG) in feste Artikel", async () => {

@@ -14,7 +14,7 @@ export interface CrmLine {
   taxRatePct?: number;
   kind: "TEXTIL" | "VEREDELUNG" | "SONSTIGE";
   variantId?: string | null;
-  bezugPosition?: number | null;
+  bezugPositionen?: number[];
   lineType?: import("@texma/shared").LineType;
   placement?: string | null;
   motiv?: string | null;

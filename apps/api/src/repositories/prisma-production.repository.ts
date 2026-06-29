@@ -18,7 +18,7 @@ export class PrismaProductionRepository implements ProductionRepository {
       select: {
         id: true, number: true, freigegeben: true, zugesagterLiefertermin: true,
         production: { select: { id: true, number: true } },
-        lines: { orderBy: { position: "asc" }, select: { position: true, description: true, qty: true, variantId: true, bezugPosition: true } },
+        lines: { orderBy: { position: "asc" }, select: { position: true, description: true, qty: true, variantId: true, bezugPositionen: true } },
       },
     });
     if (!o) return null;
@@ -65,7 +65,7 @@ export class PrismaProductionRepository implements ProductionRepository {
           components: (v?.bundleComponents ?? []).map((c) => ({ description: c.description, qty: c.qty, componentVariantId: c.componentVariantId })),
           veredlerId: v?.article.veredlerId ?? null,
           isVeredelung: v?.article.type === "FINISHING",
-          bezugPosition: l.bezugPosition ?? null,
+          bezugPositionen: l.bezugPositionen ?? [],
         };
       }),
     };

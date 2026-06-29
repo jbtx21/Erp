@@ -21,8 +21,8 @@ export interface VeredelungTextilLine {
 export interface VeredelungMotivLine {
   /** Leistungs-/Motivbeschreibung (z. B. „Logo Brust links, 2-farbig Siebdruck"). */
   description: string;
-  /** Bezogene Textilposition (Auftrags-Positionsnummer); null = unspezifisch. */
-  bezugPosition: number | null;
+  /** Bezogene Textilpositionen (Auftrags-Positionsnummern); [] = unspezifisch. */
+  bezugPositionen: number[];
   /** Platzierung als Karten-Titel (z. B. „Brust rechts"). */
   platzierung?: string;
   /** Motivname/Logo (z. B. „Logo Autohaus Weeber"); Fallback = description. */

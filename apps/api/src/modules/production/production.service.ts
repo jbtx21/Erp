@@ -33,8 +33,8 @@ export interface ProductionOrderLine {
   veredlerId: string | null;
   /** true = Veredelungsartikel (FINISHING). Ohne Veredler = Inhouse-Veredelungsschritt. */
   isVeredelung: boolean;
-  /** Veredelungsbezug (Kap. 5.4/11): Positionsnummer der zu veredelnden Textilposition. */
-  bezugPosition: number | null;
+  /** Veredelungsbezug (Kap. 5.4/11): Positionsnummern der zu veredelnden Textilpositionen. */
+  bezugPositionen: number[];
 }
 
 /** Auto-Fremdvergabe-Stufe (T-04), beim externen PA aus den Veredlern der Positionen. */
@@ -244,15 +244,16 @@ export class ProductionService {
     for (const l of lines) {
       if (!l.veredlerId) continue;
       const g = groups.get(l.veredlerId) ?? { positionen: new Set<number>(), menge: 0, info: [] };
-      const textil = l.bezugPosition != null ? byPosition.get(l.bezugPosition) : undefined;
-      if (textil) {
-        // Beistellung über ALLE Größenzeilen desselben Artikels aggregieren (Größenlauf →
-        // mehrere Größenzeilen). So umfasst die Beistellung das ganze Textil, nicht nur eine
-        // Größe. Jede Position nur einmal je Veredler zählen (mehrere Platzierungen am selben
-        // Textil verdoppeln die Menge nicht).
-        const geschwister = textil.articleId
-          ? lines.filter((x) => x.articleId === textil.articleId)
-          : [textil];
+      // Mehrere Bezugspositionen möglich (B): über ALLE referenzierten Textilien aggregieren.
+      const referenzen = l.bezugPositionen.map((p) => byPosition.get(p)).filter((t): t is ProductionOrderLine => !!t);
+      if (referenzen.length > 0) {
+        // Beistellung über ALLE Größenzeilen jedes referenzierten Artikels aggregieren
+        // (Größenlauf → mehrere Größenzeilen). So umfasst die Beistellung das ganze Textil,
+        // nicht nur eine Größe. Jede Position nur einmal je Veredler zählen (mehrere
+        // Platzierungen/Bezüge am selben Textil verdoppeln die Menge nicht).
+        const geschwister = referenzen.flatMap((textil) =>
+          textil.articleId ? lines.filter((x) => x.articleId === textil.articleId) : [textil]
+        );
         for (const t of geschwister) {
           if (g.positionen.has(t.position)) continue;
           g.positionen.add(t.position);
@@ -281,14 +282,15 @@ export class ProductionService {
     // Transferdruck im Haus): je referenziertem Textil eine Stufe, NACH den externen Stufen
     // (höhere sequence → das Positions-Gate sperrt sie, bis die externen am selben Textil
     // zurück sind). Keine Beistellung/Rücklauf — nur OFFEN → ABGESCHLOSSEN (Kap. 5.4/11).
-    const inhouseSeen = new Set<number>(); // referenzierte Textil-Erstposition (Dedup je Textil)
+    const inhouseSeen = new Set<string>(); // referenziertes Textil-Set (Dedup je Textil-Bezug)
     for (const l of lines) {
       if (l.veredlerId || !l.isVeredelung) continue;
-      const textil = l.bezugPosition != null ? byPosition.get(l.bezugPosition) : undefined;
-      const positionen = textil?.articleId
-        ? lines.filter((x) => x.articleId === textil.articleId).map((x) => x.position)
-        : textil ? [textil.position] : [l.position];
-      const key = positionen[0]!;
+      const referenzen = l.bezugPositionen.map((p) => byPosition.get(p)).filter((t): t is ProductionOrderLine => !!t);
+      const positionen = referenzen.length > 0
+        ? referenzen.flatMap((textil) => textil.articleId ? lines.filter((x) => x.articleId === textil.articleId).map((x) => x.position) : [textil.position])
+        : [l.position];
+      const dedup = [...new Set(positionen)].sort((a, b) => a - b);
+      const key = dedup.join(",");
       if (inhouseSeen.has(key)) continue;
       inhouseSeen.add(key);
       stages.push({
@@ -298,7 +300,7 @@ export class ProductionService {
         inhouse: true,
         beistellMenge: null,
         beistellInfo: `Inhouse: ${l.description}`,
-        beistellPositionen: [...new Set(positionen)].sort((a, b) => a - b),
+        beistellPositionen: dedup,
       });
     }
     return stages;

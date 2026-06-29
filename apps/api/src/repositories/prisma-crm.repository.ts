@@ -82,7 +82,7 @@ export class PrismaCrmRepository implements CrmRepository {
         await tx.quoteLine.createMany({ data: lines.map((l, i) => ({
           quoteId: quote.id, position: i + 1, description: l.description.trim(), qty: l.qty,
           unitNetCents: l.unitNetCents, taxRatePct: l.taxRatePct ?? 19, kind: l.kind,
-          variantId: l.variantId ?? null, bezugPosition: l.bezugPosition ?? null,
+          variantId: l.variantId ?? null, bezugPositionen: l.bezugPositionen ?? [],
           lineType: l.lineType ?? "ARTIKEL", placement: l.placement ?? null, motiv: l.motiv ?? null, motivGroesse: l.motivGroesse ?? null, farbton: l.farbton ?? null, platzierungsdetails: l.platzierungsdetails ?? null, sonstiges: l.sonstiges ?? null, altPreisText: l.altPreisText ?? null, imPdfAusblenden: l.imPdfAusblenden ?? false,
         })) });
       } else {

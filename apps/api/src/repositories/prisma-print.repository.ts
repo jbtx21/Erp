@@ -355,7 +355,7 @@ export class PrismaPrintRepository implements PrintRepository {
             order: {
               select: {
                 number: true, company: { select: { name: true } },
-                lines: { orderBy: { position: "asc" }, select: { position: true, description: true, qty: true, kind: true, bezugPosition: true, variantId: true, placement: true, motiv: true, motivGroesse: true, farbton: true, platzierungsdetails: true, sonstiges: true } },
+                lines: { orderBy: { position: "asc" }, select: { position: true, description: true, qty: true, kind: true, bezugPositionen: true, variantId: true, placement: true, motiv: true, motivGroesse: true, farbton: true, platzierungsdetails: true, sonstiges: true } },
               },
             },
           },
@@ -388,10 +388,12 @@ export class PrismaPrintRepository implements PrintRepository {
     });
 
     // Veredelungspositionen (Motive) mit Bezug auf die beigestellten Textilpositionen.
+    // Mehrere Bezüge möglich (B): die Veredelung gehört ins Werkstattblatt, wenn EINE der
+    // referenzierten Textilpositionen beigestellt wird (oder gar keine Beistell-Scope-Einschränkung).
     const motive = order.lines
-      .filter((l) => l.kind === "VEREDELUNG" && (scope.size === 0 || inScope(l.bezugPosition)))
+      .filter((l) => l.kind === "VEREDELUNG" && (scope.size === 0 || l.bezugPositionen.some((p) => scope.has(p))))
       .map((l) => ({
-        description: l.description, bezugPosition: l.bezugPosition, menge: l.qty,
+        description: l.description, bezugPositionen: l.bezugPositionen, menge: l.qty,
         ...(l.placement ? { platzierung: l.placement } : {}),
         ...(l.motiv ? { motiv: l.motiv } : {}),
         ...(l.motivGroesse ? { motivGroesse: l.motivGroesse } : {}),
