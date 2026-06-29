@@ -82,23 +82,46 @@ function recipientLines(
 }
 
 export class PrismaPrintRepository implements PrintRepository {
-  /** Empfänger-E-Mail (Firma) je Belegtyp — über die FK-Kette zur Company aufgelöst. */
+  /**
+   * Empfänger-E-Mail je Belegtyp: Firmen-E-Mail bevorzugt, sonst Fallback auf den ersten
+   * aktiven Kontakt der Firma (QA Finding 4 — Firmen ohne eigene Mail liefen beim Direkt-
+   * versand sonst ins Leere, obwohl ein Ansprechpartner mit Mail hinterlegt war).
+   */
   async recipientEmailForBeleg(kind: BelegMailKind, id: string): Promise<string | null> {
+    const companyId = await this.companyIdForBeleg(kind, id);
+    if (!companyId) return null;
+    const c = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: {
+        email: true,
+        contacts: {
+          where: { email: { not: null }, gesperrtAm: null, anonymisiertAm: null },
+          orderBy: { createdAt: "asc" },
+          take: 1,
+          select: { email: true },
+        },
+      },
+    });
+    return c?.email ?? c?.contacts[0]?.email ?? null;
+  }
+
+  /** Auflösung der Firma je Belegtyp (nur die companyId, FK-Kette). */
+  private async companyIdForBeleg(kind: BelegMailKind, id: string): Promise<string | null> {
     switch (kind) {
       case "QUOTE":
-        return (await prisma.quote.findUnique({ where: { id }, select: { company: { select: { email: true } } } }))?.company.email ?? null;
+        return (await prisma.quote.findUnique({ where: { id }, select: { companyId: true } }))?.companyId ?? null;
       case "INVOICE":
-        return (await prisma.invoice.findUnique({ where: { id }, select: { company: { select: { email: true } } } }))?.company.email ?? null;
+        return (await prisma.invoice.findUnique({ where: { id }, select: { companyId: true } }))?.companyId ?? null;
       case "AUFTRAGSBESTAETIGUNG":
-        return (await prisma.order.findUnique({ where: { id }, select: { company: { select: { email: true } } } }))?.company.email ?? null;
+        return (await prisma.order.findUnique({ where: { id }, select: { companyId: true } }))?.companyId ?? null;
       case "LIEFERSCHEIN":
-        return (await prisma.deliveryNote.findUnique({ where: { id }, select: { order: { select: { company: { select: { email: true } } } } } }))?.order.company.email ?? null;
+        return (await prisma.deliveryNote.findUnique({ where: { id }, select: { order: { select: { companyId: true } } } }))?.order.companyId ?? null;
       case "GUTSCHRIFT":
-        return (await prisma.creditNote.findUnique({ where: { id }, select: { invoice: { select: { company: { select: { email: true } } } } } }))?.invoice.company.email ?? null;
+        return (await prisma.creditNote.findUnique({ where: { id }, select: { invoice: { select: { companyId: true } } } }))?.invoice.companyId ?? null;
       case "MAHNUNG":
-        return (await prisma.dunningNotice.findUnique({ where: { id }, select: { openItem: { select: { invoice: { select: { company: { select: { email: true } } } } } } } }))?.openItem.invoice.company.email ?? null;
+        return (await prisma.dunningNotice.findUnique({ where: { id }, select: { openItem: { select: { invoice: { select: { companyId: true } } } } } }))?.openItem.invoice.companyId ?? null;
       case "LEIHGUT":
-        return (await prisma.sampleLoan.findUnique({ where: { id }, select: { company: { select: { email: true } } } }))?.company.email ?? null;
+        return (await prisma.sampleLoan.findUnique({ where: { id }, select: { companyId: true } }))?.companyId ?? null;
     }
   }
 

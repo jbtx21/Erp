@@ -15,7 +15,7 @@ export class PrismaStatusAmpelRepository implements StatusAmpelRepository {
         id: true, number: true, status: true, zugesagterLiefertermin: true,
         lieferstatus: true, fakturastatus: true, freigegeben: true,
         company: { select: { name: true, country: true, vatId: true, mahnsperre: true } },
-        lines: { select: { variantId: true, qty: true } },
+        lines: { select: { variantId: true, qty: true, kind: true } },
         invoice: { select: { grossCents: true, openItem: { select: { openCents: true } } } },
         production: { select: { id: true } },
       },
@@ -43,7 +43,7 @@ export class PrismaStatusAmpelRepository implements StatusAmpelRepository {
       grossCents: o.invoice?.grossCents ?? null,
       freigegeben: o.freigegeben,
       hasProduction: o.production !== null,
-      lines: o.lines.map((l) => ({ variantId: l.variantId, qty: l.qty, stockQty: l.variantId ? stock.get(l.variantId) ?? 0 : 0 })),
+      lines: o.lines.map((l) => ({ variantId: l.variantId, qty: l.qty, stockQty: l.variantId ? stock.get(l.variantId) ?? 0 : 0, kind: l.kind })),
     }));
   }
 
@@ -54,7 +54,7 @@ export class PrismaStatusAmpelRepository implements StatusAmpelRepository {
         id: true, number: true, status: true, route: true, zugesagterLiefertermin: true,
         lieferstatus: true, fakturastatus: true, freigegeben: true,
         company: { select: { name: true, country: true, vatId: true, mahnsperre: true } },
-        lines: { select: { variantId: true, qty: true } },
+        lines: { select: { variantId: true, qty: true, kind: true } },
         invoice: { select: { grossCents: true, openItem: { select: { openCents: true } } } },
         production: {
           select: {
@@ -89,7 +89,7 @@ export class PrismaStatusAmpelRepository implements StatusAmpelRepository {
       grossCents: o.invoice?.grossCents ?? null,
       freigegeben: o.freigegeben,
       hasProduction: o.production !== null,
-      lines: o.lines.map((l) => ({ variantId: l.variantId, qty: l.qty, stockQty: l.variantId ? stock.get(l.variantId) ?? 0 : 0 })),
+      lines: o.lines.map((l) => ({ variantId: l.variantId, qty: l.qty, stockQty: l.variantId ? stock.get(l.variantId) ?? 0 : 0, kind: l.kind })),
       // Prozess-Zusatzfakten:
       route: o.route as AuftragProzessExtra["route"],
       terminSet: o.zugesagterLiefertermin !== null,

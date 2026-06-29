@@ -32,7 +32,9 @@ export interface AuftragFacts {
   freigegeben: boolean;
   hasProduction: boolean;
   /** Bestandsgeführte Positionen: Sollmenge vs. aktueller Hauptlagerbestand. */
-  lines: ReadonlyArray<{ variantId: string | null; qty: number; stockQty: number }>;
+  // kind: Positionsart (TEXTIL/VEREDELUNG/SONSTIGE). Nur lagerhaltige Positionen werden
+  // bestandsgeprüft — Veredelungen (Druck/Stick) sind keine Lagerartikel (QA Finding 10).
+  lines: ReadonlyArray<{ variantId: string | null; qty: number; stockQty: number; kind?: string }>;
 }
 
 /** Zusatz-Fakten für die Prozesskette eines Auftrags (Detailsicht). */
@@ -93,7 +95,7 @@ export class StatusAmpelService {
         fakturastatus: f.fakturastatus,
         openCents: f.openCents,
         grossCents: f.grossCents,
-        lines: f.lines.map((l) => ({ hasVariant: l.variantId !== null, sufficient: l.stockQty >= l.qty })),
+        lines: f.lines.map((l) => ({ hasVariant: l.variantId !== null && l.kind !== "VEREDELUNG", sufficient: l.stockQty >= l.qty })),
         isEuForeignB2B: f.country !== "DE",
         vatIdValid: f.vatId ? validateVatId(f.vatId).valid : false,
         produktion: produktionState(f),
@@ -111,7 +113,7 @@ export class StatusAmpelService {
     return {
       status: f.status, today, liefertermin: f.liefertermin, lieferstatus: f.lieferstatus, fakturastatus: f.fakturastatus,
       openCents: f.openCents, grossCents: f.grossCents,
-      lines: f.lines.map((l) => ({ hasVariant: l.variantId !== null, sufficient: l.stockQty >= l.qty })),
+      lines: f.lines.map((l) => ({ hasVariant: l.variantId !== null && l.kind !== "VEREDELUNG", sufficient: l.stockQty >= l.qty })),
       isEuForeignB2B: f.country !== "DE", vatIdValid: f.vatId ? validateVatId(f.vatId).valid : false,
       produktion: produktionState(f), freigegeben: f.freigegeben, liefersperre: f.liefersperre,
     };

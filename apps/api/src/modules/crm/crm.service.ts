@@ -87,6 +87,8 @@ export interface CrmRepository {
   /** Legt das Angebot an, setzt stage=ANGEBOT + quoteId (transaktional). Übernimmt erfasste
    *  Anfrage-Positionen als QuoteLines; ohne Positionen Fallback auf eine Freitext-Zeile. */
   convertToQuote(id: string, input: { quoteNumber: string; companyId: string; text: string; lines: CrmLine[] | null }): Promise<{ quoteId: string }>;
+  /** Optional: Lead-Ansprechpartner als Firmen-Kontakt spiegeln (CRM↔Stammdaten, QA Finding 5). */
+  ensureCompanyContact?(companyId: string, name: string, email: string | null, phone: string | null): Promise<void>;
 }
 
 export class CrmService {
@@ -104,6 +106,7 @@ export class CrmService {
     if (!input.name || !input.name.trim()) throw new CrmError("Name/Bezeichnung ist Pflicht.");
     const rec = await this.repo.create({ ...input, name: input.name.trim(), stage: "NEU" });
     await this.audit.append(buildEntry({ entity: "CrmLead", entityId: rec.id, action: "CREATE", after: { name: rec.name, stage: rec.stage } }));
+    await this.syncContact(rec);
     return rec;
   }
 
@@ -114,6 +117,13 @@ export class CrmService {
     if (patch.name !== undefined && !patch.name.trim()) throw new CrmError("Name/Bezeichnung darf nicht leer sein.");
     const clean: UpdateCrmLeadInput = { ...patch };
     if (clean.name !== undefined) clean.name = clean.name.trim();
+    // Pipeline-Wert aus den erfassten Positionen ableiten, wenn kein Wert von Hand kam
+    // (QA Finding 2): Netto-Summe der Positionen. So spiegelt der Funnel den realen
+    // Anfragewert statt „—". Ein explizit gesetzter Wert bleibt unangetastet.
+    if (clean.valueCents === undefined && clean.lines && clean.lines.length > 0) {
+      const sum = clean.lines.reduce((s, l) => s + Math.max(0, Math.round(l.qty * l.unitNetCents)), 0);
+      if (sum > 0) clean.valueCents = sum;
+    }
     const after = await this.repo.update(id, clean);
     // Nur die tatsächlich geänderten Felder mit Vorher/Nachher protokollieren (GoBD).
     const keys = Object.keys(clean) as (keyof typeof clean)[];
@@ -123,7 +133,16 @@ export class CrmService {
     const afterRec = after as unknown as Record<string, unknown>;
     for (const k of keys) { before2[k] = beforeRec[k]; after2[k] = afterRec[k]; }
     await this.audit.append(buildEntry({ entity: "CrmLead", entityId: id, action: "UPDATE", before: before2, after: after2 }));
+    await this.syncContact(after);
     return after;
+  }
+
+  /** Lead-Ansprechpartner als Firmen-Kontakt spiegeln (best-effort; bricht den CRM-Vorgang
+   *  nicht ab). Schließt den CRM↔Stammdaten-Bruch aus QA Finding 5. */
+  private async syncContact(rec: CrmLeadRecord): Promise<void> {
+    if (!rec.companyId || !rec.contactName || !rec.contactName.trim()) return;
+    try { await this.repo.ensureCompanyContact?.(rec.companyId, rec.contactName, rec.email, rec.phone); }
+    catch { /* nicht blockierend */ }
   }
 
   /** Funnel-Übergang (F2-geprüft); VERLOREN verlangt einen Grund. */

@@ -95,4 +95,26 @@ export class PrismaCrmRepository implements CrmRepository {
       return { quoteId: quote.id };
     });
   }
+
+  /** Lead-Ansprechpartner als Firmen-Kontakt spiegeln (QA Finding 5). Dedupliziert über
+   *  companyId + Name; ergänzt fehlende Mail/Tel an einem bestehenden Kontakt. */
+  async ensureCompanyContact(companyId: string, name: string, email: string | null, phone: string | null): Promise<void> {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const parts = trimmed.split(/\s+/);
+    const firstName = parts[0]!;
+    const lastName = parts.slice(1).join(" ");
+    const existing = await prisma.contact.findFirst({
+      where: { companyId, firstName, lastName },
+      select: { id: true, email: true, phone: true },
+    });
+    if (existing) {
+      const data: { email?: string; phone?: string } = {};
+      if (email && !existing.email) data.email = email;
+      if (phone && !existing.phone) data.phone = phone;
+      if (Object.keys(data).length > 0) await prisma.contact.update({ where: { id: existing.id }, data });
+      return;
+    }
+    await prisma.contact.create({ data: { companyId, firstName, lastName, email: email ?? null, phone: phone ?? null, role: "CRM" } });
+  }
 }
