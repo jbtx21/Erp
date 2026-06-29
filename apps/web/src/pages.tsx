@@ -3110,6 +3110,8 @@ export function QuotesPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k:
       // Annahme schließt direkt mit der Auftragswandlung ab — sonst bleibt der „→ Auftrag"-Schritt unentdeckt.
       (status === "VERSENDET" || status === "NACHFASSEN") && { label: "Annehmen & in Auftrag wandeln", group: "Status & Folgeaktion", color: "green", onClick: () => void act(async () => { await trpc.quotes.transition.mutate({ id, to: "ANGENOMMEN" }); setConvertId(id); }) },
       status === "ANGENOMMEN" && !r.converted && { label: "→ Auftrag wandeln", group: "Status & Folgeaktion", color: "green", onClick: () => setConvertId(id) },
+      // Muster/Anprobe direkt aus dem Angebot erzeugen (kein Medienbruch ins Muster-Modul, QA #7).
+      status !== "ABGELEHNT" && { label: "Muster generieren (Leihgut)", group: "Status & Folgeaktion", onClick: () => void act(async () => { await trpc.sampleLoans.convertQuote.mutate({ quoteId: id }); if (typeof window !== "undefined") window.alert("Muster-Leihe aus Angebot erzeugt — im Modul Muster-Leihgut sichtbar."); }) },
       editable && { label: "Ablehnen", group: "Status & Folgeaktion", color: "red", onClick: () => {
         const grund = typeof window !== "undefined" ? window.prompt("Ablehnen — Verlustgrund?") : null;
         if (grund) void act(() => trpc.quotes.reject.mutate({ id, verlustgrund: grund }));
