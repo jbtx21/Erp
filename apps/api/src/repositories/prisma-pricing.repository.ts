@@ -82,4 +82,16 @@ export class PrismaPricingRepository implements PricingRepository {
     const r = await prisma.supplierItem.aggregate({ where: { variantId }, _min: { ekCents: true } });
     return r._min.ekCents ?? null;
   }
+
+  async listStandardTiers(variantId: string): Promise<{ minMenge: number; netCents: number }[]> {
+    // Veredelungs-/Logo-Staffel liegt unter der Basis-Preisgruppe STANDARD (B4) — unabhängig
+    // von der Preisgruppe der Firma. So ist die Staffel auch bei Nicht-STANDARD-Kunden sichtbar.
+    const std = await prisma.priceGroup.findFirst({ where: { kind: "STANDARD" }, select: { id: true } });
+    if (!std) return [];
+    return prisma.priceGroupPriceTier.findMany({
+      where: { variantId, priceGroupId: std.id },
+      select: { minMenge: true, netCents: true },
+      orderBy: { minMenge: "asc" },
+    });
+  }
 }

@@ -1746,6 +1746,11 @@ export const appRouter = router({
     tiers: roleProcedure(...supplierRoles)
       .input(z.object({ companyId: z.string().min(1), variantId: z.string().min(1) }))
       .query(({ input, ctx }) => ctx.pricing.listTiers(input.companyId, input.variantId)),
+    // Anzeige-Staffel je Position: gestaffelter VK + EK + DB je Mengenstufe (C+D, B4).
+    // Preis-sensibel → kein PRODUKTION-Zugriff.
+    staffel: roleProcedure(...supplierRoles)
+      .input(z.object({ companyId: z.string().min(1), variantId: z.string().min(1) }))
+      .query(({ input, ctx }) => ctx.pricing.staffelpreise(input.companyId, input.variantId)),
     addGroupTier: roleProcedure("ADMIN", "BUERO")
       .input(z.object({
         companyId: z.string().min(1), variantId: z.string().min(1),

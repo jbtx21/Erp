@@ -1,10 +1,12 @@
 // In-Memory-Preisquellen für Unit-Tests/Dev.
 
+import type { PriceTier } from "@texma/shared";
 import type { PriceContext, PricingRepository, TierView } from "../modules/pricing/pricing.service.js";
 
 export class InMemoryPricingRepository implements PricingRepository {
   private readonly contexts = new Map<string, PriceContext>();
   private readonly ek = new Map<string, number>();
+  private readonly standardTiers = new Map<string, PriceTier[]>();
 
   set(companyId: string, variantId: string, ctx: PriceContext): void {
     this.contexts.set(`${companyId}:${variantId}`, ctx);
@@ -12,6 +14,10 @@ export class InMemoryPricingRepository implements PricingRepository {
 
   setEk(variantId: string, ekCents: number): void {
     this.ek.set(variantId, ekCents);
+  }
+
+  setStandardTiers(variantId: string, tiers: PriceTier[]): void {
+    this.standardTiers.set(variantId, tiers);
   }
 
   private ensure(companyId: string, variantId: string): PriceContext {
@@ -47,5 +53,9 @@ export class InMemoryPricingRepository implements PricingRepository {
 
   async bestEkCents(variantId: string): Promise<number | null> {
     return this.ek.get(variantId) ?? null;
+  }
+
+  async listStandardTiers(variantId: string): Promise<PriceTier[]> {
+    return this.standardTiers.get(variantId) ?? [];
   }
 }

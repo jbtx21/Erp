@@ -77,3 +77,19 @@ describe("PricingService.addGroupTier (B4, Staffelpflege)", () => {
     await expect(svc.addGroupTier("co1", "v1", 10, -1)).rejects.toThrow();
   });
 });
+
+describe("PricingService.staffelpreise (C+D — Anzeige-Staffel VK+EK+DB)", () => {
+  it("mergt STANDARD-Basis + Gruppe + Kunde und ergänzt EK + DB je Stufe", async () => {
+    const { repo, svc } = setup(); // groupTiers 1→1000, 10→900; customer 10→800
+    repo.setStandardTiers("v1", [{ minMenge: 1, netCents: 1100 }, { minMenge: 100, netCents: 700 }]);
+    repo.setEk("v1", 600);
+    const { ekCents, staffeln } = await svc.staffelpreise("co1", "v1");
+    expect(ekCents).toBe(600);
+    // Stufe 1 von GRUPPE (sticht STANDARD), Stufe 10 von KUNDE, Stufe 100 von STANDARD.
+    expect(staffeln.map((s) => [s.minMenge, s.vkCents, s.quelle, s.dbCents])).toEqual([
+      [1, 1000, "GRUPPE", 400],
+      [10, 800, "KUNDE", 200],
+      [100, 700, "STANDARD", 100],
+    ]);
+  });
+});

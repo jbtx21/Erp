@@ -4,6 +4,7 @@
 // Eine Pipeline, klare Präzedenz — kein paralleler Mechanismus.
 
 import {
+  buildStaffelLadder,
   deckungsbeitrag,
   dbMarge,
   resolveBasePrice,
@@ -11,6 +12,7 @@ import {
   type Cents,
   type PriceGroupKind,
   type PriceTier,
+  type StaffelStufe,
   type VariantPrice,
 } from "@texma/shared";
 import { buildEntry, type AuditSink } from "@texma/audit";
@@ -50,6 +52,14 @@ export interface PricingRepository {
   removeGroupTier(companyId: string, variantId: string, minMenge: number): Promise<void>;
   /** Bester (niedrigster) Lieferanten-EK je Variante in Cent; null wenn keiner gepflegt. */
   bestEkCents(variantId: string): Promise<number | null>;
+  /** Basis-Staffel der Preisgruppe STANDARD (z. B. die Logo-/Veredelungs-Staffel, B4). */
+  listStandardTiers(variantId: string): Promise<PriceTier[]>;
+}
+
+/** Anzeige-Staffel je Position: VK+EK+DB je Mengenstufe (C+D) + bester EK. */
+export interface StaffelView {
+  ekCents: number | null;
+  staffeln: StaffelStufe[];
 }
 
 export class PricingService {
@@ -86,6 +96,22 @@ export class PricingService {
   /** Staffeltabelle (kundenindividuell + Gruppe) für (Firma, Variante). */
   async listTiers(companyId: string, variantId: string): Promise<TierView> {
     return this.repo.listTiers(companyId, variantId);
+  }
+
+  /**
+   * Anzeige-Staffel (Mengenstaffel mit VK+EK+DB je Stufe) für die Positionsmaske (C+D):
+   * mergt die STANDARD-Basisstaffel (z. B. die Logo-/Veredelungs-Staffel) mit der Gruppen-
+   * und Kundenstaffel und ergänzt EK + Deckungsbeitrag je Stufe. So ist der gestaffelte
+   * VK samt EK direkt im Angebot bei Veredelungen sichtbar.
+   */
+  async staffelpreise(companyId: string, variantId: string): Promise<StaffelView> {
+    const [view, standardTiers, ekCents] = await Promise.all([
+      this.repo.listTiers(companyId, variantId),
+      this.repo.listStandardTiers(variantId),
+      this.repo.bestEkCents(variantId),
+    ]);
+    const staffeln = buildStaffelLadder({ standardTiers, groupTiers: view.groupTiers, customerTiers: view.customerTiers, ekCents });
+    return { ekCents, staffeln };
   }
 
   /** Legt eine Preisgruppen-Staffelstufe an (Stammdaten-Pflege, auditiert). */

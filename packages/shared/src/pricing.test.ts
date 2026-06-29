@@ -5,6 +5,7 @@ import {
   dbMarge,
   STICK_MARKUP_FACTOR,
   selectTier,
+  buildStaffelLadder,
   resolveBasePrice,
   PriceResolutionError,
   type PriceTier,
@@ -92,6 +93,32 @@ describe("resolveBasePrice — eine Pipeline mit Präzedenz (B4)", () => {
 
   it("wirft sichtbar, wenn gar kein Preis hinterlegt ist (T-08)", () => {
     expect(() => resolveBasePrice({}, "STANDARD", 5)).toThrow(PriceResolutionError);
+  });
+});
+
+describe("buildStaffelLadder (B4/D — VK+EK+DB je Stufe)", () => {
+  it("mergt Staffeln (KUNDE > GRUPPE > STANDARD), sortiert und rechnet DB je Stufe", () => {
+    const ladder = buildStaffelLadder({
+      standardTiers: [{ minMenge: 1, netCents: 1000 }, { minMenge: 50, netCents: 800 }, { minMenge: 100, netCents: 700 }],
+      groupTiers: [{ minMenge: 50, netCents: 750 }], // überschreibt STANDARD bei 50
+      customerTiers: [{ minMenge: 100, netCents: 650 }], // überschreibt bei 100
+      ekCents: 400,
+    });
+    expect(ladder.map((s) => [s.minMenge, s.vkCents, s.quelle])).toEqual([
+      [1, 1000, "STANDARD"],
+      [50, 750, "GRUPPE"],
+      [100, 650, "KUNDE"],
+    ]);
+    // DB = VK − EK je Stufe (EK gilt für alle Stufen gleich).
+    expect(ladder.map((s) => s.dbCents)).toEqual([600, 350, 250]);
+    expect(ladder[0]!.ekCents).toBe(400);
+  });
+
+  it("liefert DB null, wenn kein EK hinterlegt ist", () => {
+    const ladder = buildStaffelLadder({ standardTiers: [{ minMenge: 1, netCents: 1000 }], groupTiers: [], customerTiers: [], ekCents: null });
+    expect(ladder[0]!.dbCents).toBeNull();
+    expect(ladder[0]!.dbMargePct).toBeNull();
+    expect(ladder[0]!.ekCents).toBeNull();
   });
 });
 

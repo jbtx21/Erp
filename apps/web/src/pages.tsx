@@ -2566,6 +2566,55 @@ export interface PositionsEditorCaps {
 }
 const KIND_DATA = [{ value: "TEXTIL", label: "Textil" }, { value: "VEREDELUNG", label: "Veredelung" }, { value: "SONSTIGE", label: "Sonstiges" }];
 
+// Staffelpreise (Mengenstaffel) je Veredelungsposition inline im Angebot (C+D): gestaffelter
+// VK + EK + DB je Mengenstufe aus dem Stamm (pricing.staffel). EK macht den DB je Stufe sichtbar.
+function VeredelungStaffel({ companyId, variantId }: { companyId: string; variantId: string }): JSX.Element {
+  type Row = Awaited<ReturnType<typeof trpc.pricing.staffel.query>>["staffeln"][number];
+  const [rows, setRows] = useState<Row[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    setLoaded(false);
+    void (async () => {
+      try { const r = await trpc.pricing.staffel.query({ companyId, variantId }); if (alive) { setRows(r.staffeln); setLoaded(true); } }
+      catch { if (alive) { setRows([]); setLoaded(true); } }
+    })();
+    return () => { alive = false; };
+  }, [companyId, variantId]);
+  const QUELLE: Record<string, string> = { KUNDE: "Kunde", GRUPPE: "Preisgruppe", STANDARD: "Standard" };
+  return (
+    <Stack gap={2}>
+      <Text size="xs" fw={600} c="dimmed">Staffelpreise (Mengenstaffel)</Text>
+      {loaded && rows.length === 0
+        ? <Text size="xs" c="dimmed">Keine Staffel im Stamm hinterlegt.</Text>
+        : (
+          <Table withTableBorder withColumnBorders style={{ maxWidth: 420 }}>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th><Text size="xs">ab Menge</Text></Table.Th>
+                <Table.Th style={numTd}><Text size="xs">VK/Stk</Text></Table.Th>
+                <Table.Th style={numTd}><Text size="xs">EK/Stk</Text></Table.Th>
+                <Table.Th style={numTd}><Text size="xs">DB/Stk</Text></Table.Th>
+                <Table.Th><Text size="xs">Quelle</Text></Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {rows.map((s) => (
+                <Table.Tr key={s.minMenge}>
+                  <Table.Td><Text size="xs">ab {s.minMenge}</Text></Table.Td>
+                  <Table.Td style={numTd}><Text size="xs">{euro(s.vkCents)}</Text></Table.Td>
+                  <Table.Td style={numTd}><Text size="xs" c="dimmed">{s.ekCents != null ? euro(s.ekCents) : "—"}</Text></Table.Td>
+                  <Table.Td style={numTd}><Text size="xs" c={s.dbCents != null ? (s.dbCents >= 0 ? "teal" : "red") : "dimmed"}>{s.dbCents != null ? euro(s.dbCents) : "—"}</Text></Table.Td>
+                  <Table.Td><Text size="xs" c="dimmed">{QUELLE[s.quelle] ?? s.quelle}</Text></Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        )}
+    </Stack>
+  );
+}
+
 export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate }: { lines: EditorLine[]; onChange: (l: EditorLine[]) => void; caps?: PositionsEditorCaps; companyId?: string; taxRate?: number }): JSX.Element {
   const fetchedTaxRate = useDefaultTaxRate();
   const effTaxRate = taxRate ?? fetchedTaxRate;
@@ -2858,6 +2907,10 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
                           {l.variantId && <Button size="compact-xs" variant="subtle" color="grape" onClick={() => setBundleFor(i)}>⊟ Stückliste</Button>}
                           {l.isBundle && <BundlePreview variantId={l.variantId!} positionQty={l.qty} />}
                         </Group>
+                        {/* Staffelpreise (Mengenstaffel) inline bei Veredelungen — gestaffelter VK + EK + DB (C+D). */}
+                        {l.kind === "VEREDELUNG" && companyId && l.variantId && (
+                          <Box mt={6}><VeredelungStaffel companyId={companyId} variantId={l.variantId} /></Box>
+                        )}
                       </Table.Td>
                     </Table.Tr>
                   )}

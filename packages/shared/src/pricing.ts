@@ -97,6 +97,51 @@ export function selectTier(
   return best;
 }
 
+/** Eine Staffelstufe der Angebots-Anzeige: VK + EK + DB je Mengengrenze (B4/D). */
+export interface StaffelStufe {
+  minMenge: number;
+  vkCents: Cents;
+  ekCents: Cents | null;
+  dbCents: Cents | null;
+  dbMargePct: number | null; // 0..1
+  quelle: "KUNDE" | "GRUPPE" | "STANDARD";
+}
+
+export interface StaffelLadderInput {
+  /** Basis-Staffel der Preisgruppe STANDARD (z. B. die Logo-/Veredelungs-Staffel). */
+  standardTiers: ReadonlyArray<PriceTier>;
+  /** Staffel der Preisgruppe der Firma. */
+  groupTiers: ReadonlyArray<PriceTier>;
+  /** Kundenindividuelle Staffel (höchste Präzedenz). */
+  customerTiers: ReadonlyArray<PriceTier>;
+  /** Bester Lieferanten-EK je Stück (null = kein EK hinterlegt → DB unbekannt). */
+  ekCents: Cents | null;
+}
+
+/**
+ * Baut die Anzeige-Staffel (Mengenstaffel mit VK+EK+DB je Stufe) für die Positionsmaske
+ * (B4/D, C+D): je Mengengrenze sticht KUNDE > GRUPPE > STANDARD. EK ist (mangels eigener
+ * EK-Staffel) der beste Lieferanten-EK und gilt für alle Stufen; der DB variiert mit dem VK.
+ * Aufsteigend nach minMenge sortiert.
+ */
+export function buildStaffelLadder(input: StaffelLadderInput): StaffelStufe[] {
+  const byMenge = new Map<number, { vkCents: Cents; quelle: StaffelStufe["quelle"] }>();
+  for (const t of input.standardTiers) byMenge.set(t.minMenge, { vkCents: t.netCents, quelle: "STANDARD" });
+  for (const t of input.groupTiers) byMenge.set(t.minMenge, { vkCents: t.netCents, quelle: "GRUPPE" });
+  for (const t of input.customerTiers) byMenge.set(t.minMenge, { vkCents: t.netCents, quelle: "KUNDE" });
+  const ek = input.ekCents;
+  return [...byMenge.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([minMenge, v]) => ({
+      minMenge,
+      vkCents: v.vkCents,
+      ekCents: ek,
+      dbCents: ek === null ? null : deckungsbeitrag(v.vkCents, ek),
+      dbMargePct: ek === null ? null : dbMarge(v.vkCents, ek),
+      quelle: v.quelle,
+    }));
+}
+
 export interface BasePriceSources {
   /** Kundenindividuelle Staffel — höchste Präzedenz. */
   customerTiers?: ReadonlyArray<PriceTier>;
