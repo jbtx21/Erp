@@ -19,3 +19,6 @@ dump.rdb
 /test-results/
 /playwright-report/
 /.pwtmp/
+
+# GoBD-WORM-Archiv (Laufzeit)
+/var/
