@@ -365,6 +365,21 @@ export const appRouter = router({
             };
           }
           const res = await ctx.orderWorkflow.transition(input.orderId, input.to, releaseOpts);
+          // Vertriebspfad-Lücke geschlossen (QA Finding 8/9): Angebot→Auftrag erzeugte bisher
+          // KEINEN Produktionsauftrag, daher hingen Beschaffung und Fremdvergabe (Veredeler-
+          // auftrag) in der Luft und die Auftragsampel sah „keine externe Veredelung". Beim
+          // Produktionsstart deshalb den PA automatisch erzeugen, falls noch keiner existiert —
+          // damit entstehen die BOM-Bedarfe und die Fremdvergabe-Stufen aus den Positionen.
+          // createFromOrder ist selbst gegen Doppelanlage gesichert; best-effort, der reine
+          // Statuswechsel bleibt auch ohne PA (z. B. Auftrag nicht freigegeben) bestehen.
+          if (input.to === "IN_PRODUKTION") {
+            let hasProduction = false;
+            try { hasProduction = !!(await ctx.production.status(input.orderId)); } catch { hasProduction = false; }
+            if (!hasProduction) {
+              try { await ctx.production.createFromOrder(input.orderId); }
+              catch { /* nicht blockierend (z. B. nicht freigegeben / keine Positionen) */ }
+            }
+          }
           // Versand-Verkettung: → VERSENDET erzeugt automatisch einen Lieferschein über alle
           // offenen Restmengen (bucht Bestandsabgang + setzt lieferstatus). Kein „versendet
           // ohne Lieferung" mehr. Best-effort: ein bereits voll gelieferter Auftrag → null.
