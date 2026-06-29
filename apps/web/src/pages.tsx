@@ -2629,21 +2629,26 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
       return { euro: r.netCents / 100, ...(r.ekCents != null ? { ekEuro: r.ekCents / 100 } : {}) };
     } catch { return {}; }
   };
-  const addFromCatalog = (e: { label: string; unitNetCents: number; variantId: string; isBundle?: boolean; sku?: string; articleName?: string; articleId?: string }): void => {
-    const idx = addLine({ description: e.label, qty: 1, euro: e.unitNetCents / 100, kind: "TEXTIL", variantId: e.variantId, isBundle: e.isBundle, articleNumber: e.sku, articleName: e.articleName, articleId: e.articleId });
-    void resolve(e.variantId, 1).then((p) => { if (p.euro !== undefined || p.ekEuro !== undefined) set(idx, p); });
+  // Preis (VK+EK) VOR dem Anlegen auflösen, dann die Zeile vollständig anhängen — so geht der
+  // EK nie verloren (Deckungsbeitrag-Anzeige) und es gibt keinen Stale-Closure-Verlust.
+  const addFromCatalog = async (e: { label: string; unitNetCents: number; variantId: string; isBundle?: boolean; sku?: string; articleName?: string; articleId?: string }): Promise<void> => {
+    const p = await resolve(e.variantId, 1);
+    addLine({ description: e.label, qty: 1, euro: p.euro ?? e.unitNetCents / 100, ...(p.ekEuro !== undefined ? { ekEuro: p.ekEuro } : {}), kind: "TEXTIL", variantId: e.variantId, isBundle: e.isBundle, articleNumber: e.sku, articleName: e.articleName, articleId: e.articleId });
   };
   // Katalogartikel INLINE in eine bestehende (freie) Zeile binden — über den Autocomplete-Treffer.
-  const bindCatalogToRow = (i: number, label: string): void => {
+  const bindCatalogToRow = async (i: number, label: string): Promise<void> => {
     const c = catalog.find((x) => x.label === label);
     if (!c) return;
-    set(i, { variantId: c.variantId, articleId: c.articleId, articleNumber: c.sku, articleName: c.articleName, description: c.articleName, isBundle: c.isBundle, euro: c.unitNetCents / 100 });
-    void resolve(c.variantId, lines[i]?.qty ?? 1).then((p) => { if (p.euro !== undefined || p.ekEuro !== undefined) set(i, p); });
+    const p = await resolve(c.variantId, lines[i]?.qty ?? 1);
+    set(i, { variantId: c.variantId, articleId: c.articleId, articleNumber: c.sku, articleName: c.articleName, description: c.articleName, isBundle: c.isBundle, euro: p.euro ?? c.unitNetCents / 100, ...(p.ekEuro !== undefined ? { ekEuro: p.ekEuro } : {}) });
   };
   const addHauptartikel = (e: { articleId: string; articleName: string; unitNetCents: number; sku?: string }): void =>
     void addLine({ description: e.articleName, qty: 1, euro: e.unitNetCents / 100, kind: "TEXTIL", articleId: e.articleId, articleNumber: e.sku, articleName: e.articleName });
-  const addManyVariants = (articleId: string, articleName: string, baseEuro: number, picked: { variantId: string; label: string; sku?: string; qty: number }[]): void => {
-    const fresh = picked.filter((p) => p.qty > 0).map((p) => ({ description: p.label, qty: p.qty, euro: baseEuro, kind: "TEXTIL" as PositionKind, variantId: p.variantId, articleNumber: p.sku, articleName, articleId }));
+  const addManyVariants = async (articleId: string, articleName: string, baseEuro: number, picked: { variantId: string; label: string; sku?: string; qty: number }[]): Promise<void> => {
+    const valid = picked.filter((p) => p.qty > 0);
+    // VK+EK je Variante auflösen → Größenlauf-Positionen tragen den Deckungsbeitrag (Fix DB „—").
+    const prices = await Promise.all(valid.map((p) => resolve(p.variantId, p.qty)));
+    const fresh = valid.map((p, k) => ({ description: p.label, qty: p.qty, euro: prices[k]?.euro ?? baseEuro, ...(prices[k]?.ekEuro !== undefined ? { ekEuro: prices[k]!.ekEuro } : {}), kind: "TEXTIL" as PositionKind, variantId: p.variantId, articleNumber: p.sku, articleName, articleId }));
     if (fresh.length > 0) onChange([...lines, ...fresh]);
   };
   const appendVeredelung = (e: { label: string; variantId: string; unitNetCents: number }): void => {
@@ -2652,20 +2657,20 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
     const textilQty = textilIdx >= 0 ? lines[textilIdx]!.qty : 1;
     onChange([...lines, { description: e.label, qty: textilQty, euro: e.unitNetCents / 100, kind: "VEREDELUNG", variantId: e.variantId, ...(textilIdx >= 0 ? { bezugPosition: textilIdx + 1 } : {}) }]);
   };
-  const pickVariant = (i: number, l: EditorLine, variantId: string): void => {
+  const pickVariant = async (i: number, l: EditorLine, variantId: string): Promise<void> => {
     const v = catalog.find((c) => c.variantId === variantId);
     if (!v) return;
-    set(i, { variantId, articleNumber: v.sku, articleName: v.articleName, isBundle: v.isBundle });
-    void resolve(variantId, l.qty).then((p) => { if (p.euro !== undefined || p.ekEuro !== undefined) set(i, p); });
+    const p = await resolve(variantId, l.qty);
+    set(i, { variantId, articleNumber: v.sku, articleName: v.articleName, isBundle: v.isBundle, ...(p.euro !== undefined ? { euro: p.euro } : {}), ...(p.ekEuro !== undefined ? { ekEuro: p.ekEuro } : {}) });
   };
-  // Veredelungsartikel inline aus dem Stamm wählen: Variante + Bezeichnung + VK setzen,
+  // Veredelungsartikel inline aus dem Stamm wählen: Variante + Bezeichnung + VK/EK setzen,
   // Platzierung vorbelegen wenn der Artikel im Stamm genau eine FinishingSpec führt.
-  const pickVeredelung = (i: number, l: EditorLine, variantId: string): void => {
+  const pickVeredelung = async (i: number, l: EditorLine, variantId: string): Promise<void> => {
     const v = veredelungen.find((x) => x.variantId === variantId);
     if (!v) return;
     const onePlacement = v.placements.length === 1 ? v.placements[0] : undefined;
-    set(i, { variantId, articleNumber: v.sku, articleName: v.articleName, description: v.articleName, kind: "VEREDELUNG", euro: v.unitNetCents / 100, ...(onePlacement ? { placement: onePlacement } : {}) });
-    void resolve(variantId, l.qty).then((p) => { if (p.euro !== undefined || p.ekEuro !== undefined) set(i, p); });
+    const p = await resolve(variantId, l.qty);
+    set(i, { variantId, articleNumber: v.sku, articleName: v.articleName, description: v.articleName, kind: "VEREDELUNG", euro: p.euro ?? v.unitNetCents / 100, ...(p.ekEuro !== undefined ? { ekEuro: p.ekEuro } : {}), ...(onePlacement ? { placement: onePlacement } : {}) });
   };
   const textilPositionen = lines.map((t, j) => ({ line: t, pos: j + 1 })).filter(({ line }) => line.kind === "TEXTIL");
   // Spezialfeld-Zeile (Gruppenüberschrift / Zwischen- / Gruppensumme) anhängen.
