@@ -1673,7 +1673,7 @@ export const appRouter = router({
         zahlungszielTage: z.number().int().min(0).max(365).nullish(),
         incoterm: z.string().max(40).nullish(),
         versandregel: z.string().max(80).nullish(),
-        lines: z.array(z.object({ description: z.string().min(1), qty: z.number().int().positive(), unitNetCents: z.number().int().nonnegative(), listNetCents: z.number().int().nonnegative().optional(), rabattPct: z.number().int().min(0).max(100).optional(), taxRatePct: z.number().int().min(0).max(100).optional(), kind: z.enum(["TEXTIL", "VEREDELUNG", "SONSTIGE"]).optional(), articleId: z.string().optional(), variantId: z.string().optional(), isAlternative: z.boolean().optional(), bezugPosition: z.number().int().positive().optional(), dbCents: z.number().int().optional() })).min(1),
+        lines: z.array(z.object({ description: z.string().min(1), qty: z.number().int().positive(), unitNetCents: z.number().int().nonnegative(), listNetCents: z.number().int().nonnegative().optional(), rabattPct: z.number().int().min(0).max(100).optional(), taxRatePct: z.number().int().min(0).max(100).optional(), kind: z.enum(["TEXTIL", "VEREDELUNG", "SONSTIGE"]).optional(), articleId: z.string().optional(), variantId: z.string().optional(), isAlternative: z.boolean().optional(), bezugPosition: z.number().int().positive().optional(), dbCents: z.number().int().optional(), lineType: z.enum(["ARTIKEL", "GRUPPE", "ZWISCHENSUMME", "GRUPPENSUMME"]).optional(), placement: z.string().max(120).optional(), altPreisText: z.string().max(120).optional(), imPdfAusblenden: z.boolean().optional() })).min(1),
       }))
       .mutation(async ({ input, ctx }) => {
         try { return await ctx.quotes.create({ ...input, gueltigBisAm: input.gueltigBisAm ? new Date(input.gueltigBisAm) : null }); }
@@ -1698,7 +1698,7 @@ export const appRouter = router({
         zahlungszielTage: z.number().int().min(0).max(365).nullish(),
         incoterm: z.string().max(40).nullish(),
         versandregel: z.string().max(80).nullish(),
-        lines: z.array(z.object({ description: z.string().min(1), qty: z.number().int().positive(), unitNetCents: z.number().int().nonnegative(), listNetCents: z.number().int().nonnegative().optional(), rabattPct: z.number().int().min(0).max(100).optional(), taxRatePct: z.number().int().min(0).max(100).optional(), kind: z.enum(["TEXTIL", "VEREDELUNG", "SONSTIGE"]).optional(), articleId: z.string().optional(), variantId: z.string().optional(), isAlternative: z.boolean().optional(), bezugPosition: z.number().int().positive().optional(), dbCents: z.number().int().optional() })).min(1),
+        lines: z.array(z.object({ description: z.string().min(1), qty: z.number().int().positive(), unitNetCents: z.number().int().nonnegative(), listNetCents: z.number().int().nonnegative().optional(), rabattPct: z.number().int().min(0).max(100).optional(), taxRatePct: z.number().int().min(0).max(100).optional(), kind: z.enum(["TEXTIL", "VEREDELUNG", "SONSTIGE"]).optional(), articleId: z.string().optional(), variantId: z.string().optional(), isAlternative: z.boolean().optional(), bezugPosition: z.number().int().positive().optional(), dbCents: z.number().int().optional(), lineType: z.enum(["ARTIKEL", "GRUPPE", "ZWISCHENSUMME", "GRUPPENSUMME"]).optional(), placement: z.string().max(120).optional(), altPreisText: z.string().max(120).optional(), imPdfAusblenden: z.boolean().optional() })).min(1),
       }))
       .mutation(async ({ input, ctx }) => {
         const { id, ...rest } = input;
@@ -2240,7 +2240,7 @@ export const appRouter = router({
     createOrder: roleProcedure("ADMIN", "BUERO")
       .input(z.object({
         companyId: z.string().min(1),
-        lines: z.array(z.object({ description: z.string().min(1), qty: z.number().int().positive(), unitNetCents: z.number().int().min(0), listNetCents: z.number().int().min(0).optional(), rabattPct: z.number().int().min(0).max(100).optional(), taxRatePct: z.number().int().min(0).max(100).optional(), kind: z.enum(["TEXTIL", "VEREDELUNG", "SONSTIGE"]).optional(), variantId: z.string().optional(), bezugPosition: z.number().int().positive().optional(), dbCents: z.number().int().optional() })).min(1),
+        lines: z.array(z.object({ description: z.string().min(1), qty: z.number().int().positive(), unitNetCents: z.number().int().min(0), listNetCents: z.number().int().min(0).optional(), rabattPct: z.number().int().min(0).max(100).optional(), taxRatePct: z.number().int().min(0).max(100).optional(), kind: z.enum(["TEXTIL", "VEREDELUNG", "SONSTIGE"]).optional(), variantId: z.string().optional(), bezugPosition: z.number().int().positive().optional(), dbCents: z.number().int().optional(), lineType: z.enum(["ARTIKEL", "GRUPPE", "ZWISCHENSUMME", "GRUPPENSUMME"]).optional(), placement: z.string().max(120).optional(), altPreisText: z.string().max(120).optional(), imPdfAusblenden: z.boolean().optional() })).min(1),
       }))
       .mutation(async ({ input, ctx }) => {
         try { return await ctx.salesOrders.createManual(input.companyId, input.lines); }
@@ -2258,7 +2258,7 @@ export const appRouter = router({
       .input(z.object({
         orderId: z.string().min(1),
         companyId: z.string().min(1),
-        lines: z.array(z.object({ description: z.string().min(1), qty: z.number().int().positive(), unitNetCents: z.number().int().min(0), listNetCents: z.number().int().min(0).optional(), rabattPct: z.number().int().min(0).max(100).optional(), taxRatePct: z.number().int().min(0).max(100).optional(), kind: z.enum(["TEXTIL", "VEREDELUNG", "SONSTIGE"]).optional(), variantId: z.string().optional(), bezugPosition: z.number().int().positive().optional(), dbCents: z.number().int().optional() })).min(1),
+        lines: z.array(z.object({ description: z.string().min(1), qty: z.number().int().positive(), unitNetCents: z.number().int().min(0), listNetCents: z.number().int().min(0).optional(), rabattPct: z.number().int().min(0).max(100).optional(), taxRatePct: z.number().int().min(0).max(100).optional(), kind: z.enum(["TEXTIL", "VEREDELUNG", "SONSTIGE"]).optional(), variantId: z.string().optional(), bezugPosition: z.number().int().positive().optional(), dbCents: z.number().int().optional(), lineType: z.enum(["ARTIKEL", "GRUPPE", "ZWISCHENSUMME", "GRUPPENSUMME"]).optional(), placement: z.string().max(120).optional(), altPreisText: z.string().max(120).optional(), imPdfAusblenden: z.boolean().optional() })).min(1),
       }))
       .mutation(async ({ input, ctx }) => {
         try {
@@ -2660,6 +2660,10 @@ export const appRouter = router({
           kind: z.enum(["TEXTIL", "VEREDELUNG", "SONSTIGE"]),
           variantId: z.string().nullable().optional(),
           bezugPosition: z.number().int().nullable().optional(),
+          lineType: z.enum(["ARTIKEL", "GRUPPE", "ZWISCHENSUMME", "GRUPPENSUMME"]).optional(),
+          placement: z.string().max(120).nullable().optional(),
+          altPreisText: z.string().max(120).nullable().optional(),
+          imPdfAusblenden: z.boolean().optional(),
         })).nullable().optional(),
       }))
       .mutation(async ({ input, ctx }) => {

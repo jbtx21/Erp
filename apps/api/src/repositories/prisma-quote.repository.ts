@@ -39,7 +39,7 @@ export class PrismaQuoteRepository implements QuoteRepository {
         zahlungszielTage: input.zahlungszielTage ?? null,
         incoterm: input.incoterm ?? null,
         versandregel: input.versandregel ?? null,
-        lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, taxRatePct: l.taxRatePct ?? 19, dbCents: l.dbCents ?? null, kind: (l.kind ?? "TEXTIL") as never, articleId: l.articleId ?? null, variantId: l.variantId ?? null, isAlternative: l.isAlternative ?? false, bezugPosition: l.bezugPosition ?? null })) },
+        lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, taxRatePct: l.taxRatePct ?? 19, dbCents: l.dbCents ?? null, kind: (l.kind ?? "TEXTIL") as never, articleId: l.articleId ?? null, variantId: l.variantId ?? null, isAlternative: l.isAlternative ?? false, bezugPosition: l.bezugPosition ?? null, lineType: l.lineType ?? "ARTIKEL", placement: l.placement ?? null, altPreisText: l.altPreisText ?? null, imPdfAusblenden: l.imPdfAusblenden ?? false })) },
       },
       select: { id: true },
     });
