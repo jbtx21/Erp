@@ -27,6 +27,7 @@ export interface CrmLine {
   sonstiges?: string | null;
   altPreisText?: string | null;
   imPdfAusblenden?: boolean;
+  veredlerId?: string | null;
 }
 
 export interface CrmLeadRecord {

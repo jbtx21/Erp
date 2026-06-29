@@ -17,14 +17,14 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
         invoice: { select: { id: true } },
         production: { select: { id: true } },
         _count: { select: { deliveryNotes: true } },
-        lines: { orderBy: { position: "asc" }, select: { description: true, qty: true, kind: true, unitNetCents: true, listNetCents: true, rabattPct: true, taxRatePct: true, dbCents: true, variantId: true, bezugPositionen: true, lineType: true, placement: true, positionType: true, positionSide: true, positionId: true, motiv: true, motivGroesse: true, farbton: true, platzierungsdetails: true, sonstiges: true, altPreisText: true, imPdfAusblenden: true } },
+        lines: { orderBy: { position: "asc" }, select: { description: true, qty: true, kind: true, unitNetCents: true, listNetCents: true, rabattPct: true, taxRatePct: true, dbCents: true, variantId: true, bezugPositionen: true, lineType: true, placement: true, positionType: true, positionSide: true, positionId: true, motiv: true, motivGroesse: true, farbton: true, platzierungsdetails: true, sonstiges: true, altPreisText: true, imPdfAusblenden: true, veredlerId: true } },
       },
     });
     if (!o) return null;
     return {
       id: o.id, number: o.number, companyId: o.companyId, status: String(o.status),
       invoiced: o.invoice !== null, inProduction: o.production !== null, delivered: o._count.deliveryNotes > 0,
-      lines: o.lines.map((l) => ({ description: l.description, qty: l.qty, kind: l.kind as PositionKind, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents, rabattPct: l.rabattPct, taxRatePct: l.taxRatePct, dbCents: l.dbCents, variantId: l.variantId, bezugPositionen: l.bezugPositionen, lineType: l.lineType as import("@texma/shared").LineType, placement: l.placement, positionType: l.positionType, positionSide: l.positionSide, positionId: l.positionId, motiv: l.motiv, motivGroesse: l.motivGroesse, farbton: l.farbton, platzierungsdetails: l.platzierungsdetails, sonstiges: l.sonstiges, altPreisText: l.altPreisText, imPdfAusblenden: l.imPdfAusblenden })),
+      lines: o.lines.map((l) => ({ description: l.description, qty: l.qty, kind: l.kind as PositionKind, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents, rabattPct: l.rabattPct, taxRatePct: l.taxRatePct, dbCents: l.dbCents, variantId: l.variantId, bezugPositionen: l.bezugPositionen, lineType: l.lineType as import("@texma/shared").LineType, placement: l.placement, positionType: l.positionType, positionSide: l.positionSide, positionId: l.positionId, motiv: l.motiv, motivGroesse: l.motivGroesse, farbton: l.farbton, platzierungsdetails: l.platzierungsdetails, sonstiges: l.sonstiges, altPreisText: l.altPreisText, imPdfAusblenden: l.imPdfAusblenden, veredlerId: l.veredlerId ?? null })),
     };
   }
 
@@ -40,7 +40,7 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
       position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents,
       listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, taxRatePct: l.taxRatePct ?? 19, dbCents: l.dbCents ?? null,
       kind: (l.kind ?? "TEXTIL") as never, variantId: l.variantId ?? null, bezugPositionen: l.bezugPositionen ?? [],
-      lineType: l.lineType ?? "ARTIKEL", placement: l.placement ?? null, positionType: l.positionType ?? null, positionSide: l.positionSide ?? null, positionId: l.positionId ?? null, motiv: l.motiv ?? null, motivGroesse: l.motivGroesse ?? null, farbton: l.farbton ?? null, platzierungsdetails: l.platzierungsdetails ?? null, sonstiges: l.sonstiges ?? null, altPreisText: l.altPreisText ?? null, imPdfAusblenden: l.imPdfAusblenden ?? false,
+      lineType: l.lineType ?? "ARTIKEL", placement: l.placement ?? null, positionType: l.positionType ?? null, positionSide: l.positionSide ?? null, positionId: l.positionId ?? null, motiv: l.motiv ?? null, motivGroesse: l.motivGroesse ?? null, farbton: l.farbton ?? null, platzierungsdetails: l.platzierungsdetails ?? null, sonstiges: l.sonstiges ?? null, altPreisText: l.altPreisText ?? null, imPdfAusblenden: l.imPdfAusblenden ?? false, veredlerId: l.veredlerId ?? null,
     });
 
     await prisma.$transaction(async (tx) => {
@@ -79,7 +79,7 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
         // Ad-hoc-Artikel aus Freitext-Position SAUBER im Stamm anlegen: eindeutige SKU
         // (Beleg-/Positionsbezug), Name, Beschreibung (Text) + Artikeltyp — kein Freitext-Dump.
         const art = await tx.article.create({
-          data: { sku: m.sku, name: m.name, description: m.description ?? m.name, type: m.isVeredelung ? "FINISHING" : "STOCK", variants: { create: { sku: m.sku } } },
+          data: { sku: m.sku, name: m.name, description: m.description ?? m.name, type: m.isVeredelung ? "FINISHING" : "STOCK", veredlerId: m.veredlerId ?? null, variants: { create: { sku: m.sku } } },
           select: { variants: { select: { id: true } } },
         });
         const variantId = art.variants[0]!.id;
@@ -93,7 +93,7 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
           companyId: input.companyId,
           quoteId: input.quoteId,
           status: "ANGELEGT",
-          lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, taxRatePct: l.taxRatePct ?? 19, dbCents: l.dbCents ?? null, kind: (l.kind ?? "TEXTIL") as never, variantId: l.variantId ?? variantByIndex.get(i) ?? null, bezugPositionen: l.bezugPositionen ?? [], lineType: l.lineType ?? "ARTIKEL", placement: l.placement ?? null, positionType: l.positionType ?? null, positionSide: l.positionSide ?? null, positionId: l.positionId ?? null, motiv: l.motiv ?? null, motivGroesse: l.motivGroesse ?? null, farbton: l.farbton ?? null, platzierungsdetails: l.platzierungsdetails ?? null, sonstiges: l.sonstiges ?? null, altPreisText: l.altPreisText ?? null, imPdfAusblenden: l.imPdfAusblenden ?? false })) },
+          lines: { create: input.lines.map((l, i) => ({ position: i + 1, description: l.description, qty: l.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, taxRatePct: l.taxRatePct ?? 19, dbCents: l.dbCents ?? null, kind: (l.kind ?? "TEXTIL") as never, variantId: l.variantId ?? variantByIndex.get(i) ?? null, bezugPositionen: l.bezugPositionen ?? [], lineType: l.lineType ?? "ARTIKEL", placement: l.placement ?? null, positionType: l.positionType ?? null, positionSide: l.positionSide ?? null, positionId: l.positionId ?? null, motiv: l.motiv ?? null, motivGroesse: l.motivGroesse ?? null, farbton: l.farbton ?? null, platzierungsdetails: l.platzierungsdetails ?? null, sonstiges: l.sonstiges ?? null, altPreisText: l.altPreisText ?? null, imPdfAusblenden: l.imPdfAusblenden ?? false, veredlerId: l.veredlerId ?? null })) },
         },
         select: { id: true },
       });
@@ -123,7 +123,7 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
         companyId: true,
         lines: {
           orderBy: { position: "asc" },
-          select: { position: true, description: true, qty: true, unitNetCents: true, listNetCents: true, rabattPct: true, taxRatePct: true, dbCents: true, kind: true, articleId: true, variantId: true, isAlternative: true, bezugPositionen: true, lineType: true, placement: true, positionType: true, positionSide: true, positionId: true, motiv: true, motivGroesse: true, farbton: true, platzierungsdetails: true, sonstiges: true, altPreisText: true, imPdfAusblenden: true },
+          select: { position: true, description: true, qty: true, unitNetCents: true, listNetCents: true, rabattPct: true, taxRatePct: true, dbCents: true, kind: true, articleId: true, variantId: true, isAlternative: true, bezugPositionen: true, lineType: true, placement: true, positionType: true, positionSide: true, positionId: true, motiv: true, motivGroesse: true, farbton: true, platzierungsdetails: true, sonstiges: true, altPreisText: true, imPdfAusblenden: true, veredlerId: true },
         },
       },
     });
@@ -167,6 +167,7 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
         sonstiges: l.sonstiges,
         altPreisText: l.altPreisText,
         imPdfAusblenden: l.imPdfAusblenden,
+        veredlerId: l.veredlerId ?? null,
         needsVariant: !!l.articleId && !l.variantId && !l.isAlternative,
       })),
     };

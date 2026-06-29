@@ -947,6 +947,9 @@ model QuoteLine {
   altPreisText String?
   // Position im Beleg-PDF ausblenden (interne Position, Xentral "im PDF ausblenden").
   imPdfAusblenden Boolean @default(false)
+  // Veredler je Veredelungs-Position (Fremdvergabe direkt aus dem Vertriebsweg, G1): hat
+  // Vorrang vor dem Veredler des Katalogartikels. null = inhouse bzw. aus Artikel ableiten.
+  veredlerId  String?
 }
 
 enum OrderStatus {
@@ -1056,6 +1059,9 @@ model OrderLine {
   sonstiges         String?
   altPreisText String? // Alternativtext statt Euro-Betrag im Beleg-PDF ("nach Aufwand")
   imPdfAusblenden Boolean @default(false) // Position im Beleg-PDF ausblenden
+  // Veredler je Veredelungs-Position (Fremdvergabe direkt aus dem Vertriebsweg, G1): hat
+  // Vorrang vor dem Veredler des Katalogartikels (loadOrderForProduction). null = inhouse/aus Artikel.
+  veredlerId  String?
 }
 
 // Positionsart: Basistextil vs. Veredelung (Druck/Stick) vs. Sonstiges (Versand,

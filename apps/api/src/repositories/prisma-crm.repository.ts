@@ -83,7 +83,7 @@ export class PrismaCrmRepository implements CrmRepository {
           quoteId: quote.id, position: i + 1, description: l.description.trim(), qty: l.qty,
           unitNetCents: l.unitNetCents, taxRatePct: l.taxRatePct ?? 19, kind: l.kind,
           variantId: l.variantId ?? null, bezugPositionen: l.bezugPositionen ?? [],
-          lineType: l.lineType ?? "ARTIKEL", placement: l.placement ?? null, positionType: l.positionType ?? null, positionSide: l.positionSide ?? null, positionId: l.positionId ?? null, motiv: l.motiv ?? null, motivGroesse: l.motivGroesse ?? null, farbton: l.farbton ?? null, platzierungsdetails: l.platzierungsdetails ?? null, sonstiges: l.sonstiges ?? null, altPreisText: l.altPreisText ?? null, imPdfAusblenden: l.imPdfAusblenden ?? false,
+          lineType: l.lineType ?? "ARTIKEL", placement: l.placement ?? null, positionType: l.positionType ?? null, positionSide: l.positionSide ?? null, positionId: l.positionId ?? null, motiv: l.motiv ?? null, motivGroesse: l.motivGroesse ?? null, farbton: l.farbton ?? null, platzierungsdetails: l.platzierungsdetails ?? null, sonstiges: l.sonstiges ?? null, altPreisText: l.altPreisText ?? null, imPdfAusblenden: l.imPdfAusblenden ?? false, veredlerId: l.veredlerId ?? null,
         })) });
       } else {
         const text = input.text.trim();

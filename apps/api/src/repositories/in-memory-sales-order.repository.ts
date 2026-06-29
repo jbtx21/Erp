@@ -20,6 +20,7 @@ export interface MemQuoteLine {
   isAlternative?: boolean;
   bezugPositionen?: number[];
   dbCents?: number | null;
+  veredlerId?: string | null;
 }
 interface MemQuote { id: string; companyId: string; accepted: boolean; lines: MemQuoteLine[] }
 
@@ -53,7 +54,7 @@ export class InMemorySalesOrderRepository implements SalesOrderRepository {
     return {
       id: o.id, number: o.number, companyId: o.companyId, status: lock.status ?? "ANGELEGT",
       invoiced: !!lock.invoiced, inProduction: !!lock.inProduction, delivered: !!lock.delivered || delivered,
-      lines: o.lines.map((l) => ({ description: l.description, qty: l.qty, kind: l.kind ?? "TEXTIL", unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, taxRatePct: l.taxRatePct ?? 19, dbCents: l.dbCents ?? null, variantId: l.variantId ?? null, bezugPositionen: l.bezugPositionen ?? [], lineType: l.lineType ?? "ARTIKEL", placement: l.placement ?? null, positionType: l.positionType ?? null, positionSide: l.positionSide ?? null, positionId: l.positionId ?? null, motiv: l.motiv ?? null, motivGroesse: l.motivGroesse ?? null, farbton: l.farbton ?? null, platzierungsdetails: l.platzierungsdetails ?? null, sonstiges: l.sonstiges ?? null, altPreisText: l.altPreisText ?? null, imPdfAusblenden: l.imPdfAusblenden ?? false })),
+      lines: o.lines.map((l) => ({ description: l.description, qty: l.qty, kind: l.kind ?? "TEXTIL", unitNetCents: l.unitNetCents, listNetCents: l.listNetCents ?? null, rabattPct: l.rabattPct ?? null, taxRatePct: l.taxRatePct ?? 19, dbCents: l.dbCents ?? null, variantId: l.variantId ?? null, bezugPositionen: l.bezugPositionen ?? [], lineType: l.lineType ?? "ARTIKEL", placement: l.placement ?? null, positionType: l.positionType ?? null, positionSide: l.positionSide ?? null, positionId: l.positionId ?? null, motiv: l.motiv ?? null, motivGroesse: l.motivGroesse ?? null, farbton: l.farbton ?? null, platzierungsdetails: l.platzierungsdetails ?? null, sonstiges: l.sonstiges ?? null, altPreisText: l.altPreisText ?? null, imPdfAusblenden: l.imPdfAusblenden ?? false, veredlerId: l.veredlerId ?? null })),
     };
   }
   async updateOrder(orderId: string, companyId: string, lines: SalesLine[]): Promise<void> {
@@ -103,6 +104,7 @@ export class InMemorySalesOrderRepository implements SalesOrderRepository {
         sonstiges: null,
         altPreisText: null,
         imPdfAusblenden: false,
+        veredlerId: l.veredlerId ?? null,
         needsVariant: !!l.articleId && !l.variantId && !l.isAlternative,
       })),
     };

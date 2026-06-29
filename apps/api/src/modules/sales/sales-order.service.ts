@@ -21,12 +21,14 @@ export interface SalesLine {
   placement?: string | null; positionType?: string | null; positionSide?: string | null; positionId?: string | null; motiv?: string | null; motivGroesse?: string | null; farbton?: string | null; platzierungsdetails?: string | null; sonstiges?: string | null; // Veredelungs-Detailfelder (Werkstattblatt-Karte) + Positions-Skizze (T-04)
   altPreisText?: string | null; // Alternativtext statt Euro-Betrag im PDF
   imPdfAusblenden?: boolean; // Position im Beleg-PDF ausblenden
+  veredlerId?: string | null; // Veredler je Veredelungs-Position (Fremdvergabe, G1); Vorrang vor Artikel-Veredler
   /**
    * Materialisierung: temporär (frei) erfasste Produktposition beim Wandeln in einen
    * festen Artikel überführen (Article+Variant anlegen, STANDARD-Preis = VK). Der Repo
    * legt den Artikel an und verknüpft die Auftragsposition mit der neuen Variante.
+   * `veredlerId` setzt zugleich Article.veredlerId, damit der Katalog den Veredler merkt.
    */
-  materializeArticle?: { sku: string; name: string; description?: string; isVeredelung: boolean };
+  materializeArticle?: { sku: string; name: string; description?: string; isVeredelung: boolean; veredlerId?: string | null };
 }
 
 export interface CreatedSalesOrder {
@@ -69,6 +71,7 @@ export interface ConversionPlanLine {
   sonstiges: string | null;
   altPreisText: string | null;
   imPdfAusblenden: boolean;
+  veredlerId: string | null; // Veredler je Position (Fremdvergabe aus dem Angebot übernommen, G1)
   /** true, wenn ein Hauptartikel ohne Variante (Farbe×Größe muss gewählt werden). */
   needsVariant: boolean;
 }
@@ -103,6 +106,7 @@ export interface OrderEditLine {
   sonstiges: string | null;
   altPreisText: string | null;
   imPdfAusblenden: boolean;
+  veredlerId: string | null; // Veredler je Position (Round-Trip bei Bearbeitung, G1)
 }
 
 export interface OrderEditData {
@@ -160,8 +164,17 @@ export class SalesOrderService {
     validateLines(lines);
     if (!(await this.repo.companyExists(companyId))) throw new SalesOrderError("Unbekannte Firma.");
     const number = await this.numbering.next("ORDER");
-    const { id } = await this.repo.createOrder({ number, companyId, lines });
-    await this.audit.append(buildEntry({ entity: "Order", entityId: id, action: "CREATE", after: { number, companyId, lineCount: lines.length, manual: true } }));
+    // Frei erfasste Produktpositionen (TEXTIL/VEREDELUNG ohne Variante/Artikel) wie beim
+    // Angebot-Wandeln (convertQuote) als festen Artikel materialisieren — sonst bleibt
+    // variantId null und es entsteht keine Beschaffung/Fremdvergabe. SONSTIGE bleibt frei.
+    const materialized: SalesLine[] = lines.map((l, i) => {
+      const materialize = !l.variantId && !l.materializeArticle && (l.kind === "TEXTIL" || l.kind === "VEREDELUNG");
+      return materialize
+        ? { ...l, materializeArticle: { sku: `${number}-P${i + 1}`, name: l.description.trim(), description: l.description.trim(), isVeredelung: l.kind === "VEREDELUNG", veredlerId: l.veredlerId } }
+        : l;
+    });
+    const { id } = await this.repo.createOrder({ number, companyId, lines: materialized });
+    await this.audit.append(buildEntry({ entity: "Order", entityId: id, action: "CREATE", after: { number, companyId, lineCount: materialized.length, manual: true, materialisierteArtikel: materialized.filter((l) => l.materializeArticle).length } }));
     return { id, number };
   }
 
@@ -208,8 +221,8 @@ export class SalesOrderService {
         const skuSuffix = entries.length > 1 ? `-${k + 1}` : "";
         built.push({ originPos: l.position, line: {
           description: l.description, qty: e.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents, rabattPct: l.rabattPct, taxRatePct: l.taxRatePct, kind: l.kind, variantId: e.variantId, bezugPositionen: l.bezugPositionen, dbCents: l.dbCents,
-          lineType: l.lineType, placement: l.placement, positionType: l.positionType, positionSide: l.positionSide, positionId: l.positionId, motiv: l.motiv, motivGroesse: l.motivGroesse, farbton: l.farbton, platzierungsdetails: l.platzierungsdetails, sonstiges: l.sonstiges, altPreisText: l.altPreisText, imPdfAusblenden: l.imPdfAusblenden,
-          ...(materialize ? { materializeArticle: { sku: `${number}-P${l.position}${skuSuffix}`, name: l.description.trim(), description: l.description.trim(), isVeredelung: l.kind === "VEREDELUNG" } } : {}),
+          lineType: l.lineType, placement: l.placement, positionType: l.positionType, positionSide: l.positionSide, positionId: l.positionId, motiv: l.motiv, motivGroesse: l.motivGroesse, farbton: l.farbton, platzierungsdetails: l.platzierungsdetails, sonstiges: l.sonstiges, altPreisText: l.altPreisText, imPdfAusblenden: l.imPdfAusblenden, veredlerId: l.veredlerId,
+          ...(materialize ? { materializeArticle: { sku: `${number}-P${l.position}${skuSuffix}`, name: l.description.trim(), description: l.description.trim(), isVeredelung: l.kind === "VEREDELUNG", veredlerId: l.veredlerId } } : {}),
         } });
       });
     }

@@ -18,7 +18,7 @@ export class PrismaProductionRepository implements ProductionRepository {
       select: {
         id: true, number: true, freigegeben: true, zugesagterLiefertermin: true,
         production: { select: { id: true, number: true } },
-        lines: { orderBy: { position: "asc" }, select: { position: true, description: true, qty: true, variantId: true, bezugPositionen: true } },
+        lines: { orderBy: { position: "asc" }, select: { position: true, description: true, qty: true, variantId: true, bezugPositionen: true, veredlerId: true, kind: true } },
       },
     });
     if (!o) return null;
@@ -63,8 +63,11 @@ export class PrismaProductionRepository implements ProductionRepository {
           articleId: v?.articleId ?? null,
           isBundle: v?.isBundle ?? false,
           components: (v?.bundleComponents ?? []).map((c) => ({ description: c.description, qty: c.qty, componentVariantId: c.componentVariantId })),
-          veredlerId: v?.article.veredlerId ?? null,
-          isVeredelung: v?.article.type === "FINISHING",
+          // G1: Veredler/Veredelung primär aus der Position (Fremdvergabe direkt aus dem
+          // Vertriebsweg), Katalogartikel nur als Fallback. So wird auch eine frei erfasste
+          // Veredelungsposition mit gesetztem Veredler zur externen Fremdvergabe-Stufe.
+          veredlerId: l.veredlerId ?? v?.article.veredlerId ?? null,
+          isVeredelung: l.kind === "VEREDELUNG" || v?.article.type === "FINISHING",
           bezugPositionen: l.bezugPositionen ?? [],
         };
       }),

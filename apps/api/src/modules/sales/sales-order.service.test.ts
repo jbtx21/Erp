@@ -127,6 +127,34 @@ describe("SalesOrderService (Auftragserstellung)", () => {
     await svc.convertQuote("q-1");
     expect(repo.orders[0]?.lines[0]?.materializeArticle).toBeUndefined();
   });
+
+  // G2: manueller Auftrag materialisiert Freipositionen genau wie convertQuote.
+  it("materialisiert Freipositionen auch im manuellen Auftrag (G2)", async () => {
+    const { svc, repo } = setup();
+    const res = await svc.createManual("co-1", [
+      { description: "Sonder-Polo", qty: 5, unitNetCents: 1500, kind: "TEXTIL" },
+      { description: "Sonderstick", qty: 5, unitNetCents: 400, kind: "VEREDELUNG", veredlerId: "sup_stick" },
+      { description: "Versandkosten", qty: 1, unitNetCents: 590, kind: "SONSTIGE" },
+    ]);
+    const lines = repo.orders[0]!.lines;
+    expect(lines[0]?.materializeArticle).toMatchObject({ name: "Sonder-Polo", isVeredelung: false, sku: `${res.number}-P1` });
+    // G1: der gewählte Veredler landet am materialisierten Artikel (externe Fremdvergabe später).
+    expect(lines[1]?.materializeArticle).toMatchObject({ name: "Sonderstick", isVeredelung: true, veredlerId: "sup_stick" });
+    expect(lines[2]?.materializeArticle).toBeUndefined(); // SONSTIGE bleibt freie Position
+  });
+
+  // G1: der Positions-Veredler des Angebots fließt in den Auftrag (Fremdvergabe aus dem Vertriebsweg).
+  it("übernimmt den Positions-Veredler des Angebots in den Auftrag (G1)", async () => {
+    const { svc, repo } = setup();
+    repo.addQuote({
+      id: "q-1", companyId: "co-1", accepted: false,
+      lines: [{ position: 1, description: "Stick Brust", qty: 100, unitNetCents: 400, kind: "VEREDELUNG", veredlerId: "sup_stick" }],
+    });
+    await svc.convertQuote("q-1");
+    const line = repo.orders[0]!.lines[0]!;
+    expect(line.veredlerId).toBe("sup_stick");
+    expect(line.materializeArticle).toMatchObject({ isVeredelung: true, veredlerId: "sup_stick" });
+  });
 });
 
 describe("SalesOrderService.updateOrder (vollständige Bearbeitung)", () => {
