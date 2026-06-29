@@ -59,14 +59,30 @@ async function main(): Promise<void> {
   });
 
   // ── Artikel + Varianten (Farbe×Größe) + Preise ────────────────────────────
+  // Artikelstammsatz mit den verbindlichen Mindestfeldern: Nr. (sku), Name, Beschreibung
+  // (Text) + Stamm-PIM. EK liegt je Variante am SupplierItem, VK je Variante am Preis.
   const article = await prisma.article.upsert({
     where: { sku: "POLO-CLASSIC" }, update: {},
-    create: { id: "art-polo", sku: "POLO-CLASSIC", name: "Poloshirt Classic" },
+    create: {
+      id: "art-polo", sku: "POLO-CLASSIC", name: "Poloshirt Classic",
+      description: "Klassisches Piqué-Poloshirt aus 100 % Baumwolle — vielseitig veredelbar (Stick/Druck).",
+      brand: "Texile Premium", materialComposition: "100% Baumwolle", careInstructions: "40 °C, nicht bleichen",
+    },
   });
-  for (const [id, sku, farbe, groesse, cents] of [
-    ["var-polo-navy-l", "POLO-NAVY-L", "Navy", "L", 1290],
-    ["var-polo-navy-xl", "POLO-NAVY-XL", "Navy", "XL", 1390],
-    ["var-polo-white-m", "POLO-WHITE-M", "Weiß", "M", 1190],
+  // ── Lieferanten (zuerst, damit die EK-SupplierItems je Variante darauf zeigen) ──
+  const sup1 = await prisma.supplier.upsert({
+    where: { id: "sup-fhb" }, update: {},
+    create: { id: "sup-fhb", name: "FHB Textil GmbH", vatId: "DE123456789", iban: "DE02120300000000202051" },
+  });
+  await prisma.supplier.upsert({
+    where: { id: "sup-stanley" }, update: {},
+    create: { id: "sup-stanley", name: "Stanley/Stella", vatId: "BE0987654321" },
+  });
+  // Jede Variante bekommt VK (Preis) UND EK (SupplierItem) — keine Variante ohne EK.
+  for (const [id, sku, farbe, groesse, cents, ekCents] of [
+    ["var-polo-navy-l", "POLO-NAVY-L", "Navy", "L", 1290, 640],
+    ["var-polo-navy-xl", "POLO-NAVY-XL", "Navy", "XL", 1390, 690],
+    ["var-polo-white-m", "POLO-WHITE-M", "Weiß", "M", 1190, 590],
   ] as const) {
     await prisma.variant.upsert({
       where: { id }, update: {},
@@ -76,24 +92,14 @@ async function main(): Promise<void> {
         prices: { create: [{ priceGroupId: pgStandard.id, netCents: cents }] },
       },
     });
+    await prisma.supplierItem.upsert({
+      where: { id: `si-${sku}` }, update: {},
+      create: { id: `si-${sku}`, supplierId: sup1.id, supplierSku: `FHB-${sku}`, variantId: id, ekCents, availableQty: 500, priority: 1 },
+    }).catch(() => {});
     // var-polo-navy-l bewusst UNTER Mindestbestand → erzeugt Reorder-Vorschlag (T-12).
     const qty = id === "var-polo-navy-l" ? 10 : 120;
     await prisma.stockLevel.upsert({ where: { variantId: id }, update: { qty, minStock: 50 }, create: { variantId: id, qty, minStock: 50 } });
   }
-
-  // ── Lieferanten + Katalog ──────────────────────────────────────────────────
-  const sup1 = await prisma.supplier.upsert({
-    where: { id: "sup-fhb" }, update: {},
-    create: { id: "sup-fhb", name: "FHB Textil GmbH", vatId: "DE123456789", iban: "DE02120300000000202051" },
-  });
-  await prisma.supplier.upsert({
-    where: { id: "sup-stanley" }, update: {},
-    create: { id: "sup-stanley", name: "Stanley/Stella", vatId: "BE0987654321" },
-  });
-  await prisma.supplierItem.upsert({
-    where: { id: "si-1" }, update: {},
-    create: { id: "si-1", supplierId: sup1.id, supplierSku: "FHB-POLO-NAVY-L", variantId: "var-polo-navy-l", ekCents: 640, availableQty: 500 },
-  }).catch(() => {});
 
   // ── Lieferadresse (Pflicht für Versand-Liste) ──────────────────────────────
   const addrGross = await prisma.deliveryAddress.upsert({
