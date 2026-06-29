@@ -81,6 +81,12 @@ export interface CatalogEntry {
   isBundle: boolean;
 }
 
+/** Veredelungs-/Logo-Artikel (type FINISHING) für die Inline-Auswahl in der Positionsmaske. */
+export interface VeredelungCatalogEntry extends CatalogEntry {
+  /** Im Artikelstamm hinterlegte Platzierungen (FinishingSpec) — Vorschläge für die Position. */
+  placements: string[];
+}
+
 /** Eine Stücklisten-Komponente einer Set-/Bundle-Variante (Kap. 5.1). */
 export interface ComponentRow {
   description: string;
@@ -134,6 +140,8 @@ export interface ProductRepository {
   catalog(): Promise<CatalogEntry[]>;
   /** Serverseitige, begrenzte Katalogsuche (SKU/Name/Beschreibung) für skalierbare Picker. */
   searchCatalog(query: string, limit: number): Promise<CatalogEntry[]>;
+  /** Veredelungs-/Logo-Artikel (FINISHING) inkl. Stamm-Platzierungen für die Inline-Auswahl. */
+  veredelungCatalog(): Promise<VeredelungCatalogEntry[]>;
   createVariant(input: CreateVariantInput): Promise<{ id: string }>;
   /** Erzeugt das Farbe×Größe-Raster eines Artikels; vorhandene Kombis werden übersprungen. */
   generateMatrixVariants(articleId: string, combos: ReadonlyArray<{ farbe: string; groesse: string }>): Promise<{ created: number; skipped: number; createdSkus: string[] }>;
@@ -216,6 +224,11 @@ export class ProductService {
   /** Flacher Artikel-/Varianten-Katalog für die Positionserfassung (Picker). */
   catalog(): Promise<CatalogEntry[]> {
     return this.repo.catalog();
+  }
+
+  /** Veredelungs-/Logo-Artikel (FINISHING) inkl. Stamm-Platzierungen — für die Inline-Auswahl. */
+  veredelungCatalog(): Promise<VeredelungCatalogEntry[]> {
+    return this.repo.veredelungCatalog();
   }
 
   /**

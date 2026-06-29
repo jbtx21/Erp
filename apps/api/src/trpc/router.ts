@@ -1480,6 +1480,8 @@ export const appRouter = router({
     listArticles: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.products.listArticles()),
     /** Flacher Artikel-/Varianten-Katalog für den Picker in Angebot/Auftrag/Leihgut. */
     catalog: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.products.catalog()),
+    /** Veredelungs-/Logo-Artikel (FINISHING) + Stamm-Platzierungen für die Inline-Auswahl. */
+    veredelungCatalog: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.products.veredelungCatalog()),
     /** Serverseitige, begrenzte Katalogsuche (skalierbarer Picker bei vielen Varianten). */
     searchCatalog: roleProcedure(...supplierRoles)
       .input(z.object({ query: z.string().default(""), limit: z.number().int().positive().max(200).optional() }))

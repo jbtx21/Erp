@@ -91,6 +91,26 @@ export class PrismaProductRepository implements ProductRepository {
     });
   }
 
+  async veredelungCatalog(): Promise<import("../modules/product/product.service.js").VeredelungCatalogEntry[]> {
+    const rows = await prisma.variant.findMany({
+      // Spiegelbild zu catalog(): NUR Veredelung/Logo (FINISHING) — für die Inline-Auswahl in der Positionsmaske.
+      where: { article: { type: "FINISHING" } },
+      orderBy: [{ article: { sku: "asc" } }, { sku: "asc" }],
+      select: {
+        id: true, sku: true, articleId: true, isBundle: true,
+        article: { select: { name: true, description: true, finishingSpecs: { select: { placement: true } } } },
+        attributes: { select: { name: true, value: true } },
+        prices: { where: { priceGroup: { kind: "STANDARD" } }, select: { netCents: true }, take: 1 },
+      },
+    });
+    return rows.map((v) => {
+      const attrs = v.attributes.map((a) => a.value).join(" / ");
+      const label = `${v.article.name}${attrs ? ` — ${attrs}` : ""} (${v.sku})`;
+      const placements = [...new Set(v.article.finishingSpecs.map((f) => f.placement).filter((p) => p.trim()))];
+      return { variantId: v.id, articleId: v.articleId, articleName: v.article.name, sku: v.sku, description: v.article.description ?? "", label, unitNetCents: v.prices[0]?.netCents ?? 0, isBundle: v.isBundle, placements };
+    });
+  }
+
   async searchCatalog(query: string, limit: number): Promise<CatalogEntry[]> {
     // Treffer über Varianten-SKU, Artikelname/-SKU/-Beschreibung (case-insensitive); nur
     // echte Lagerartikel (STOCK), wie catalog(). Begrenzt auf `limit` für skalierbare Picker.

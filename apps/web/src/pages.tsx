@@ -3,7 +3,7 @@
 // Bereiche mit wenig Code anbindbar sind. Interaktive Aktionen (Versand bestätigen,
 // Mahnlauf, Reorder→Bestellungen) sind je Seite ergänzt.
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ActionIcon, Alert, Anchor, Badge, Box, Button, Card, Checkbox, FileButton, Group, Image, Loader, Menu, Modal, NumberInput, Paper, PasswordInput, Popover, SegmentedControl, Select, SimpleGrid, Stack, Switch, Table, Tabs, TagsInput, Text, Textarea, TextInput, Title } from "@mantine/core";
+import { ActionIcon, Alert, Anchor, Autocomplete, Badge, Box, Button, Card, Checkbox, FileButton, Group, Image, Loader, Menu, Modal, NumberInput, Paper, PasswordInput, Popover, SegmentedControl, Select, SimpleGrid, Stack, Switch, Table, Tabs, TagsInput, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { validateVatId } from "@texma/shared/vat";
 import { buildTrackingUrl, type Carrier } from "@texma/shared/tracking";
@@ -2578,6 +2578,10 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
   }, [catalog]);
   const [markupCfg, setMarkupCfg] = useState<MarkupConfig | null>(null);
   useEffect(() => { void trpc.stickerei.markup.getConfig.query().then((c) => setMarkupCfg(c as MarkupConfig)).catch(() => undefined); }, []);
+  // Veredelungs-/Logo-Artikel aus dem Stamm — für die Inline-Auswahl in Veredelungszeilen.
+  const [veredelungen, setVeredelungen] = useState<Awaited<ReturnType<typeof trpc.products.veredelungCatalog.query>>>([]);
+  useEffect(() => { void trpc.products.veredelungCatalog.query().then(setVeredelungen).catch(() => undefined); }, []);
+  const placementsFor = (variantId?: string): string[] => (variantId ? veredelungen.find((x) => x.variantId === variantId)?.placements ?? [] : []);
   const [detailFor, setDetailFor] = useState<number | null>(null);
   const [bundleFor, setBundleFor] = useState<number | null>(null);
   const [logoOpen, setLogoOpen] = useState(false);
@@ -2644,6 +2648,15 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
     const v = catalog.find((c) => c.variantId === variantId);
     if (!v) return;
     set(i, { variantId, articleNumber: v.sku, articleName: v.articleName, isBundle: v.isBundle });
+    void resolve(variantId, l.qty).then((p) => { if (p.euro !== undefined || p.ekEuro !== undefined) set(i, p); });
+  };
+  // Veredelungsartikel inline aus dem Stamm wählen: Variante + Bezeichnung + VK setzen,
+  // Platzierung vorbelegen wenn der Artikel im Stamm genau eine FinishingSpec führt.
+  const pickVeredelung = (i: number, l: EditorLine, variantId: string): void => {
+    const v = veredelungen.find((x) => x.variantId === variantId);
+    if (!v) return;
+    const onePlacement = v.placements.length === 1 ? v.placements[0] : undefined;
+    set(i, { variantId, articleNumber: v.sku, articleName: v.articleName, description: v.articleName, kind: "VEREDELUNG", euro: v.unitNetCents / 100, ...(onePlacement ? { placement: onePlacement } : {}) });
     void resolve(variantId, l.qty).then((p) => { if (p.euro !== undefined || p.ekEuro !== undefined) set(i, p); });
   };
   const textilPositionen = lines.map((t, j) => ({ line: t, pos: j + 1 })).filter(({ line }) => line.kind === "TEXTIL");
@@ -2744,6 +2757,10 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
                     <Table.Td>
                       {fromCatalog
                         ? <div><Text size="sm" lineClamp={1}>{l.articleName || l.description || "—"}</Text>{l.articleNumber && <Text size="xs" c="dimmed">{l.articleNumber}</Text>}</div>
+                        : l.kind === "VEREDELUNG" && veredelungen.length > 0
+                        ? <Select size="xs" variant="unstyled" searchable placeholder="Veredelung aus Stamm…" value={null} clearable={false}
+                            data={veredelungen.map((x) => ({ value: x.variantId, label: x.label }))}
+                            onChange={(v) => v && pickVeredelung(i, l, v)} nothingFoundMessage="Keine Veredelung im Stamm" />
                         : <TextInput size="xs" variant="unstyled" placeholder="Beschreibung (Freiposition)" value={l.description} onChange={(e) => set(i, { description: e.currentTarget.value })} />}
                     </Table.Td>
                     <Table.Td>
@@ -2777,7 +2794,7 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
                       <Table.Td colSpan={10}>
                         <Group gap="md" align="end" wrap="wrap" py={4}>
                           {l.kind === "VEREDELUNG" && (
-                            <TextInput size="xs" label="Platzierung" w={150} placeholder="z. B. Brust links" value={l.placement ?? ""} onChange={(e) => set(i, { placement: e.currentTarget.value || undefined })} />
+                            <Autocomplete size="xs" label="Platzierung" w={170} placeholder="z. B. Brust links" data={placementsFor(l.variantId)} value={l.placement ?? ""} onChange={(v) => set(i, { placement: v || undefined })} />
                           )}
                           {l.kind === "VEREDELUNG" && (
                             <Select size="xs" label="Bezug (Textil-Pos.)" w={190} clearable placeholder="—" value={l.bezugPosition != null ? String(l.bezugPosition) : null}

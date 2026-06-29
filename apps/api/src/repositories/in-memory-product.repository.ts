@@ -123,6 +123,11 @@ export class InMemoryProductRepository implements ProductRepository {
     });
   }
 
+  async veredelungCatalog(): Promise<import("../modules/product/product.service.js").VeredelungCatalogEntry[]> {
+    // In-Memory-Double modelliert keinen FINISHING-Artikeltyp — Veredelungskatalog bleibt leer.
+    return [];
+  }
+
   async listComponents(variantId: string): Promise<ComponentRow[]> {
     const comps = this.components.get(variantId) ?? [];
     return comps.map((c) => {
