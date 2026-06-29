@@ -3,7 +3,7 @@
 // Bereiche mit wenig Code anbindbar sind. Interaktive Aktionen (Versand bestätigen,
 // Mahnlauf, Reorder→Bestellungen) sind je Seite ergänzt.
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Alert, Anchor, Badge, Box, Button, Card, Checkbox, FileButton, Group, Image, Loader, Menu, Modal, NumberInput, Paper, PasswordInput, Popover, SegmentedControl, Select, SimpleGrid, Stack, Switch, Table, Tabs, TagsInput, Text, Textarea, TextInput, Title } from "@mantine/core";
+import { ActionIcon, Alert, Anchor, Badge, Box, Button, Card, Checkbox, FileButton, Group, Image, Loader, Menu, Modal, NumberInput, Paper, PasswordInput, Popover, SegmentedControl, Select, SimpleGrid, Stack, Switch, Table, Tabs, TagsInput, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { validateVatId } from "@texma/shared/vat";
 import { buildTrackingUrl, type Carrier } from "@texma/shared/tracking";
@@ -2056,7 +2056,8 @@ export type PositionKind = "TEXTIL" | "VEREDELUNG" | "SONSTIGE";
 // Eine Position kann auf eine konkrete Variante (variantId) ODER nur auf einen
 // Hauptartikel (articleId, Farbe×Größe noch offen) verweisen; isAlternative kennzeichnet
 // ein unverbindliches Alternativangebot (wird beim Wandeln in den Auftrag weggelassen).
-export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind; variantId?: string; articleId?: string; articleNumber?: string; articleName?: string; isAlternative?: boolean; ekEuro?: number; isBundle?: boolean; rabattPct?: number; taxRatePct?: number; vkManual?: boolean; bezugPosition?: number }
+export type LineType = "ARTIKEL" | "GRUPPE" | "ZWISCHENSUMME" | "GRUPPENSUMME";
+export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind; variantId?: string; articleId?: string; articleNumber?: string; articleName?: string; isAlternative?: boolean; ekEuro?: number; isBundle?: boolean; rabattPct?: number; taxRatePct?: number; vkManual?: boolean; bezugPosition?: number; lineType?: LineType; placement?: string; altPreisText?: string; imPdfAusblenden?: boolean }
 
 // Artikel-Picker: durchsuchbare Auswahl aus dem Artikelstamm (ERPNext „Link field").
 // Bei Auswahl wird eine Position vorbefüllt (Bezeichnung, Standardpreis, Variante).
@@ -2548,56 +2549,64 @@ function MengenMatrixDialog({ onClose, onAdd }: { onClose: () => void; onAdd: (a
   );
 }
 
-export function LinesEditor({ lines, onChange, quoteMode = false, companyId, taxRate }: { lines: EditorLine[]; onChange: (l: EditorLine[]) => void; quoteMode?: boolean; companyId?: string; taxRate?: number }): JSX.Element {
+// ── Positionsmaske (Anfrage/Angebot/Auftrag) — tabellenbasiert, Xentral-/ERPNext-Muster ──
+// Ersetzt LinesEditor: echte Datentabelle (Sticky-Header, ScrollContainer, tabular-nums),
+// Pro-Zeilen-Summe, Pen-Detail je Zeile (Platzierung/Bezug/Optional/Alt-Preistext/PDF-ausblenden),
+// Capability-Flags statt quoteMode, Pfeil-Sortierung, Tastatur (Enter = neue Zeile), Inline-
+// Validierung. Artikel-Nr./Name bei Katalogartikeln schreibgeschützt (Altlast entfernt).
+export interface PositionsEditorCaps {
+  hauptartikel?: boolean; // Hauptartikel ohne Variante (Farbe×Größe erst beim Auftrag) — Angebot/Anfrage
+  sizeRun?: boolean; // Größenlauf-Matrix
+  logo?: boolean; // Logo/Veredelung-Dialog
+  alternative?: boolean; // Optional-/Alternativposition (Angebot/Anfrage)
+}
+const KIND_DATA = [{ value: "TEXTIL", label: "Textil" }, { value: "VEREDELUNG", label: "Veredelung" }, { value: "SONSTIGE", label: "Sonstiges" }];
+
+export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate }: { lines: EditorLine[]; onChange: (l: EditorLine[]) => void; caps?: PositionsEditorCaps; companyId?: string; taxRate?: number }): JSX.Element {
   const fetchedTaxRate = useDefaultTaxRate();
   const effTaxRate = taxRate ?? fetchedTaxRate;
-  // Katalog laden → Varianten je Artikel für die Inline-Variantenwahl (Farbe×Größe) gruppieren.
   const [catalog, setCatalog] = useState<Awaited<ReturnType<typeof trpc.products.catalog.query>>>([]);
   useEffect(() => { void trpc.products.catalog.query().then(setCatalog).catch(() => undefined); }, []);
-  const variantsByArticle = new Map<string, typeof catalog>();
-  for (const c of catalog) { const arr = variantsByArticle.get(c.articleId) ?? []; arr.push(c); variantsByArticle.set(c.articleId, arr); }
-  const set = (i: number, patch: Partial<EditorLine>): void => onChange(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
-  // Aufschlagsfaktor-Konfiguration (Kap. 4.4) für die automatische VK-Ableitung aus dem EK.
+  const variantsByArticle = useMemo(() => {
+    const m = new Map<string, typeof catalog>();
+    for (const c of catalog) { const arr = m.get(c.articleId) ?? []; arr.push(c); m.set(c.articleId, arr); }
+    return m;
+  }, [catalog]);
   const [markupCfg, setMarkupCfg] = useState<MarkupConfig | null>(null);
   useEffect(() => { void trpc.stickerei.markup.getConfig.query().then((c) => setMarkupCfg(c as MarkupConfig)).catch(() => undefined); }, []);
-  // EK setzen: bei freien/temporären Positionen (kein Katalogartikel) den VK automatisch
-  // aus dem Aufschlagsfaktor ableiten, solange noch kein VK manuell gesetzt wurde (Kap. 4.4).
-  const applyEk = (i: number, l: EditorLine, raw: number | string): void => {
-    if (raw === "") { set(i, { ekEuro: undefined }); return; }
-    const ek = Number(raw);
-    const patch: Partial<EditorLine> = { ekEuro: ek };
-    // EK→VK-Automatik bei freien Positionen: auch bei MANUELLER EK-Eingabe feuern, solange
-    // der VK nicht von Hand überschrieben wurde (vkManual). Faktor aus dem Aufschlag (Kap. 4.4).
-    const isFree = !l.variantId && !l.articleId;
-    if (isFree && ek > 0 && !l.vkManual) {
-      const { factor } = resolveMarkupFactor(markupCfg ?? DEFAULT_MARKUP_CONFIG, { menge: l.qty, ekCents: Math.round(ek * 100) });
-      patch.euro = Math.round(ek * factor * 100) / 100;
-    }
-    set(i, patch);
+  const [detailFor, setDetailFor] = useState<number | null>(null);
+  const [bundleFor, setBundleFor] = useState<number | null>(null);
+  const [logoOpen, setLogoOpen] = useState(false);
+  const [mengenOpen, setMengenOpen] = useState(false);
+
+  const set = (i: number, patch: Partial<EditorLine>): void => onChange(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+  const move = (i: number, dir: -1 | 1): void => {
+    const j = i + dir;
+    if (j < 0 || j >= lines.length) return;
+    const next = [...lines]; [next[i], next[j]] = [next[j]!, next[i]!]; onChange(next);
+    if (detailFor === i) setDetailFor(j); else if (detailFor === j) setDetailFor(i);
   };
-  const [bundleFor, setBundleFor] = useState<number | null>(null); // Index der Zeile mit offenem Stücklisten-Editor
-  const [shown, setShown] = useState<Record<number, boolean>>({}); // aufgeklappte Stücklisten-Vorschauen
-  const [logoOpen, setLogoOpen] = useState(false); // Dialog „Logo/Veredelung anlegen"
-  const [mengenOpen, setMengenOpen] = useState(false); // Dialog „Größen/Mengen aufteilen"
-  // Nur eine WIRKLICH leere Platzhalterzeile ersetzen (keine Beschreibung, kein Preis,
-  // keine Artikel-/Variantenbindung), sonst anhängen — verhindert Datenverlust, wenn eine
-  // gefüllte Position (z. B. 200× Textil) nur keine Beschreibung trägt. Gibt den Zielindex zurück.
-  const isBlank = (l: EditorLine): boolean =>
-    !l.description.trim() && !l.variantId && !l.articleId && !l.articleNumber && !l.articleName && !l.ekEuro && !l.euro;
+  const removeAt = (i: number): void => { onChange(lines.filter((_, j) => j !== i)); if (detailFor === i) setDetailFor(null); };
+  const isBlank = (l: EditorLine): boolean => !l.description.trim() && !l.variantId && !l.articleId && !l.articleNumber && !l.articleName && !l.ekEuro && !l.euro;
+  const blankRow = (): EditorLine => ({ description: "", qty: 1, euro: 0, kind: "TEXTIL" });
   const addLine = (line: EditorLine): number => {
     const idx = lines.findIndex(isBlank);
     onChange(idx >= 0 ? lines.map((l, j) => (j === idx ? line : l)) : [...lines, line]);
     return idx >= 0 ? idx : lines.length;
   };
-  // Veredelung IMMER als zusätzliche Position anhängen (nie eine bestehende ersetzen); Menge
-  // an die zugehörige Textilposition koppeln, damit die Mengenstaffel greift (Kap. 5.4/11).
-  const appendVeredelung = (e: { label: string; variantId: string; unitNetCents: number }): void => {
-    const textilIdx = lines.findIndex((l) => l.kind === "TEXTIL" && l.qty > 0);
-    const textilQty = textilIdx >= 0 ? lines[textilIdx]!.qty : 1;
-    // Standard-Bezug = erste Textilposition (Kap. 5.4/11); im Bezug-Select änderbar.
-    onChange([...lines, { description: e.label, qty: textilQty, euro: e.unitNetCents / 100, kind: "VEREDELUNG", variantId: e.variantId, ...(textilIdx >= 0 ? { bezugPosition: textilIdx + 1 } : {}) }]);
+  // EK-Eingabe: bei freien Positionen den VK automatisch aus dem Aufschlagsfaktor ableiten,
+  // solange der VK noch leer/0 ist (kein dauerhafter vkManual-Lock mehr — Fix der Altmaske).
+  const applyEk = (i: number, l: EditorLine, raw: number | string): void => {
+    if (raw === "") { set(i, { ekEuro: undefined }); return; }
+    const ek = Number(raw);
+    const patch: Partial<EditorLine> = { ekEuro: ek };
+    const isFree = !l.variantId && !l.articleId;
+    if (isFree && ek > 0 && l.euro <= 0) {
+      const { factor } = resolveMarkupFactor(markupCfg ?? DEFAULT_MARKUP_CONFIG, { menge: l.qty, ekCents: Math.round(ek * 100) });
+      patch.euro = Math.round(ek * factor * 100) / 100;
+    }
+    set(i, patch);
   };
-  // Staffelpreis + Lieferanten-EK (→ Deckungsbeitrag) für eine Variante des Kunden ziehen.
   const resolve = async (variantId: string, qty: number): Promise<{ euro?: number; ekEuro?: number }> => {
     if (!companyId) return {};
     try {
@@ -2611,91 +2620,125 @@ export function LinesEditor({ lines, onChange, quoteMode = false, companyId, tax
   };
   const addHauptartikel = (e: { articleId: string; articleName: string; unitNetCents: number; sku?: string }): void =>
     void addLine({ description: e.articleName, qty: 1, euro: e.unitNetCents / 100, kind: "TEXTIL", articleId: e.articleId, articleNumber: e.sku, articleName: e.articleName });
-  // Größenlauf/Matrix: mehrere Farbe×Größe-Varianten EINES Hauptartikels mit Menge je
-  // Variante auf einmal als Positionen anhängen (Sortierung). Basis-VK je Variante; pro
-  // Zeile danach editierbar.
   const addManyVariants = (articleId: string, articleName: string, baseEuro: number, picked: { variantId: string; label: string; sku?: string; qty: number }[]): void => {
     const fresh = picked.filter((p) => p.qty > 0).map((p) => ({ description: p.label, qty: p.qty, euro: baseEuro, kind: "TEXTIL" as PositionKind, variantId: p.variantId, articleNumber: p.sku, articleName, articleId }));
     if (fresh.length > 0) onChange([...lines, ...fresh]);
   };
-  // Inline-Variantenwahl: andere Farbe×Größe desselben Artikels wählen → Variante + Nr. + Preis übernehmen.
+  const appendVeredelung = (e: { label: string; variantId: string; unitNetCents: number }): void => {
+    const textilIdx = lines.findIndex((l) => l.kind === "TEXTIL" && l.qty > 0);
+    const textilQty = textilIdx >= 0 ? lines[textilIdx]!.qty : 1;
+    onChange([...lines, { description: e.label, qty: textilQty, euro: e.unitNetCents / 100, kind: "VEREDELUNG", variantId: e.variantId, ...(textilIdx >= 0 ? { bezugPosition: textilIdx + 1 } : {}) }]);
+  };
   const pickVariant = (i: number, l: EditorLine, variantId: string): void => {
     const v = catalog.find((c) => c.variantId === variantId);
     if (!v) return;
     set(i, { variantId, articleNumber: v.sku, articleName: v.articleName, isBundle: v.isBundle });
     void resolve(variantId, l.qty).then((p) => { if (p.euro !== undefined || p.ekEuro !== undefined) set(i, p); });
   };
+  const textilPositionen = lines.map((t, j) => ({ line: t, pos: j + 1 })).filter(({ line }) => line.kind === "TEXTIL");
+
   return (
     <Box>
-      <Group gap="xs" mb={6}>
+      <Group gap="xs" mb="xs">
         <ArticlePicker onPick={addFromCatalog} />
-        {quoteMode && <HauptartikelPicker onPick={addHauptartikel} />}
-        {quoteMode && <Button size="xs" variant="light" onClick={() => setMengenOpen(true)}>+ Größen/Mengen</Button>}
-        {quoteMode && <Button size="xs" variant="light" color="grape" onClick={() => setLogoOpen(true)}>+ Logo/Veredelung</Button>}
-        <Text size="xs" c="dimmed">{quoteMode ? "Variante/Hauptartikel/Größenlauf wählen, Logo anlegen oder unten frei erfassen" : "aus dem Artikelstamm wählen oder unten frei erfassen"}</Text>
+        {caps.hauptartikel && <HauptartikelPicker onPick={addHauptartikel} />}
+        {caps.sizeRun && <Button size="xs" variant="light" onClick={() => setMengenOpen(true)}>+ Größenlauf</Button>}
+        {caps.logo && <Button size="xs" variant="light" color="grape" onClick={() => setLogoOpen(true)}>+ Logo/Veredelung</Button>}
+        <Button size="xs" variant="default" onClick={() => onChange([...lines, blankRow()])}>+ Freiposition</Button>
       </Group>
       {logoOpen && <LogoArticleDialog onClose={() => setLogoOpen(false)} onCreated={(e) => { appendVeredelung(e); setLogoOpen(false); }} />}
       {mengenOpen && <MengenMatrixDialog onClose={() => setMengenOpen(false)} onAdd={(a) => { addManyVariants(a.articleId, a.articleName, a.baseEuro, a.rows); setMengenOpen(false); }} />}
-      {lines.map((l, i) => {
-        const db = lineDbCents(l);
-        const effEuro = effUnitEuro(l);
-        const margePct = db !== null && effEuro > 0 ? (effEuro - (l.ekEuro ?? 0)) / effEuro : null;
-        const hasRabatt = (l.rabattPct ?? 0) > 0;
-        const artVariants = l.articleId ? variantsByArticle.get(l.articleId) : undefined;
-        return (
-        <Group key={i} gap="xs" mt={4} align="end">
-          <Select label={i === 0 ? "Art" : undefined} w={110} value={l.kind} onChange={(v) => v && set(i, { kind: v as PositionKind })}
-            data={[{ value: "TEXTIL", label: "Textil" }, { value: "VEREDELUNG", label: "Veredelung" }, { value: "SONSTIGE", label: "Sonstiges" }]} />
-          <TextInput label={i === 0 ? "Artikel-Nr." : undefined} value={l.articleNumber ?? ""} onChange={(e) => set(i, { articleNumber: e.currentTarget.value || undefined })} placeholder="—" w={110} title="Artikelnummer (SKU) — bei Katalogartikeln automatisch" />
-          <TextInput label={i === 0 ? "Artikelname" : undefined} value={l.articleName ?? ""} onChange={(e) => set(i, { articleName: e.currentTarget.value || undefined })} placeholder="—" w={150} title="Artikelname — bei Katalogartikeln automatisch" />
-          {artVariants && artVariants.length > 0 && (
-            <Select label={i === 0 ? "Variante" : undefined} w={150} value={l.variantId ?? null} searchable placeholder="Farbe×Größe"
-              data={artVariants.map((c) => ({ value: c.variantId, label: c.label }))}
-              onChange={(v) => v && pickVariant(i, l, v)} title="Variantenstruktur (Farbe×Größe) aus dem PIM" />
-          )}
-          <TextInput label={i === 0 ? "Beschreibung" : undefined} value={l.description} onChange={(e) => set(i, { description: e.currentTarget.value })} placeholder="200 Polos bestickt" w={180} />
-          {l.kind === "VEREDELUNG" && (
-            // Veredelungsbezug (Kap. 5.4/11): an welche Textilposition gehört diese Veredelung?
-            // Verknüpft Logo/Druck mit dem zu veredelnden Textil (mehrere Platzierungen je Textil möglich).
-            <Select label={i === 0 ? "Bezug" : undefined} w={150} clearable placeholder="Textil-Pos."
-              value={l.bezugPosition != null ? String(l.bezugPosition) : null}
-              data={lines.map((t, j) => ({ line: t, pos: j + 1 })).filter(({ line }) => line.kind === "TEXTIL")
-                .map(({ line, pos }) => ({ value: String(pos), label: `Pos. ${pos} — ${(line.articleName || line.description || "Textil").slice(0, 24)}` }))}
-              onChange={(v) => set(i, { bezugPosition: v ? Number(v) : undefined })}
-              title="Zugehörige Textilposition (Veredelungsbezug, Kap. 5.4/11)" />
-          )}
-          <NumberInput label={i === 0 ? "Menge" : undefined} value={l.qty} onChange={(v) => set(i, { qty: Number(v) || 1 })}
-            onBlur={() => { if (companyId && l.variantId) void resolve(l.variantId, l.qty).then((p) => { if (p.euro !== undefined || p.ekEuro !== undefined) set(i, p); }); }}
-            min={1} w={70} />
-          <MoneyInput label={i === 0 ? "EK (€)" : undefined} value={l.ekEuro ?? ""} onChange={(v) => applyEk(i, l, v)} min={0} w={90} placeholder="—" title="Einkaufspreis — VK wird bei freien Positionen automatisch über den Aufschlagsfaktor berechnet" />
-          <MoneyInput label={i === 0 ? "VK (€)" : undefined} value={l.euro} onChange={(v) => set(i, { euro: Number(v) || 0, vkManual: true })} min={0} w={90} />
-          <NumberInput label={i === 0 ? "Rabatt %" : undefined} value={l.rabattPct ?? ""} onChange={(v) => set(i, { rabattPct: v === "" ? undefined : Math.min(100, Math.max(0, Number(v))) })} min={0} max={100} decimalScale={1} w={80} placeholder="0" />
-          {hasRabatt && <Text size="xs" c="dimmed" title="Netto-Einzelpreis nach Rabatt">= {euro(Math.round(effEuro * 100))}</Text>}
-          {db !== null && <Badge color={db >= 0 ? "teal" : "red"} variant="light" size="sm" title="Deckungsbeitrag (VK nach Rabatt − EK) × Menge">DB {euro(db)}{margePct !== null ? ` · ${(margePct * 100).toFixed(0)}%` : ""}</Badge>}
-          {l.isBundle && <Badge color="grape" variant="light" size="sm" title="Set/Bundle — löst sich in eine Stückliste auf">Set</Badge>}
-          {quoteMode && l.articleId && !l.variantId && <Badge color="orange" variant="light" size="sm" title="Farbe & Größe werden beim Wandeln in den Auftrag abgefragt">Variante offen</Badge>}
-          {(l.kind === "TEXTIL" || l.kind === "VEREDELUNG") && !l.variantId && !l.articleId && l.description.trim() !== "" && (
-            <Badge color="gray" variant="light" size="sm" title="Freiposition ohne Katalogbezug — erzeugt KEINEN Lieferantenbedarf (Procure-to-Order). Für Beschaffung einen Katalogartikel/Variante wählen.">ohne Artikelbezug</Badge>
-          )}
-          {l.variantId && <Button size="compact-xs" variant={l.isBundle ? "light" : "subtle"} color="grape" onClick={() => { if (l.isBundle) setShown((s) => ({ ...s, [i]: !s[i] })); else setBundleFor(i); }} title="Stückliste anzeigen/bearbeiten">⊟ Stückliste</Button>}
-          {quoteMode && <Switch size="xs" label="Alt." tabIndex={-1} checked={!!l.isAlternative} onChange={(e) => set(i, { isAlternative: e.currentTarget.checked })} title="Alternativposition — wird beim Wandeln in den Auftrag nicht übernommen" />}
-          <Button size="compact-sm" variant="subtle" color="red" disabled={lines.length === 1} onClick={() => onChange(lines.filter((_, j) => j !== i))}>✕</Button>
-        </Group>
-        );
-      })}
-      {lines.map((l, i) => (l.isBundle && shown[i] && l.variantId ? (
-        <Group key={`bp-${i}`} gap="xs">
-          <BundlePreview variantId={l.variantId} positionQty={l.qty} />
-          <Button size="compact-xs" variant="subtle" color="grape" onClick={() => setBundleFor(i)}>bearbeiten</Button>
-        </Group>
-      ) : null))}
-      <Button size="compact-xs" variant="light" mt="xs" onClick={() => onChange([...lines, { description: "", qty: 1, euro: 0, kind: "VEREDELUNG" }])}>+ Position</Button>
+
+      <Table.ScrollContainer minWidth={880}>
+        <Table verticalSpacing={4} fz="sm" highlightOnHover withTableBorder stickyHeader>
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th w={34}>Pos</Table.Th><Table.Th w={104}>Art</Table.Th><Table.Th>Artikel</Table.Th>
+              <Table.Th w={150}>Variante</Table.Th><Table.Th w={64} ta="right">Menge</Table.Th>
+              <Table.Th w={86} ta="right">EK</Table.Th><Table.Th w={86} ta="right">VK</Table.Th>
+              <Table.Th w={68} ta="right">Rabatt</Table.Th><Table.Th w={96} ta="right">Summe</Table.Th><Table.Th w={120} />
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {lines.length === 0 && <Table.Tr><Table.Td colSpan={10}><Text size="sm" c="dimmed" py="xs">Noch keine Position — Artikel wählen oder „+ Freiposition".</Text></Table.Td></Table.Tr>}
+            {lines.map((l, i) => {
+              const fromCatalog = !!l.variantId || !!l.articleId;
+              const artVariants = l.articleId ? variantsByArticle.get(l.articleId) : undefined;
+              const lineNetCents = Math.round(l.qty * effUnitEuro(l) * 100);
+              const db = lineDbCents(l);
+              const open = detailFor === i;
+              return (
+                <Fragment key={i}>
+                  <Table.Tr style={l.isAlternative ? { opacity: 0.7 } : undefined}>
+                    <Table.Td><Text size="xs" c="dimmed" style={numTd}>{i + 1}</Text></Table.Td>
+                    <Table.Td><Select size="xs" variant="unstyled" value={l.kind} onChange={(v) => v && set(i, { kind: v as PositionKind })} data={KIND_DATA} allowDeselect={false} /></Table.Td>
+                    <Table.Td>
+                      {fromCatalog
+                        ? <div><Text size="sm" lineClamp={1}>{l.articleName || l.description || "—"}</Text>{l.articleNumber && <Text size="xs" c="dimmed">{l.articleNumber}</Text>}</div>
+                        : <TextInput size="xs" variant="unstyled" placeholder="Beschreibung (Freiposition)" value={l.description} onChange={(e) => set(i, { description: e.currentTarget.value })} />}
+                    </Table.Td>
+                    <Table.Td>
+                      {artVariants && artVariants.length > 0
+                        ? <Select size="xs" variant="unstyled" searchable placeholder="Farbe×Größe" value={l.variantId ?? null} data={artVariants.map((c) => ({ value: c.variantId, label: c.label }))} onChange={(v) => v && pickVariant(i, l, v)} />
+                        : l.variantId ? <Text size="xs" c="dimmed">gewählt</Text>
+                        : (caps.alternative && l.articleId) ? <Badge size="xs" color="orange" variant="light" title="Farbe & Größe beim Wandeln in den Auftrag">offen</Badge>
+                        : <Text size="xs" c="dimmed">—</Text>}
+                    </Table.Td>
+                    <Table.Td><NumberInput size="xs" variant="unstyled" w={56} min={1} value={l.qty} onChange={(v) => set(i, { qty: Number(v) || 1 })} onBlur={() => { if (companyId && l.variantId) void resolve(l.variantId, l.qty).then((p) => { if (p.euro !== undefined || p.ekEuro !== undefined) set(i, p); }); }} /></Table.Td>
+                    <Table.Td><MoneyInput size="xs" variant="unstyled" w={78} min={0} placeholder="—" value={l.ekEuro ?? ""} onChange={(v) => applyEk(i, l, v)} /></Table.Td>
+                    <Table.Td><MoneyInput size="xs" variant="unstyled" w={78} min={0} value={l.euro} onChange={(v) => set(i, { euro: Number(v) || 0 })} /></Table.Td>
+                    <Table.Td><NumberInput size="xs" variant="unstyled" w={60} min={0} max={100} decimalScale={1} placeholder="0" value={l.rabattPct ?? ""} onChange={(v) => set(i, { rabattPct: v === "" ? undefined : Math.min(100, Math.max(0, Number(v))) })} /></Table.Td>
+                    <Table.Td>
+                      <Text size="sm" style={numTd} c={l.isAlternative ? "dimmed" : undefined}>{euro(lineNetCents)}</Text>
+                      {db !== null && <Text size="xs" c={db >= 0 ? "teal" : "red"} style={numTd}>DB {euro(db)}</Text>}
+                    </Table.Td>
+                    <Table.Td>
+                      <Group gap={2} wrap="nowrap" justify="flex-end">
+                        {l.isAlternative && <Badge size="xs" color="gray" variant="light">Alt.</Badge>}
+                        {l.placement && <Badge size="xs" color="grape" variant="light" title={l.placement}>⌖</Badge>}
+                        <ActionIcon size="sm" variant={open ? "light" : "subtle"} color="gray" onClick={() => setDetailFor(open ? null : i)} title="Details (Platzierung, Bezug, Optional …)">✎</ActionIcon>
+                        <ActionIcon size="sm" variant="subtle" color="gray" disabled={i === 0} onClick={() => move(i, -1)} title="nach oben">↑</ActionIcon>
+                        <ActionIcon size="sm" variant="subtle" color="gray" disabled={i === lines.length - 1} onClick={() => move(i, 1)} title="nach unten">↓</ActionIcon>
+                        <ActionIcon size="sm" variant="subtle" color="red" onClick={() => removeAt(i)} title="Position entfernen">✕</ActionIcon>
+                      </Group>
+                    </Table.Td>
+                  </Table.Tr>
+                  {open && (
+                    <Table.Tr style={{ background: "var(--mantine-color-gray-0)" }}>
+                      <Table.Td colSpan={10}>
+                        <Group gap="md" align="end" wrap="wrap" py={4}>
+                          {l.kind === "VEREDELUNG" && (
+                            <TextInput size="xs" label="Platzierung" w={150} placeholder="z. B. Brust links" value={l.placement ?? ""} onChange={(e) => set(i, { placement: e.currentTarget.value || undefined })} />
+                          )}
+                          {l.kind === "VEREDELUNG" && (
+                            <Select size="xs" label="Bezug (Textil-Pos.)" w={190} clearable placeholder="—" value={l.bezugPosition != null ? String(l.bezugPosition) : null}
+                              data={textilPositionen.map(({ line, pos }) => ({ value: String(pos), label: `Pos. ${pos} — ${(line.articleName || line.description || "Textil").slice(0, 22)}` }))}
+                              onChange={(v) => set(i, { bezugPosition: v ? Number(v) : undefined })} />
+                          )}
+                          {!fromCatalog && (
+                            <TextInput size="xs" label="Artikel-Nr. (frei)" w={130} value={l.articleNumber ?? ""} onChange={(e) => set(i, { articleNumber: e.currentTarget.value || undefined })} />
+                          )}
+                          <TextInput size="xs" label="Alt. Preistext" w={150} placeholder='z. B. "nach Aufwand"' value={l.altPreisText ?? ""} onChange={(e) => set(i, { altPreisText: e.currentTarget.value || undefined })} />
+                          {caps.alternative && <Switch size="xs" mb={6} label="Alternativposition" checked={!!l.isAlternative} onChange={(e) => set(i, { isAlternative: e.currentTarget.checked })} />}
+                          <Switch size="xs" mb={6} label="Im PDF ausblenden" checked={!!l.imPdfAusblenden} onChange={(e) => set(i, { imPdfAusblenden: e.currentTarget.checked })} />
+                          {l.variantId && <Button size="compact-xs" variant="subtle" color="grape" onClick={() => setBundleFor(i)}>⊟ Stückliste</Button>}
+                          {l.isBundle && <BundlePreview variantId={l.variantId!} positionQty={l.qty} />}
+                        </Group>
+                      </Table.Td>
+                    </Table.Tr>
+                  )}
+                </Fragment>
+              );
+            })}
+          </Table.Tbody>
+        </Table>
+      </Table.ScrollContainer>
+
       <Text size="xs" c="dimmed" mt={4}>USt {effTaxRate} % (zentral über Einstellungen). Steuerbefreite Vorgänge separat.</Text>
       <LineTotals lines={lines} taxRate={effTaxRate} />
       {bundleFor !== null && lines[bundleFor]?.variantId && (
         <BundleEditor variantId={lines[bundleFor]!.variantId!} label={lines[bundleFor]!.description || "Variante"} positionQty={lines[bundleFor]!.qty}
-          onClose={() => setBundleFor(null)}
-          onSaved={(isBundle) => { set(bundleFor, { isBundle }); setShown((s) => ({ ...s, [bundleFor]: isBundle })); setBundleFor(null); }} />
+          onClose={() => setBundleFor(null)} onSaved={(isBundle) => { set(bundleFor, { isBundle }); setBundleFor(null); }} />
       )}
     </Box>
   );
@@ -2751,7 +2794,15 @@ export const lineHasContent = (l: EditorLine): boolean =>
 // Beschreibung mit Fallback (Server verlangt eine nicht-leere Beschreibung je Position).
 const lineDesc = (l: EditorLine): string => l.description.trim() || l.articleName?.trim() || l.articleNumber?.trim() || "Position";
 
-export const toApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; variantId?: string; bezugPosition?: number; dbCents?: number }[] =>
+// Positions-Strukturfelder (Positionsmaske) in das API-Format spreaden — nur wenn gesetzt.
+const lineStructFields = (l: EditorLine): { lineType?: LineType; placement?: string; altPreisText?: string; imPdfAusblenden?: boolean } => ({
+  ...(l.lineType && l.lineType !== "ARTIKEL" ? { lineType: l.lineType } : {}),
+  ...(l.placement?.trim() ? { placement: l.placement.trim() } : {}),
+  ...(l.altPreisText?.trim() ? { altPreisText: l.altPreisText.trim() } : {}),
+  ...(l.imPdfAusblenden ? { imPdfAusblenden: true } : {}),
+});
+
+export const toApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; variantId?: string; bezugPosition?: number; dbCents?: number; lineType?: LineType; placement?: string; altPreisText?: string; imPdfAusblenden?: boolean }[] =>
   lines.filter(lineHasContent).map((l) => ({
     description: lineDesc(l), qty: l.qty, kind: l.kind, ...lineMoney(l), ...(l.variantId ? { variantId: l.variantId } : {}),
     // USt-Satz der Position mitschicken (eingefroren); so bleibt die Steuerbefreiung (0 %)
@@ -2759,19 +2810,21 @@ export const toApiLines = (lines: EditorLine[]): { description: string; qty: num
     ...(l.taxRatePct != null ? { taxRatePct: l.taxRatePct } : {}),
     // Veredelungsbezug: Positionsnummer der zugehörigen Textilposition (Kap. 5.4/11).
     ...(l.bezugPosition != null ? { bezugPosition: l.bezugPosition } : {}),
+    ...lineStructFields(l),
   }));
 
 // Wie toApiLines, aber inkl. Artikel-/Varianten-Referenz und Alternativ-Kennzeichen (Angebot).
-export const toQuoteApiLines = (lines: EditorLine[], taxRatePct = 19): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; articleId?: string; variantId?: string; isAlternative?: boolean; bezugPosition?: number; dbCents?: number }[] =>
+export const toQuoteApiLines = (lines: EditorLine[], taxRatePct = 19): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; articleId?: string; variantId?: string; isAlternative?: boolean; bezugPosition?: number; dbCents?: number; lineType?: LineType; placement?: string; altPreisText?: string; imPdfAusblenden?: boolean }[] =>
   lines.filter(lineHasContent).map((l) => ({
     description: lineDesc(l), qty: l.qty, kind: l.kind, ...lineMoney(l), taxRatePct,
     ...(l.articleId ? { articleId: l.articleId } : {}), ...(l.variantId ? { variantId: l.variantId } : {}), ...(l.isAlternative ? { isAlternative: true } : {}),
     ...(l.bezugPosition != null ? { bezugPosition: l.bezugPosition } : {}),
+    ...lineStructFields(l),
   }));
 
 // Rekonstruiert die Erfassungs-Positionen aus gespeicherten Angebots-/Auftragszeilen
 // (für die Bearbeitung): VK = Listenpreis, Rabatt, EK = effektiver Netto − DB.
-type StoredLine = { description: string; qty: number; kind: PositionKind; unitNetCents: number; listNetCents: number | null; rabattPct: number | null; taxRatePct?: number | null; dbCents: number | null; articleId?: string | null; variantId?: string | null; isAlternative?: boolean; bezugPosition?: number | null };
+type StoredLine = { description: string; qty: number; kind: PositionKind; unitNetCents: number; listNetCents: number | null; rabattPct: number | null; taxRatePct?: number | null; dbCents: number | null; articleId?: string | null; variantId?: string | null; isAlternative?: boolean; bezugPosition?: number | null; lineType?: string | null; placement?: string | null; altPreisText?: string | null; imPdfAusblenden?: boolean };
 export const fromStoredLines = (ls: StoredLine[]): EditorLine[] =>
   ls.map((l) => ({
     description: l.description, qty: l.qty, kind: l.kind,
@@ -2783,6 +2836,10 @@ export const fromStoredLines = (ls: StoredLine[]): EditorLine[] =>
     ...(l.articleId ? { articleId: l.articleId } : {}),
     ...(l.isAlternative ? { isAlternative: true } : {}),
     ...(l.bezugPosition != null ? { bezugPosition: l.bezugPosition } : {}),
+    ...(l.lineType && l.lineType !== "ARTIKEL" ? { lineType: l.lineType as LineType } : {}),
+    ...(l.placement ? { placement: l.placement } : {}),
+    ...(l.altPreisText ? { altPreisText: l.altPreisText } : {}),
+    ...(l.imPdfAusblenden ? { imPdfAusblenden: true } : {}),
   }));
 
 // Auflösung einer offenen Position beim Wandeln: eine Variante (String) ODER ein Größenlauf
@@ -3050,7 +3107,7 @@ export function QuotesPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k:
               <Text size="sm" c="dimmed">Währung: <b>EUR</b> · Preisfindung über Preisgruppe des Kunden + Mengenstaffeln (B4).</Text>
             </Collapsible>
             <Title order={5} mt="lg">Artikel</Title>
-            <LinesEditor lines={lines} onChange={(l) => { setLines(l); setDirty(true); }} quoteMode companyId={companyId || undefined} taxRate={exempt ? 0 : globalTaxRate} />
+            <PositionsEditor lines={lines} onChange={(l) => { setLines(l); setDirty(true); }} caps={{ hauptartikel: true, sizeRun: true, logo: true, alternative: true }} companyId={companyId || undefined} taxRate={exempt ? 0 : globalTaxRate} />
             <Collapsible title="Stickerei-Mengenstaffeln je Logo (Referenz)">
               <StickereiStaffelnSection
                 companyId={companyId || undefined}
@@ -4110,7 +4167,7 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
               </Tabs.List>
               <Tabs.Panel value="details" pt="md">
                 <CompanyPicker value={newCompany} onChange={(v) => { setNewCompany(v); setDirty(true); }} w={240} />
-                <LinesEditor lines={newLines} onChange={(l) => { setNewLines(l); setDirty(true); }} companyId={newCompany || undefined} taxRate={globalTaxRate} />
+                <PositionsEditor lines={newLines} onChange={(l) => { setNewLines(l); setDirty(true); }} caps={{ sizeRun: true, logo: true }} companyId={newCompany || undefined} taxRate={globalTaxRate} />
               </Tabs.Panel>
               <Tabs.Panel value="stickerei" pt="md">
                 <StickereiStaffelnSection
@@ -4952,7 +5009,7 @@ function CrmEditModal({ lead, onClose, onSaved }: { lead: CrmRow | null; onClose
         <Box>
           <Text size="sm" fw={600} mb={4}>Anfrage-Positionen (optional)</Text>
           <Text size="xs" c="dimmed" mb="xs">Mehrere Positionen wie im Angebot — Artikel/Variante wählen oder frei beschreiben (auch Veredelung). Freitext lässt sich später in feste Artikel wandeln.</Text>
-          <LinesEditor lines={lines} onChange={setLines} quoteMode companyId={companyId || undefined} taxRate={globalTaxRate} />
+          <PositionsEditor lines={lines} onChange={setLines} caps={{ hauptartikel: true, sizeRun: true, logo: true, alternative: true }} companyId={companyId || undefined} taxRate={globalTaxRate} />
         </Box>
         <Group justify="flex-end" mt="xs">
           <Button variant="default" onClick={onClose}>Abbrechen</Button>
