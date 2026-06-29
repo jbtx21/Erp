@@ -36,6 +36,14 @@ export interface VeredelungMotivLine {
   platzierungsdetails?: string;
   /** Sonstiges (z. B. Einzelname, Sondertext). */
   sonstiges?: string;
+  /** Dateiname der Druck-/Stickdatei (Kartenfeld „Druckdatei"). */
+  druckdatei?: string;
+  /** Kleidungstyp für die Platzierungs-Skizze; default heuristisch aus Text (T-04). */
+  positionType?: GarmentType;
+  /** Ansicht der Skizze (front/back bzw. cap-Seiten); default heuristisch aus Text. */
+  positionSide?: string;
+  /** Markerpunkt-Id (z. B. „bl" = Brust links); default heuristisch aus Text. */
+  positionId?: string;
 }
 
 export interface VeredelungsauftragInput {
@@ -97,6 +105,186 @@ export interface VeredelungsartFlags {
   beflockt: boolean;
   transfer: boolean;
   plott: boolean;
+}
+
+/** Kleidungstypen für die Platzierungs-Skizze (Werkstattblatt, T-04). */
+export type GarmentType = "shirt" | "cap" | "hose";
+
+/** Ein Markerpunkt auf der Kleidungs-Skizze (relative Koordinaten 0..1, y von oben). */
+export interface GarmentPoint {
+  id: string;
+  label: string;
+  xPct: number;
+  yPct: number;
+}
+
+/**
+ * Platzierungs-Koordinaten je Kleidungstyp und Ansicht (übernommen aus dem TEXMA-
+ * Veredlungsauftrag-Generator). Der PDF-Renderer zeichnet anhand dieser Punkte den
+ * grünen Positionsmarker auf die Kleidungs-Skizze.
+ */
+export const POSITION_POINTS: Record<GarmentType, Record<string, GarmentPoint[]>> = {
+  shirt: {
+    front: [
+      { id: "bl", label: "Brust links", xPct: 0.64, yPct: 0.34 },
+      { id: "br", label: "Brust rechts", xPct: 0.36, yPct: 0.34 },
+      { id: "bm", label: "Brust Mitte", xPct: 0.5, yPct: 0.34 },
+      { id: "kl", label: "Kragen links", xPct: 0.6, yPct: 0.16 },
+      { id: "kr", label: "Kragen rechts", xPct: 0.4, yPct: 0.16 },
+      { id: "ba", label: "Bauch", xPct: 0.5, yPct: 0.55 },
+      { id: "al", label: "Aermel links", xPct: 0.82, yPct: 0.42 },
+      { id: "ar", label: "Aermel rechts", xPct: 0.18, yPct: 0.42 },
+      { id: "ml", label: "Manschette links", xPct: 0.88, yPct: 0.82 },
+      { id: "mr", label: "Manschette rechts", xPct: 0.12, yPct: 0.82 },
+    ],
+    back: [
+      { id: "rg", label: "Ruecken mitte", xPct: 0.5, yPct: 0.444 },
+      { id: "ro", label: "Ruecken oben", xPct: 0.5, yPct: 0.307 },
+      { id: "ru", label: "Ruecken unten", xPct: 0.5, yPct: 0.683 },
+      { id: "na", label: "Nacken", xPct: 0.5, yPct: 0.205 },
+      { id: "al", label: "Aermel links", xPct: 0.18, yPct: 0.42 },
+      { id: "ar", label: "Aermel rechts", xPct: 0.82, yPct: 0.42 },
+    ],
+  },
+  cap: {
+    front: [
+      { id: "cf", label: "Front mittig", xPct: 0.5, yPct: 0.41 },
+      { id: "cfl", label: "Front links", xPct: 0.35, yPct: 0.41 },
+      { id: "cfr", label: "Front rechts", xPct: 0.65, yPct: 0.41 },
+    ],
+    links: [{ id: "csl", label: "Seite links", xPct: 0.591, yPct: 0.341 }],
+    rechts: [{ id: "csr", label: "Seite rechts", xPct: 0.409, yPct: 0.341 }],
+    hinten: [
+      { id: "ch", label: "Hinten mittig", xPct: 0.5, yPct: 0.239 },
+      { id: "cv", label: "Verschluss", xPct: 0.5, yPct: 0.382 },
+    ],
+  },
+  hose: {
+    front: [
+      { id: "htl", label: "Tasche links", xPct: 0.3, yPct: 0.35 },
+      { id: "htr", label: "Tasche rechts", xPct: 0.7, yPct: 0.35 },
+      { id: "hbl", label: "Bein links", xPct: 0.273, yPct: 0.512 },
+      { id: "hbr", label: "Bein rechts", xPct: 0.705, yPct: 0.512 },
+    ],
+  },
+};
+
+/** Alias-Map: alte XX-Schreibweise → kanonische Form (2XL/3XL-Konvention). */
+export const SIZE_ALIASES: Record<string, string> = {
+  XXL: "2XL",
+  XXXL: "3XL",
+  XXXXL: "4XL",
+  XXXXXL: "5XL",
+  XXXXXXL: "6XL",
+};
+
+/** Kanonisiert eine Größenangabe (XXL→2XL, XXXL→3XL …); Unbekanntes nur getrimmt. */
+export function canonicalSize(s: string): string {
+  const u = String(s).toUpperCase().trim();
+  return SIZE_ALIASES[u] ?? u;
+}
+
+/** Ergebnis der Platzierungsauflösung: Kleidungstyp, Ansicht und (optional) Markerpunkt. */
+export interface GarmentPlacement {
+  type: GarmentType;
+  side: string;
+  pointId?: string;
+}
+
+/** Faltet Umlaute/ß für robustes Text-Matching ("Ärmel"→"aermel", "Rücken"→"ruecken"). */
+function foldText(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss");
+}
+
+// Markerpunkt-Erkennung je Typ+Ansicht (spezifischste Regel zuerst). Mappt freien
+// Platzierungstext auf eine Punkt-Id aus POSITION_POINTS (T-04).
+const POINT_RULES: Record<string, ReadonlyArray<readonly [RegExp, string]>> = {
+  "shirt:front": [
+    [/brust\s*links/, "bl"],
+    [/brust\s*rechts/, "br"],
+    [/kragen\s*links/, "kl"],
+    [/kragen\s*rechts/, "kr"],
+    [/manschette\s*links/, "ml"],
+    [/manschette\s*rechts/, "mr"],
+    [/(aermel|arm)\D*links/, "al"],
+    [/(aermel|arm)\D*rechts/, "ar"],
+    [/bauch/, "ba"],
+    [/brust/, "bm"],
+  ],
+  "shirt:back": [
+    [/nacken/, "na"],
+    [/ruecken\s*oben/, "ro"],
+    [/ruecken\s*unten/, "ru"],
+    [/(aermel|arm)\D*links/, "al"],
+    [/(aermel|arm)\D*rechts/, "ar"],
+    [/rueck/, "rg"],
+  ],
+  "cap:front": [
+    [/front\s*links|links/, "cfl"],
+    [/front\s*rechts|rechts/, "cfr"],
+    [/.*/, "cf"],
+  ],
+  "cap:links": [[/.*/, "csl"]],
+  "cap:rechts": [[/.*/, "csr"]],
+  "cap:hinten": [
+    [/verschluss/, "cv"],
+    [/.*/, "ch"],
+  ],
+  "hose:front": [
+    [/tasche\s*links/, "htl"],
+    [/tasche\s*rechts/, "htr"],
+    [/bein\s*links/, "hbl"],
+    [/bein\s*rechts/, "hbr"],
+    [/tasche/, "htl"],
+    [/bein/, "hbl"],
+  ],
+};
+
+/**
+ * Bestimmt für eine Veredelungsposition die Kleidungs-Skizze (Typ/Ansicht/Markerpunkt).
+ * Explizit gesetzte Felder (positionType/positionSide/positionId) haben Vorrang; sonst
+ * wird heuristisch aus Platzierung/Motiv/Beschreibung abgeleitet (T-04). Pure, testbar.
+ */
+export function resolveGarmentPlacement(line: VeredelungMotivLine): GarmentPlacement {
+  const txt = foldText(
+    [line.platzierung, line.platzierungsdetails, line.motiv, line.description].filter(Boolean).join(" ")
+  );
+
+  const type: GarmentType =
+    line.positionType ??
+    (/\b(cap|kappe|muetze|beanie|basecap)\b/.test(txt)
+      ? "cap"
+      : /\b(hose|jeans|bein|short|pants)\b/.test(txt)
+        ? "hose"
+        : "shirt");
+
+  let side = line.positionSide;
+  if (!side) {
+    if (type === "shirt") side = /rueck|nacken/.test(txt) ? "back" : "front";
+    else if (type === "cap") side = /hinten|verschluss/.test(txt) ? "hinten" : /links/.test(txt) ? "links" : /rechts/.test(txt) ? "rechts" : "front";
+    else side = "front";
+  }
+  // Ansicht auf eine vorhandene Skizze begrenzen, sonst Default-Ansicht des Typs.
+  if (!POSITION_POINTS[type]?.[side]) side = Object.keys(POSITION_POINTS[type])[0]!;
+
+  let pointId = line.positionId;
+  if (!pointId) {
+    const rules = POINT_RULES[`${type}:${side}`] ?? [];
+    for (const [re, id] of rules) {
+      if (re.test(txt)) {
+        pointId = id;
+        break;
+      }
+    }
+  }
+  // Marker nur, wenn die Id auf der gewählten Ansicht existiert.
+  const valid = POSITION_POINTS[type]?.[side]?.some((p) => p.id === pointId);
+  return valid ? { type, side, pointId } : { type, side };
 }
 
 /** Fachliche Größenreihenfolge (Konfektion); Unbekanntes hinten, dann alphabetisch. */

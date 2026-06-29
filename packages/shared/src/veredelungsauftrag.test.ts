@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildBeistellMatrix, detectVeredelungsarten, sortSizes, veredelungsauftragDokument } from "./veredelungsauftrag.js";
+import { buildBeistellMatrix, canonicalSize, detectVeredelungsarten, POSITION_POINTS, resolveGarmentPlacement, sortSizes, veredelungsauftragDokument } from "./veredelungsauftrag.js";
 
 describe("veredelungsauftrag (Werkstattblatt-Aufbereitung)", () => {
   it("sortiert Größen fachlich (XS<S<M<…), Unbekanntes hinten", () => {
@@ -43,6 +43,53 @@ describe("veredelungsauftrag (Werkstattblatt-Aufbereitung)", () => {
     expect(p.motivGroesse).toBe("8 x 2 cm");
     expect(p.platzierungsdetails).toBe("Brust rechts");
     expect(p.sonstiges).toBe("= S. Beer");
+  });
+
+  it("kanonisiert Größen (XXL→2XL, XXXL→3XL), Unbekanntes nur getrimmt", () => {
+    expect(canonicalSize("xxl")).toBe("2XL");
+    expect(canonicalSize(" XXXL ")).toBe("3XL");
+    expect(canonicalSize("L")).toBe("L");
+    expect(canonicalSize("44")).toBe("44");
+  });
+
+  describe("resolveGarmentPlacement (T-04, Skizze/Marker aus Platzierungstext)", () => {
+    const ofText = (platzierung: string): ReturnType<typeof resolveGarmentPlacement> =>
+      resolveGarmentPlacement({ description: "", bezugPositionen: [], platzierung });
+
+    it("Shirt vorne: Brust links/rechts/Mitte auf die richtigen Marker", () => {
+      expect(ofText("Brust links")).toEqual({ type: "shirt", side: "front", pointId: "bl" });
+      expect(ofText("Brust rechts")).toEqual({ type: "shirt", side: "front", pointId: "br" });
+      expect(ofText("Brust")).toEqual({ type: "shirt", side: "front", pointId: "bm" });
+    });
+
+    it("Shirt hinten: Rücken/Nacken → Rückseite", () => {
+      expect(ofText("Rücken mittig")).toEqual({ type: "shirt", side: "back", pointId: "rg" });
+      expect(ofText("Rücken oben")).toEqual({ type: "shirt", side: "back", pointId: "ro" });
+      expect(ofText("Nackenlabel")).toEqual({ type: "shirt", side: "back", pointId: "na" });
+    });
+
+    it("Cap erkennt Typ + Seite, Hose erkennt Typ", () => {
+      expect(ofText("Cap Front")).toMatchObject({ type: "cap", side: "front" });
+      expect(ofText("Mütze hinten Verschluss")).toEqual({ type: "cap", side: "hinten", pointId: "cv" });
+      expect(ofText("Hose Bein links")).toEqual({ type: "hose", side: "front", pointId: "hbl" });
+    });
+
+    it("explizite Felder haben Vorrang vor der Heuristik", () => {
+      const p = resolveGarmentPlacement({ description: "x", bezugPositionen: [], platzierung: "Brust links", positionType: "cap", positionSide: "front", positionId: "cfr" });
+      expect(p).toEqual({ type: "cap", side: "front", pointId: "cfr" });
+    });
+
+    it("ohne erkennbare Platzierung: Skizze ohne Marker", () => {
+      const p = ofText("");
+      expect(p.type).toBe("shirt");
+      expect(p.side).toBe("front");
+      expect(p.pointId).toBeUndefined();
+    });
+
+    it("aufgelöste Marker-Id existiert immer in POSITION_POINTS", () => {
+      const p = ofText("Ärmel rechts");
+      expect(POSITION_POINTS[p.type][p.side]?.some((pt) => pt.id === p.pointId)).toBe(true);
+    });
   });
 
   it("markiert Inhouse, wenn kein Veredler gesetzt ist", () => {
