@@ -200,6 +200,15 @@ function fmtCell(key: string, v: unknown): ReactNode {
   // Varianten-Attribute [{name,value}] lesbar rendern: „Navy / L" statt Roh-JSON (P1).
   if (Array.isArray(v) && v.length > 0 && v.every((x) => x !== null && typeof x === "object" && "value" in (x as object)))
     return (v as Array<{ value: unknown }>).map((x) => String(x.value)).join(" / ");
+  // Positions-Arrays [{qty,description,unitNetCents}] kompakt zusammenfassen statt Roh-JSON
+  // dumpen (QA Finding 1): „2 Pos · 250 Stk". Leere Arrays als „—".
+  if (Array.isArray(v)) {
+    if (v.length === 0) return <Text component="span" c="dimmed">—</Text>;
+    if (v.every((x) => x !== null && typeof x === "object" && "qty" in (x as object))) {
+      const stk = (v as Array<{ qty?: number }>).reduce((s, x) => s + (Number(x.qty) || 0), 0);
+      return <Text component="span" size="sm">{v.length} Pos · {stk} Stk</Text>;
+    }
+  }
   if (typeof v === "object") return <code style={{ fontSize: 11 }}>{JSON.stringify(v)}</code>;
   if (/cents$/i.test(key) && typeof v === "number") return euro(v);
   // Negative Mengen (v. a. Lagerbestand) sind fast immer ein Fehlerzustand → rot markieren.
@@ -3167,6 +3176,7 @@ export function QuotesPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k:
   const [dirty, setDirty] = useState(false); // ungespeicherte Änderungen im Angebots-Editor
   useUnsavedGuard(view === "create" && dirty);
   const [editId, setEditId] = useState<string | null>(null); // gesetzt = Bearbeitung statt Neuanlage
+  const [quoteNumber, setQuoteNumber] = useState(""); // aufgelöste Angebots-Nr. beim Bearbeiten (QA Finding 7)
   const [convertId, setConvertId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   // Anlage-Formular
@@ -3243,7 +3253,7 @@ export function QuotesPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k:
   };
 
   const resetForm = (): void => {
-    setLines([]); setCompanyId(""); setTerms(""); setEditId(null);
+    setLines([]); setCompanyId(""); setTerms(""); setEditId(null); setQuoteNumber("");
     setZahlungszielTage(""); setIncoterm(""); setVersandregel(""); setExempt(false); setDirty(false);
     setProjekt(""); setInterneBezeichnung(""); setKommission(""); setWunschLiefertermin("");
   };
@@ -3251,7 +3261,7 @@ export function QuotesPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k:
     setErr(null);
     try {
       const q = await trpc.quotes.forEdit.query({ id });
-      setEditId(id); setCompanyId(q.companyId); setTerms(q.terms ?? "");
+      setEditId(id); setQuoteNumber(q.number); setCompanyId(q.companyId); setTerms(q.terms ?? "");
       setOrderType(q.orderType); setQuotationTo(q.quotationTo);
       setZahlungszielTage(q.zahlungszielTage ?? ""); setIncoterm(q.incoterm ?? ""); setVersandregel(q.versandregel ?? "");
       setProjekt(q.projekt ?? ""); setInterneBezeichnung(q.interneBezeichnung ?? ""); setKommission(q.kommission ?? "");
@@ -3327,7 +3337,7 @@ export function QuotesPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k:
 
           <Tabs.Panel value="details" pt="md">
             <Group gap="md" align="end" wrap="wrap">
-              <TextInput label="Nummernkreis" value="AN-.JJJJ.-" readOnly w={160} />
+              <TextInput label={editId ? "Angebots-Nr." : "Nummernkreis"} value={editId ? quoteNumber : "wird beim Speichern vergeben"} readOnly w={editId ? 140 : 200} />
               <TextInput label="Datum" type="date" value={datum} readOnly w={150} />
               <Select label="Bestellart" w={170} data={[{ value: "SALES", label: "Vertrieb" }, { value: "MAINTENANCE", label: "Wartung" }, { value: "SHOPPING_CART", label: "Warenkorb" }]} value={orderType} onChange={(v) => v && setOrderType(v)} />
               <Select label="Angebot für" w={140} data={[{ value: "CUSTOMER", label: "Kunde" }, { value: "LEAD", label: "Lead" }]} value={quotationTo} onChange={(v) => v && setQuotationTo(v)} />
@@ -3471,7 +3481,7 @@ export function QuotesPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k:
 const ORDER_TYPE_LABEL: Record<string, string> = { SALES: "Vertrieb", MAINTENANCE: "Wartung", SHOPPING_CART: "Warenkorb" };
 const QUOTATION_TO_LABEL: Record<string, string> = { CUSTOMER: "Kunde", LEAD: "Lead" };
 const QUOTE_STATUS_COLOR: Record<string, string> = { ENTWURF: "gray", VERSENDET: "blue", NACHFASSEN: "yellow", ANGENOMMEN: "green", ABGELEHNT: "red" };
-const QUOTE_STATUS_LABEL: Record<string, string> = { ENTWURF: "Entwurf", VERSENDET: "Offen", NACHFASSEN: "Nachfassen", ANGENOMMEN: "Beauftragt", ABGELEHNT: "Verloren" };
+const QUOTE_STATUS_LABEL: Record<string, string> = { ENTWURF: "Entwurf", VERSENDET: "Versendet", NACHFASSEN: "Nachfassen", ANGENOMMEN: "Beauftragt", ABGELEHNT: "Verloren" };
 
 // Aufklappbarer Abschnitt (ERPNext-Sektionen).
 function Collapsible({ title, children }: { title: string; children: ReactNode }): JSX.Element {
@@ -4469,6 +4479,14 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
         // Fallback auf die geteilte Maschine. So bietet die UI nie einen illegalen Übergang an.
         const next = (r.allowedTransitions as string[] | undefined) ?? orderStatusMachine.next(String(r.status) as OrderStatus);
         const runTransition = (to: string) => async () => {
+          // Bestätigung vor weitreichenden/außenwirksamen Statuswechseln (QA Finding 6):
+          // Faktura erzeugt eine echte Rechnung, Versand bucht Lieferschein, Storno gibt frei.
+          const confirmMsg: Record<string, string> = {
+            FAKTURIERT: "Auftrag fakturieren? Es wird eine echte Rechnung (RE-Nr., USt, offener Posten) erzeugt.",
+            VERSENDET: "Auftrag als versendet markieren? Über die offenen Restmengen wird automatisch ein Lieferschein gebucht.",
+            STORNIERT: "Auftrag wirklich stornieren? Reservierter Bestand wird wieder freigegeben.",
+          };
+          if (confirmMsg[to] && !window.confirm(confirmMsg[to])) return;
           setErr(null); setMsg(null);
           try {
             if (to === "FAKTURIERT") {

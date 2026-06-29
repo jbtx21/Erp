@@ -65,7 +65,7 @@ export class InMemoryQuoteRepository implements QuoteRepository {
     const q = this.quotes.get(quoteId);
     if (!q) return null;
     return {
-      id: q.id, companyId: q.companyId, status: q.status, gueltigBisAm: q.gueltigBisAm, terms: q.terms, orderType: q.orderType, quotationTo: q.quotationTo,
+      id: q.id, number: q.number, companyId: q.companyId, status: q.status, gueltigBisAm: q.gueltigBisAm, terms: q.terms, orderType: q.orderType, quotationTo: q.quotationTo,
       zahlungszielTage: q.zahlungszielTage, incoterm: q.incoterm, versandregel: q.versandregel, projekt: q.projekt, interneBezeichnung: q.interneBezeichnung, kommission: q.kommission, wunschLiefertermin: q.wunschLiefertermin,
       lines: q.lines.map((l) => ({
         description: l.description, qty: l.qty, kind: l.kind ?? "TEXTIL", unitNetCents: l.unitNetCents,

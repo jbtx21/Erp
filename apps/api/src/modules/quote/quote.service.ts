@@ -76,6 +76,7 @@ export interface QuoteEditLine {
 
 export interface QuoteEditData {
   id: string;
+  number: string;
   companyId: string;
   status: QuoteStatus;
   gueltigBisAm: Date | null;

@@ -65,13 +65,13 @@ export class PrismaQuoteRepository implements QuoteRepository {
     const q = await prisma.quote.findUnique({
       where: { id: quoteId },
       select: {
-        id: true, companyId: true, status: true, gueltigBisAm: true, terms: true, orderType: true, quotationTo: true, zahlungszielTage: true, incoterm: true, versandregel: true, projekt: true, interneBezeichnung: true, kommission: true, wunschLiefertermin: true,
+        id: true, number: true, companyId: true, status: true, gueltigBisAm: true, terms: true, orderType: true, quotationTo: true, zahlungszielTage: true, incoterm: true, versandregel: true, projekt: true, interneBezeichnung: true, kommission: true, wunschLiefertermin: true,
         lines: { orderBy: { position: "asc" }, select: { description: true, qty: true, kind: true, unitNetCents: true, listNetCents: true, rabattPct: true, taxRatePct: true, dbCents: true, articleId: true, variantId: true, isAlternative: true, bezugPositionen: true, lineType: true, placement: true, positionType: true, positionSide: true, positionId: true, motiv: true, motivGroesse: true, farbton: true, platzierungsdetails: true, sonstiges: true, altPreisText: true, imPdfAusblenden: true } },
       },
     });
     if (!q) return null;
     return {
-      id: q.id, companyId: q.companyId, status: q.status as QuoteStatus, gueltigBisAm: q.gueltigBisAm, terms: q.terms, orderType: q.orderType, quotationTo: q.quotationTo, zahlungszielTage: q.zahlungszielTage, incoterm: q.incoterm, versandregel: q.versandregel, projekt: q.projekt, interneBezeichnung: q.interneBezeichnung, kommission: q.kommission, wunschLiefertermin: q.wunschLiefertermin,
+      id: q.id, number: q.number, companyId: q.companyId, status: q.status as QuoteStatus, gueltigBisAm: q.gueltigBisAm, terms: q.terms, orderType: q.orderType, quotationTo: q.quotationTo, zahlungszielTage: q.zahlungszielTage, incoterm: q.incoterm, versandregel: q.versandregel, projekt: q.projekt, interneBezeichnung: q.interneBezeichnung, kommission: q.kommission, wunschLiefertermin: q.wunschLiefertermin,
       lines: q.lines.map((l) => ({ description: l.description, qty: l.qty, kind: l.kind as never, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents, rabattPct: l.rabattPct, taxRatePct: l.taxRatePct, dbCents: l.dbCents, articleId: l.articleId, variantId: l.variantId, isAlternative: l.isAlternative, bezugPositionen: l.bezugPositionen, lineType: l.lineType as import("@texma/shared").LineType, placement: l.placement, positionType: l.positionType, positionSide: l.positionSide, positionId: l.positionId, motiv: l.motiv, motivGroesse: l.motivGroesse, farbton: l.farbton, platzierungsdetails: l.platzierungsdetails, sonstiges: l.sonstiges, altPreisText: l.altPreisText, imPdfAusblenden: l.imPdfAusblenden })),
     };
   }
