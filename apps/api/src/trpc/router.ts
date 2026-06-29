@@ -1675,10 +1675,14 @@ export const appRouter = router({
         zahlungszielTage: z.number().int().min(0).max(365).nullish(),
         incoterm: z.string().max(40).nullish(),
         versandregel: z.string().max(80).nullish(),
+        projekt: z.string().max(120).nullish(),
+        interneBezeichnung: z.string().max(200).nullish(),
+        kommission: z.string().max(120).nullish(),
+        wunschLiefertermin: z.string().datetime().nullish(),
         lines: z.array(z.object({ description: z.string().min(1), qty: z.number().int().positive(), unitNetCents: z.number().int().nonnegative(), listNetCents: z.number().int().nonnegative().optional(), rabattPct: z.number().int().min(0).max(100).optional(), taxRatePct: z.number().int().min(0).max(100).optional(), kind: z.enum(["TEXTIL", "VEREDELUNG", "SONSTIGE"]).optional(), articleId: z.string().optional(), variantId: z.string().optional(), isAlternative: z.boolean().optional(), bezugPosition: z.number().int().positive().optional(), dbCents: z.number().int().optional(), lineType: z.enum(["ARTIKEL", "GRUPPE", "ZWISCHENSUMME", "GRUPPENSUMME"]).optional(), placement: z.string().max(120).optional(), motiv: z.string().max(120).optional(), motivGroesse: z.string().max(60).optional(), farbton: z.string().max(80).optional(), platzierungsdetails: z.string().max(200).optional(), sonstiges: z.string().max(200).optional(), altPreisText: z.string().max(120).optional(), imPdfAusblenden: z.boolean().optional() })).min(1),
       }))
       .mutation(async ({ input, ctx }) => {
-        try { return await ctx.quotes.create({ ...input, gueltigBisAm: input.gueltigBisAm ? new Date(input.gueltigBisAm) : null }); }
+        try { return await ctx.quotes.create({ ...input, gueltigBisAm: input.gueltigBisAm ? new Date(input.gueltigBisAm) : null, wunschLiefertermin: input.wunschLiefertermin ? new Date(input.wunschLiefertermin) : null }); }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
     // Angebot für die Bearbeitung laden (Kopf + Positionen).
@@ -1700,11 +1704,15 @@ export const appRouter = router({
         zahlungszielTage: z.number().int().min(0).max(365).nullish(),
         incoterm: z.string().max(40).nullish(),
         versandregel: z.string().max(80).nullish(),
+        projekt: z.string().max(120).nullish(),
+        interneBezeichnung: z.string().max(200).nullish(),
+        kommission: z.string().max(120).nullish(),
+        wunschLiefertermin: z.string().datetime().nullish(),
         lines: z.array(z.object({ description: z.string().min(1), qty: z.number().int().positive(), unitNetCents: z.number().int().nonnegative(), listNetCents: z.number().int().nonnegative().optional(), rabattPct: z.number().int().min(0).max(100).optional(), taxRatePct: z.number().int().min(0).max(100).optional(), kind: z.enum(["TEXTIL", "VEREDELUNG", "SONSTIGE"]).optional(), articleId: z.string().optional(), variantId: z.string().optional(), isAlternative: z.boolean().optional(), bezugPosition: z.number().int().positive().optional(), dbCents: z.number().int().optional(), lineType: z.enum(["ARTIKEL", "GRUPPE", "ZWISCHENSUMME", "GRUPPENSUMME"]).optional(), placement: z.string().max(120).optional(), motiv: z.string().max(120).optional(), motivGroesse: z.string().max(60).optional(), farbton: z.string().max(80).optional(), platzierungsdetails: z.string().max(200).optional(), sonstiges: z.string().max(200).optional(), altPreisText: z.string().max(120).optional(), imPdfAusblenden: z.boolean().optional() })).min(1),
       }))
       .mutation(async ({ input, ctx }) => {
         const { id, ...rest } = input;
-        try { await ctx.quotes.update(id, { ...rest, gueltigBisAm: input.gueltigBisAm ? new Date(input.gueltigBisAm) : null }); return { ok: true as const }; }
+        try { await ctx.quotes.update(id, { ...rest, gueltigBisAm: input.gueltigBisAm ? new Date(input.gueltigBisAm) : null, wunschLiefertermin: input.wunschLiefertermin ? new Date(input.wunschLiefertermin) : null }); return { ok: true as const }; }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
     transition: roleProcedure("ADMIN", "BUERO")

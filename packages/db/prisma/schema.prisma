@@ -794,6 +794,12 @@ model Quote {
   zahlungszielTage Int? // Zahlungsziel in Tagen (Kopf; Default aus Kundenstamm)
   incoterm    String? // Lieferbedingung (Incoterm), z. B. EXW/DAP
   versandregel String? // Versandkosten-/Versandregel (frei/pauschal/nach Gewicht …)
+  // Beleg-Kopffelder (Xentral-Parität): Projekt/Kostenstelle, interne Bezeichnung,
+  // Kunden-Bestellnummer/Kommission, gewünschter Liefertermin.
+  projekt            String?
+  interneBezeichnung String?
+  kommission         String?
+  wunschLiefertermin DateTime?
   lines     QuoteLine[]
   order     Order?
   inquiry   Inquiry? // Ursprungs-Anfrage (B20)

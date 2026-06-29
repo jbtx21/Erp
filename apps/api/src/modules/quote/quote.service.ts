@@ -37,6 +37,10 @@ export interface CreateQuoteInput {
   zahlungszielTage?: number | null;
   incoterm?: string | null;
   versandregel?: string | null;
+  projekt?: string | null;
+  interneBezeichnung?: string | null;
+  kommission?: string | null;
+  wunschLiefertermin?: Date | null;
   lines: Array<{ description: string; qty: number; unitNetCents: number; listNetCents?: number | null; rabattPct?: number | null; taxRatePct?: number | null; kind?: import("@texma/shared").PositionKind; articleId?: string | null; variantId?: string | null; isAlternative?: boolean; dbCents?: number | null; bezugPosition?: number | null; lineType?: import("@texma/shared").LineType; placement?: string | null; motiv?: string | null; motivGroesse?: string | null; farbton?: string | null; platzierungsdetails?: string | null; sonstiges?: string | null; altPreisText?: string | null; imPdfAusblenden?: boolean }>;
 }
 
@@ -78,6 +82,10 @@ export interface QuoteEditData {
   zahlungszielTage: number | null;
   incoterm: string | null;
   versandregel: string | null;
+  projekt: string | null;
+  interneBezeichnung: string | null;
+  kommission: string | null;
+  wunschLiefertermin: Date | null;
   lines: QuoteEditLine[];
 }
 

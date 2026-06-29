@@ -3093,6 +3093,11 @@ export function QuotesPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k:
   const [zahlungszielTage, setZahlungszielTage] = useState<number | "">("");
   const [incoterm, setIncoterm] = useState("");
   const [versandregel, setVersandregel] = useState("");
+  // Beleg-Kopffelder (Xentral-Parität).
+  const [projekt, setProjekt] = useState("");
+  const [interneBezeichnung, setInterneBezeichnung] = useState("");
+  const [kommission, setKommission] = useState("");
+  const [wunschLiefertermin, setWunschLiefertermin] = useState("");
   const [exempt, setExempt] = useState(false);
   const globalTaxRate = useDefaultTaxRate();
   const [busy, setBusy] = useState(false);
@@ -3153,6 +3158,7 @@ export function QuotesPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k:
   const resetForm = (): void => {
     setLines([]); setCompanyId(""); setTerms(""); setEditId(null);
     setZahlungszielTage(""); setIncoterm(""); setVersandregel(""); setExempt(false); setDirty(false);
+    setProjekt(""); setInterneBezeichnung(""); setKommission(""); setWunschLiefertermin("");
   };
   const startEdit = async (id: string): Promise<void> => {
     setErr(null);
@@ -3161,6 +3167,8 @@ export function QuotesPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k:
       setEditId(id); setCompanyId(q.companyId); setTerms(q.terms ?? "");
       setOrderType(q.orderType); setQuotationTo(q.quotationTo);
       setZahlungszielTage(q.zahlungszielTage ?? ""); setIncoterm(q.incoterm ?? ""); setVersandregel(q.versandregel ?? "");
+      setProjekt(q.projekt ?? ""); setInterneBezeichnung(q.interneBezeichnung ?? ""); setKommission(q.kommission ?? "");
+      setWunschLiefertermin(q.wunschLiefertermin ? new Date(q.wunschLiefertermin).toISOString().slice(0, 10) : "");
       if (q.gueltigBisAm) setGueltigBis(new Date(q.gueltigBisAm).toISOString().slice(0, 10));
       setLines(fromStoredLines(q.lines));
       setDirty(false); setView("create");
@@ -3193,6 +3201,10 @@ export function QuotesPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k:
         zahlungszielTage: zahlungszielTage === "" ? undefined : Number(zahlungszielTage),
         incoterm: incoterm.trim() || undefined,
         versandregel: versandregel.trim() || undefined,
+        projekt: projekt.trim() || undefined,
+        interneBezeichnung: interneBezeichnung.trim() || undefined,
+        kommission: kommission.trim() || undefined,
+        wunschLiefertermin: wunschLiefertermin ? `${wunschLiefertermin}T00:00:00.000Z` : undefined,
       };
       if (editId) await trpc.quotes.update.mutate({ id: editId, ...payload });
       else await trpc.quotes.create.mutate(payload);
@@ -3234,6 +3246,12 @@ export function QuotesPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k:
               <Select label="Angebot für" w={140} data={[{ value: "CUSTOMER", label: "Kunde" }, { value: "LEAD", label: "Lead" }]} value={quotationTo} onChange={(v) => v && setQuotationTo(v)} />
               <TextInput label="Gültig bis" type="date" value={gueltigBis} onChange={(e) => setGueltigBis(e.currentTarget.value)} w={150} />
               <CompanyPicker value={companyId} onChange={(v) => { setCompanyId(v); setDirty(true); }} w={240} />
+            </Group>
+            <Group gap="md" align="end" wrap="wrap" mt="md">
+              <TextInput label="Projekt / Kostenstelle" placeholder="z. B. Messe 2026" value={projekt} onChange={(e) => { setProjekt(e.currentTarget.value); setDirty(true); }} w={200} />
+              <TextInput label="Interne Bezeichnung" placeholder="intern, nicht auf dem Beleg" value={interneBezeichnung} onChange={(e) => { setInterneBezeichnung(e.currentTarget.value); setDirty(true); }} w={240} />
+              <TextInput label="Ihre Bestellnummer / Kommission" placeholder="Kundenreferenz" value={kommission} onChange={(e) => { setKommission(e.currentTarget.value); setDirty(true); }} w={220} />
+              <TextInput label="Wunsch-Liefertermin" type="date" value={wunschLiefertermin} onChange={(e) => { setWunschLiefertermin(e.currentTarget.value); setDirty(true); }} w={170} />
             </Group>
             <Collapsible title="Währung und Preisliste">
               <Text size="sm" c="dimmed">Währung: <b>EUR</b> · Preisfindung über Preisgruppe des Kunden + Mengenstaffeln (B4).</Text>
