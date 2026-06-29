@@ -76,8 +76,10 @@ export class PrismaSalesOrderRepository implements SalesOrderRepository {
       for (let i = 0; i < input.lines.length; i++) {
         const m = input.lines[i]!.materializeArticle;
         if (!m) continue;
+        // Ad-hoc-Artikel aus Freitext-Position SAUBER im Stamm anlegen: eindeutige SKU
+        // (Beleg-/Positionsbezug), Name, Beschreibung (Text) + Artikeltyp — kein Freitext-Dump.
         const art = await tx.article.create({
-          data: { sku: m.sku, name: m.name, isVeredelung: m.isVeredelung, variants: { create: { sku: m.sku } } },
+          data: { sku: m.sku, name: m.name, description: m.description ?? m.name, type: m.isVeredelung ? "FINISHING" : "STOCK", variants: { create: { sku: m.sku } } },
           select: { variants: { select: { id: true } } },
         });
         const variantId = art.variants[0]!.id;

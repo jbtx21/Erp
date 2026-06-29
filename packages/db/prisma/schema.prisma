@@ -382,8 +382,7 @@ model Article {
   sku         String    @unique
   name        String
   description String?
-  type        ArticleType @default(STOCK) // Artikeltyp-Diskriminator (Backfill aus isVeredelung)
-  isVeredelung Boolean  @default(false) // Transfer/Siebdruck/Stick (Kap. 11)
+  type        ArticleType @default(STOCK) // Artikeltyp-Diskriminator (STOCK/FINISHING/SERVICE/BOM) — einzige Quelle für „Veredelung"
   // Bestandsführung als Eigenschaft (Procure-to-Order): default KEIN Bestand (negative/
   // beliebige Mengen okay). Nur ausgewählte Artikel (Transferdrucke) sind bestandsgeführt
   // → volle Verfügbarkeits-/Reservierungs-/Meldebestand-/Shop-Puffer-Logik.

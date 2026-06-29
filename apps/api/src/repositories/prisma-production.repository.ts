@@ -31,7 +31,7 @@ export class PrismaProductionRepository implements ProductionRepository {
           where: { id: { in: variantIds } },
           select: {
             id: true, isBundle: true, articleId: true,
-            article: { select: { veredlerId: true, bestandsgefuehrt: true, isVeredelung: true } },
+            article: { select: { veredlerId: true, bestandsgefuehrt: true, type: true } },
             bestandsgefuehrtOverride: true,
             // Hauptlieferant (niedrigste priority) für die Beschaffungs-Lieferzeit (Procure-to-Order).
             supplierItems: { orderBy: { priority: "asc" }, take: 1, select: { supplier: { select: { lieferzeitTage: true } } } },
@@ -64,7 +64,7 @@ export class PrismaProductionRepository implements ProductionRepository {
           isBundle: v?.isBundle ?? false,
           components: (v?.bundleComponents ?? []).map((c) => ({ description: c.description, qty: c.qty, componentVariantId: c.componentVariantId })),
           veredlerId: v?.article.veredlerId ?? null,
-          isVeredelung: v?.article.isVeredelung ?? false,
+          isVeredelung: v?.article.type === "FINISHING",
           bezugPosition: l.bezugPosition ?? null,
         };
       }),

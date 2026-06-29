@@ -54,7 +54,7 @@ export class PrismaPostCalcRepository implements PostCalcRepository {
 
     const variants = await prisma.variant.findMany({
       where: { id: { in: variantIds } },
-      select: { id: true, article: { select: { isVeredelung: true, finishingSpecs: { select: { method: true, stitchCount: true } } } } },
+      select: { id: true, article: { select: { type: true, finishingSpecs: { select: { method: true, stitchCount: true } } } } },
     });
     const byVariant = new Map(variants.map((v) => [v.id, v.article]));
 
@@ -66,7 +66,7 @@ export class PrismaPostCalcRepository implements PostCalcRepository {
     let minutes = 0;
     for (const l of lines) {
       const art = l.variantId ? byVariant.get(l.variantId) : undefined;
-      if (!art?.isVeredelung) continue;
+      if (art?.type !== "FINISHING") continue;
       for (const spec of art.finishingSpecs) {
         const t = targetByKind.get(methodToKind[spec.method] ?? "");
         if (!t) continue;

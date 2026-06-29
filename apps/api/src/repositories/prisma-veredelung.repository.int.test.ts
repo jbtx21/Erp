@@ -51,8 +51,8 @@ if (!dbConfigured) {
       });
       expect(entry.sku).toBe(SKU);
 
-      const art = await prisma.article.findFirst({ where: { sku: SKU }, select: { isVeredelung: true, veredlerId: true, finishingSpecs: { select: { method: true } } } });
-      expect(art?.isVeredelung).toBe(true);
+      const art = await prisma.article.findFirst({ where: { sku: SKU }, select: { type: true, veredlerId: true, finishingSpecs: { select: { method: true } } } });
+      expect(art?.type).toBe("FINISHING");
       expect(art?.veredlerId).toBe(SUP);
       expect(art?.finishingSpecs[0]?.method).toBe("STICK");
 

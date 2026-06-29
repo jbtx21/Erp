@@ -236,7 +236,7 @@ export class PrismaProductRepository implements ProductRepository {
     return prisma.$transaction(async (tx) => {
       const article = await tx.article.create({
         data: {
-          sku: input.sku, name: input.name, type: "FINISHING", isVeredelung: true, veredlerId: input.veredlerId,
+          sku: input.sku, name: input.name, type: "FINISHING", veredlerId: input.veredlerId,
           // Eine Veredelungs-Spezifikation je Platzierung (z. B. Siebdruck vorne + hinten).
           finishingSpecs: { create: (input.placements.length > 0 ? input.placements : [""]).map((placement) => ({ method: input.method as never, placement })) },
           variants: { create: { sku: input.sku } },

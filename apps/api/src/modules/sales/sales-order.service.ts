@@ -26,7 +26,7 @@ export interface SalesLine {
    * festen Artikel überführen (Article+Variant anlegen, STANDARD-Preis = VK). Der Repo
    * legt den Artikel an und verknüpft die Auftragsposition mit der neuen Variante.
    */
-  materializeArticle?: { sku: string; name: string; isVeredelung: boolean };
+  materializeArticle?: { sku: string; name: string; description?: string; isVeredelung: boolean };
 }
 
 export interface CreatedSalesOrder {
@@ -193,7 +193,7 @@ export class SalesOrderService {
         built.push({ originPos: l.position, line: {
           description: l.description, qty: e.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents, rabattPct: l.rabattPct, taxRatePct: l.taxRatePct, kind: l.kind, variantId: e.variantId, bezugPosition: l.bezugPosition, dbCents: l.dbCents,
           lineType: l.lineType, placement: l.placement, altPreisText: l.altPreisText, imPdfAusblenden: l.imPdfAusblenden,
-          ...(materialize ? { materializeArticle: { sku: `${number}-P${l.position}${skuSuffix}`, name: l.description.trim(), isVeredelung: l.kind === "VEREDELUNG" } } : {}),
+          ...(materialize ? { materializeArticle: { sku: `${number}-P${l.position}${skuSuffix}`, name: l.description.trim(), description: l.description.trim(), isVeredelung: l.kind === "VEREDELUNG" } } : {}),
         } });
       });
     }

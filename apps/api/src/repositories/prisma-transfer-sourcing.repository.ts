@@ -16,7 +16,7 @@ export class PrismaTransferSourcingRepository implements TransferSourcingReposit
       where: { id: { in: variantIds } },
       select: {
         id: true, sku: true, bestandsgefuehrtOverride: true,
-        article: { select: { name: true, isVeredelung: true, bestandsgefuehrt: true } },
+        article: { select: { name: true, type: true, bestandsgefuehrt: true } },
         supplierItems: { where: { priority: 1 }, select: { supplierId: true, ekCents: true }, take: 1 },
       },
     });
@@ -25,7 +25,7 @@ export class PrismaTransferSourcingRepository implements TransferSourcingReposit
     const byVariant = new Map<string, TransferNeedInput>();
     for (const l of lines) {
       const v = l.variantId ? vmap.get(l.variantId) : undefined;
-      if (!v || !v.article.isVeredelung) continue;
+      if (!v || v.article.type !== "FINISHING") continue;
       // Nur bestandsgeführte Veredelungsartikel = Transferdrucke (Override ?? Artikel-Flag).
       const managed = v.bestandsgefuehrtOverride ?? v.article.bestandsgefuehrt;
       if (!managed) continue;

@@ -72,12 +72,12 @@ if (!dbConfigured) {
       // Positionsrabatt bleibt erhalten: effektiver Netto 1350, VK-Liste 1500, 10 %.
       expect(lines[0]).toMatchObject({ unitNetCents: 1350, listNetCents: 1500, rabattPct: 10 });
 
-      const polo = await prisma.article.findFirst({ where: { sku: `${res.number}-P1` }, select: { name: true, isVeredelung: true, variants: { select: { id: true, prices: { select: { netCents: true } } } } } });
-      expect(polo).toMatchObject({ name: "Sonder-Polo SO", isVeredelung: false });
+      const polo = await prisma.article.findFirst({ where: { sku: `${res.number}-P1` }, select: { name: true, type: true, description: true, variants: { select: { id: true, prices: { select: { netCents: true } } } } } });
+      expect(polo).toMatchObject({ name: "Sonder-Polo SO", type: "STOCK", description: "Sonder-Polo SO" });
       expect(polo?.variants[0]?.prices[0]?.netCents).toBe(1500); // STANDARD-Preis = VK-Liste (ohne Rabatt)
 
-      const stick = await prisma.article.findFirst({ where: { sku: `${res.number}-P2` }, select: { isVeredelung: true } });
-      expect(stick?.isVeredelung).toBe(true);
+      const stick = await prisma.article.findFirst({ where: { sku: `${res.number}-P2` }, select: { type: true } });
+      expect(stick?.type).toBe("FINISHING");
     });
 
     it("orderForEdit + updateOrder: lädt und ersetzt die Positionen (vor Fakturierung)", async () => {
