@@ -2068,7 +2068,7 @@ export type PositionKind = "TEXTIL" | "VEREDELUNG" | "SONSTIGE";
 // Hauptartikel (articleId, Farbe×Größe noch offen) verweisen; isAlternative kennzeichnet
 // ein unverbindliches Alternativangebot (wird beim Wandeln in den Auftrag weggelassen).
 export type LineType = "ARTIKEL" | "GRUPPE" | "ZWISCHENSUMME" | "GRUPPENSUMME";
-export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind; variantId?: string; articleId?: string; articleNumber?: string; articleName?: string; isAlternative?: boolean; ekEuro?: number; isBundle?: boolean; rabattPct?: number; taxRatePct?: number; vkManual?: boolean; bezugPositionen?: number[]; lineType?: LineType; placement?: string; motiv?: string; motivGroesse?: string; farbton?: string; platzierungsdetails?: string; sonstiges?: string; altPreisText?: string; imPdfAusblenden?: boolean; positionType?: string; positionSide?: string; positionId?: string }
+export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind; variantId?: string; articleId?: string; articleNumber?: string; articleName?: string; isAlternative?: boolean; ekEuro?: number; isBundle?: boolean; rabattPct?: number; taxRatePct?: number; vkManual?: boolean; bezugPositionen?: number[]; lineType?: LineType; placement?: string; motiv?: string; motivGroesse?: string; farbton?: string; platzierungsdetails?: string; sonstiges?: string; altPreisText?: string; imPdfAusblenden?: boolean; positionType?: string; positionSide?: string; positionId?: string; veredlerId?: string }
 
 // Artikel-Picker: durchsuchbare Auswahl aus dem Artikelstamm (ERPNext „Link field").
 // Bei Auswahl wird eine Position vorbefüllt (Bezeichnung, Standardpreis, Variante).
@@ -2396,20 +2396,23 @@ function BundlePreview({ variantId, positionQty }: { variantId: string; position
 // (analog Textil-„Hersteller"), eigener EK beim Veredler + eigene Mengenstaffel. Beim
 // Siebdruck den festen Siebdruck-Lieferanten wählen. Direkt als Angebotsposition übernommen.
 interface TierRow { minMenge: number; euro: number }
-function LogoArticleDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (e: { label: string; variantId: string; unitNetCents: number }) => void }): JSX.Element {
-  const [name, setName] = useState(""); const [sku, setSku] = useState("");
-  const [method, setMethod] = useState<"STICK" | "DRUCK" | "DRUCK_DIGITAL" | "TRANSFER">("STICK");
+// `initial` befüllt den Dialog aus einer frei erfassten Veredelungsposition vor (Inline-
+// Katalogspeicherung mitten im Walkthrough): Bezeichnung, SKU, Platzierung, Veredler, EK
+// werden übernommen, der/die Anwender:in ergänzt nur noch fehlende Stammdaten und speichert.
+function LogoArticleDialog({ onClose, onCreated, initial, title = "Logo / Veredelung anlegen" }: { onClose: () => void; onCreated: (e: { label: string; variantId: string; unitNetCents: number }) => void; initial?: { name?: string; sku?: string; method?: "STICK" | "DRUCK" | "DRUCK_DIGITAL" | "TRANSFER"; placements?: string[]; veredlerId?: string; ekEuro?: number; vkEuro?: number }; title?: string }): JSX.Element {
+  const [name, setName] = useState(initial?.name ?? ""); const [sku, setSku] = useState(initial?.sku ?? "");
+  const [method, setMethod] = useState<"STICK" | "DRUCK" | "DRUCK_DIGITAL" | "TRANSFER">(initial?.method ?? "STICK");
   // Mehrere Platzierungen je Logo (z. B. Siebdruck vorne + hinten) → je eine Veredelungs-Spezifikation.
-  const [placements, setPlacements] = useState<string[]>([]);
-  const [veredlerId, setVeredlerId] = useState("");
+  const [placements, setPlacements] = useState<string[]>(initial?.placements ?? []);
+  const [veredlerId, setVeredlerId] = useState(initial?.veredlerId ?? "");
   // Inhouse-Veredelung (z. B. 2-farbiger Transferdruck im Haus): kein externer Veredler →
   // keine Fremdvergabe-Stufe in der Produktion.
   const [inhouse, setInhouse] = useState(false);
   // Material-Dienstleister bei Inhouse (z. B. Transfer-Lieferant): liefert das Material, das
   // über die Beschaffung bestellt wird; die Applikation läuft inhouse.
   const [materialLieferantId, setMaterialLieferantId] = useState("");
-  const [ek, setEk] = useState<number | "">("");
-  const [tiers, setTiers] = useState<TierRow[]>([{ minMenge: 1, euro: 0 }]);
+  const [ek, setEk] = useState<number | "">(initial?.ekEuro ?? "");
+  const [tiers, setTiers] = useState<TierRow[]>([{ minMenge: 1, euro: initial?.vkEuro ?? 0 }]);
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
   // Aufschlagsfaktor (Kap. 4.4) für die automatische Staffel-VK-Vorbelegung aus dem EK.
   const [markupCfg, setMarkupCfg] = useState<MarkupConfig | null>(null);
@@ -2441,7 +2444,7 @@ function LogoArticleDialog({ onClose, onCreated }: { onClose: () => void; onCrea
   };
 
   return (
-    <Modal opened onClose={onClose} title="Logo / Veredelung anlegen" size="lg">
+    <Modal opened onClose={onClose} title={title} size="lg">
       {err && <Alert color="red" mb="sm">{err}</Alert>}
       <Group gap="md" align="end" wrap="wrap">
         <TextInput label="Bezeichnung" withAsterisk placeholder="z. B. Logo TSV Emden" value={name} onChange={(e) => setName(e.currentTarget.value)} w={240} />
@@ -2474,6 +2477,46 @@ function LogoArticleDialog({ onClose, onCreated }: { onClose: () => void; onCrea
         })()}
         <Button variant="default" onClick={onClose}>Abbrechen</Button>
         <Button loading={busy} disabled={!name.trim() || !sku.trim() || (!inhouse && !veredlerId)} onClick={() => void create()}>Anlegen &amp; übernehmen</Button>
+      </Group>
+    </Modal>
+  );
+}
+
+// Textilartikel (frei erfasst) als wiederverwendbaren Stammartikel speichern — inline aus
+// der Positionszeile heraus, mitten im Walkthrough. Bezeichnung/SKU/Beschreibung +
+// optional Farbe/Größe (Basis-Variante). Nach Anlage wird die Zeile an die Variante gebunden.
+function TextilCatalogDialog({ onClose, onCreated, initial }: { onClose: () => void; onCreated: (e: { label: string; variantId: string; unitNetCents: number; sku?: string; articleName?: string }) => void; initial?: { name?: string; sku?: string; description?: string } }): JSX.Element {
+  const [name, setName] = useState(initial?.name ?? "");
+  const [sku, setSku] = useState(initial?.sku ?? "");
+  const [description, setDescription] = useState(initial?.description ?? "");
+  const [farbe, setFarbe] = useState(""); const [groesse, setGroesse] = useState("");
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
+  const create = async (): Promise<void> => {
+    setBusy(true); setErr(null);
+    try {
+      const attributes = [
+        ...(farbe.trim() ? [{ name: "Farbe", value: farbe.trim() }] : []),
+        ...(groesse.trim() ? [{ name: "Größe", value: groesse.trim() }] : []),
+      ];
+      const e = await trpc.products.quickCreate.mutate({ sku: sku.trim(), name: name.trim(), ...(description.trim() ? { description: description.trim() } : {}), attributes });
+      onCreated({ label: e.label, variantId: e.variantId, unitNetCents: e.unitNetCents, sku: sku.trim(), articleName: name.trim() });
+    } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+  return (
+    <Modal opened onClose={onClose} title="Textilartikel in Katalog speichern" size="md">
+      {err && <Alert color="red" mb="sm">{err}</Alert>}
+      <Group gap="md" align="end" wrap="wrap">
+        <TextInput label="Bezeichnung" withAsterisk placeholder="z. B. Hakro T-Shirt Baumwolle" value={name} onChange={(e) => setName(e.currentTarget.value)} w={260} />
+        <TextInput label="Artikel-Nr. (SKU)" withAsterisk placeholder="z. B. HAKRO-292" value={sku} onChange={(e) => setSku(e.currentTarget.value)} w={150} />
+      </Group>
+      <TextInput label="Beschreibung" placeholder="Material, Schnitt …" mt="sm" value={description} onChange={(e) => setDescription(e.currentTarget.value)} />
+      <Group gap="md" align="end" wrap="wrap" mt="sm">
+        <TextInput label="Farbe" placeholder="optional" w={140} value={farbe} onChange={(e) => setFarbe(e.currentTarget.value)} />
+        <TextInput label="Größe" placeholder="optional" w={120} value={groesse} onChange={(e) => setGroesse(e.currentTarget.value)} />
+      </Group>
+      <Group justify="flex-end" mt="lg">
+        <Button variant="default" onClick={onClose}>Abbrechen</Button>
+        <Button loading={busy} disabled={!name.trim() || !sku.trim()} onClick={() => void create()}>Speichern &amp; übernehmen</Button>
       </Group>
     </Modal>
   );
@@ -2645,6 +2688,11 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
   const [pickerFor, setPickerFor] = useState<number | null>(null);
   const [bundleFor, setBundleFor] = useState<number | null>(null);
   const [logoOpen, setLogoOpen] = useState(false);
+  // Inline-Katalogspeicherung einer frei erfassten Position (mitten im Walkthrough): Index
+  // der Zeile, die gerade als echter Stammartikel gespeichert wird (öffnet LogoArticleDialog
+  // bei VEREDELUNG, sonst das schlanke Textil-Formular).
+  const [catalogSaveFor, setCatalogSaveFor] = useState<number | null>(null);
+  const [textilSaveFor, setTextilSaveFor] = useState<number | null>(null);
   const [mengenOpen, setMengenOpen] = useState(false);
   const [rabattOpen, setRabattOpen] = useState(false);
   const [bulkRabatt, setBulkRabatt] = useState<number | "">("");
@@ -2761,6 +2809,14 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
     }));
     onChange(updated);
   };
+  // Inline-Katalogspeicherung: nach erfolgreicher Anlage die Zeile an die NEUE Katalogvariante
+  // binden (variantId + Bezeichnung/SKU + VK), sodass aus der Freiposition ein echter
+  // Stammartikel wird (fromCatalog = true). Veredelungskatalog für die Platzierungs-Hints neu laden.
+  const bindRowToCatalog = (i: number, e: { label: string; variantId: string; unitNetCents: number; sku?: string; articleName?: string }): void => {
+    set(i, { variantId: e.variantId, articleNumber: e.sku ?? lines[i]?.articleNumber, articleName: e.articleName ?? lines[i]?.articleName ?? e.label, euro: e.unitNetCents / 100 });
+    void trpc.products.catalog.query().then(setCatalog).catch(() => undefined);
+    void trpc.products.veredelungCatalog.query().then(setVeredelungen).catch(() => undefined);
+  };
 
   return (
     <Box>
@@ -2791,6 +2847,31 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
         {companyId && <Button size="xs" variant="default" loading={refreshing} onClick={() => { setRefreshing(true); void refreshPrices().finally(() => setRefreshing(false)); }} title="Preise aus dem Artikelstamm neu laden">↻ Positionen aktualisieren</Button>}
       </Group>
       {logoOpen && <LogoArticleDialog onClose={() => setLogoOpen(false)} onCreated={(e) => { appendVeredelung(e); setLogoOpen(false); }} />}
+      {/* Inline-Katalogspeicherung einer frei erfassten VEREDELUNG-Position: voller Logo-Dialog,
+          aus der Zeile vorbefüllt; nach Anlage wird DIESELBE Zeile gebunden (kein neuer Eintrag). */}
+      {catalogSaveFor !== null && lines[catalogSaveFor] && (
+        <LogoArticleDialog
+          title="Veredelung in Katalog speichern"
+          initial={{
+            name: lines[catalogSaveFor]!.motiv?.trim() || lines[catalogSaveFor]!.articleName?.trim() || lines[catalogSaveFor]!.description.trim(),
+            sku: lines[catalogSaveFor]!.articleNumber?.trim() || undefined,
+            ...(lines[catalogSaveFor]!.placement ? { placements: [lines[catalogSaveFor]!.placement!] } : {}),
+            ...(lines[catalogSaveFor]!.veredlerId ? { veredlerId: lines[catalogSaveFor]!.veredlerId } : {}),
+            ...(lines[catalogSaveFor]!.ekEuro !== undefined ? { ekEuro: lines[catalogSaveFor]!.ekEuro } : {}),
+            vkEuro: lines[catalogSaveFor]!.euro,
+          }}
+          onClose={() => setCatalogSaveFor(null)}
+          onCreated={(e) => { bindRowToCatalog(catalogSaveFor, e); setCatalogSaveFor(null); }}
+        />
+      )}
+      {/* Inline-Katalogspeicherung einer frei erfassten TEXTIL-Position: schlankes Stamm-Formular. */}
+      {textilSaveFor !== null && lines[textilSaveFor] && (
+        <TextilCatalogDialog
+          initial={{ name: lines[textilSaveFor]!.articleName?.trim() || lines[textilSaveFor]!.description.trim(), sku: lines[textilSaveFor]!.articleNumber?.trim() || "", description: lines[textilSaveFor]!.description.trim() }}
+          onClose={() => setTextilSaveFor(null)}
+          onCreated={(e) => { bindRowToCatalog(textilSaveFor, e); setTextilSaveFor(null); }}
+        />
+      )}
       {mengenOpen && <MengenMatrixDialog onClose={() => setMengenOpen(false)} onAdd={(a) => { addManyVariants(a.articleId, a.articleName, a.baseEuro, a.rows); setMengenOpen(false); }} />}
       {pickerFor !== null && (
         <GarmentPositionModal
@@ -2921,8 +3002,23 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
                               data={textilPositionen.map(({ line, pos }) => ({ value: String(pos), label: `Pos. ${pos} — ${(line.articleName || line.description || "Textil").slice(0, 22)}` }))}
                               onChange={(vals) => setBezug(i, vals)} />
                           )}
+                          {/* G1: Veredler je Position — gesetzt → externe Fremdvergabe, leer → inhouse.
+                              Vorrang vor dem Veredler eines (ggf. frei erfassten) Katalogartikels. */}
+                          {l.kind === "VEREDELUNG" && (
+                            <Box>
+                              <SupplierPicker label="Veredler (leer = inhouse)" value={l.veredlerId ?? ""} onChange={(id) => set(i, { veredlerId: id || undefined })} w={220} />
+                              <Text size="9px" c="dimmed">{l.veredlerId ? "→ externe Fremdvergabe" : "→ inhouse (keine Fremdvergabe)"}</Text>
+                            </Box>
+                          )}
                           {!fromCatalog && (
                             <TextInput size="xs" label="Artikel-Nr. (frei)" w={130} value={l.articleNumber ?? ""} onChange={(e) => set(i, { articleNumber: e.currentTarget.value || undefined })} />
+                          )}
+                          {/* Inline-Katalogspeicherung: frei erfasste Position mit allen nötigen Stammdaten
+                              anreichern und als wiederverwendbaren Artikel sichern (mitten im Walkthrough). */}
+                          {!fromCatalog && lineHasContent(l) && (l.kind === "VEREDELUNG" || l.kind === "TEXTIL") && (
+                            <Button size="compact-xs" variant="light" color="teal" mb={6}
+                              onClick={() => (l.kind === "VEREDELUNG" ? setCatalogSaveFor(i) : setTextilSaveFor(i))}
+                              title="Diese frei erfasste Position als echten Stammartikel im Katalog speichern">💾 In Katalog speichern</Button>
                           )}
                           <TextInput size="xs" label="Alt. Preistext" w={150} placeholder='z. B. "nach Aufwand"' value={l.altPreisText ?? ""} onChange={(e) => set(i, { altPreisText: e.currentTarget.value || undefined })} />
                           {caps.alternative && <Switch size="xs" mb={6} label="Alternativposition" checked={!!l.isAlternative} onChange={(e) => set(i, { isAlternative: e.currentTarget.checked })} />}
@@ -3005,7 +3101,8 @@ export const lineHasContent = (l: EditorLine): boolean =>
 const lineDesc = (l: EditorLine): string => l.description.trim() || l.articleName?.trim() || l.articleNumber?.trim() || "Position";
 
 // Positions-Strukturfelder (Positionsmaske) in das API-Format spreaden — nur wenn gesetzt.
-const lineStructFields = (l: EditorLine): { lineType?: LineType; placement?: string; motiv?: string; motivGroesse?: string; farbton?: string; platzierungsdetails?: string; sonstiges?: string; altPreisText?: string; imPdfAusblenden?: boolean; positionType?: string; positionSide?: string; positionId?: string } => ({
+const lineStructFields = (l: EditorLine): { lineType?: LineType; placement?: string; motiv?: string; motivGroesse?: string; farbton?: string; platzierungsdetails?: string; sonstiges?: string; altPreisText?: string; imPdfAusblenden?: boolean; positionType?: string; positionSide?: string; positionId?: string; veredlerId?: string } => ({
+  ...(l.veredlerId ? { veredlerId: l.veredlerId } : {}),
   ...(l.lineType && l.lineType !== "ARTIKEL" ? { lineType: l.lineType } : {}),
   ...(l.placement?.trim() ? { placement: l.placement.trim() } : {}),
   ...(l.positionType ? { positionType: l.positionType } : {}),
@@ -3020,7 +3117,7 @@ const lineStructFields = (l: EditorLine): { lineType?: LineType; placement?: str
   ...(l.imPdfAusblenden ? { imPdfAusblenden: true } : {}),
 });
 
-export const toApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; variantId?: string; bezugPositionen?: number[]; dbCents?: number; lineType?: LineType; placement?: string; motiv?: string; motivGroesse?: string; farbton?: string; platzierungsdetails?: string; sonstiges?: string; altPreisText?: string; imPdfAusblenden?: boolean; positionType?: string; positionSide?: string; positionId?: string }[] =>
+export const toApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; variantId?: string; bezugPositionen?: number[]; dbCents?: number; lineType?: LineType; placement?: string; motiv?: string; motivGroesse?: string; farbton?: string; platzierungsdetails?: string; sonstiges?: string; altPreisText?: string; imPdfAusblenden?: boolean; positionType?: string; positionSide?: string; positionId?: string; veredlerId?: string }[] =>
   lines.filter(lineHasContent).map((l) => ({
     description: lineDesc(l), qty: l.qty, kind: l.kind, ...lineMoney(l), ...(l.variantId ? { variantId: l.variantId } : {}),
     // USt-Satz der Position mitschicken (eingefroren); so bleibt die Steuerbefreiung (0 %)
@@ -3032,7 +3129,7 @@ export const toApiLines = (lines: EditorLine[]): { description: string; qty: num
   }));
 
 // Wie toApiLines, aber inkl. Artikel-/Varianten-Referenz und Alternativ-Kennzeichen (Angebot).
-export const toQuoteApiLines = (lines: EditorLine[], taxRatePct = 19): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; articleId?: string; variantId?: string; isAlternative?: boolean; bezugPositionen?: number[]; dbCents?: number; lineType?: LineType; placement?: string; motiv?: string; motivGroesse?: string; farbton?: string; platzierungsdetails?: string; sonstiges?: string; altPreisText?: string; imPdfAusblenden?: boolean; positionType?: string; positionSide?: string; positionId?: string }[] =>
+export const toQuoteApiLines = (lines: EditorLine[], taxRatePct = 19): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; articleId?: string; variantId?: string; isAlternative?: boolean; bezugPositionen?: number[]; dbCents?: number; lineType?: LineType; placement?: string; motiv?: string; motivGroesse?: string; farbton?: string; platzierungsdetails?: string; sonstiges?: string; altPreisText?: string; imPdfAusblenden?: boolean; positionType?: string; positionSide?: string; positionId?: string; veredlerId?: string }[] =>
   lines.filter(lineHasContent).map((l) => ({
     description: lineDesc(l), qty: l.qty, kind: l.kind, ...lineMoney(l), taxRatePct,
     ...(l.articleId ? { articleId: l.articleId } : {}), ...(l.variantId ? { variantId: l.variantId } : {}), ...(l.isAlternative ? { isAlternative: true } : {}),
@@ -3042,7 +3139,7 @@ export const toQuoteApiLines = (lines: EditorLine[], taxRatePct = 19): { descrip
 
 // Rekonstruiert die Erfassungs-Positionen aus gespeicherten Angebots-/Auftragszeilen
 // (für die Bearbeitung): VK = Listenpreis, Rabatt, EK = effektiver Netto − DB.
-type StoredLine = { description: string; qty: number; kind: PositionKind; unitNetCents: number; listNetCents: number | null; rabattPct: number | null; taxRatePct?: number | null; dbCents: number | null; articleId?: string | null; variantId?: string | null; isAlternative?: boolean; bezugPositionen?: number[] | null; lineType?: string | null; placement?: string | null; positionType?: string | null; positionSide?: string | null; positionId?: string | null; motiv?: string | null; motivGroesse?: string | null; farbton?: string | null; platzierungsdetails?: string | null; sonstiges?: string | null; altPreisText?: string | null; imPdfAusblenden?: boolean };
+type StoredLine = { description: string; qty: number; kind: PositionKind; unitNetCents: number; listNetCents: number | null; rabattPct: number | null; taxRatePct?: number | null; dbCents: number | null; articleId?: string | null; variantId?: string | null; isAlternative?: boolean; bezugPositionen?: number[] | null; lineType?: string | null; placement?: string | null; positionType?: string | null; positionSide?: string | null; positionId?: string | null; motiv?: string | null; motivGroesse?: string | null; farbton?: string | null; platzierungsdetails?: string | null; sonstiges?: string | null; altPreisText?: string | null; imPdfAusblenden?: boolean; veredlerId?: string | null };
 export const fromStoredLines = (ls: StoredLine[]): EditorLine[] =>
   ls.map((l) => ({
     description: l.description, qty: l.qty, kind: l.kind,
@@ -3066,6 +3163,7 @@ export const fromStoredLines = (ls: StoredLine[]): EditorLine[] =>
     ...(l.sonstiges ? { sonstiges: l.sonstiges } : {}),
     ...(l.altPreisText ? { altPreisText: l.altPreisText } : {}),
     ...(l.imPdfAusblenden ? { imPdfAusblenden: true } : {}),
+    ...(l.veredlerId ? { veredlerId: l.veredlerId } : {}),
   }));
 
 // Auflösung einer offenen Position beim Wandeln: eine Variante (String) ODER ein Größenlauf
