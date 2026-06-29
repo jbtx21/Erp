@@ -21,6 +21,7 @@ export default defineConfig({
       "@texma/shared/vat": src("vat.ts"),
       "@texma/shared/kontenrahmen": src("kontenrahmen.ts"),
       "@texma/shared/import-mapping": src("import-mapping.ts"),
+      "@texma/shared/positions-model": src("positions-model.ts"),
       "@texma/shared": src("index.ts"),
     },
   },

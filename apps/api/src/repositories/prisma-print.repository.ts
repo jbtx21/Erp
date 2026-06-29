@@ -1,7 +1,7 @@
 // Prisma-Druckdaten: liest Lieferschein/Rechnung samt Positionen + Empfängeradresse.
 
 import { prisma } from "@texma/db";
-import { FIRMA_DEFAULT, lineNet, taxOnNet, VAT_STANDARD, type FirmenProfil, type PositionKind } from "@texma/shared";
+import { FIRMA_DEFAULT, lineNet, taxOnNet, VAT_STANDARD, type FirmenProfil, type LineType, type PositionKind } from "@texma/shared";
 import type { BelegMailKind, CompanyDataSheetData, DeliveryNotePrintData, InvoicePrintData, LaufzettelPrintData, LetterMeta, OrderConfirmationPrintData, PrintRepository, PricePrintLine, QuotePrintData, SupplierDataSheetData } from "../modules/print/print.service.js";
 
 /** Schlüssel im AppSetting-Speicher (gespiegelt aus settings.service). */
@@ -38,14 +38,15 @@ function lineExtras(variantId: string | null, map: VariantDetailMap): { artNr?: 
 }
 
 // Positions-Strukturfelder (Positionsmaske) → Belegposition: Platzierung, Alt-Preistext, PDF-ausblenden.
-function lineStruct(l: { placement?: string | null; altPreisText?: string | null; imPdfAusblenden?: boolean }): { platzierung?: string; altPreisText?: string; imPdfAusblenden?: boolean } {
+function lineStruct(l: { placement?: string | null; altPreisText?: string | null; imPdfAusblenden?: boolean; lineType?: string | null }): { platzierung?: string; altPreisText?: string; imPdfAusblenden?: boolean; lineType?: LineType } {
   return {
     ...(l.placement ? { platzierung: l.placement } : {}),
     ...(l.altPreisText ? { altPreisText: l.altPreisText } : {}),
     ...(l.imPdfAusblenden ? { imPdfAusblenden: true } : {}),
+    ...(l.lineType && l.lineType !== "ARTIKEL" ? { lineType: l.lineType as LineType } : {}),
   };
 }
-const LINE_STRUCT_SELECT = { placement: true, altPreisText: true, imPdfAusblenden: true } as const;
+const LINE_STRUCT_SELECT = { placement: true, altPreisText: true, imPdfAusblenden: true, lineType: true } as const;
 
 /** Netto/USt/Brutto aus Preis-Positionen (Standard-USt) — für Angebot/AB ohne gespeicherte Steuer. */
 function totals(lines: PricePrintLine[]): { netCents: number; taxCents: number; grossCents: number } {

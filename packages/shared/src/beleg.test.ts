@@ -96,6 +96,32 @@ describe("Angebot / Auftragsbestätigung", () => {
     expect(d.positionen[0]?.rabatt).toBeUndefined();
   });
 
+  it("Strukturzeilen: Gruppenüberschrift + Zwischen-/Gruppensumme (Xentral-Spezialfeld)", () => {
+    const d = angebotDokument({
+      nummer: "AN-2026-0010", datum: new Date("2026-06-22"), empfaenger: ["X"],
+      positionen: [
+        { menge: 0, bezeichnung: "Oberbekleidung", einzelpreisCents: 0, lineType: "GRUPPE" },
+        { menge: 10, bezeichnung: "Poloshirt", einzelpreisCents: 1000 },   // 10.000
+        { menge: 5, bezeichnung: "Cap", einzelpreisCents: 800 },            // 4.000
+        { menge: 0, bezeichnung: "", einzelpreisCents: 0, lineType: "GRUPPENSUMME" }, // 14.000 (seit Gruppe)
+        { menge: 2, bezeichnung: "Stick", einzelpreisCents: 1500 },         // 3.000
+        { menge: 0, bezeichnung: "", einzelpreisCents: 0, lineType: "ZWISCHENSUMME" }, // 17.000 (laufend)
+      ],
+      netCents: 17000, taxCents: 3230, grossCents: 20230,
+    });
+    const gruppe = d.positionen[0];
+    expect(gruppe?.strukturTyp).toBe("GRUPPE");
+    expect(gruppe?.bezeichnung).toBe("Oberbekleidung");
+    expect(gruppe?.gesamt).toBeUndefined(); // Überschrift hat keinen Betrag
+    const gruppensumme = d.positionen[3];
+    expect(gruppensumme?.strukturTyp).toBe("GRUPPENSUMME");
+    expect(gruppensumme?.strukturBetrag).toContain("140,00"); // 10.000 + 4.000 seit Gruppe
+    const zwischensumme = d.positionen[5];
+    expect(zwischensumme?.strukturTyp).toBe("ZWISCHENSUMME");
+    expect(zwischensumme?.bezeichnung).toBe("Zwischensumme"); // Default-Label
+    expect(zwischensumme?.strukturBetrag).toContain("170,00"); // laufender Netto über alle
+  });
+
   it("Auftragsbestätigung mit Liefertermin und Bestellbezug", () => {
     const d = auftragsbestaetigungDokument({
       nummer: "AB-2026-0007", datum: new Date("2026-06-22"), empfaenger: ["Muster GmbH"],

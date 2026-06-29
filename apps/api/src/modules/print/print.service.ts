@@ -8,7 +8,7 @@ import { renderVeredelungsauftragPdf } from "../../pdf/veredelungsauftrag-pdf.js
 import { TEXMA_LOGO_B64 } from "../../pdf/texma-logo.js";
 import { renderDataSheetPdf } from "../../pdf/datasheet-pdf.js";
 
-export interface PricePrintLine { menge: number; bezeichnung: string; einzelpreisCents: number; listenpreisCents?: number | null; rabattPct?: number | null; artNr?: string; detail?: string[]; alternativ?: boolean }
+export interface PricePrintLine { menge: number; bezeichnung: string; einzelpreisCents: number; listenpreisCents?: number | null; rabattPct?: number | null; artNr?: string; detail?: string[]; alternativ?: boolean; platzierung?: string; altPreisText?: string; imPdfAusblenden?: boolean; lineType?: import("@texma/shared").LineType }
 
 /** Brief-Kopf-Metadaten (TEXMA-Layout): Kunden-Nr., Ansprechpartner, Zusatz-Meta-Zeilen, Anrede. */
 export interface LetterMeta {

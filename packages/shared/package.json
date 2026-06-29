@@ -49,6 +49,10 @@
     "./import-mapping": {
       "types": "./dist/import-mapping.d.ts",
       "import": "./dist/import-mapping.js"
+    },
+    "./positions-model": {
+      "types": "./dist/positions-model.d.ts",
+      "import": "./dist/positions-model.js"
     }
   },
   "scripts": {

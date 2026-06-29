@@ -3,6 +3,7 @@
 // formatierte Euro-Strings raus (formatEur). Lieferschein ohne Preise.
 
 import { formatEur, lineNet, type Cents } from "./money.js";
+import { computePositionTotals, type LineType } from "./positions-model.js";
 
 export interface BelegPosition {
   menge: number;
@@ -25,6 +26,12 @@ export interface BelegPosition {
   altPreisText?: string;
   /** Position im PDF ausblenden (interne Position). */
   imPdfAusblenden?: boolean;
+  /** Strukturzeile (Xentral-Spezialfeld): Gruppenüberschrift / Zwischen- / Gruppensumme.
+   *  Wenn gesetzt, rendert der Beleg-Renderer KEINE normale Positionszeile, sondern die
+   *  Überschrift bzw. eine Summenzeile (strukturBetrag). */
+  strukturTyp?: LineType;
+  /** Formatierter Netto-Betrag einer Zwischen-/Gruppensumme (nur bei strukturTyp). */
+  strukturBetrag?: string;
 }
 
 /** Ansprechpartner-Block (Innendienst) im Belegkopf. */
@@ -246,6 +253,8 @@ export interface PreisPosition {
   altPreisText?: string | null;
   /** Position im PDF ausblenden (interne Position). */
   imPdfAusblenden?: boolean;
+  /** Strukturzeile (Xentral-Spezialfeld): GRUPPE/ZWISCHENSUMME/GRUPPENSUMME. Fehlend = ARTIKEL. */
+  lineType?: LineType | null;
 }
 
 /**
@@ -269,22 +278,48 @@ export function redactKundenbezeichnung(text: string): string {
     .trim();
 }
 
-/** Gemeinsame Preis-Positionen (Einzel-/Rabatt-/Zeilenpreis) für Rechnung/Angebot/AB. */
+const STRUKTUR_LABEL: Record<Exclude<LineType, "ARTIKEL">, string> = {
+  GRUPPE: "",
+  ZWISCHENSUMME: "Zwischensumme",
+  GRUPPENSUMME: "Gruppensumme",
+};
+
+/** Gemeinsame Preis-Positionen (Einzel-/Rabatt-/Zeilenpreis) für Rechnung/Angebot/AB.
+ *  Strukturzeilen (Gruppenüberschrift, Zwischen-/Gruppensumme) werden über das EINE
+ *  Positionsmodell (computePositionTotals, USt-je-Satz-konsistent) berechnet und als
+ *  Überschrift bzw. Summenzeile (strukturBetrag) ausgegeben. */
 function preisPositionen(ps: PreisPosition[]): BelegPosition[] {
-  return ps.map((p) => ({
-    menge: p.menge,
-    bezeichnung: redactKundenbezeichnung(p.bezeichnung),
-    // Einzelpreis = VK-Liste (vor Rabatt), sonst der effektive Netto; Zeilenbetrag = effektiver Netto × Menge.
-    einzelpreis: formatEur(p.listenpreisCents ?? p.einzelpreisCents),
-    ...(p.rabattPct ? { rabatt: `${p.rabattPct} %` } : {}),
-    gesamt: formatEur(lineNet(p.menge, p.einzelpreisCents)),
-    ...(p.artNr ? { artNr: p.artNr } : {}),
-    ...(p.detail && p.detail.length > 0 ? { detail: p.detail.map(redactKundenbezeichnung) } : {}),
-    ...(p.alternativ ? { alternativ: true } : {}),
-    ...(p.platzierung ? { platzierung: p.platzierung } : {}),
-    ...(p.altPreisText ? { altPreisText: p.altPreisText } : {}),
-    ...(p.imPdfAusblenden ? { imPdfAusblenden: true } : {}),
-  }));
+  // Berechnete Zwischen-/Gruppensummen aus den zählenden ARTIKEL-Positionen (Alternativen ausgenommen).
+  const totals = computePositionTotals(
+    ps.map((p) => ({ lineType: p.lineType ?? undefined, qty: p.menge, unitNetCents: p.einzelpreisCents, isAlternative: p.alternativ, description: p.bezeichnung })),
+  );
+  return ps.map((p, i) => {
+    const t = p.lineType ?? "ARTIKEL";
+    if (t !== "ARTIKEL") {
+      // Strukturzeile: Überschrift (GRUPPE) oder Summenzeile (ZWISCHEN-/GRUPPENSUMME).
+      const isSum = t === "ZWISCHENSUMME" || t === "GRUPPENSUMME";
+      return {
+        menge: 0,
+        bezeichnung: redactKundenbezeichnung(p.bezeichnung || STRUKTUR_LABEL[t]),
+        strukturTyp: t,
+        ...(isSum ? { strukturBetrag: formatEur(totals.rows[i]?.computedNetCents ?? 0) } : {}),
+      };
+    }
+    return {
+      menge: p.menge,
+      bezeichnung: redactKundenbezeichnung(p.bezeichnung),
+      // Einzelpreis = VK-Liste (vor Rabatt), sonst der effektive Netto; Zeilenbetrag = effektiver Netto × Menge.
+      einzelpreis: formatEur(p.listenpreisCents ?? p.einzelpreisCents),
+      ...(p.rabattPct ? { rabatt: `${p.rabattPct} %` } : {}),
+      gesamt: formatEur(lineNet(p.menge, p.einzelpreisCents)),
+      ...(p.artNr ? { artNr: p.artNr } : {}),
+      ...(p.detail && p.detail.length > 0 ? { detail: p.detail.map(redactKundenbezeichnung) } : {}),
+      ...(p.alternativ ? { alternativ: true } : {}),
+      ...(p.platzierung ? { platzierung: p.platzierung } : {}),
+      ...(p.altPreisText ? { altPreisText: p.altPreisText } : {}),
+      ...(p.imPdfAusblenden ? { imPdfAusblenden: true } : {}),
+    };
+  });
 }
 
 /** Netto/USt/Brutto-Summenblock. */

@@ -82,6 +82,22 @@ async function renderTexmaLetter(beleg: BelegDokument, firma: FirmenProfil): Pro
   for (const p of beleg.positionen) {
     // Interne Position im Beleg-PDF ausblenden (Xentral „im PDF ausblenden").
     if (p.imPdfAusblenden) continue;
+    // Strukturzeile (Xentral-Spezialfeld): Gruppenüberschrift bzw. Zwischen-/Gruppensumme.
+    if (p.strukturTyp) {
+      if (p.strukturTyp === "GRUPPE") {
+        ensure(22);
+        y -= 4;
+        page.drawText(p.bezeichnung.slice(0, 60), { x: cols.art, y, size: 10.5, font: bold, color: DARK });
+        y -= 16;
+      } else {
+        ensure(18);
+        page.drawLine({ start: { x: cols.preis - 10, y: y + 9 }, end: { x: A4.width - MARGIN, y: y + 9 }, thickness: 0.3, color: GREY });
+        page.drawText(p.bezeichnung, { x: cols.preis, y, size: 9, font: bold, color: DARK });
+        if (beleg.zeigePreise && p.strukturBetrag) page.drawText(p.strukturBetrag, { x: cols.summe, y, size: 9, font: bold });
+        y -= 16;
+      }
+      continue;
+    }
     // Platzierung (Brust/Rücken) als erste Zusatzzeile unter der Bezeichnung.
     const detailSrc = [...(p.platzierung ? [`Platzierung: ${p.platzierung}`] : []), ...(p.detail ?? [])];
     const detail = detailSrc.flatMap((d) => wrap(d, font, 9, cols.preis - cols.bez - 8));

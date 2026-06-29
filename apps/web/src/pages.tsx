@@ -8,6 +8,7 @@ import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { validateVatId } from "@texma/shared/vat";
 import { buildTrackingUrl, type Carrier } from "@texma/shared/tracking";
 import { resolveMarkupFactor, DEFAULT_MARKUP_CONFIG, type MarkupConfig } from "@texma/shared/markup";
+import { computePositionTotals } from "@texma/shared/positions-model";
 import { konto, kontenliste, KONTENRAHMEN_LABEL, type Kontenrahmen } from "@texma/shared/kontenrahmen";
 import { trpc } from "./trpc.js";
 import { AufschlagsfaktorenSection, LogosStickereiSection, StickereiAusschreibungSection, StickereiStaffelnSection, Postcalc } from "./Differentiators.js";
@@ -2299,6 +2300,9 @@ export function SupplierPicker({ value, onChange, label, w = 200 }: { value: str
 
 // Effektiver Netto-Einzelpreis (VK − Positionsrabatt) in Euro.
 const effUnitEuro = (l: EditorLine): number => l.euro * (1 - (l.rabattPct ?? 0) / 100);
+// Strukturzeile (Xentral-Spezialfeld): Gruppenüberschrift / Zwischen- / Gruppensumme — keine zählende Position.
+const isStructLine = (l: EditorLine): boolean => !!l.lineType && l.lineType !== "ARTIKEL";
+const structLabel: Record<Exclude<LineType, "ARTIKEL">, string> = { GRUPPE: "Neue Gruppe", ZWISCHENSUMME: "Zwischensumme", GRUPPENSUMME: "Gruppensumme" };
 
 // Deckungsbeitrag je Position (effektiver VK − EK) × Menge in Cent; null wenn kein EK bekannt.
 const lineDbCents = (l: EditorLine): number | null =>
@@ -2578,6 +2582,13 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
   const [bundleFor, setBundleFor] = useState<number | null>(null);
   const [logoOpen, setLogoOpen] = useState(false);
   const [mengenOpen, setMengenOpen] = useState(false);
+  const [rabattOpen, setRabattOpen] = useState(false);
+  const [bulkRabatt, setBulkRabatt] = useState<number | "">("");
+  const [refreshing, setRefreshing] = useState(false);
+  // Berechnete Zwischen-/Gruppensummen (eine Quelle: computePositionTotals, USt-je-Satz-konsistent).
+  const posTotals = useMemo(() => computePositionTotals(
+    lines.map((l) => ({ lineType: l.lineType, qty: l.qty, unitNetCents: Math.round(effUnitEuro(l) * 100), isAlternative: l.isAlternative, description: l.description })),
+  ), [lines]);
 
   const set = (i: number, patch: Partial<EditorLine>): void => onChange(lines.map((l, j) => (j === i ? { ...l, ...patch } : l)));
   const move = (i: number, dir: -1 | 1): void => {
@@ -2636,6 +2647,22 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
     void resolve(variantId, l.qty).then((p) => { if (p.euro !== undefined || p.ekEuro !== undefined) set(i, p); });
   };
   const textilPositionen = lines.map((t, j) => ({ line: t, pos: j + 1 })).filter(({ line }) => line.kind === "TEXTIL");
+  // Spezialfeld-Zeile (Gruppenüberschrift / Zwischen- / Gruppensumme) anhängen.
+  const addStruct = (t: Exclude<LineType, "ARTIKEL">): void =>
+    onChange([...lines, { lineType: t, kind: "SONSTIGE", qty: 1, euro: 0, description: structLabel[t] }]);
+  // Rabatt % auf ALLE zählenden Positionen (Bulk-Aktion, Xentral). Strukturzeilen unberührt.
+  const applyBulkRabatt = (pct: number): void =>
+    onChange(lines.map((l) => (isStructLine(l) ? l : { ...l, rabattPct: pct > 0 ? pct : undefined })));
+  // Positionen aktualisieren: VK/EK aller Katalog-/Varianten-Positionen aus dem Stamm neu laden.
+  const refreshPrices = async (): Promise<void> => {
+    if (!companyId) return;
+    const updated = await Promise.all(lines.map(async (l) => {
+      if (!l.variantId) return l;
+      const p = await resolve(l.variantId, l.qty);
+      return { ...l, ...(p.euro !== undefined ? { euro: p.euro } : {}), ...(p.ekEuro !== undefined ? { ekEuro: p.ekEuro } : {}) };
+    }));
+    onChange(updated);
+  };
 
   return (
     <Box>
@@ -2645,6 +2672,25 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
         {caps.sizeRun && <Button size="xs" variant="light" onClick={() => setMengenOpen(true)}>+ Größenlauf</Button>}
         {caps.logo && <Button size="xs" variant="light" color="grape" onClick={() => setLogoOpen(true)}>+ Logo/Veredelung</Button>}
         <Button size="xs" variant="default" onClick={() => onChange([...lines, blankRow()])}>+ Freiposition</Button>
+        <Menu shadow="md" position="bottom-start" withinPortal>
+          <Menu.Target><Button size="xs" variant="default">+ Spezialfeld ▾</Button></Menu.Target>
+          <Menu.Dropdown>
+            <Menu.Label>Strukturzeilen</Menu.Label>
+            <Menu.Item onClick={() => addStruct("GRUPPE")}>Gruppenüberschrift</Menu.Item>
+            <Menu.Item onClick={() => addStruct("ZWISCHENSUMME")}>Zwischensumme</Menu.Item>
+            <Menu.Item onClick={() => addStruct("GRUPPENSUMME")}>Gruppensumme</Menu.Item>
+          </Menu.Dropdown>
+        </Menu>
+        <Popover opened={rabattOpen} onChange={setRabattOpen} position="bottom" withArrow trapFocus>
+          <Popover.Target><Button size="xs" variant="default" onClick={() => setRabattOpen((o) => !o)}>Rabatt auf alle</Button></Popover.Target>
+          <Popover.Dropdown>
+            <Group gap="xs" align="end">
+              <NumberInput size="xs" w={96} label="Rabatt %" min={0} max={100} decimalScale={1} value={bulkRabatt} onChange={(v) => setBulkRabatt(v === "" ? "" : Number(v))} />
+              <Button size="xs" onClick={() => { if (bulkRabatt !== "") applyBulkRabatt(Math.min(100, Math.max(0, Number(bulkRabatt)))); setRabattOpen(false); }}>Anwenden</Button>
+            </Group>
+          </Popover.Dropdown>
+        </Popover>
+        {companyId && <Button size="xs" variant="default" loading={refreshing} onClick={() => { setRefreshing(true); void refreshPrices().finally(() => setRefreshing(false)); }} title="Preise aus dem Artikelstamm neu laden">↻ Positionen aktualisieren</Button>}
       </Group>
       {logoOpen && <LogoArticleDialog onClose={() => setLogoOpen(false)} onCreated={(e) => { appendVeredelung(e); setLogoOpen(false); }} />}
       {mengenOpen && <MengenMatrixDialog onClose={() => setMengenOpen(false)} onAdd={(a) => { addManyVariants(a.articleId, a.articleName, a.baseEuro, a.rows); setMengenOpen(false); }} />}
@@ -2662,6 +2708,29 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
           <Table.Tbody>
             {lines.length === 0 && <Table.Tr><Table.Td colSpan={10}><Text size="sm" c="dimmed" py="xs">Noch keine Position — Artikel wählen oder „+ Freiposition".</Text></Table.Td></Table.Tr>}
             {lines.map((l, i) => {
+              // Strukturzeile (Spezialfeld): Gruppenüberschrift bzw. Zwischen-/Gruppensumme.
+              if (isStructLine(l)) {
+                const isGruppe = l.lineType === "GRUPPE";
+                const sub = posTotals.rows[i]?.computedNetCents ?? 0;
+                return (
+                  <Table.Tr key={i} style={{ background: "var(--mantine-color-gray-1)" }}>
+                    <Table.Td><Text size="xs" c="dimmed" style={numTd}>{i + 1}</Text></Table.Td>
+                    <Table.Td colSpan={7}>
+                      {isGruppe
+                        ? <TextInput size="xs" variant="unstyled" fw={700} placeholder="Gruppenüberschrift" value={l.description} onChange={(e) => set(i, { description: e.currentTarget.value })} styles={{ input: { fontWeight: 700 } }} />
+                        : <Text size="sm" fw={600}>{l.description || structLabel[l.lineType as Exclude<LineType, "ARTIKEL">]}</Text>}
+                    </Table.Td>
+                    <Table.Td>{!isGruppe && <Text size="sm" fw={700} style={numTd}>{euro(sub)}</Text>}</Table.Td>
+                    <Table.Td>
+                      <Group gap={2} wrap="nowrap" justify="flex-end">
+                        <ActionIcon size="sm" variant="subtle" color="gray" disabled={i === 0} onClick={() => move(i, -1)} title="nach oben">↑</ActionIcon>
+                        <ActionIcon size="sm" variant="subtle" color="gray" disabled={i === lines.length - 1} onClick={() => move(i, 1)} title="nach unten">↓</ActionIcon>
+                        <ActionIcon size="sm" variant="subtle" color="red" onClick={() => removeAt(i)} title="Zeile entfernen">✕</ActionIcon>
+                      </Group>
+                    </Table.Td>
+                  </Table.Tr>
+                );
+              }
               const fromCatalog = !!l.variantId || !!l.articleId;
               const artVariants = l.articleId ? variantsByArticle.get(l.articleId) : undefined;
               const lineNetCents = Math.round(l.qty * effUnitEuro(l) * 100);
@@ -2790,7 +2859,7 @@ const lineMoney = (l: EditorLine): { unitNetCents: number; listNetCents?: number
 // ODER Artikel-/Variantenbindung ODER ein VK > 0. Verhindert den stillen Verlust einer
 // bepreisten Position nur weil das Beschreibungsfeld leer ist (Datenverlust-Bug).
 export const lineHasContent = (l: EditorLine): boolean =>
-  l.description.trim() !== "" || !!l.variantId || !!l.articleId || l.euro > 0;
+  isStructLine(l) || l.description.trim() !== "" || !!l.variantId || !!l.articleId || l.euro > 0;
 // Beschreibung mit Fallback (Server verlangt eine nicht-leere Beschreibung je Position).
 const lineDesc = (l: EditorLine): string => l.description.trim() || l.articleName?.trim() || l.articleNumber?.trim() || "Position";
 
