@@ -15,6 +15,7 @@ import { AufschlagsfaktorenSection, LogosStickereiSection, StickereiAusschreibun
 import { euro, numTd, statusMantineColor, prettyStatus } from "./theme.js";
 import { MultiLineChart, BarChart } from "./charts.js";
 import { DocActionMenu, DocFormShell, DocListHeader, StatusDot, StatusBadge, EmptyState, type DocAction } from "./doc-layout.js";
+import { notify, confirmDialog, promptDialog } from "./ui-kit.js";
 import { OrderAmpelDetail, Auftragsampel } from "./StatusAmpel.js";
 import { useUnsavedGuard } from "./use-unsaved-guard.js";
 import { downloadCsv } from "./export.js";
@@ -72,28 +73,26 @@ type BelegMailKind = "QUOTE" | "AUFTRAGSBESTAETIGUNG" | "INVOICE" | "LIEFERSCHEI
 async function openBelegMail(kind: BelegMailKind, id: string): Promise<void> {
   const draft = await trpc.mail.buildDraft.query({ kind, id });
   openOutlookDraft(draft);
-  if (!draft.to && typeof window !== "undefined")
-    window.alert("Hinweis: Für diesen Beleg ist keine Kontakt-E-Mail hinterlegt. Bitte den Empfänger im Outlook-Entwurf ergänzen (oder die E-Mail in den Kundenstammdaten pflegen).");
+  if (!draft.to)
+    notify.info("Für diesen Beleg ist keine Kontakt-E-Mail hinterlegt. Bitte den Empfänger im Outlook-Entwurf ergänzen (oder die E-Mail in den Kundenstammdaten pflegen).");
 }
 
 // Outlook-Entwurf für den Veredelungsauftrag (an den Veredler).
 async function openVeredelungsauftragMail(subProductionId: string): Promise<void> {
   const draft = await trpc.mail.buildVeredelungsauftragDraft.query({ subProductionId });
   openOutlookDraft(draft);
-  if (!draft.to && typeof window !== "undefined")
-    window.alert("Hinweis: Beim Veredler ist keine E-Mail hinterlegt. Bitte den Empfänger im Outlook-Entwurf ergänzen (oder die E-Mail in den Lieferantenstammdaten pflegen).");
+  if (!draft.to)
+    notify.info("Beim Veredler ist keine E-Mail hinterlegt. Bitte den Empfänger im Outlook-Entwurf ergänzen (oder die E-Mail in den Lieferantenstammdaten pflegen).");
 }
 
 // Veredelungsauftrag DIREKT an den Veredler senden (PDF-Anhang) — verbindlich, Empfänger
 // vorbefüllt (Lieferanten-E-Mail) und im Dialog bestätigt. Wirft bei Fehlern (Caller fängt).
 async function sendVeredelungsauftragDirect(subProductionId: string): Promise<void> {
   const draft = await trpc.mail.buildVeredelungsauftragDraft.query({ subProductionId });
-  const target = typeof window !== "undefined"
-    ? window.prompt("Veredelungsauftrag jetzt per E-Mail mit PDF-Anhang an den Veredler senden an:", draft.to)
-    : draft.to;
+  const target = await promptDialog({ title: "Veredelungsauftrag senden", label: "Empfänger-E-Mail", message: "Veredelungsauftrag jetzt per E-Mail mit PDF-Anhang an den Veredler senden:", defaultValue: draft.to, confirmLabel: "Senden" });
   if (!target || !target.trim()) return;
   const res = await trpc.mail.sendVeredelungsauftrag.mutate({ subProductionId, to: target.trim() });
-  if (typeof window !== "undefined") window.alert(`Veredelungsauftrag wurde an ${res.to} gesendet (${res.filename}).`);
+  notify.success(`Veredelungsauftrag wurde an ${res.to} gesendet (${res.filename}).`);
 }
 
 // Beleg DIREKT per SMTP versenden (PDF-Anhang) — verbindliche Alternative zum Outlook-Entwurf.
@@ -101,12 +100,10 @@ async function sendVeredelungsauftragDirect(subProductionId: string): Promise<vo
 // Versand sofort ausgeht (kein stiller Versand). Wirft bei Backend-Fehlern (Caller fängt → onErr).
 async function sendBelegDirect(kind: BelegMailKind, id: string, label: string): Promise<void> {
   const { to } = await trpc.mail.belegRecipient.query({ kind, id });
-  const target = typeof window !== "undefined"
-    ? window.prompt(`„${label}" jetzt per E-Mail mit PDF-Anhang senden an:`, to)
-    : to;
+  const target = await promptDialog({ title: `„${label}" senden`, label: "Empfänger-E-Mail", message: `„${label}" jetzt per E-Mail mit PDF-Anhang senden:`, defaultValue: to, confirmLabel: "Senden" });
   if (!target || !target.trim()) return; // Abbruch oder leer → nicht senden
   const res = await trpc.mail.sendBeleg.mutate({ kind, id, to: target.trim() });
-  if (typeof window !== "undefined") window.alert(`„${label}" wurde an ${target.trim()} gesendet (${res.filename}).`);
+  notify.success(`„${label}" wurde an ${target.trim()} gesendet (${res.filename}).`);
 }
 
 // Ausgangs-E-Rechnung (XRechnung/ZUGFeRD-CII, Kap. 19) zu einer Rechnung erzeugen und als
@@ -115,7 +112,7 @@ async function sendBelegDirect(kind: BelegMailKind, id: string, label: string): 
 async function downloadEInvoiceXml(invoiceId: string): Promise<void> {
   const res = await trpc.einvoice.forInvoice.mutate({ invoiceId });
   if (!res.valid) {
-    if (typeof window !== "undefined") window.alert(`E-Rechnung ist nicht EN16931-konform und wurde nicht erzeugt:\n\n${res.errors.join("\n")}\n\nBitte die Stammdaten prüfen (z. B. USt-IdNr. in den Einstellungen).`);
+    notify.error(<span style={{ whiteSpace: "pre-line" }}>{`E-Rechnung ist nicht EN16931-konform und wurde nicht erzeugt:\n\n${res.errors.join("\n")}\n\nBitte die Stammdaten prüfen (z. B. USt-IdNr. in den Einstellungen).`}</span>);
     return;
   }
   downloadText(res.filename, res.xml, "application/xml");
@@ -239,15 +236,18 @@ function autoCompare(a: unknown, b: unknown): number {
   return sa.localeCompare(sb, "de");
 }
 
+export interface AutoTableEmpty { icon?: ReactNode; title: string; hint?: string; actionLabel?: string; onAction?: () => void }
+
 export function AutoTable({
   rows, hide = [], action, onRowClick, highlightId, bulkActions, cellRender,
-  filters, sortable, pageSize, totals, onSelectionChange, initialSort,
+  filters, sortable, pageSize, totals, onSelectionChange, initialSort, emptyState,
 }: {
   rows: Row[]; hide?: string[]; action?: (r: Row) => ReactNode; onRowClick?: (r: Row) => void; highlightId?: string;
   bulkActions?: BulkAction[]; cellRender?: (col: string, value: unknown, row: Row) => ReactNode | undefined;
   filters?: AutoTableFilter[]; sortable?: boolean; pageSize?: number;
   totals?: (rows: Row[]) => Record<string, ReactNode>; onSelectionChange?: (rows: Row[]) => void;
   initialSort?: { key: string; dir: "asc" | "desc" };
+  emptyState?: AutoTableEmpty;
 }): JSX.Element {
   const hlRef = useRef<HTMLTableRowElement | null>(null);
   // Mehrfachauswahl (nur wenn bulkActions ODER onSelectionChange gesetzt): markierte Zeilen-Keys.
@@ -283,7 +283,8 @@ export function AutoTable({
   const toggleOne = (k: string): void => setSel((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
   const toggleSort = (c: string): void => setSort((s) => (s && s.key === c ? (s.dir === "asc" ? { key: c, dir: "desc" } : null) : { key: c, dir: "asc" }));
 
-  if (!rows || rows.length === 0) return <Text c="dimmed" mt="sm">Keine Daten.</Text>;
+  if (!rows || rows.length === 0)
+    return emptyState ? <EmptyState {...emptyState} /> : <EmptyState title="Keine Einträge" hint="Hier erscheinen Einträge, sobald welche vorhanden sind." />;
   // Rohe cuid-`id`-Spalte ausblenden, sobald eine sprechende Kennung vorhanden ist.
   const row0 = rows[0] as Row;
   const hasDisplayId = DISPLAY_ID_KEYS.some((k) => k in (row0 as object) && Boolean((row0 as Row)[k]));
@@ -372,7 +373,7 @@ export function AutoTable({
  *  Bulk-Aktionen) optional durch — so werden Listen ohne Eigenbau zu Cockpits. */
 export function ListPage({
   title, hint, load, hide, action, toolbar, module, cellRender,
-  filters, sortable, pageSize, totals, bulkActions,
+  filters, sortable, pageSize, totals, bulkActions, emptyState,
 }: {
   title: string; hint?: string; load: () => Promise<Row[]>; hide?: string[]; module?: string;
   action?: (r: Row, reload: () => Promise<void>) => ReactNode; toolbar?: (reload: () => Promise<void>) => ReactNode;
@@ -380,6 +381,7 @@ export function ListPage({
   filters?: AutoTableFilter[]; sortable?: boolean; pageSize?: number;
   totals?: (rows: Row[]) => Record<string, ReactNode>;
   bulkActions?: (reload: () => Promise<void>) => BulkAction[];
+  emptyState?: AutoTableEmpty;
 }): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -402,7 +404,7 @@ export function ListPage({
       {loading ? <Group mt="sm" gap="xs"><Loader size="sm" /><Text size="sm">lädt…</Text></Group>
         : <AutoTable rows={rows} hide={hide ?? []} cellRender={cellRender} action={action ? (r) => action(r, reload) : undefined}
             filters={filters} sortable={sortable} pageSize={pageSize} totals={totals}
-            bulkActions={bulkActions?.(reload)} />}
+            bulkActions={bulkActions?.(reload)} emptyState={emptyState} />}
     </>
   );
 }
@@ -934,8 +936,8 @@ export function InvoicesPage({ onOpen }: { onOpen?: (k: string, id: string) => v
         <DocActionMenu actions={[
           ...(onOpen ? [{ label: "Kunde öffnen", group: "Allgemein", onClick: () => onOpen("companies", String(r.companyId)) }] : []),
           ...(onOpen && r.orderId ? [{ label: "Auftrag öffnen", group: "Allgemein", onClick: () => onOpen("orders", String(r.orderId)) }] : []),
-          ...belegDocActions("INVOICE", String(r.id), "Rechnung", (m) => window.alert(m)),
-          { label: "E-Rechnung (XRechnung XML)", group: "Dokumente", onClick: () => { void downloadEInvoiceXml(String(r.id)).catch((e) => window.alert(errMsg(e))); } },
+          ...belegDocActions("INVOICE", String(r.id), "Rechnung", (m) => notify.error(m)),
+          { label: "E-Rechnung (XRechnung XML)", group: "Dokumente", onClick: () => { void downloadEInvoiceXml(String(r.id)).catch((e) => notify.error(errMsg(e))); } },
         ]} />
       )} />
   );
@@ -2173,7 +2175,7 @@ export function ProductsPage({ focusId }: { focusId?: string } = {}): JSX.Elemen
             try {
               const skus = bulkSkus.split(",").map((s) => s.trim()).filter(Boolean);
               const r = await trpc.products.bulkUpdateArticles.mutate({ skus, patch: { [bulkField]: bulkValue } });
-              window.alert(`${r.updated} Artikel aktualisiert.`);
+              notify.success(`${r.updated} Artikel aktualisiert.`);
               setBulkValue(""); await loadArticles();
             } catch (e) { setErr(errMsg(e)); }
           }}>Anwenden</Button>
@@ -3524,10 +3526,11 @@ export function QuotesPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k:
       (status === "VERSENDET" || status === "NACHFASSEN") && { label: "Annehmen & in Auftrag wandeln", group: "Status & Folgeaktion", color: "green", onClick: () => void act(async () => { await trpc.quotes.transition.mutate({ id, to: "ANGENOMMEN" }); setConvertId(id); }) },
       status === "ANGENOMMEN" && !r.converted && { label: "→ Auftrag wandeln", group: "Status & Folgeaktion", color: "green", onClick: () => setConvertId(id) },
       // Muster/Anprobe direkt aus dem Angebot erzeugen (kein Medienbruch ins Muster-Modul, QA #7).
-      status !== "ABGELEHNT" && { label: "Muster generieren (Leihgut)", group: "Status & Folgeaktion", onClick: () => void act(async () => { await trpc.sampleLoans.convertQuote.mutate({ quoteId: id }); if (typeof window !== "undefined") window.alert("Muster-Leihe aus Angebot erzeugt — im Modul Muster-Leihgut sichtbar."); }) },
+      status !== "ABGELEHNT" && { label: "Muster generieren (Leihgut)", group: "Status & Folgeaktion", onClick: () => void act(async () => { await trpc.sampleLoans.convertQuote.mutate({ quoteId: id }); notify.success("Muster-Leihe aus Angebot erzeugt — im Modul Muster-Leihgut sichtbar."); }) },
       editable && { label: "Ablehnen", group: "Status & Folgeaktion", color: "red", onClick: () => {
-        const grund = typeof window !== "undefined" ? window.prompt("Ablehnen — Verlustgrund?") : null;
-        if (grund) void act(() => trpc.quotes.reject.mutate({ id, verlustgrund: grund }));
+        void promptDialog({ title: "Angebot ablehnen", label: "Verlustgrund" }).then((grund) => {
+          if (grund) void act(() => trpc.quotes.reject.mutate({ id, verlustgrund: grund }));
+        });
       } },
     ];
     return (
@@ -3701,7 +3704,7 @@ export function QuotesPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k:
   return (
     <>
       {/* AP1: nach der Wandlung direkt in den neuen Auftrag springen (verlustfreie Pipeline). */}
-      {convertId && <ConvertQuoteDialog quoteId={convertId} onClose={() => setConvertId(null)} onDone={({ id, number }) => { setConvertId(null); void load(); if (onOpen) onOpen("orders", id); else window.alert(`Auftrag ${number} angelegt.`); }} />}
+      {convertId && <ConvertQuoteDialog quoteId={convertId} onClose={() => setConvertId(null)} onDone={({ id, number }) => { setConvertId(null); void load(); if (onOpen) onOpen("orders", id); else notify.success(`Auftrag ${number} angelegt.`); }} />}
       <DocListHeader
         module="⌂ Vertrieb"
         title="Angebote"
@@ -4311,9 +4314,9 @@ function ConnectionsPanel({ orderId, role, onChanged, onOpen }: { orderId: strin
               )}
               {invoiceNode && (role === "ADMIN" || role === "BUCHHALTUNG") && (
                 <Button size="compact-xs" variant="light" color="red" onClick={async () => {
-                  const reason = window.prompt("Gutschriftsgrund (Storno der Rechnung):");
+                  const reason = await promptDialog({ title: "Storno per Gutschrift", label: "Gutschriftsgrund (Storno der Rechnung)" });
                   if (!reason) return;
-                  const restock = window.confirm("Ware zurück ins Lager buchen? (OK = Retoure: gelieferte Mengen werden als Zugang gebucht / Abbrechen = nur Finanz-Storno)");
+                  const restock = await confirmDialog({ title: "Ware zurück ins Lager?", message: "Gelieferte Mengen als Zugang zurückbuchen (Retoure)? Andernfalls nur Finanz-Storno ohne Warenbewegung.", confirmLabel: "Retoure ins Lager", cancelLabel: "Nur Finanz-Storno" });
                   setErr(null); setMsg(null);
                   try { const r = await trpc.invoices.cancelByCreditNote.mutate({ invoiceId: invoiceNode.id, reason, restock }); setMsg(`Gutschrift ${r.number} gebucht (Rechnung bleibt WORM)${restock ? " · Ware zurück ins Lager" : ""}.`); await load(); onChanged(); }
                   catch (e) { setErr(errMsg(e)); }
@@ -4714,13 +4717,13 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
     try {
       const o = await trpc.sales.orderForEdit.query({ orderId: id });
       if (o.invoiced) {
-        window.alert(`Auftrag ${o.number} ist bereits fakturiert und kann nicht mehr bearbeitet werden.`);
+        notify.error(`Auftrag ${o.number} ist bereits fakturiert und kann nicht mehr bearbeitet werden.`);
         return;
       }
       const hinweise: string[] = [];
       if (o.inProduction) hinweise.push("in Produktion — die Stückliste wird beim Speichern neu aufgebaut");
       if (o.delivered) hinweise.push("bereits teilgeliefert — gelieferte Mengen können nicht reduziert/entfernt werden");
-      if (hinweise.length) window.alert(`Hinweis zu Auftrag ${o.number}: ${hinweise.join("; ")}.`);
+      if (hinweise.length) notify.info(`Hinweis zu Auftrag ${o.number}: ${hinweise.join("; ")}.`);
       setEditOrderId(id); setNewCompany(o.companyId); setNewLines(fromStoredLines(o.lines)); setShowCreate(true); setDirty(false);
     } catch (e) { setErr(errMsg(e)); }
   };
@@ -4729,10 +4732,10 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
     try {
       if (editOrderId) {
         await trpc.sales.updateOrder.mutate({ orderId: editOrderId, companyId: newCompany, lines: toApiLines(newLines) });
-        window.alert("Auftrag gespeichert.");
+        notify.success("Auftrag gespeichert.");
       } else {
         const r = await trpc.sales.createOrder.mutate({ companyId: newCompany, lines: toApiLines(newLines) });
-        window.alert(`Auftrag ${r.number} angelegt.`);
+        notify.success(`Auftrag ${r.number} angelegt.`);
       }
       resetOrderForm(); await load();
     } catch (e) { setErr(errMsg(e)); }
@@ -4850,7 +4853,9 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
               probs = (det?.checks ?? []).filter((c) => c.lamp === "ROT" || c.lamp === "GELB").map((c) => `• ${c.label}: ${c.hint}`);
             } catch { /* Ampel-Abruf best-effort */ }
             const head = r.ampel === "ROT" ? "Die Auftragsampel meldet PROBLEME:" : "Die Auftragsampel meldet Hinweise:";
-            if (!window.confirm(`${head}\n${probs.join("\n") || "(Details siehe Ampel-Tab)"}\n\nTrotzdem „${prettyStatus(to)}" ausführen?`)) return;
+            const ok = await confirmDialog({ title: "Auftragsampel", danger: r.ampel === "ROT", confirmLabel: `Trotzdem „${prettyStatus(to)}"`,
+              message: <span style={{ whiteSpace: "pre-line" }}>{`${head}\n${probs.join("\n") || "(Details siehe Ampel-Tab)"}`}</span> });
+            if (!ok) return;
           }
           // #12 Versand mit Teillieferung: Mengen je Position im Dialog erfassen, statt automatisch
           // alles auf einmal auszuliefern. Der Dialog bucht den Lieferschein + schaltet auf Versendet.
@@ -4860,7 +4865,7 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
             FAKTURIERT: "Auftrag fakturieren? Es wird eine echte Rechnung (RE-Nr., USt, offener Posten) erzeugt.",
             STORNIERT: "Auftrag wirklich stornieren? Reservierter Bestand wird wieder freigegeben.",
           };
-          if (confirmMsg[to] && !window.confirm(confirmMsg[to])) return;
+          if (confirmMsg[to] && !(await confirmDialog({ title: prettyStatus(to), message: confirmMsg[to], danger: to === "STORNIERT" }))) return;
           setErr(null); setMsg(null);
           try {
             if (to === "FAKTURIERT") {
@@ -5374,7 +5379,7 @@ function CompanyContactsPanel({ companyId, companies, onChanged }: { companyId: 
                     data={companies.filter((c) => c.id !== companyId).map((c) => ({ value: c.id, label: c.name }))}
                     onChange={(target) => { if (target) void run(async () => { await trpc.contacts.link.mutate({ contactId: p.contactId, entity: "Company", entityId: target }); }); }} />
                   {p.primary && <Button size="compact-xs" variant="subtle" color="red"
-                    onClick={() => { if (typeof window === "undefined" || window.confirm(`Person „${p.name}" löschen?`)) void run(async () => { await trpc.contacts.delete.mutate({ id: p.contactId, companyId }); }); }}>Löschen</Button>}
+                    onClick={() => { void confirmDialog({ title: "Person löschen", message: `Person „${p.name}" löschen?`, danger: true, confirmLabel: "Löschen" }).then((ok) => { if (ok) void run(async () => { await trpc.contacts.delete.mutate({ id: p.contactId, companyId }); }); }); }}>Löschen</Button>}
                 </Group>
               </Table.Td>
             </Table.Tr>
@@ -5448,7 +5453,7 @@ function CompanyAddressesPanel({ companyId }: { companyId: string }): JSX.Elemen
                 <Group gap={4} justify="flex-end" wrap="nowrap">
                   {!a.isDefault && <Button size="compact-xs" variant="subtle" onClick={() => run(async () => { await trpc.addresses.setDefault.mutate({ id: a.id, companyId }); })}>Als Standard</Button>}
                   <Button size="compact-xs" variant="subtle" onClick={() => setEdit({ ...a })}>Bearbeiten</Button>
-                  <Button size="compact-xs" variant="subtle" color="red" onClick={() => { if (typeof window === "undefined" || window.confirm(`Lieferadresse „${a.label}" löschen?`)) void run(async () => { await trpc.addresses.delete.mutate({ id: a.id, companyId }); }); }}>Löschen</Button>
+                  <Button size="compact-xs" variant="subtle" color="red" onClick={() => { void confirmDialog({ title: "Lieferadresse löschen", message: `Lieferadresse „${a.label}" löschen?`, danger: true, confirmLabel: "Löschen" }).then((ok) => { if (ok) void run(async () => { await trpc.addresses.delete.mutate({ id: a.id, companyId }); }); }); }}>Löschen</Button>
                 </Group>
               </Table.Td>
             </Table.Tr>
@@ -5536,7 +5541,7 @@ export function CompaniesPage({ focusId, onNavigate, onOpen }: { focusId?: strin
             // Löschen nur für unbenutzte Stammsätze (Fehleingaben/Test-Müll, P1-4); Server
             // verweigert die Löschung bei verknüpften Belegen mit klarer Meldung.
             { label: "Löschen", group: "Gefahr", color: "red", onClick: async () => {
-              if (typeof window !== "undefined" && !window.confirm(`Kunde „${String(r.name ?? r.id)}" löschen? Nur möglich, wenn keine Belege/Vorgänge verknüpft sind.`)) return;
+              if (!(await confirmDialog({ title: "Kunde löschen", message: `Kunde „${String(r.name ?? r.id)}" löschen? Nur möglich, wenn keine Belege/Vorgänge verknüpft sind.`, danger: true, confirmLabel: "Löschen" }))) return;
               setErr(null);
               try { await trpc.companies.delete.mutate({ id: String(r.id) }); setOpenCompany(null); await load(); }
               catch (e) { setErr(errMsg(e)); }
@@ -5698,8 +5703,9 @@ export function CrmPipelinePage({ onOpen }: { onNavigate?: (k: string) => void; 
     const id = String(r.id); const stage = String(r.stage); const hasCompany = Boolean(r.companyId);
     const quoteId = r.quoteId ? String(r.quoteId) : null;
     const lost = () => {
-      const lostReason = typeof window !== "undefined" ? window.prompt("Verloren — Grund?") : null;
-      if (lostReason) void act(() => trpc.crm.advance.mutate({ id, to: "VERLOREN", lostReason }));
+      void promptDialog({ title: "Als verloren markieren", label: "Grund" }).then((lostReason) => {
+        if (lostReason) void act(() => trpc.crm.advance.mutate({ id, to: "VERLOREN", lostReason }));
+      });
     };
     const exportPdf = async () => { setErr(null); try { const r = await trpc.print.inquiry.query({ id }); downloadBase64(r.filename, r.base64, "application/pdf"); } catch (e) { setErr(errMsg(e)); } };
     const actions: Array<DocAction | false> = [
@@ -5795,7 +5801,7 @@ export function InquiriesPage(): JSX.Element {
         <DocActionMenu actions={[
           status === "NEU" && { label: "In Bearbeitung nehmen", group: "Status & Folgeaktion", onClick: () => void act(() => trpc.inquiries.startProcessing.mutate({ id })) },
           status === "IN_BEARBEITUNG" && { label: "→ In Angebot wandeln", group: "Status & Folgeaktion", color: "green", disabled: !r.companyId, title: r.companyId ? undefined : "Erst eine Firma zuordnen (Anfrage-Detail) — Neukunde unter Kunden anlegen", onClick: () => void act(() => trpc.inquiries.convertToQuote.mutate({ id })) },
-          (status !== "ANGEBOT" && status !== "VERWORFEN") && { label: "Verwerfen", group: "Status & Folgeaktion", color: "red", onClick: () => { const grund = typeof window !== "undefined" ? window.prompt("Verwerfen — Grund?") : null; if (grund) void act(() => trpc.inquiries.discard.mutate({ id, grund })); } },
+          (status !== "ANGEBOT" && status !== "VERWORFEN") && { label: "Verwerfen", group: "Status & Folgeaktion", color: "red", onClick: () => { void promptDialog({ title: "Anfrage verwerfen", label: "Grund" }).then((grund) => { if (grund) void act(() => trpc.inquiries.discard.mutate({ id, grund })); }); } },
         ]} />
       </Group>
     );
@@ -5806,7 +5812,7 @@ export function InquiriesPage(): JSX.Element {
       <DocListHeader module="CRM / Anfragen" title="Anfragen" hint="Anfrage-Funnel NEU → In Bearbeitung → Angebot (B20, AF-Nummer aus F1). Maileingang wird per IMAP zu Anfragen, Absender mit Kundenstammdaten abgeglichen." />
       <Button size="compact-sm" variant="light" mt="xs" onClick={() => void act(async () => {
         const r = await trpc.mail.pollInbox.mutate();
-        window.alert(`Posteingang: ${r.created} neue Anfrage(n), ${r.matched} Kunde(n) zugeordnet, ${r.skipped} übersprungen.`);
+        notify.success(`Posteingang: ${r.created} neue Anfrage(n), ${r.matched} Kunde(n) zugeordnet, ${r.skipped} übersprungen.`);
       })}>📧 Posteingang abrufen</Button>
       <Group mt="sm" gap="xs" align="end">
         <TextInput label="Anfragetext" value={text} onChange={(e) => setText(e.currentTarget.value)} placeholder="200 Polos bestickt, Logo …" w={280} />
@@ -5853,7 +5859,7 @@ export function LeadsPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k: 
           status === "NEU" && { label: "→ Kontaktiert", group: "Status & Folgeaktion", onClick: () => void act(() => trpc.leads.transition.mutate({ id, to: "KONTAKTIERT" })) },
           status === "KONTAKTIERT" && { label: "→ Qualifiziert", group: "Status & Folgeaktion", onClick: () => void act(() => trpc.leads.transition.mutate({ id, to: "QUALIFIZIERT" })) },
           status === "QUALIFIZIERT" && { label: "In Kunde konvertieren", group: "Status & Folgeaktion", color: "green", onClick: () => void act(() => trpc.leads.convert.mutate({ id })) },
-          (status !== "KONVERTIERT" && status !== "VERWORFEN") && { label: "Verwerfen", group: "Status & Folgeaktion", color: "red", onClick: () => { const grund = typeof window !== "undefined" ? window.prompt("Verwerfen — Grund?") : null; if (grund) void act(() => trpc.leads.discard.mutate({ id, grund })); } },
+          (status !== "KONVERTIERT" && status !== "VERWORFEN") && { label: "Verwerfen", group: "Status & Folgeaktion", color: "red", onClick: () => { void promptDialog({ title: "Lead verwerfen", label: "Grund" }).then((grund) => { if (grund) void act(() => trpc.leads.discard.mutate({ id, grund })); }); } },
           (status === "KONVERTIERT" && Boolean(r.convertedCompanyId)) && { label: "Kundenstamm öffnen", group: "Allgemein", onClick: () => onOpen?.("companies", String(r.convertedCompanyId)) },
         ]} />
       </Group>
@@ -6090,7 +6096,7 @@ export function MailAccountsPage(): JSX.Element {
                   <Group gap={4} justify="flex-end" wrap="nowrap">
                     {!a.defaultOutgoing && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.mailAccounts.setDefault.mutate({ id: a.id, kind: "outgoing" }))}>→ Ausgang</Button>}
                     {!a.defaultIncoming && <Button size="compact-xs" variant="default" onClick={() => void act(() => trpc.mailAccounts.setDefault.mutate({ id: a.id, kind: "incoming" }))}>→ Eingang</Button>}
-                    <Button size="compact-xs" color="red" variant="light" onClick={() => { if (typeof window === "undefined" || window.confirm(`Konto „${a.name}" löschen?`)) void act(() => trpc.mailAccounts.remove.mutate({ id: a.id })); }}>Löschen</Button>
+                    <Button size="compact-xs" color="red" variant="light" onClick={() => { void confirmDialog({ title: "Konto löschen", message: `Konto „${a.name}" löschen?`, danger: true, confirmLabel: "Löschen" }).then((ok) => { if (ok) void act(() => trpc.mailAccounts.remove.mutate({ id: a.id })); }); }}>Löschen</Button>
                   </Group>
                 </Table.Td>
               </Table.Tr>
@@ -6135,7 +6141,7 @@ export function CostCentersPage(): JSX.Element {
           <DocActionMenu actions={[
             { label: "Bearbeiten", group: "Allgemein", onClick: () => setEdit({ id: String(r.id), nummer: String(r.nummer), name: String(r.name) }) },
             { label: "Löschen", group: "Gefahr", color: "red", onClick: async () => {
-              if (typeof window !== "undefined" && !window.confirm(`Kostenstelle „${String(r.nummer)}" löschen?`)) return;
+              if (!(await confirmDialog({ title: "Kostenstelle löschen", message: `Kostenstelle „${String(r.nummer)}" löschen?`, danger: true, confirmLabel: "Löschen" }))) return;
               try { await trpc.costCenters.delete.mutate({ id: String(r.id) }); await load(); }
               catch (e) { setErr(errMsg(e)); }
             } },
@@ -6786,7 +6792,7 @@ export function SubproductionPage({ onOpen, focusId }: { onOpen?: (k: string, id
     let menge: number | undefined;
     if (to === "BEISTELLUNG_VERSANDT" || to === "RUECKLAUF_ERHALTEN") {
       const def = to === "RUECKLAUF_ERHALTEN" ? sub.beistellMenge ?? 0 : 0;
-      const ans = typeof window !== "undefined" ? window.prompt(`${to === "RUECKLAUF_ERHALTEN" ? "Rücklauf" : "Beistell"}menge?`, String(def)) : null;
+      const ans = await promptDialog({ title: to === "RUECKLAUF_ERHALTEN" ? "Rücklauf erhalten" : "Beistellung versandt", label: `${to === "RUECKLAUF_ERHALTEN" ? "Rücklauf" : "Beistell"}menge`, defaultValue: String(def) });
       if (ans === null) return;
       menge = Number(ans) || 0;
     }
@@ -7608,7 +7614,7 @@ export function NewsletterPage(): JSX.Element {
         String(r.status) === "ENTWURF"
           ? <Button size="compact-xs" color="green" onClick={async () => {
               setErr(null);
-              try { const res = await trpc.newsletter.send.mutate({ campaignId: String(r.id) }); window.alert(`Versendet an ${res.recipientCount} Empfänger.`); await load(); }
+              try { const res = await trpc.newsletter.send.mutate({ campaignId: String(r.id) }); notify.success(`Versendet an ${res.recipientCount} Empfänger.`); await load(); }
               catch (e) { setErr(errMsg(e)); }
             }}>Versenden</Button>
           : <Text size="xs" c="dimmed">gesendet</Text>
@@ -7685,7 +7691,7 @@ export function OpportunitiesPage(): JSX.Element {
             <Select size="xs" w={140} value={String(r.stage)} onChange={(v) => v && void act(() => trpc.opportunities.advanceStage.mutate({ id, stage: v as "ANGEBOT" }))} data={OPP_STAGES.map((s) => ({ value: s.value, label: s.label }))} />
             <DocActionMenu actions={[
               { label: "Gewonnen", group: "Status & Folgeaktion", color: "green", onClick: () => void act(() => trpc.opportunities.markWon.mutate({ id })) },
-              { label: "Verloren", group: "Status & Folgeaktion", color: "red", onClick: () => { const g = window.prompt("Verlustgrund?"); if (g) void act(() => trpc.opportunities.markLost.mutate({ id, reason: g })); } },
+              { label: "Verloren", group: "Status & Folgeaktion", color: "red", onClick: () => { void promptDialog({ title: "Als verloren markieren", label: "Verlustgrund" }).then((g) => { if (g) void act(() => trpc.opportunities.markLost.mutate({ id, reason: g })); }); } },
             ]} />
           </Group>
         );
@@ -8508,7 +8514,7 @@ export function HrPage(): JSX.Element {
         <Select label="Mitarbeiter" value={vacEmp} onChange={setVacEmp} data={emps.map((e) => ({ value: e.id, label: e.name }))} w={180} />
         <TextInput label="Von" type="date" value={von} onChange={(e) => setVon(e.currentTarget.value)} w={160} />
         <TextInput label="Bis" type="date" value={bis} onChange={(e) => setBis(e.currentTarget.value)} w={160} />
-        <Button disabled={!vacEmp || !von || !bis} onClick={() => void act(async () => { const r = await trpc.hr.requestVacation.mutate({ employeeId: vacEmp!, vonDatum: new Date(von).toISOString(), bisDatum: new Date(bis).toISOString() }); window.alert(`${r.tage} Werktage beantragt.`); setVon(""); setBis(""); })}>Beantragen</Button>
+        <Button disabled={!vacEmp || !von || !bis} onClick={() => void act(async () => { const r = await trpc.hr.requestVacation.mutate({ employeeId: vacEmp!, vonDatum: new Date(von).toISOString(), bisDatum: new Date(bis).toISOString() }); notify.success(`${r.tage} Werktage beantragt.`); setVon(""); setBis(""); })}>Beantragen</Button>
       </Group>
       <Table mt="sm" withTableBorder withColumnBorders>
         <Table.Thead><Table.Tr><Table.Th>Mitarbeiter</Table.Th><Table.Th>Von</Table.Th><Table.Th>Bis</Table.Th><Table.Th ta="right">Tage</Table.Th><Table.Th>Status</Table.Th><Table.Th>Aktion</Table.Th></Table.Tr></Table.Thead>

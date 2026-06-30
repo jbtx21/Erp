@@ -19,6 +19,7 @@ import {
   type MarkupRule,
 } from "@texma/shared/markup";
 import { trpc } from "./trpc.js";
+import { confirmDialog } from "./ui-kit.js";
 import { euro, numTd, statusMantineColor, statusOf } from "./theme.js";
 import { MoneyInput } from "./money-input.js";
 
@@ -254,7 +255,8 @@ function StickereiAusschreibungen({ logos, onDecided }: { logos: LogoOption[]; o
     } catch (e) { setErr(errMsg(e)); }
   };
   const decide = async (gewinnerAngebotId: string): Promise<void> => {
-    if (!openId || (typeof window !== "undefined" && !window.confirm("Dieses Angebot als Gewinner wählen? Partner + Staffeln werden ans Logo übernommen."))) return;
+    if (!openId) return;
+    if (!(await confirmDialog({ title: "Gewinner wählen", message: "Dieses Angebot als Gewinner wählen? Partner + Staffeln werden ans Logo übernommen.", confirmLabel: "Als Gewinner wählen" }))) return;
     setErr(null);
     try { await trpc.stickerei.ausschreibung.decide.mutate({ ausschreibungId: openId, gewinnerAngebotId }); await loadDetail(openId); await loadList(logoVersionId); await onDecided(); }
     catch (e) { setErr(errMsg(e)); }
@@ -416,7 +418,7 @@ function LogoVerwaltung({ logos, onChanged }: { logos: LogoOption[]; onChanged: 
   }, [onChanged]);
 
   const remove = useCallback(async (id: string, label: string) => {
-    if (!window.confirm(`Logo-Version „${label}" wirklich löschen? Zugehörige Mengenstaffeln werden mitgelöscht.`)) return;
+    if (!(await confirmDialog({ title: "Logo-Version löschen", message: `Logo-Version „${label}" wirklich löschen? Zugehörige Mengenstaffeln werden mitgelöscht.`, danger: true, confirmLabel: "Löschen" }))) return;
     setErr("");
     setStatus("");
     try {

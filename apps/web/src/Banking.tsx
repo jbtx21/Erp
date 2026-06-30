@@ -7,6 +7,7 @@ import { ibanIsValid } from "@texma/shared/pain001";
 import { trpc } from "./trpc.js";
 import { euro, numTd } from "./theme.js";
 import { MoneyInput } from "./money-input.js";
+import { confirmDialog } from "./ui-kit.js";
 
 function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -107,7 +108,7 @@ function Connections(): JSX.Element {
   }, [load]);
 
   const del = useCallback(async (id: string, name: string) => {
-    if (typeof window !== "undefined" && !window.confirm(`Bank-Verbindung „${name}" wirklich löschen?`)) return;
+    if (!(await confirmDialog({ title: "Bank-Verbindung löschen", message: `Bank-Verbindung „${name}" wirklich löschen? Laufende Transaktionen können fehlschlagen.`, danger: true, confirmLabel: "Löschen" }))) return;
     setErr("");
     setStatus("");
     try {

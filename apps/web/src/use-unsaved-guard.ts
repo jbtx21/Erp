@@ -3,6 +3,7 @@
 // URL-Wechsel; (2) Abfangen des Hash-Wechsels (In-App-Navigation/Sidebar) mit Confirm —
 // bei Ablehnung wird der vorige Hash wiederhergestellt.
 import { useEffect } from "react";
+import { confirmDialog } from "./ui-kit.js";
 
 export function useUnsavedGuard(dirty: boolean): void {
   useEffect(() => {
@@ -14,17 +15,20 @@ export function useUnsavedGuard(dirty: boolean): void {
     };
     window.addEventListener("beforeunload", onBeforeUnload);
 
-    // In-App-Navigation (Hash) abfangen: bei dirty einen Bestätigungsdialog zeigen und
-    // den Hash zurücksetzen, wenn der Nutzer bleiben will.
+    // In-App-Navigation (Hash) abfangen: das Ziel merken, SOFORT auf den vorigen Hash
+    // zurückspringen und dann asynchron (Mantine-Modal) bestätigen. Bei „Verlassen" wird
+    // das Ziel angewandt, sonst bleibt der Editor stehen.
     let lastHash = window.location.hash;
+    let guarding = false;
     const onHashChange = (): void => {
-      if (window.location.hash === lastHash) return;
-      const ok = window.confirm("Es gibt ungespeicherte Änderungen. Diese Ansicht wirklich verlassen?");
-      if (ok) { lastHash = window.location.hash; return; }
-      // Bleiben: vorigen Hash ohne erneutes Event wiederherstellen.
-      window.removeEventListener("hashchange", onHashChange);
-      window.location.hash = lastHash;
-      setTimeout(() => window.addEventListener("hashchange", onHashChange), 0);
+      if (window.location.hash === lastHash || guarding) return;
+      const target = window.location.hash;
+      guarding = true;
+      window.location.hash = lastHash; // synchron zurück (löst ein hashchange aus → früher Early-Return)
+      void confirmDialog({ title: "Ungespeicherte Änderungen", message: "Es gibt ungespeicherte Änderungen. Diese Ansicht wirklich verlassen?", confirmLabel: "Verlassen", danger: true }).then((ok) => {
+        guarding = false;
+        if (ok) { lastHash = target; window.location.hash = target; }
+      });
     };
     window.addEventListener("hashchange", onHashChange);
 
