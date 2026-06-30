@@ -47,6 +47,32 @@ describe("DunningService.runDunning (T-14)", () => {
     expect(run.proposals).toHaveLength(0);
   });
 
+  it("Vorschau (preview) ist nebenwirkungsfrei und reichert Anzeigefelder an", async () => {
+    const { repo, service } = setup([
+      oi({ id: "a", dunningLevel: 0, companyName: "Maier GmbH", invoiceNumber: "RE-9", openCents: 5000 }),
+      oi({ id: "b", mahnsperre: true, companyName: "Gesperrt AG" }),
+    ]);
+    const preview = await service.previewDunning(TODAY);
+    expect(preview.proposals).toHaveLength(1);
+    expect(preview.proposals[0]).toMatchObject({ itemId: "a", invoiceNumber: "RE-9", companyName: "Maier GmbH", openCents: 5000, fromLevel: 0, toLevel: 1, blocked: false });
+    expect(preview.blocked).toHaveLength(1);
+    expect(preview.blocked[0]).toMatchObject({ itemId: "b", companyName: "Gesperrt AG", blocked: true });
+    // Kein Fortschreiben: Stufe bleibt 0.
+    expect((await repo.listDunning(10)).find((r) => r.id === "a")).toMatchObject({ dunningLevel: 0 });
+  });
+
+  it("selektiver Lauf mahnt nur die markierten Posten (onlyItemIds)", async () => {
+    const { repo, service } = setup([
+      oi({ id: "a", dunningLevel: 0 }),
+      oi({ id: "b", dunningLevel: 0 }),
+    ]);
+    const run = await service.runDunning(TODAY, { onlyItemIds: ["a"] });
+    expect(run.proposals.map((p) => p.itemId)).toEqual(["a"]);
+    const rows = await repo.listDunning(10);
+    expect(rows.find((r) => r.id === "a")).toMatchObject({ dunningLevel: 1 });
+    expect(rows.find((r) => r.id === "b")).toMatchObject({ dunningLevel: 0 }); // nicht gemahnt
+  });
+
   it("verknüpft in der Übersicht Abrechnungsdatum + Zahlungsziel ⇒ Fälligkeit", async () => {
     // Rechnung am 17.04., 14 Tage Ziel ⇒ Fälligkeit 01.05. — die Übersicht macht die Kette sichtbar.
     const { repo } = setup([

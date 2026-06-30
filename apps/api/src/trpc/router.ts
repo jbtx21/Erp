@@ -750,11 +750,20 @@ export const appRouter = router({
   }),
 
   dunning: router({
-    /** Startet den Mahnlauf: überfällige, nicht gesperrte Posten +1 Stufe (T-14). */
-    run: roleProcedure(...supplierRoles)
+    /** Nebenwirkungsfreie Vorschau des Mahnlaufs (Cockpit: prüfen → selektiv ausführen). */
+    preview: roleProcedure(...supplierRoles)
       .input(z.object({ today: z.string().datetime().optional() }).optional())
+      .query(async ({ input, ctx }) => ctx.dunning.previewDunning(input?.today ? new Date(input.today) : new Date())),
+
+    /** Startet den Mahnlauf: überfällige, nicht gesperrte Posten +1 Stufe (T-14).
+     *  Mit onlyItemIds selektiv — nur die markierten Posten werden gemahnt. */
+    run: roleProcedure(...supplierRoles)
+      .input(z.object({ today: z.string().datetime().optional(), onlyItemIds: z.array(z.string()).optional() }).optional())
       .mutation(async ({ input, ctx }) => {
-        const res = await ctx.dunning.runDunning(input?.today ? new Date(input.today) : new Date());
+        const res = await ctx.dunning.runDunning(
+          input?.today ? new Date(input.today) : new Date(),
+          input?.onlyItemIds ? { onlyItemIds: input.onlyItemIds } : undefined
+        );
         // GoBD: jeden erzeugten Mahnbeleg unveränderbar archivieren (WORM).
         for (const noticeId of res.noticeIds) {
           await autoArchive(ctx, "MAHNUNG", "DunningNotice", noticeId, () => ctx.print.mahnungPdf(noticeId));

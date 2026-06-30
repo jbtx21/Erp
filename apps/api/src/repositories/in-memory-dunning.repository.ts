@@ -1,7 +1,7 @@
 // In-Memory-Implementierung der Mahnwesen-Repositories — für Tests/lokale Durchstiche.
 
 import { daysOverdue as overdueDays, type DunnableItem, type DunningNoticeDraft } from "@texma/shared";
-import type { DunningRepository } from "../modules/dunning/dunning.service.js";
+import type { DunnableDetail, DunningRepository } from "../modules/dunning/dunning.service.js";
 import type { DunningOverviewItem, DunningQueryRepository } from "./read.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -28,6 +28,13 @@ export class InMemoryDunningRepository implements DunningRepository, DunningQuer
       dueDate: i.dueDate,
       dunningLevel: i.dunningLevel,
       mahnsperre: i.mahnsperre,
+    }));
+  }
+
+  async listDunnableDetailed(): Promise<DunnableDetail[]> {
+    return this.items.map((i) => ({
+      id: i.id, openCents: i.openCents, dueDate: i.dueDate, dunningLevel: i.dunningLevel, mahnsperre: i.mahnsperre,
+      invoiceNumber: i.invoiceNumber, companyName: i.companyName ?? "—", ...(i.companyId ? { companyId: i.companyId } : {}),
     }));
   }
 

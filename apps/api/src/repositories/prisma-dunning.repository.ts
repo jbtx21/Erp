@@ -4,7 +4,7 @@
 
 import { prisma } from "@texma/db";
 import { daysOverdue as overdueDays, type DunnableItem, type DunningNoticeDraft } from "@texma/shared";
-import type { DunningRepository } from "../modules/dunning/dunning.service.js";
+import type { DunnableDetail, DunningRepository } from "../modules/dunning/dunning.service.js";
 import type { DunningOverviewItem, DunningQueryRepository } from "./read.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -47,6 +47,14 @@ export class PrismaDunningRepository implements DunningRepository, DunningQueryR
 
   async listDunnable(): Promise<DunnableItem[]> {
     return this.load();
+  }
+
+  async listDunnableDetailed(): Promise<DunnableDetail[]> {
+    const rows = await this.load();
+    return rows.map((r) => ({
+      id: r.id, openCents: r.openCents, dueDate: r.dueDate, dunningLevel: r.dunningLevel, mahnsperre: r.mahnsperre,
+      invoiceNumber: r.invoiceNumber, companyName: r.companyName, companyId: r.companyId,
+    }));
   }
 
   async applyDunningStep(notice: DunningNoticeDraft): Promise<{ noticeId: string | null }> {

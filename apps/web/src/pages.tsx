@@ -3,7 +3,7 @@
 // Bereiche mit wenig Code anbindbar sind. Interaktive Aktionen (Versand bestätigen,
 // Mahnlauf, Reorder→Bestellungen) sind je Seite ergänzt.
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ActionIcon, Alert, Anchor, Autocomplete, Badge, Box, Button, Card, Checkbox, FileButton, Group, Image, Loader, Menu, Modal, MultiSelect, NumberInput, Paper, PasswordInput, Popover, SegmentedControl, Select, SimpleGrid, Stack, Switch, Table, Tabs, TagsInput, Text, Textarea, TextInput, Title } from "@mantine/core";
+import { ActionIcon, Alert, Anchor, Autocomplete, Badge, Box, Button, Card, Checkbox, Chip, FileButton, Group, Image, Loader, Menu, Modal, MultiSelect, NumberInput, Pagination, Paper, PasswordInput, Popover, SegmentedControl, Select, SimpleGrid, Stack, Switch, Table, Tabs, TagsInput, Text, Textarea, TextInput, Title } from "@mantine/core";
 import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { validateVatId } from "@texma/shared/vat";
 import { buildTrackingUrl, type Carrier } from "@texma/shared/tracking";
@@ -219,66 +219,124 @@ function fmtCell(key: string, v: unknown): ReactNode {
 // Bulk-/Stapelaktion (Xentral „Stapelverarbeitung"): wirkt auf die markierten Zeilen.
 export interface BulkAction { label: string; color?: string; run: (selected: Row[]) => void | Promise<void> }
 
-export function AutoTable({ rows, hide = [], action, onRowClick, highlightId, bulkActions, cellRender }: { rows: Row[]; hide?: string[]; action?: (r: Row) => ReactNode; onRowClick?: (r: Row) => void; highlightId?: string; bulkActions?: BulkAction[]; cellRender?: (col: string, value: unknown, row: Row) => ReactNode | undefined }): JSX.Element {
+// AutoTable v2 (Buchhaltungs-Cockpit-Schicht, Xentral-Maxime): Filter-Toggle-Leiste,
+// sortierbare Spaltenköpfe, Pagination und Σ-Summenzeile — alle optional und additiv,
+// damit die ~20 bestehenden Aufrufstellen unverändert weiterlaufen (Auto-Spalten bleiben).
+export interface AutoTableFilter { key: string; label: string; predicate: (r: Row) => boolean }
+
+/** Wert-Vergleich für die Spaltensortierung: Zahl < Datum < Text, null zuletzt. */
+function autoCompare(a: unknown, b: unknown): number {
+  const ea = a === null || a === undefined || a === "";
+  const eb = b === null || b === undefined || b === "";
+  if (ea && eb) return 0;
+  if (ea) return 1;
+  if (eb) return -1;
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  if (typeof a === "boolean" && typeof b === "boolean") return a === b ? 0 : a ? -1 : 1;
+  const sa = String(a), sb = String(b);
+  const da = Date.parse(sa), db = Date.parse(sb);
+  if (!Number.isNaN(da) && !Number.isNaN(db)) return da - db;
+  return sa.localeCompare(sb, "de");
+}
+
+export function AutoTable({
+  rows, hide = [], action, onRowClick, highlightId, bulkActions, cellRender,
+  filters, sortable, pageSize, totals, onSelectionChange, initialSort,
+}: {
+  rows: Row[]; hide?: string[]; action?: (r: Row) => ReactNode; onRowClick?: (r: Row) => void; highlightId?: string;
+  bulkActions?: BulkAction[]; cellRender?: (col: string, value: unknown, row: Row) => ReactNode | undefined;
+  filters?: AutoTableFilter[]; sortable?: boolean; pageSize?: number;
+  totals?: (rows: Row[]) => Record<string, ReactNode>; onSelectionChange?: (rows: Row[]) => void;
+  initialSort?: { key: string; dir: "asc" | "desc" };
+}): JSX.Element {
   const hlRef = useRef<HTMLTableRowElement | null>(null);
-  // Mehrfachauswahl (nur wenn bulkActions gesetzt): markierte Zeilen-Keys.
+  // Mehrfachauswahl (nur wenn bulkActions ODER onSelectionChange gesetzt): markierte Zeilen-Keys.
   const [sel, setSel] = useState<Set<string>>(new Set());
-  const rowKey = (r: Row, i: number): string => String(r.id ?? i);
+  const [active, setActive] = useState<string[]>([]); // aktive Filter-Toggles
+  const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" } | null>(initialSort ?? null);
+  const [page, setPage] = useState(1);
+  const rowKey = (r: Row, i: number): string => String(r.id ?? `idx_${i}`);
   // Treffer aus der globalen Suche in den Sichtbereich rollen (Deep-Link).
   useEffect(() => { if (highlightId && hlRef.current) hlRef.current.scrollIntoView({ block: "center", behavior: "smooth" }); }, [highlightId, rows]);
-  // Auswahl zurücksetzen, wenn sich die Datenmenge ändert (Reload/Filter).
-  useEffect(() => { setSel(new Set()); }, [rows]);
-  if (!rows || rows.length === 0) return <Text c="dimmed" mt="sm">Keine Daten.</Text>;
-  const selectable = !!bulkActions && bulkActions.length > 0;
-  const selectedRows = selectable ? rows.filter((r, i) => sel.has(rowKey(r, i))) : [];
-  const allSelected = selectable && rows.length > 0 && sel.size === rows.length;
-  const toggleAll = (): void => setSel(allSelected ? new Set() : new Set(rows.map((r, i) => rowKey(r, i))));
+  // Auswahl/Seite zurücksetzen, wenn sich die Datenmenge ändert (Reload).
+  useEffect(() => { setSel(new Set()); setPage(1); }, [rows]);
+  useEffect(() => { setPage(1); }, [active, sort]);
+
+  // Filter (AND über aktive Toggles) → Sortierung → Pagination. Clientseitig (≤10 User).
+  const filtered = useMemo(() => {
+    if (!filters || active.length === 0) return rows;
+    const preds = filters.filter((f) => active.includes(f.key)).map((f) => f.predicate);
+    return rows.filter((r) => preds.every((p) => p(r)));
+  }, [rows, filters, active]);
+  const sorted = useMemo(() => {
+    if (!sort) return filtered;
+    const dir = sort.dir === "asc" ? 1 : -1;
+    return [...filtered].sort((a, b) => dir * autoCompare(a[sort.key], b[sort.key]));
+  }, [filtered, sort]);
+  const keyed = sorted.map((r, i) => [r, rowKey(r, i)] as const);
+
+  const selectable = (!!bulkActions && bulkActions.length > 0) || !!onSelectionChange;
+  const selectedRows = selectable ? keyed.filter(([, k]) => sel.has(k)).map(([r]) => r) : [];
+  useEffect(() => { onSelectionChange?.(selectedRows); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [sel]);
+  const allSelected = selectable && sorted.length > 0 && sel.size >= sorted.length;
+  const toggleAll = (): void => setSel(allSelected ? new Set() : new Set(keyed.map(([, k]) => k)));
   const toggleOne = (k: string): void => setSel((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
-  // Rohe cuid-`id`-Spalte ausblenden, sobald eine sprechende Kennung vorhanden ist
-  // (Kunden-Nr./Beleg-Nr./SKU …). Klick/Highlight nutzen r.id intern weiter; verbleibende
-  // cuid-Werte rendert fmtCell als kompaktes Tooltip-Kürzel (ID-Hygiene, Xentral-Parität).
+  const toggleSort = (c: string): void => setSort((s) => (s && s.key === c ? (s.dir === "asc" ? { key: c, dir: "desc" } : null) : { key: c, dir: "asc" }));
+
+  if (!rows || rows.length === 0) return <Text c="dimmed" mt="sm">Keine Daten.</Text>;
+  // Rohe cuid-`id`-Spalte ausblenden, sobald eine sprechende Kennung vorhanden ist.
   const row0 = rows[0] as Row;
   const hasDisplayId = DISPLAY_ID_KEYS.some((k) => k in (row0 as object) && Boolean((row0 as Row)[k]));
   const cols = Object.keys(row0 as object).filter((k) => !hide.includes(k) && !(k === "id" && hasDisplayId));
-  // Breite Tabellen (v. a. Aufträge mit Status-Aktionen) horizontal scrollbar halten,
-  // damit die Aktionsspalte rechts nie abgeschnitten wird (QA #13). Zusätzlich die
-  // Aktionsspalte rechts FIXIEREN (sticky), sodass „Aktionen ▾"/Eil bei überbreiten
-  // Tabellen (Aufträge: 14 Spalten) ohne horizontales Scrollen sichtbar bleiben —
-  // deckender Hintergrund, damit darunterliegende Zellen nicht durchscheinen.
+
+  const pages = pageSize ? Math.max(1, Math.ceil(sorted.length / pageSize)) : 1;
+  const pageRows = pageSize ? keyed.slice((page - 1) * pageSize, page * pageSize) : keyed;
+  const totalRow = totals ? totals(sorted) : null;
+
   const stickyActionTd: CSSProperties = { position: "sticky", right: 0, background: "var(--mantine-color-body)", whiteSpace: "nowrap", boxShadow: "-6px 0 6px -6px rgba(0,0,0,0.18)", zIndex: 1 };
   const stickyActionTh: CSSProperties = { ...stickyActionTd, zIndex: 2 };
   return (
     <>
+      {filters && filters.length > 0 && (
+        <Chip.Group multiple value={active} onChange={setActive}>
+          <Group gap={6} mt="sm" mb={4}>
+            {filters.map((f) => <Chip key={f.key} value={f.key} size="xs" variant="outline">{f.label}</Chip>)}
+            {active.length > 0 && <Anchor component="button" type="button" size="xs" c="dimmed" onClick={() => setActive([])}>zurücksetzen</Anchor>}
+          </Group>
+        </Chip.Group>
+      )}
       {selectable && (
         <Group gap="xs" mt="sm" mb={4} style={{ minHeight: 28 }}>
-          <Text size="sm" c={sel.size ? undefined : "dimmed"}>{sel.size} ausgewählt</Text>
-          {sel.size > 0 && bulkActions!.map((a) => (
+          <Text size="sm" c={sel.size ? undefined : "dimmed"}>{sel.size} ausgewählt{filtered.length !== rows.length ? ` · ${filtered.length}/${rows.length} gefiltert` : ""}</Text>
+          {sel.size > 0 && bulkActions?.map((a) => (
             <Button key={a.label} size="compact-xs" variant="light" color={a.color}
               onClick={() => { void a.run(selectedRows); }}>{a.label}</Button>
           ))}
           {sel.size > 0 && <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setSel(new Set())}>Auswahl aufheben</Button>}
         </Group>
       )}
-      <Table.ScrollContainer minWidth={action ? 820 : 600} mt={selectable ? 0 : "sm"}>
+      <Table.ScrollContainer minWidth={action ? 820 : 600} mt={selectable || filters ? 0 : "sm"}>
         <Table striped highlightOnHover withTableBorder verticalSpacing="xs" fz="sm">
           <Table.Thead>
             <Table.Tr>
               {selectable && <Table.Th style={{ width: 32 }}><Checkbox aria-label="Alle auswählen" checked={allSelected} indeterminate={sel.size > 0 && !allSelected} onChange={toggleAll} /></Table.Th>}
-              {cols.map((c) => <Table.Th key={c}>{colLabel(c)}</Table.Th>)}
+              {cols.map((c) => (
+                <Table.Th key={c} onClick={sortable ? () => toggleSort(c) : undefined} style={sortable ? { cursor: "pointer", userSelect: "none" } : undefined}>
+                  {colLabel(c)}{sortable && sort?.key === c ? (sort.dir === "asc" ? " ▲" : " ▼") : ""}
+                </Table.Th>
+              ))}
               {action && <Table.Th style={stickyActionTh} />}
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
-            {rows.map((r, i) => {
+            {pageRows.map(([r, k], i) => {
               const hit = highlightId !== undefined && String(r.id) === highlightId;
-              const k = rowKey(r, i);
               return (
-                <Table.Tr key={i} ref={hit ? hlRef : undefined}
+                <Table.Tr key={k || i} ref={hit ? hlRef : undefined}
                   style={{ ...(onRowClick ? { cursor: "pointer" } : {}), ...(hit ? { background: "var(--mantine-color-yellow-1)" } : {}) }}>
                   {selectable && <Table.Td><Checkbox aria-label="Zeile auswählen" checked={sel.has(k)} onChange={() => toggleOne(k)} /></Table.Td>}
                   {cols.map((c) => {
                     const custom = cellRender?.(c, r[c], r);
-                    // Zellen mit eigenem (klickbaren) Inhalt nicht zusätzlich die Zeilenaktion auslösen lassen.
                     return custom !== undefined
                       ? <Table.Td key={c}>{custom}</Table.Td>
                       : <Table.Td key={c} onClick={onRowClick ? () => onRowClick(r) : undefined}>{fmtCell(c, r[c])}</Table.Td>;
@@ -288,8 +346,23 @@ export function AutoTable({ rows, hide = [], action, onRowClick, highlightId, bu
               );
             })}
           </Table.Tbody>
+          {totalRow && (
+            <Table.Tfoot>
+              <Table.Tr style={{ fontWeight: 600, borderTop: "2px solid var(--mantine-color-gray-4)" }}>
+                {selectable && <Table.Td />}
+                {cols.map((c) => <Table.Td key={c} style={/cents$/i.test(c) ? numTd : undefined}>{totalRow[c] ?? ""}</Table.Td>)}
+                {action && <Table.Td style={stickyActionTd} />}
+              </Table.Tr>
+            </Table.Tfoot>
+          )}
         </Table>
       </Table.ScrollContainer>
+      {pageSize && pages > 1 && (
+        <Group justify="space-between" mt="xs">
+          <Text size="xs" c="dimmed">{sorted.length} Einträge · Seite {page}/{pages}</Text>
+          <Pagination size="sm" total={pages} value={page} onChange={setPage} />
+        </Group>
+      )}
     </>
   );
 }
@@ -1152,53 +1225,114 @@ const MAHNSTUFE_LABEL: Record<number, string> = { 0: "—", 1: "Zahlungserinneru
 
 // Zell-Rendering der Mahnwesen-Liste: Tage überfällig (rot bei >0), Mahnstufe lesbar,
 // Mahnsperre als Badge. Macht die Kette Fälligkeit ⇒ Überfälligkeit ⇒ Mahnstufe sichtbar.
-function dunningCell(c: string, v: unknown): JSX.Element | undefined {
-  if (c === "daysOverdue") {
-    return Number(v) > 0
-      ? <Text component="span" fw={600} c="red.7">{`+${String(v)}`}</Text>
-      : <Text component="span" c="dimmed">{String(v)}</Text>;
-  }
-  if (c === "dunningLevel") {
-    return <Text component="span" c={Number(v) > 0 ? "amber.7" : "dimmed"}>{MAHNSTUFE_LABEL[Number(v)] ?? String(v)}</Text>;
-  }
-  if (c === "mahnsperre") {
-    return v ? <Badge size="xs" color="red">Mahnsperre</Badge> : <Text component="span" c="dimmed">—</Text>;
-  }
-  return undefined;
+// Mahnlauf-Cockpit (Kap. 9.5, Xentral-Mahnwesen-Blaupause): Vorschau (Dry-Run) → prüfen →
+// selektiv ausführen. `dunning.preview` ist nebenwirkungsfrei; `run({onlyItemIds})` mahnt nur
+// die markierten, nicht gesperrten Posten. Gesperrte Posten (Mahnsperre) sind sichtbar, aber
+// nicht auswählbar — so sieht der Buchhalter, DASS und WARUM jemand nicht gemahnt wird.
+interface DunPreviewRow {
+  itemId: string; fromLevel: number; toLevel: number; daysOverdue: number;
+  invoiceNumber: string; companyName: string; openCents: number; dueDate: string | Date; blocked: boolean;
 }
 
-export const DunningPage = (): JSX.Element => (
-  <ListPage module="Finanzen / Mahnwesen" title="Mahnwesen"
-    hint="Offene Posten mit der vollständigen Kette: Abrechnungsdatum + Zahlungsziel ⇒ Fälligkeit ⇒ Tage überfällig ⇒ Mahnstufe (Kap. 9.5). „Mahnlauf starten“ hebt überfällige, nicht gesperrte Posten um eine Stufe und schreibt den Mahnbeleg (Historie). Bezahlte/gutgeschriebene Posten verschwinden automatisch."
-    load={() => trpc.dunning.list.query({ limit: 100 }) as Promise<Row[]>}
-    hide={["latestNoticeId", "companyId"]}
-    cellRender={dunningCell}
-    toolbar={(reload) => <RunDunningBtn reload={reload} />}
-    action={(r) => <DunningRowActions noticeId={r.latestNoticeId ? String(r.latestNoticeId) : null} />} />
-);
-
-// Mahnung je Posten: Download (PDF) und Mailversand — verfügbar, sobald ein Mahnbeleg
-// existiert (nach dem Mahnlauf). Empfänger (Kundenadresse) und die stufenspezifische
-// Mailvorlage (beleg.mahnung.<stufe>) werden serverseitig über die Mahnstufe aufgelöst.
-function DunningRowActions({ noticeId }: { noticeId: string | null }): JSX.Element {
+export function DunningPage(): JSX.Element {
+  const [data, setData] = useState<{ proposals: DunPreviewRow[]; blocked: DunPreviewRow[] } | null>(null);
+  const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  if (!noticeId) return <Text size="xs" c="dimmed">noch keine Mahnung</Text>;
-  return (
-    <Group gap={6} justify="flex-end" wrap="nowrap" onClick={(e) => e.stopPropagation()}>
-      <DocActionMenu actions={belegDocActions("MAHNUNG", noticeId, "Mahnung", setErr)} />
-      {err && <Text size="xs" c="red" title={err}>!</Text>}
-    </Group>
-  );
-}
+  const [computedAt, setComputedAt] = useState<string | null>(null);
+  const [selIds, setSelIds] = useState<string[]>([]);
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<{ gemahnt: number; gesperrt: number } | null>(null);
 
-function RunDunningBtn({ reload }: { reload: () => Promise<void> }): JSX.Element {
-  const [busy, setBusy] = useState(false);
+  const recompute = useCallback(async () => {
+    setLoading(true); setErr(null);
+    try {
+      const p = await trpc.dunning.preview.query({});
+      setData(p as { proposals: DunPreviewRow[]; blocked: DunPreviewRow[] });
+      setComputedAt(new Date().toLocaleString("de-DE"));
+      setResult(null);
+    } catch (e) { setErr((e as Error).message); } finally { setLoading(false); }
+  }, []);
+  useEffect(() => { void recompute(); }, [recompute]);
+
+  const run = async (ids: string[]): Promise<void> => {
+    if (ids.length === 0) return;
+    setRunning(true); setErr(null);
+    try {
+      const res = await trpc.dunning.run.mutate({ today: new Date().toISOString(), onlyItemIds: ids });
+      setResult({ gemahnt: res.proposals.length, gesperrt: res.blocked.length });
+      await recompute();
+    } catch (e) { setErr((e as Error).message); } finally { setRunning(false); }
+  };
+
+  const proposalIds = (data?.proposals ?? []).map((p) => p.itemId);
+  const rows: Row[] = useMemo(() => {
+    if (!data) return [];
+    const toRow = (p: DunPreviewRow, blocked: boolean): Row => ({
+      id: p.itemId, invoiceNumber: p.invoiceNumber, companyName: p.companyName, openCents: p.openCents,
+      dueDate: typeof p.dueDate === "string" ? p.dueDate : new Date(p.dueDate).toISOString(),
+      daysOverdue: p.daysOverdue, stufe: `${p.fromLevel} → ${p.toLevel}`,
+      status: blocked ? "GESPERRT" : "VORSCHLAG", _level: p.toLevel, _blocked: blocked,
+    });
+    return [...data.proposals.map((p) => toRow(p, false)), ...data.blocked.map((p) => toRow(p, true))];
+  }, [data]);
+
+  const cell = (c: string, v: unknown, r: Row): ReactNode | undefined => {
+    if (c === "status") return r._blocked
+      ? <StatusDot color="var(--mantine-color-red-6)" label="Mahnsperre" />
+      : <StatusDot color="var(--mantine-color-blue-6)" label="Vorschlag" />;
+    if (c === "stufe") return <Badge size="xs" variant="light" color={r._blocked ? "gray" : "yellow"}>{String(v)}</Badge>;
+    if (c === "daysOverdue") return Number(v) > 0
+      ? <Text component="span" fw={600} c="red.7">+{String(v)}</Text>
+      : <Text component="span" c="dimmed">{String(v)}</Text>;
+    return undefined;
+  };
+
+  const filters: AutoTableFilter[] = [
+    { key: "l1", label: "Zahlungserinnerung", predicate: (r) => Number(r._level) === 1 },
+    { key: "l2", label: "1. Mahnung", predicate: (r) => Number(r._level) === 2 },
+    { key: "l3", label: "2. Mahnung", predicate: (r) => Number(r._level) === 3 },
+    { key: "vorschlag", label: "nur Vorschläge", predicate: (r) => !r._blocked },
+  ];
+
   return (
-    <Button size="xs" loading={busy} onClick={async () => {
-      setBusy(true);
-      try { await trpc.dunning.run.mutate({ today: new Date().toISOString() }); await reload(); }
-      finally { setBusy(false); }
-    }}>Mahnlauf starten</Button>
+    <Stack gap="md">
+      <div>
+        <Text size="xs" c="dimmed">Finanzen / Mahnwesen</Text>
+        <Title order={3}>Mahnlauf-Cockpit</Title>
+        <Text size="sm" c="dimmed" mt={4}>Vorschau prüfen → markieren → selektiv ausführen. Die Vorschau verändert nichts; erst „mahnen“ hebt die Stufe und erzeugt den Mahnbeleg (Kap. 9.5).</Text>
+      </div>
+
+      {err && <Alert color="red" title="Fehler">{err}</Alert>}
+
+      <Card withBorder padding="sm">
+        <Group justify="space-between">
+          <Text size="sm">{computedAt ? <>Letzte Berechnung: <b>{computedAt}</b></> : "Noch nicht berechnet"}{data ? ` · ${data.proposals.length} Vorschläge, ${data.blocked.length} gesperrt` : ""}</Text>
+          <Button size="xs" variant="light" loading={loading} onClick={() => void recompute()}>Mahnlauf neu berechnen</Button>
+        </Group>
+      </Card>
+
+      {result && <Alert color="green" title="Mahnlauf ausgeführt">{result.gemahnt} Posten gemahnt, {result.gesperrt} gesperrt (nicht gemahnt). Mahnbelege archiviert (GoBD).</Alert>}
+
+      {loading && !data ? <Loader /> : !data || rows.length === 0
+        ? <Text c="dimmed">Keine überfälligen Posten — nichts zu mahnen.</Text>
+        : (
+          <>
+            <AutoTable rows={rows} hide={["_level", "_blocked"]} cellRender={cell} sortable pageSize={20}
+              filters={filters} initialSort={{ key: "daysOverdue", dir: "desc" }}
+              onSelectionChange={(sel) => setSelIds(sel.filter((r) => !r._blocked).map((r) => String(r.id)))}
+              totals={(rs) => ({ openCents: euro(rs.reduce((s, r) => s + Number(r.openCents || 0), 0)), companyName: `${rs.length} Posten` })} />
+            <Card withBorder padding="sm">
+              <Group justify="space-between">
+                <Text size="sm">{selIds.length} markiert <Text component="span" c="dimmed">(gesperrte ausgenommen)</Text></Text>
+                <Group gap="xs">
+                  <Button size="xs" variant="default" disabled={proposalIds.length === 0 || running} loading={running} onClick={() => void run(proposalIds)}>Alle Vorschläge mahnen ({proposalIds.length})</Button>
+                  <Button size="xs" disabled={selIds.length === 0 || running} loading={running} onClick={() => void run(selIds)}>Markierte mahnen ({selIds.length})</Button>
+                </Group>
+              </Group>
+            </Card>
+          </>
+        )}
+    </Stack>
   );
 }
 
