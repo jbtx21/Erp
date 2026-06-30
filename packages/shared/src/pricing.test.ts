@@ -5,6 +5,7 @@ import {
   dbMarge,
   STICK_MARKUP_FACTOR,
   selectTier,
+  selectStaffel,
   buildStaffelLadder,
   resolveBasePrice,
   PriceResolutionError,
@@ -54,6 +55,34 @@ describe("Mengenstaffel selectTier (B4 / T-15)", () => {
   it("gibt null, wenn keine Stufe greift", () => {
     expect(selectTier([{ minMenge: 10, netCents: 900 }], 5)).toBeNull();
     expect(selectTier([], 100)).toBeNull();
+  });
+});
+
+describe("selectStaffel — EINE Stufenfunktion für VK-/EK-/Stick-EK-Staffeln", () => {
+  // Generisch über beliebige {minMenge}-Zeilen: dieselbe Semantik, die VK-Staffel (selectTier),
+  // EK-Staffel (buildStaffelLadder) und Stick-EK-Staffel (stickereiPriceForMenge) teilen.
+  const ek = [
+    { minMenge: 1, ekCents: 500 },
+    { minMenge: 25, ekCents: 420 },
+    { minMenge: 100, ekCents: 380 },
+  ];
+
+  it("wählt die Zeile mit der größten minMenge ≤ Menge (untere Schranke)", () => {
+    expect(selectStaffel(ek, 1)?.ekCents).toBe(500);
+    expect(selectStaffel(ek, 24)?.ekCents).toBe(500);
+    expect(selectStaffel(ek, 25)?.ekCents).toBe(420);
+    expect(selectStaffel(ek, 99)?.ekCents).toBe(420);
+    expect(selectStaffel(ek, 100)?.ekCents).toBe(380);
+    expect(selectStaffel(ek, 10_000)?.ekCents).toBe(380);
+  });
+
+  it("gibt null unter der kleinsten Grenze und ist reihenfolge-unabhängig", () => {
+    expect(selectStaffel(ek, 0)).toBeNull();
+    expect(selectStaffel([...ek].reverse(), 30)?.ekCents).toBe(420);
+  });
+
+  it("lehnt negative Menge ab", () => {
+    expect(() => selectStaffel(ek, -1)).toThrow();
   });
 });
 

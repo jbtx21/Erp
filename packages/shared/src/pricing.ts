@@ -101,22 +101,35 @@ export interface PriceTier {
 }
 
 /**
- * Wählt die passende Stufe: die mit der größten `minMenge`, die `menge` nicht
- * überschreitet. Gibt `null`, wenn keine Stufe greift (z. B. Menge unter der
- * kleinsten `minMenge`).
+ * Generische Stufenfunktion (eine Quelle für alle Staffel-Lookups): wählt aus beliebigen
+ * Staffel-Zeilen die mit der größten `minMenge`, die `menge` nicht überschreitet (untere
+ * Schranke). `null`, wenn keine Stufe greift. VK-Staffel, EK-Staffel und Stick-EK-Staffel
+ * teilen exakt diese Semantik — ein Algorithmus statt drei Kopien.
+ */
+export function selectStaffel<T extends { minMenge: number }>(
+  rows: ReadonlyArray<T>,
+  menge: number
+): T | null {
+  if (menge < 0) throw new Error("menge must be >= 0");
+  let best: T | null = null;
+  for (const r of rows) {
+    if (r.minMenge <= menge && (best === null || r.minMenge > best.minMenge)) {
+      best = r;
+    }
+  }
+  return best;
+}
+
+/**
+ * Wählt die passende Preisstufe (VK): die mit der größten `minMenge`, die `menge` nicht
+ * überschreitet. Gibt `null`, wenn keine Stufe greift (z. B. Menge unter der kleinsten
+ * `minMenge`). Dünner Wrapper über {@link selectStaffel}.
  */
 export function selectTier(
   tiers: ReadonlyArray<PriceTier>,
   menge: number
 ): PriceTier | null {
-  if (menge < 0) throw new Error("menge must be >= 0");
-  let best: PriceTier | null = null;
-  for (const t of tiers) {
-    if (t.minMenge <= menge && (best === null || t.minMenge > best.minMenge)) {
-      best = t;
-    }
-  }
-  return best;
+  return selectStaffel(tiers, menge);
 }
 
 /** Eine Staffelstufe der Angebots-Anzeige: VK + EK + DB je Mengengrenze (B4/D). */
@@ -148,12 +161,7 @@ export interface StaffelLadderInput {
 
 /** EK für eine Mengengrenze aus der EK-Staffel (größte minMenge ≤ menge); sonst Fallback. */
 function ekForMenge(ekTiers: ReadonlyArray<{ minMenge: number; ekCents: Cents }>, menge: number, fallback: Cents | null): Cents | null {
-  let best: Cents | null = fallback;
-  let bestMin = -1;
-  for (const t of ekTiers) {
-    if (t.minMenge <= menge && t.minMenge > bestMin) { best = t.ekCents; bestMin = t.minMenge; }
-  }
-  return best;
+  return selectStaffel(ekTiers, menge)?.ekCents ?? fallback;
 }
 
 /**

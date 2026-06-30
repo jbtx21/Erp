@@ -4,7 +4,7 @@
 
 import { type Cents, roundCents } from "./money.js";
 import { type MarkupConfig, type MarkupContext, resolveMarkupFactor } from "./markup.js";
-import { STICK_MARKUP_FACTOR, deckungsbeitrag, markupVk } from "./pricing.js";
+import { STICK_MARKUP_FACTOR, deckungsbeitrag, markupVk, selectStaffel } from "./pricing.js";
 
 export type StickereiRoute = "DIREKT" | "AUSSCHREIBUNG";
 
@@ -139,11 +139,9 @@ export function stickereiPriceForMenge(
   markup: StaffelMarkup = STICK_MARKUP_FACTOR
 ): StickereiStaffelVk | null {
   if (menge < 0) throw new Error("Menge darf nicht negativ sein.");
-  let chosen: StickereiStaffel | null = null;
-  for (const s of sortedValidStaffeln(staffeln)) {
-    if (s.minMenge <= menge) chosen = s;
-    else break;
-  }
+  // sortedValidStaffeln validiert (Dubletten/Grenzen); die Stufenwahl ist die EINE gemeinsame
+  // Stufenfunktion (selectStaffel) — identische Semantik wie VK-/EK-Staffel im Preis-Modul.
+  const chosen = selectStaffel(sortedValidStaffeln(staffeln), menge);
   return chosen ? tierVk(chosen, resolveTierFactor(markup, menge, chosen.ekCents)) : null;
 }
 
