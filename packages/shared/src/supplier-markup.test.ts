@@ -4,11 +4,8 @@ import {
   factorToBp,
   resolveCustomerPriceGroup,
   resolveSupplierVk,
-  supplierMarkupsToRules,
-  validateSupplierMarkups,
   type SupplierMarkupEntry,
 } from "./supplier-markup.js";
-import { resolveMarkupFactor } from "./markup.js";
 import { PriceResolutionError } from "./pricing.js";
 
 describe("Lieferanten-Aufschlag (Kap. 4.4): VK = EK × Faktor(Lieferant × Kundengruppe)", () => {
@@ -66,44 +63,8 @@ describe("Kundengruppe je Lieferant (Premium@HAKRO, Standard@Stanley)", () => {
   });
 });
 
-describe("supplierMarkupsToRules — Fold-in in die EINE Regel-Engine (Variante A)", () => {
-  const hakro: SupplierMarkupEntry[] = [
-    { priceGroup: "STANDARD", factorBp: factorToBp(1.88) },
-    { priceGroup: "PREMIUM", factorBp: factorToBp(1.6) },
-  ];
-  it("erzeugt je Zeile eine Regel supplierId × priceGroup mit dem Faktor", () => {
-    const rules = supplierMarkupsToRules("sup_hakro", hakro);
-    expect(rules).toEqual([
-      { factor: 1.88, supplierId: "sup_hakro", priceGroup: "STANDARD", label: "sup_hakro/STANDARD" },
-      { factor: 1.6, supplierId: "sup_hakro", priceGroup: "PREMIUM", label: "sup_hakro/PREMIUM" },
-    ]);
-  });
-  it("die Regel-Engine reproduziert die Faktor-Wahl von resolveSupplierVk", () => {
-    const rules = supplierMarkupsToRules("sup_hakro", hakro);
-    // defaultFactor = Standard-Faktor des Lieferanten (Grund-VK) → unbekannte Gruppe fällt zurück.
-    const cfg = { defaultFactor: 1.88, rules };
-    const viaRules = resolveMarkupFactor(cfg, { supplierId: "sup_hakro", priceGroup: "PREMIUM" }).factor;
-    const viaSupplier = bpToFactor(resolveSupplierVk({ ekCents: 1000, markups: hakro, group: "PREMIUM" }).factorBp!);
-    expect(viaRules).toBe(viaSupplier); // 1,6
-  });
-});
-
-describe("validateSupplierMarkups", () => {
-  it("akzeptiert eine saubere Matrix", () => {
-    expect(() => validateSupplierMarkups([{ priceGroup: "STANDARD", factorBp: 18800 }])).not.toThrow();
-  });
+describe("factorToBp", () => {
   it("lehnt nicht-positive Faktoren ab", () => {
-    expect(() => validateSupplierMarkups([{ priceGroup: "STANDARD", factorBp: 0 }])).toThrow();
-  });
-  it("lehnt doppelte Gruppen ab", () => {
-    expect(() =>
-      validateSupplierMarkups([
-        { priceGroup: "TOP", factorBp: 16000 },
-        { priceGroup: "TOP", factorBp: 17000 },
-      ])
-    ).toThrow();
-  });
-  it("factorToBp lehnt nicht-positive Faktoren ab", () => {
     expect(() => factorToBp(0)).toThrow();
   });
 });

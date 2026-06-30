@@ -6,7 +6,6 @@
 // (factorBp = Faktor × 10000), damit keine Floats in der DB landen (Kap. „Geld immer in Cent").
 import { type Cents, roundCents } from "./money.js";
 import { type PriceGroupKind, PriceResolutionError } from "./pricing.js";
-import { type MarkupRule } from "./markup.js";
 
 /** Skalierung der Aufschlagsfaktoren: Faktor 1,88 ⇒ factorBp 18800. */
 export const FACTOR_BP_SCALE = 10000;
@@ -99,30 +98,3 @@ function applyFactor(ekCents: Cents, factorBp: number): Cents {
   return roundCents((ekCents * factorBp) / FACTOR_BP_SCALE);
 }
 
-/**
- * Bridge (Phase 1, Variante A): die Aufschlagsmatrix eines Lieferanten als Aufschlagsregeln der
- * EINEN Regel-Engine (markup.ts). Jede Zeile wird zu einer Regel `factor` unter den Bedingungen
- * `supplierId` × `priceGroup`. So lässt sich SupplierMarkup verlustfrei in MarkupRule auflösen —
- * Artikel- und Veredelungs-Aufschläge laufen dann über denselben Resolver (resolveMarkupFactor).
- */
-export function supplierMarkupsToRules(
-  supplierId: string,
-  markups: ReadonlyArray<SupplierMarkupEntry>
-): MarkupRule[] {
-  return markups.map((m) => ({
-    factor: bpToFactor(m.factorBp),
-    supplierId,
-    priceGroup: m.priceGroup,
-    label: `${supplierId}/${m.priceGroup}`,
-  }));
-}
-
-/** Validiert eine Aufschlagsmatrix eines Lieferanten (Faktoren > 0, je Gruppe höchstens einmal). */
-export function validateSupplierMarkups(markups: ReadonlyArray<SupplierMarkupEntry>): void {
-  const seen = new Set<PriceGroupKind>();
-  for (const m of markups) {
-    if (!(m.factorBp > 0)) throw new Error(`Aufschlagsfaktor für ${m.priceGroup} muss > 0 sein.`);
-    if (seen.has(m.priceGroup)) throw new Error(`Doppelter Aufschlag für Kundengruppe ${m.priceGroup}.`);
-    seen.add(m.priceGroup);
-  }
-}
