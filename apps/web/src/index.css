@@ -35,6 +35,23 @@ body {
   outline: none;
 }
 
+/* Skip-Link: für Maus unsichtbar (off-screen), bei Tastatur-Fokus sichtbar oben links.
+   Springt die Navigation über, direkt zu #main-content (WCAG 2.4.1 Bypass Blocks). */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 1000;
+  background: var(--erp-focus);
+  color: #fff;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0 0 6px 0;
+  font-size: 13px;
+}
+.skip-link:focus {
+  left: 0;
+}
+
 /* Kein Doppeltipp-Zoom auf interaktiven Elementen (Mobile). */
 button,
 a,

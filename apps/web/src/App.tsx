@@ -369,6 +369,9 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<voi
   }, [active]);
 
   return (
+    <>
+    {/* Skip-Link (Tastatur/Screenreader): springt die Navigation über, direkt zum Inhalt. */}
+    <a href="#main-content" className="skip-link">Zum Inhalt springen</a>
     <AppShell header={{ height: 52 }} navbar={{ width: navCollapsed ? 64 : 248, breakpoint: "xs" }} padding="md">
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between">
@@ -397,7 +400,7 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<voi
         <SideNav active={active} collapsed={navCollapsed} onNavigate={setActive} />
       </AppShell.Navbar>
 
-      <AppShell.Main>
+      <AppShell.Main id="main-content">
         {/* Genau eine <h1> je Route (Screenreader-Einstieg / WCAG „page-has-heading-one"):
             der Bereichsname. Visuell deckt DocListHeader/DocFormShell den Titel ab, daher
             unsichtbar gehalten, um keine Dopplung zu zeigen. */}
@@ -406,6 +409,7 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<voi
           focusId={focus && focus.navKey === active ? focus.id : undefined} />
       </AppShell.Main>
     </AppShell>
+    </>
   );
 }
 

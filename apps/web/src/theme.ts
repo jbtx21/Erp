@@ -52,6 +52,13 @@ export const T = {
 export const euro = (cents: number | null | undefined): string =>
   cents == null ? "—" : (cents / 100).toLocaleString("de-DE", { style: "currency", currency: "EUR" });
 
+/** Datum aus ISO-String/Date, de-DE kurz (30.06.2026). Schwester von `euro` für Datumsspalten. */
+export const datum = (iso: string | Date | null | undefined): string => {
+  if (iso == null) return "—";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+};
+
 // ── Status / Ampel — Signal nie allein ueber Farbe (Symbol + Text doppeln) ────────
 export interface StatusToken {
   color: string;

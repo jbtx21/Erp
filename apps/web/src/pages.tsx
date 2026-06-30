@@ -12,7 +12,7 @@ import { computePositionTotals } from "@texma/shared/positions-model";
 import { konto, kontenliste, KONTENRAHMEN_LABEL, type Kontenrahmen } from "@texma/shared/kontenrahmen";
 import { trpc } from "./trpc.js";
 import { AufschlagsfaktorenSection, LogosStickereiSection, StickereiAusschreibungSection, StickereiStaffelnSection, Postcalc } from "./Differentiators.js";
-import { euro, numTd, statusMantineColor, prettyStatus } from "./theme.js";
+import { euro, datum, numTd, statusMantineColor, prettyStatus } from "./theme.js";
 import { MultiLineChart, BarChart } from "./charts.js";
 import { DocActionMenu, DocFormShell, DocListHeader, StatusDot, StatusBadge, EmptyState, type DocAction } from "./doc-layout.js";
 import { notify, confirmDialog, promptDialog } from "./ui-kit.js";
@@ -166,7 +166,19 @@ const COL_LABELS: Record<string, string> = {
   productionNumber: "PA-Nr.", orderNumber: "Auftragsnr.", supplierName: "Lieferant", inhouse: "Ausführung", subNumber: "Stufen-Nr.", sequence: "Stufe",
   source: "Quelle", ekCheckStatus: "EK-Prüfung", articleName: "Artikel", requiredQty: "Bedarf", receivedQty: "Erhalten", orderQty: "Bestellen", stockQty: "Bestand",
   // CRM / Pipeline (B15): die rohen Prisma-Feldnamen leakten sonst englisch in die Liste.
-  contactName: "Ansprechpartner", stage: "Phase", valueCents: "Wert", expectedCloseAt: "Erw. Abschluss", text: "Beschreibung",
+  contactName: "Ansprechpartner", stage: "Phase", valueCents: "Wert", expectedCloseAt: "Erw. Abschluss", expectedCloseDate: "Erw. Abschluss",
+  text: "Beschreibung", lostReason: "Verlustgrund", probability: "Wahrscheinlichkeit", priority: "Priorität",
+  // Personen / Adresse / Bank (verhindert künftige englische/camelCase-Köpfe).
+  firstName: "Vorname", lastName: "Nachname", emailAddress: "E-Mail", city: "Ort", country: "Land", deliveryAddress: "Lieferadresse",
+  debtorName: "Debitor", creditorName: "Kreditor", bankName: "Bank", creditorIban: "IBAN", creditorBic: "BIC",
+  // Beträge (immer als € via fmtCell, /cents$/i) + Mengen/Faktoren.
+  amountCents: "Betrag", lineNetCents: "Netto", listNetCents: "Listenpreis", costCents: "Kosten", dbCents: "DB",
+  lohnCents: "Lohn", kreditlimitCents: "Kreditlimit", initialCents: "Anfangsbestand",
+  defaultQty: "Menge", markupFactor: "Aufschlag", defaultFactor: "Standardfaktor", colorCount: "Farben",
+  leadTimeDays: "Lieferzeit (T)", lieferzeitTage: "Lieferzeit (T)",
+  // Zeit / Dokumente / Flags.
+  bookedAt: "Gebucht am", issueDate: "Belegdatum", closedAt: "Abgeschlossen am", exportedAt: "Exportiert am", lastLoginAt: "Letzter Login",
+  isDefault: "Standard", fileName: "Dateiname", fileSize: "Größe", contentType: "Typ", finishingType: "Veredelungsart", materialComposition: "Material",
 };
 /** Deutsches Label für einen Spalten-Schlüssel; per-Tabelle via `labels` überschreibbar,
  *  Fallback: camelCase → Wörter (damit künftige Felder nicht roh-englisch durchschlagen). */
@@ -197,7 +209,7 @@ function fmtCell(key: string, v: unknown): ReactNode {
   if (/kind$/i.test(key) && typeof v === "string")
     return <StatusBadge status={v} />;
   if (/(at|date|termin|am)$/i.test(key) && typeof v === "string" && !Number.isNaN(Date.parse(v)))
-    return new Date(v).toLocaleDateString("de-DE");
+    return datum(v);
   // Varianten-Attribute [{name,value}] lesbar rendern: „Navy / L" statt Roh-JSON (P1).
   if (Array.isArray(v) && v.length > 0 && v.every((x) => x !== null && typeof x === "object" && "value" in (x as object)))
     return (v as Array<{ value: unknown }>).map((x) => String(x.value)).join(" / ");
