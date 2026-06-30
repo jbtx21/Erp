@@ -240,7 +240,7 @@ export interface AutoTableEmpty { icon?: ReactNode; title: string; hint?: string
 
 export function AutoTable({
   rows, hide = [], action, onRowClick, highlightId, bulkActions, cellRender,
-  filters, sortable, pageSize, totals, onSelectionChange, initialSort, emptyState,
+  filters, sortable, pageSize, totals, onSelectionChange, initialSort, emptyState, label,
 }: {
   rows: Row[]; hide?: string[]; action?: (r: Row) => ReactNode; onRowClick?: (r: Row) => void; highlightId?: string;
   bulkActions?: BulkAction[]; cellRender?: (col: string, value: unknown, row: Row) => ReactNode | undefined;
@@ -248,6 +248,7 @@ export function AutoTable({
   totals?: (rows: Row[]) => Record<string, ReactNode>; onSelectionChange?: (rows: Row[]) => void;
   initialSort?: { key: string; dir: "asc" | "desc" };
   emptyState?: AutoTableEmpty;
+  label?: string; // zugänglicher Tabellenname (Screenreader); Default „Datentabelle".
 }): JSX.Element {
   const hlRef = useRef<HTMLTableRowElement | null>(null);
   // Mehrfachauswahl (nur wenn bulkActions ODER onSelectionChange gesetzt): markierte Zeilen-Keys.
@@ -317,7 +318,7 @@ export function AutoTable({
         </Group>
       )}
       <Table.ScrollContainer minWidth={action ? 820 : 600} mt={selectable || filters ? 0 : "sm"}>
-        <Table striped highlightOnHover withTableBorder verticalSpacing="xs" fz="sm">
+        <Table striped highlightOnHover withTableBorder verticalSpacing="xs" fz="sm" aria-label={label ?? "Datentabelle"}>
           <Table.Thead>
             <Table.Tr>
               {selectable && <Table.Th style={{ width: 32 }}><Checkbox aria-label="Alle auswählen" checked={allSelected} indeterminate={sel.size > 0 && !allSelected} onChange={toggleAll} /></Table.Th>}

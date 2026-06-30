@@ -12,20 +12,39 @@ import type { CSSProperties } from "react";
 // und der einzige verbliebene Inline-Helfer `numTd` für rechtsbündige Zahlen.
 
 export const T = {
+  // ── Flaechen, gestaffelt (4 Ebenen wie das Xentral-Vorbild, in Navy) ──
   bg: "#FFFFFF",
   surface: "#F5F6F8", // Karten, Zebra, Sidebar
+  surfaceAlt: "#EEF0F3", // zweite Zebra-/Layer-Ebene
+  disabled: "#F0F1F3", // deaktivierte Flaeche
   border: "#E2E5EA",
-  text: "#0E1C36", // Navy — Werte/Fliesstext
-  text2: "#5B6473", // Labels/Hilfetext
-  text3: "#9AA1AD", // Platzhalter/deaktiviert
+  borderStrong: "#ABB0BC", // betonte Trennlinie/Rahmen
+  // ── Text, 4-stufig. WCAG-AA: text/text2/text3 fuer INFORMATION (>=4.5:1 auf Weiss);
+  //    text4 NUR Platzhalter/deaktiviert (Kontrast-FAIL fuer Text — nie fuer Information).
+  text: "#0E1C36", // Navy — Werte/Fliesstext (≈15.3:1)
+  text2: "#5B6473", // Labels/Hilfetext (≈5.9:1, PASS)
+  text3: "#7A828F", // sekundaere Information (≈4.6:1, PASS) — war #9AA1AD (FAIL), korrigiert
+  text4: "#9AA1AD", // NUR Platzhalter/deaktiviert, NIE Information
+  // ── Aktion mit vollem Interaktions-Set ──
   primary: "#0E1C36", // Navy — Aktion
   primaryHover: "#1A2C4D",
-  success: "#386A4E", // Forest (gedaempft, NICHT Signalgruen)
+  primaryActive: "#091324",
+  onPrimary: "#FFFFFF", // expliziter Kontrast auf Brand-Flaeche (≈15.3:1, statt autoContrast zu raten)
+  // ── Status-Rollen + heller Badge-Hintergrund (Flaeche), Vordergrund nur Rahmen/Symbol ──
+  success: "#386A4E", successBg: "#E8F3EE", // Forest (gedaempft, NICHT Signalgruen)
   highlight: "#34FF67", // Signalgruen NUR als Status-Dot/"live"
   green: "#2E7D52", // Ampel: im Plan
-  amber: "#C77700", // Ampel: Achtung
-  red: "#C0392B", // Ampel: ueberfaellig/Problem
-  info: "#2563EB",
+  amber: "#C77700", amberBg: "#FEF4E6", // Ampel: Achtung
+  red: "#C0392B", redBg: "#FCEBEC", // Ampel: ueberfaellig/Problem
+  info: "#2563EB", infoBg: "#EAF1FE",
+  // ── Fokus als Token (sichtbarer 3px-Ring, Tastatur) ──
+  focusRing: "#0E1C36",
+  focusRingShadow: "rgba(14,28,54,.20)",
+  focusRingWidth: "0.1875rem",
+  // ── Raster/Radius/Typo als Token (statt hartkodiert) ──
+  space: "0.25rem", // 4px-Basis
+  radius: "6px",
+  iconStroke: "1.1px",
   font: 'Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
 } as const;
 
@@ -50,12 +69,12 @@ export const statusOf = (s: string): StatusToken =>
 /** Mantine-Badge-Farbe je Ampel-Status (für StatusBadge-Komponenten). */
 export const statusMantineColor: Record<string, string> = {
   // Ampel
-  ROT: "red", GELB: "amber", GRUEN: "green",
+  ROT: "danger", GELB: "amber", GRUEN: "forest",
   // Entwurf / neu / Start (neutral)
   ENTWURF: "gray", NEU: "gray", ANGELEGT: "gray", OFFEN: "gray", ERFASST: "gray",
   // In Bearbeitung / unterwegs (blau)
-  IN_BEARBEITUNG: "blue", IN_PRODUKTION: "blue", KONTAKTIERT: "blue", NACHFASSEN: "blue",
-  VERSANDBEREIT: "blue", VERLIEHEN: "blue",
+  IN_BEARBEITUNG: "sky", IN_PRODUKTION: "sky", KONTAKTIERT: "sky", NACHFASSEN: "sky",
+  VERSANDBEREIT: "sky", VERLIEHEN: "sky",
   // Versendet / qualifiziert (indigo)
   VERSENDET: "indigo", QUALIFIZIERT: "indigo",
   // Angebot abgegeben (violet) — CRM-Funnel-Stufe ANGEBOT
@@ -64,11 +83,11 @@ export const statusMantineColor: Record<string, string> = {
   ANGENOMMEN: "teal", KONVERTIERT: "teal", ABGESCHLOSSEN: "teal", FAKTURIERT: "teal",
   ZURUECK: "teal", BERECHNET: "teal", GEWONNEN: "teal",
   // Zahlungsabgleich-Status (vereinheitlichter Abgleich)
-  ZUGEORDNET: "teal", TEILZUGEORDNET: "amber", KLAERUNG: "red",
+  ZUGEORDNET: "teal", TEILZUGEORDNET: "amber", KLAERUNG: "danger",
   // Rechnungs-Zahlstatus
   BEZAHLT: "teal", TEILBEZAHLT: "amber",
   // Negativ abgeschlossen (rot)
-  ABGELEHNT: "red", VERWORFEN: "red", STORNIERT: "red", VERLOREN: "red",
+  ABGELEHNT: "danger", VERWORFEN: "danger", STORNIERT: "danger", VERLOREN: "danger",
 };
 
 /** Badge-Farbe für einen Status (Fallback grau). */
@@ -103,13 +122,29 @@ const amber: MantineColorsTuple = [
   "#fff8e1", "#ffecb3", "#ffe082", "#ffd24d", "#fbc02d",
   "#f0a500", "#d98c00", "#C77700", "#a35f00", "#7d4900",
 ];
+// Ampel-/Status-Farben als kontrollierte Tupel statt generischer Mantine-Namen:
+// Index 0 = heller Badge-Hintergrund (entspricht den *Bg-Tokens), Index 6/9 = Vordergrund.
+// So erzeugt <Badge color="danger" variant="light"> automatisch redBg-Fläche + red-Text
+// (Xentral-Muster --ax-bg-error-secondary + --ax-fg-error-primary, in Navy-Sprache).
+const forest: MantineColorsTuple = [
+  "#E8F3EE", "#cfe6da", "#aed3bf", "#86bd9f", "#63a984",
+  "#4a9270", "#3e8463", "#386A4E", "#2c5640", "#1f3e2e",
+];
+const danger: MantineColorsTuple = [
+  "#FCEBEC", "#f6d2d4", "#ec9fa3", "#e06b71", "#d44a51",
+  "#cc353d", "#C0392B", "#a32c25", "#85231f", "#6b1c19",
+];
+const sky: MantineColorsTuple = [
+  "#EAF1FE", "#cfe0fc", "#a3c4f9", "#74a5f6", "#4f8cf3",
+  "#3179f0", "#2563EB", "#1d54c4", "#19479e", "#163a7d",
+];
 export const mantineTheme = createTheme({
   fontFamily: T.font,
   fontFamilyMonospace: 'ui-monospace, SFMono-Regular, Menlo, monospace',
   primaryColor: "navy",
   primaryShade: 9,
   defaultRadius: "sm",
-  colors: { navy, amber },
+  colors: { navy, amber, forest, danger, sky },
   autoContrast: true, // lesbarer Text auf farbigen Flächen (Badges/Buttons)
   focusRing: "auto", // sichtbarer Fokus nur bei Tastatur (:focus-visible)
   cursorType: "pointer", // klickbare Controls fühlen sich klickbar an
@@ -119,7 +154,7 @@ export const mantineTheme = createTheme({
   components: {
     Table: { defaultProps: { striped: true, highlightOnHover: true, withTableBorder: true, verticalSpacing: "xs", horizontalSpacing: "sm", fz: "sm" } },
     Card: { defaultProps: { withBorder: true, radius: "md", shadow: "none" } },
-    Badge: { defaultProps: { variant: "light", radius: "sm" } },
+    Badge: { defaultProps: { variant: "light", radius: "sm", fz: "11px" } },
     Button: { defaultProps: { radius: "sm" } },
     Alert: { defaultProps: { radius: "md", variant: "light" } },
     Tooltip: { defaultProps: { openDelay: 300, withArrow: true } },

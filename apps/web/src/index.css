@@ -22,11 +22,14 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Sichtbarer Fokus NUR bei Tastaturnavigation (nicht beim Mausklick). */
+/* Sichtbarer Fokus NUR bei Tastaturnavigation (nicht beim Mausklick).
+   Outline (2px) + weicher 3px-Navy-Halo (focusRingShadow-Token) = klar sichtbarer Ring
+   auf hellen wie farbigen Flächen, gemäß Xentral-Maxime. */
 :focus-visible {
   outline: 2px solid var(--erp-focus);
   outline-offset: 2px;
   border-radius: 3px;
+  box-shadow: 0 0 0 0.1875rem rgba(14, 28, 54, 0.2);
 }
 :focus:not(:focus-visible) {
   outline: none;

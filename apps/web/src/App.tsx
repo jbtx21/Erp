@@ -1,7 +1,7 @@
 // Navigations-Gerüst: Auth-Gate + AppShell mit gruppierter Sidebar über ALLE Module
 // (alles durchklickbar). Jede Sektion ist eine Seite gegen die echten tRPC-Endpunkte.
 import { useCallback, useEffect, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
-import { ActionIcon, AppShell, Badge, Box, Button, Collapse, Group, HoverCard, Kbd, Loader, Modal, NavLink, Paper, ScrollArea, Stack, Tabs, Text, TextInput, Title, Tooltip, UnstyledButton } from "@mantine/core";
+import { ActionIcon, AppShell, Badge, Box, Button, Collapse, Group, HoverCard, Kbd, Loader, Modal, NavLink, Paper, ScrollArea, Stack, Tabs, Text, TextInput, Title, Tooltip, UnstyledButton, VisuallyHidden } from "@mantine/core";
 import { Chevron, NavIcon, SidebarToggleIcon, type NavIconName } from "./nav-icons.js";
 import { Login } from "./Login.js";
 import { Dashboard } from "./Dashboard.js";
@@ -157,10 +157,12 @@ function GlobalSearch({ onSelect }: { onSelect: (hit: SearchHit) => void }): JSX
 
   return (
     <>
-      <Button variant="default" size="xs" w={340} justify="space-between" onClick={() => setOpen(true)}
-        rightSection={<Kbd size="xs">⌘K</Kbd>} c="dimmed" fw={400}>
-        Suche: Firma, Auftrag, Artikel, Lead…
-      </Button>
+      <Box role="search">
+        <Button variant="default" size="xs" w={340} justify="space-between" onClick={() => setOpen(true)}
+          rightSection={<Kbd size="xs">⌘K</Kbd>} c="dimmed" fw={400} aria-label="Globale Suche öffnen (Strg+K)">
+          Suche: Firma, Auftrag, Artikel, Lead…
+        </Button>
+      </Box>
       <Modal opened={open} onClose={() => setOpen(false)} withCloseButton={false} size="lg" yOffset={80} padding={0}
         overlayProps={{ backgroundOpacity: 0.35, blur: 1 }} transitionProps={{ duration: 120 }}>
         <TextInput size="md" variant="unstyled" px="md" autoFocus placeholder="Suchen… (Firma, Auftrag, Artikel, Lead, Lieferant)"
@@ -275,6 +277,7 @@ function SideNav({ active, collapsed, onNavigate }: { active: string; collapsed:
                 <Box miw={190}>
                   {g.items.map((i) => (
                     <NavLink key={i.key} label={i.label} active={active === i.key} variant="light" color="navy"
+                      aria-current={active === i.key ? "page" : undefined}
                       onClick={() => onNavigate(i.key)} style={{ borderRadius: 6 }} />
                   ))}
                 </Box>
@@ -297,7 +300,8 @@ function SideNav({ active, collapsed, onNavigate }: { active: string; collapsed:
               {/* Klick auf den Gruppenkopf navigiert zum ersten Eintrag (und klappt auf);
                   der Chevron ist ein separater Auf-/Zuklapp-Schalter (QA: Kopf wirkte
                   klickbar, klappte aber nur ein). */}
-              <UnstyledButton onClick={() => { if (g.items[0]) onNavigate(g.items[0].key); if (closed.has(g.group)) toggleGroup(g.group); }} aria-expanded={open}
+              <UnstyledButton onClick={() => { if (g.items[0]) onNavigate(g.items[0].key); if (closed.has(g.group)) toggleGroup(g.group); }}
+                aria-expanded={open} aria-controls={`grp-${g.group.replace(/\W+/g, "-")}`}
                 style={{ display: "block", width: "100%", borderRadius: 6, padding: "6px 8px", marginTop: 4 }}
                 className="erp-nav-group">
                 <Group gap={8} wrap="nowrap">
@@ -307,10 +311,11 @@ function SideNav({ active, collapsed, onNavigate }: { active: string; collapsed:
                     onClick={(e) => { e.stopPropagation(); toggleGroup(g.group); }}><Chevron open={open} /></Box>
                 </Group>
               </UnstyledButton>
-              <Collapse in={open}>
+              <Collapse in={open} id={`grp-${g.group.replace(/\W+/g, "-")}`}>
                 <Box pl={6}>
                   {g.items.map((i) => (
                     <NavLink key={i.key} label={i.label} active={active === i.key} variant="light" color="navy"
+                      aria-current={active === i.key ? "page" : undefined}
                       onClick={() => onNavigate(i.key)} style={{ borderRadius: 6 }} />
                   ))}
                 </Box>
@@ -388,11 +393,15 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<voi
         </Group>
       </AppShell.Header>
 
-      <AppShell.Navbar p={navCollapsed ? 4 : "xs"} style={{ background: "var(--erp-surface)" }}>
+      <AppShell.Navbar p={navCollapsed ? 4 : "xs"} style={{ background: "var(--erp-surface)" }} aria-label="Hauptnavigation">
         <SideNav active={active} collapsed={navCollapsed} onNavigate={setActive} />
       </AppShell.Navbar>
 
       <AppShell.Main>
+        {/* Genau eine <h1> je Route (Screenreader-Einstieg / WCAG „page-has-heading-one"):
+            der Bereichsname. Visuell deckt DocListHeader/DocFormShell den Titel ab, daher
+            unsichtbar gehalten, um keine Dopplung zu zeigen. */}
+        <VisuallyHidden component="h1">{activeLabel(active)}</VisuallyHidden>
         <Page k={active} role={user.role} userName={user.name} onNavigate={setActive} onOpen={openEntity}
           focusId={focus && focus.navKey === active ? focus.id : undefined} />
       </AppShell.Main>
