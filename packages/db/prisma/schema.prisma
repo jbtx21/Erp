@@ -79,6 +79,7 @@ enum PriceGroupKind {
   STANDARD
   TOP
   PREMIUM
+  SCHULE
   WIEDERVERKAEUFER
   AGENTUR
 }
@@ -90,6 +91,38 @@ model PriceGroup {
   companies Company[]
   prices    PriceGroupPrice[]
   priceTiers PriceGroupPriceTier[]
+  supplierMarkups SupplierMarkup[]
+  customerSupplierGroups CustomerSupplierPriceGroup[]
+}
+
+// Aufschlagsmatrix je Lieferant × Kundengruppe (flach): VK = round(EK × factorBp / 10000).
+// „Jeder Lieferant hat eigene Aufschlagsfaktoren je Kundengruppe" (Standard/Top/Premium/Schule/
+// Wiederverkäufer/Agentur). factorBp = Faktor × 10000 (Int, kein Float) — z. B. 1,88 → 18800.
+model SupplierMarkup {
+  id           String     @id @default(cuid())
+  supplierId   String
+  supplier     Supplier   @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  priceGroupId String
+  priceGroup   PriceGroup @relation(fields: [priceGroupId], references: [id])
+  factorBp     Int // Aufschlagsfaktor in Zehntausendstel (1,88 = 18800)
+
+  @@unique([supplierId, priceGroupId])
+  @@index([supplierId])
+}
+
+// Kundengruppe je (Kunde × Lieferant): ein Kunde kann bei HAKRO „Premium", bei Stanley
+// „Standard" sein. Fehlt der Eintrag → Default-Preisgruppe der Firma → sonst STANDARD.
+model CustomerSupplierPriceGroup {
+  id           String     @id @default(cuid())
+  companyId    String
+  company      Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  supplierId   String
+  supplier     Supplier   @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  priceGroupId String
+  priceGroup   PriceGroup @relation(fields: [priceGroupId], references: [id])
+
+  @@unique([companyId, supplierId])
+  @@index([supplierId])
 }
 
 // Firma = Kunde. KEIN 1:1-Import Firma↔Kontakt (Kap. 8.3).
@@ -157,6 +190,7 @@ model Company {
   portalUsers     PortalUser[] // Kundenportal-Logins (B13)
   sampleLoans     SampleLoan[] // Muster-Leihgut (B5)
   priceTiers      CustomerPriceTier[] // kundenindividuelle Mengenstaffel (B4)
+  supplierGroups  CustomerSupplierPriceGroup[] // Preisgruppe je Lieferant (Premium@HAKRO, Standard@…)
   shopConnectors  ShopConnector[] // T-01: Shops mappen auf die Firma, nicht auf Mitarbeiter
   opportunities   Opportunity[] // Verkaufschancen (CRM)
   callLogs        CallLog[] // Anrufprotokoll (Telefon-Modul)
@@ -392,6 +426,11 @@ model Article {
   // beliebige Mengen okay). Nur ausgewählte Artikel (Transferdrucke) sind bestandsgeführt
   // → volle Verfügbarkeits-/Reservierungs-/Meldebestand-/Shop-Puffer-Logik.
   bestandsgefuehrt Boolean @default(false)
+  // Genau EIN (Textil-)Lieferant je Artikel — Quelle für EK und für die Aufschlagsmatrix
+  // (VK = EK × Faktor(Lieferant, Kundengruppe)). Pflicht auf Service-/UI-Ebene (DB nullable
+  // für migrationssicheren Backfill bestehender Artikel).
+  supplierId  String?
+  supplier    Supplier? @relation("ArticleSupplier", fields: [supplierId], references: [id])
   // Zugewiesener Veredler (Pflicht bei Veredelungs-/Logo-Artikeln, analog Textil-„Hersteller").
   veredlerId  String?
   veredler    Supplier? @relation("ArticleVeredler", fields: [veredlerId], references: [id])
@@ -667,6 +706,9 @@ model Supplier {
   syncCursor      String? // Delta-Sync-Cursor (Kap. 13)
   active          Boolean  @default(true)
   supplierItems   SupplierItem[]
+  textilArtikel   Article[] @relation("ArticleSupplier") // Artikel mit diesem (Textil-)Lieferanten
+  markups         SupplierMarkup[] // Aufschlagsmatrix je Kundengruppe
+  customerGroups  CustomerSupplierPriceGroup[] // kundenindividuelle Gruppe je Kunde
   veredelungsArtikel Article[] @relation("ArticleVeredler") // als Veredler zugewiesene Logo-/Veredelungsartikel
   subProductions  SubProductionOrder[]
   stickereiKunden Company[] @relation("StickereiPartner")

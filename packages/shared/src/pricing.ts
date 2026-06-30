@@ -34,6 +34,7 @@ export type PriceGroupKind =
   | "STANDARD"
   | "TOP"
   | "PREMIUM"
+  | "SCHULE"
   | "WIEDERVERKAEUFER"
   | "AGENTUR";
 

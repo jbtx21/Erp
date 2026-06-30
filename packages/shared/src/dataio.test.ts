@@ -28,13 +28,19 @@ describe("dataio: csvToRecords / recordsToCsv (Artikel)", () => {
   });
 
   it("ordnet Spalten über die Überschrift zu (Reihenfolge egal)", () => {
-    const { records, errors } = csvToRecords(ARTICLE_COLUMNS, "Bezeichnung;Artikelnummer\nPolo;A-1");
+    const { records, errors } = csvToRecords(
+      ARTICLE_COLUMNS,
+      "Bezeichnung;Beschreibung;EK (€);VK (€);Artikelnummer\nPolo;Baumwoll-Polo;5,00;9,40;A-1"
+    );
     expect(errors).toHaveLength(0);
     expect(records[0]).toMatchObject({ sku: "A-1", name: "Polo" });
   });
 
   it("meldet fehlende Pflichtwerte je Zeile und überspringt sie", () => {
-    const { records, errors } = csvToRecords(ARTICLE_COLUMNS, "Artikelnummer;Bezeichnung\nA-1;Polo\n;Ohne SKU");
+    const { records, errors } = csvToRecords(
+      ARTICLE_COLUMNS,
+      "Artikelnummer;Bezeichnung;Beschreibung;EK (€);VK (€)\nA-1;Polo;Baumwoll-Polo;5,00;9,40\n;Ohne SKU;Beschr.;5,00;9,40"
+    );
     expect(records).toHaveLength(1);
     expect(errors).toHaveLength(1);
     expect(errors[0]).toMatchObject({ row: 2 });

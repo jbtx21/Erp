@@ -65,6 +65,7 @@ const PRICE_GROUP_NAME: Record<PriceGroupKind, string> = {
   STANDARD: "Standard",
   TOP: "Top",
   PREMIUM: "Premium",
+  SCHULE: "Schule",
   WIEDERVERKAEUFER: "Wiederverkäufer",
   AGENTUR: "Agentur",
 };
