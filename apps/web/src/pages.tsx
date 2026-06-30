@@ -185,6 +185,20 @@ const COL_LABELS: Record<string, string> = {
 const colLabel = (key: string, labels?: Record<string, string>): string =>
   labels?.[key] ?? COL_LABELS[key] ?? key.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (c) => c.toUpperCase());
 
+// Pro-Tabelle-Overrides für AutoTable (ergänzen die globale COL_LABELS): vor allem das
+// mehrdeutige „Name" je Kontext (Kunde/Lieferant/Artikel …). Greift via labels-Prop.
+const TABLE_LABELS: Record<string, Record<string, string>> = {
+  pipeline: { name: "Bezeichnung", text: "Bedarf" },
+  leads: { name: "Bezeichnung", text: "Bedarf" },
+  companies: { name: "Kunde" },
+  suppliers: { name: "Lieferant" },
+  products: { name: "Artikel" },
+  costcenters: { name: "Kostenstelle" },
+  mailaccounts: { name: "Kontoname" },
+};
+/** Labels-Overrides für eine Listen-Route (leeres Objekt = nur globale COL_LABELS). */
+const labelsFor = (route: string): Record<string, string> => TABLE_LABELS[route] ?? {};
+
 // Standard-Panel-Rahmen (Phase 1, Konsistenz): EINE Quelle statt ~40 Inline-Wiederholungen
 // des border+radius-Musters. Per `...PANEL_STYLE` in jedes betroffene style-Objekt gespreizt,
 // damit Sonderprops (maxWidth, flex, borderTop …) erhalten bleiben.
@@ -787,7 +801,7 @@ export function SuppliersPage({ focusId }: { focusId?: string } = {}): JSX.Eleme
         filters={<TextInput placeholder="Suche: Name, USt-IdNr., E-Mail …" value={q} onChange={(e) => setQ(e.currentTarget.value)} w={320} />}
       />
       {err && <Alert color="red" mt="sm" withCloseButton onClose={() => setErr(null)}>{err}</Alert>}
-      <AutoTable rows={filtered} highlightId={focusId} onRowClick={(r) => setOpenSupplier((c) => c === String(r.id) ? null : String(r.id))} action={(r) => (
+      <AutoTable rows={filtered} labels={labelsFor("suppliers")} highlightId={focusId} onRowClick={(r) => setOpenSupplier((c) => c === String(r.id) ? null : String(r.id))} action={(r) => (
         <Group gap={6} justify="flex-end" wrap="nowrap" onClick={(e) => e.stopPropagation()}>
           <Button size="compact-xs" variant={openSupplier === String(r.id) ? "filled" : "subtle"} onClick={() => setOpenSupplier((c) => c === String(r.id) ? null : String(r.id))}>Details</Button>
           <DocActionMenu actions={[{ label: "Katalog anzeigen", group: "Allgemein", onClick: () => { setSid(String(r.id)); setApplied(String(r.id)); } }]} />
@@ -1658,6 +1672,8 @@ function ArticleRowEdit({ a, onSaved, onVariants, onOpen }: { a: ArticleData; on
             : <Text size="sm" c={a[c.key] ? undefined : "dimmed"}>{a[c.key] ? String(a[c.key]) : "—"}</Text>}
         </Table.Td>
       ))}
+      <Table.Td style={numTd}>{euro(Number(a.ekCents))}</Table.Td>
+      <Table.Td style={numTd}>{euro(Number(a.vkCents))}</Table.Td>
       <Table.Td><Badge color={pct === 100 ? "green" : pct >= 50 ? "yellow" : "orange"} variant="light">{pct}%</Badge></Table.Td>
       <Table.Td>
         <Group gap={4} wrap="nowrap" justify="flex-end">
@@ -2283,6 +2299,7 @@ export function ProductsPage({ focusId }: { focusId?: string } = {}): JSX.Elemen
           <Table.Thead><Table.Tr>
             <Table.Th>SKU</Table.Th>
             {PIM_COLS.map((c) => <Table.Th key={c.key}>{c.label}</Table.Th>)}
+            <Table.Th ta="right">EK</Table.Th><Table.Th ta="right">VK</Table.Th>
             <Table.Th>Vollst.</Table.Th><Table.Th>Aktion</Table.Th>
           </Table.Tr></Table.Thead>
           <Table.Tbody>
@@ -5632,7 +5649,7 @@ export function CompaniesPage({ focusId, onNavigate, onOpen }: { focusId?: strin
         action={<Button size="xs" onClick={() => setCreateOpen(true)}>+ Firma anlegen</Button>}
         filters={<TextInput placeholder="Suche: Name, Kunden-Nr., Branche, E-Mail …" value={q} onChange={(e) => setQ(e.currentTarget.value)} w={340} />} />
       {err && <Alert color="red" mt="sm" withCloseButton onClose={() => setErr(null)}>{err}</Alert>}
-      <AutoTable rows={filtered} onRowClick={(r) => setOpenCompany((c) => c === String(r.id) ? null : String(r.id))} action={(r) => (
+      <AutoTable rows={filtered} labels={labelsFor("companies")} onRowClick={(r) => setOpenCompany((c) => c === String(r.id) ? null : String(r.id))} action={(r) => (
         // „Details" (Preview-Toggle) inline wie Xentras Vorschau-Auge; Sekundäraktionen im Kebab.
         <Group gap={6} justify="flex-end" wrap="nowrap" onClick={(e) => e.stopPropagation()}>
           <Button size="compact-xs" variant={openCompany === String(r.id) ? "filled" : "subtle"} onClick={() => setOpenCompany((c) => c === String(r.id) ? null : String(r.id))}>Details</Button>
@@ -5872,7 +5889,7 @@ export function CrmPipelinePage({ onOpen }: { onNavigate?: (k: string) => void; 
       </Paper>
 
       <AutoTable rows={rows as Row[]} hide={["id", "companyId", "email", "phone", "note", "probability", "lostReason", "legacyKind", "legacyId", "quoteId", "createdAt"]}
-        labels={{ name: "Bezeichnung", text: "Bedarf" }} label="Vertriebs-Pipeline" action={actionsFor} />
+        labels={labelsFor("pipeline")} label="Vertriebs-Pipeline" action={actionsFor} />
       <CrmEditModal lead={editRow} onClose={() => setEditRow(null)} onSaved={() => void load()} />
     </>
   );
@@ -5986,7 +6003,7 @@ export function LeadsPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k: 
         }}>Lead anlegen</Button>
       </Group>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
-      <AutoTable rows={rows} hide={["note", "webseite", "convertedCompanyId"]} highlightId={focusId} action={actionsFor} />
+      <AutoTable rows={rows} labels={labelsFor("leads")} hide={["note", "webseite", "convertedCompanyId"]} highlightId={focusId} action={actionsFor} />
     </>
   );
 }
