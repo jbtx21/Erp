@@ -132,7 +132,7 @@ function Connections(): JSX.Element {
             <Table.Th>Art</Table.Th>
             <Table.Th>IBAN</Table.Th>
             <Table.Th>Zustimmung</Table.Th>
-            <Table.Th>Letzter Sync</Table.Th>
+            <Table.Th>Letzte Synchronisierung</Table.Th>
             <Table.Th ta="right">Aktion</Table.Th>
           </Table.Tr>
         </Table.Thead>
@@ -368,7 +368,7 @@ function Payments(): JSX.Element {
       <Group align="end" gap="sm" mt="sm">
         <Select label="Verbindung" w={220} data={conns.map((c) => ({ value: c.id, label: `${c.name} (${c.kind})` }))}
           value={connectionId} onChange={setConnectionId} />
-        <TextInput label="Ausführungsdatum" w={150} value={execDate} onChange={(e) => setExecDate(e.currentTarget.value)} placeholder="YYYY-MM-DD" />
+        <TextInput label="Ausführungsdatum" w={150} value={execDate} onChange={(e) => setExecDate(e.currentTarget.value)} placeholder="JJJJ-MM-TT" />
       </Group>
 
       <Table withTableBorder mt="sm" verticalSpacing="xs">
@@ -410,7 +410,7 @@ function Payments(): JSX.Element {
       <Table withTableBorder mt="xs" verticalSpacing="xs">
         <Table.Thead>
           <Table.Tr>
-            <Table.Th>MsgId</Table.Th>
+            <Table.Th>Meldungs-ID</Table.Th>
             <Table.Th>Verbindung</Table.Th>
             <Table.Th ta="right">Posten</Table.Th>
             <Table.Th ta="right">Summe</Table.Th>

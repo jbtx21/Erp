@@ -14,12 +14,12 @@ function ZahlungsabgleichPage({ role, onOpen }: { role: string; onOpen?: (k: str
   return (
     <>
       <DocListHeader module="Buchhaltung" title="Zahlungsabgleich"
-        hint="Ein gemeinsames Abgleich-Datenmodell über alle Quellen: Übersicht (Herkunft + Status + OP-Aging) → Kontoumsatz importieren → ggf. manuell zuordnen." />
+        hint="Ein gemeinsames Abgleich-Datenmodell über alle Quellen: Übersicht (Herkunft + Status + Fälligkeitsstaffel) → Kontoumsatz importieren → ggf. manuell zuordnen." />
       <Tabs defaultValue="overview" mt="md" keepMounted={false}>
         <Tabs.List>
           <Tabs.Tab value="overview">Übersicht</Tabs.Tab>
           <Tabs.Tab value="banking">Kontoumsätze</Tabs.Tab>
-          <Tabs.Tab value="op">Offene Posten (OP-Aging)</Tabs.Tab>
+          <Tabs.Tab value="op">Offene Posten (Fälligkeitsstaffel)</Tabs.Tab>
           <Tabs.Tab value="erfassen">Zahlung erfassen</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="overview" pt="md"><ZahlungsabgleichOverview onOpen={onOpen} /></Tabs.Panel>
@@ -68,7 +68,7 @@ const NAV: ReadonlyArray<{ group: string; icon: NavIconName; items: ReadonlyArra
   // Fremdvergabe-Ausführung → Reporting → Aufschlagsfaktoren je Veredelungsart.
   { group: "Veredelung", icon: "produktion", items: [
     { key: "logos", label: "Logos & Stickerei" }, { key: "ausschreibungen", label: "Stickerei-Ausschreibungen" },
-    { key: "subproduction", label: "Fremdvergabe" }, { key: "prodreport", label: "Produktions-Reporting" },
+    { key: "subproduction", label: "Fremdvergabe" }, { key: "prodreport", label: "Produktions-Auswertung" },
     { key: "aufschlag", label: "Aufschlagsfaktoren" },
   ] },
   { group: "Buchhaltung", icon: "finanzen", items: [

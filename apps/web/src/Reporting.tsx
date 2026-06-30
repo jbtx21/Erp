@@ -308,7 +308,7 @@ export function Reporting({ role }: { role: string }): JSX.Element {
       {leadTime && (
         <Card withBorder padding="md">
           <CardHead
-            title="Durchlaufzeit (Lead Time)"
+            title="Durchlaufzeit"
             onCsv={() => downloadCsv(`durchlaufzeit-${granularity}.csv`, ["Periode", "Aufträge", "Ø Durchlaufzeit (h)"], leadTime.buckets.map((b) => [b.key, String(b.count), String(b.avgHours)]))}
           />
           <Group gap="lg">
@@ -366,7 +366,7 @@ export function Reporting({ role }: { role: string }): JSX.Element {
       {onTime && (
         <Card withBorder padding="md">
           <CardHead
-            title="Termintreue (On-Time)"
+            title="Termintreue"
             onCsv={() => downloadCsv(`termintreue-${granularity}.csv`, ["Periode", "Aufträge", "Pünktlich", "Quote (%)"], onTime.buckets.map((b) => [b.key, String(b.total), String(b.onTime), b.ratePercent == null ? "" : String(b.ratePercent)]))}
           />
           <Group gap="lg">

@@ -165,9 +165,13 @@ const COL_LABELS: Record<string, string> = {
   invoiceNumber: "Rechnungsnr.", erzeugtAm: "Erzeugt", stufe: "Mahnstufe", offenCents: "Offen", mahngebuehrCents: "Mahngebühr", faelligSeit: "Fällig seit",
   productionNumber: "PA-Nr.", orderNumber: "Auftragsnr.", supplierName: "Lieferant", inhouse: "Ausführung", subNumber: "Stufen-Nr.", sequence: "Stufe",
   source: "Quelle", ekCheckStatus: "EK-Prüfung", articleName: "Artikel", requiredQty: "Bedarf", receivedQty: "Erhalten", orderQty: "Bestellen", stockQty: "Bestand",
+  // CRM / Pipeline (B15): die rohen Prisma-Feldnamen leakten sonst englisch in die Liste.
+  contactName: "Ansprechpartner", stage: "Phase", valueCents: "Wert", expectedCloseAt: "Erw. Abschluss", text: "Beschreibung",
 };
-const colLabel = (key: string): string =>
-  COL_LABELS[key] ?? key.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (c) => c.toUpperCase());
+/** Deutsches Label für einen Spalten-Schlüssel; per-Tabelle via `labels` überschreibbar,
+ *  Fallback: camelCase → Wörter (damit künftige Felder nicht roh-englisch durchschlagen). */
+const colLabel = (key: string, labels?: Record<string, string>): string =>
+  labels?.[key] ?? COL_LABELS[key] ?? key.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (c) => c.toUpperCase());
 
 // Rohe Prisma-CUIDs (z. B. „cmqwoqa6e0008ue3g92nv6588") nie als Klartext zeigen — unleserlich,
 // nicht referenzierbar. Sprechende Slugs (co-muster, sup-fhb) und Belegnummern (AN-2026-…) sind
@@ -240,7 +244,7 @@ export interface AutoTableEmpty { icon?: ReactNode; title: string; hint?: string
 
 export function AutoTable({
   rows, hide = [], action, onRowClick, highlightId, bulkActions, cellRender,
-  filters, sortable, pageSize, totals, onSelectionChange, initialSort, emptyState, label,
+  filters, sortable, pageSize, totals, onSelectionChange, initialSort, emptyState, label, labels,
 }: {
   rows: Row[]; hide?: string[]; action?: (r: Row) => ReactNode; onRowClick?: (r: Row) => void; highlightId?: string;
   bulkActions?: BulkAction[]; cellRender?: (col: string, value: unknown, row: Row) => ReactNode | undefined;
@@ -249,6 +253,7 @@ export function AutoTable({
   initialSort?: { key: string; dir: "asc" | "desc" };
   emptyState?: AutoTableEmpty;
   label?: string; // zugänglicher Tabellenname (Screenreader); Default „Datentabelle".
+  labels?: Record<string, string>; // tabellenspezifische Überschriften-Overrides (Schlüssel = Datenfeld).
 }): JSX.Element {
   const hlRef = useRef<HTMLTableRowElement | null>(null);
   // Mehrfachauswahl (nur wenn bulkActions ODER onSelectionChange gesetzt): markierte Zeilen-Keys.
@@ -324,7 +329,7 @@ export function AutoTable({
               {selectable && <Table.Th style={{ width: 32 }}><Checkbox aria-label="Alle auswählen" checked={allSelected} indeterminate={sel.size > 0 && !allSelected} onChange={toggleAll} /></Table.Th>}
               {cols.map((c) => (
                 <Table.Th key={c} onClick={sortable ? () => toggleSort(c) : undefined} style={sortable ? { cursor: "pointer", userSelect: "none" } : undefined}>
-                  {colLabel(c)}{sortable && sort?.key === c ? (sort.dir === "asc" ? " ▲" : " ▼") : ""}
+                  {colLabel(c, labels)}{sortable && sort?.key === c ? (sort.dir === "asc" ? " ▲" : " ▼") : ""}
                 </Table.Th>
               ))}
               {action && <Table.Th style={stickyActionTh} />}
@@ -1407,7 +1412,7 @@ export const ProductionReportingPage = (): JSX.Element => {
   const statEntries = Object.entries(stats);
   return (
     <>
-      <DocListHeader module="Fertigung" title="Produktions-Reporting" />
+      <DocListHeader module="Fertigung" title="Produktions-Auswertung" />
       <Text size="sm" c="dimmed" mt={4}>Durchlaufzeit, Fehlerquote, Termintreue je Periode (Kap. 29).</Text>
       <Group mt="sm" gap="xs">
         <Select size="xs" value={tab} onChange={(v) => v && setTab(v as typeof tab)} data={[
@@ -4177,7 +4182,7 @@ function ProductionCreateDialog({ orderId, onClose, onDone }: { orderId: string;
       {preview?.procurementLeadDays != null && (
         <Alert color="blue" variant="light" mt="md">
           <Text size="sm">
-            <b>Procure-to-Order:</b> Beschaffungs-Lieferzeit {preview.procurementLeadDays} Werktage (Hauptlieferant).
+            <b>Direktbeschaffung:</b> Beschaffungs-Lieferzeit {preview.procurementLeadDays} Werktage (Hauptlieferant).
             Spätestes Bestelldatum beim Lieferanten:{" "}
             <b>{preview.proposedOrderDate ? new Date(preview.proposedOrderDate).toLocaleDateString("de-DE") : "—"}</b>
             {" "}— erst beschaffen, dann veredeln.
@@ -5769,7 +5774,8 @@ export function CrmPipelinePage({ onOpen }: { onNavigate?: (k: string) => void; 
         </Group>
       </Paper>
 
-      <AutoTable rows={rows as Row[]} hide={["id", "companyId", "email", "phone", "note", "probability", "lostReason", "legacyKind", "legacyId", "quoteId", "createdAt"]} action={actionsFor} />
+      <AutoTable rows={rows as Row[]} hide={["id", "companyId", "email", "phone", "note", "probability", "lostReason", "legacyKind", "legacyId", "quoteId", "createdAt"]}
+        labels={{ name: "Bezeichnung", text: "Bedarf" }} label="Vertriebs-Pipeline" action={actionsFor} />
       <CrmEditModal lead={editRow} onClose={() => setEditRow(null)} onSaved={() => void load()} />
     </>
   );
@@ -8562,7 +8568,7 @@ function ApiTokensSection(): JSX.Element {
 
   return (
     <Box mt="xl">
-      <Title order={4}>API-Tokens (Personal Access Token)</Title>
+      <Title order={4}>API-Token (Persönlicher Zugriffsschlüssel)</Title>
       <Text size="sm" c="dimmed" mt={2}>Read-only API-/MCP-Zugriff (`/api/v1`) für externe Agenten. RBAC über die Token-Rolle (PRODUKTION ohne Preise/Finanzbelege). Der Klartext ist <b>nur einmalig</b> sichtbar.</Text>
       {err && <Alert color="red" mt="sm" withCloseButton onClose={() => setErr(null)}>{err}</Alert>}
       {fresh && (
@@ -9540,7 +9546,7 @@ export function HomePage({ userName, onNavigate }: { userName?: string; onNaviga
           {card("Vertrieb", [{ label: "Firmen/Kunden", navKey: "companies" }, { label: "Vertriebs-Pipeline", navKey: "pipeline" }, { label: "Angebote", navKey: "quotes" }, { label: "Aufträge", navKey: "orders" }])}
           {card("Beschaffung", [{ label: "Lieferanten", navKey: "suppliers" }, { label: "Eingangsrechnungen", navKey: "incoming" }, { label: "Nachbestellung", navKey: "reorder" }, { label: "Muster-Leihgut", navKey: "samples" }, { label: "Lager & Inventur", navKey: "lager" }])}
           {card("Finanzen", [{ label: "Mahnwesen", navKey: "dunning" }, { label: "Banking", navKey: "banking" }, { label: "Auswertungen", navKey: "reporting" }, { label: "GoBD-Archiv", navKey: "archive" }, { label: "Kostenstellen", navKey: "costcenters" }])}
-          {card("Produktion & System", [{ label: "Produktions-Reporting", navKey: "prodreport" }, { label: "Fremdvergabe", navKey: "subproduction" }, { label: "Automationen", navKey: "automation" }, { label: "Einstellungen", navKey: "admin" }, { label: "Personalwesen", navKey: "hr" }])}
+          {card("Produktion & System", [{ label: "Produktions-Auswertung", navKey: "prodreport" }, { label: "Fremdvergabe", navKey: "subproduction" }, { label: "Automationen", navKey: "automation" }, { label: "Einstellungen", navKey: "admin" }, { label: "Personalwesen", navKey: "hr" }])}
         </Group>
       )}
     </>
