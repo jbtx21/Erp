@@ -1373,10 +1373,16 @@ export const appRouter = router({
         from: z.string().datetime(),
         to: z.string().datetime(),
         kontenrahmen: z.enum(["SKR03", "SKR04"]),
+        format: z.enum(["csv", "xml"]).optional(),
+        includeAlreadyExported: z.boolean().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         try {
-          return await ctx.datevExport.export({ from: new Date(input.from), to: new Date(input.to), kontenrahmen: input.kontenrahmen });
+          return await ctx.datevExport.export({
+            from: new Date(input.from), to: new Date(input.to), kontenrahmen: input.kontenrahmen,
+            ...(input.format ? { format: input.format } : {}),
+            ...(input.includeAlreadyExported != null ? { includeAlreadyExported: input.includeAlreadyExported } : {}),
+          });
         } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
   }),

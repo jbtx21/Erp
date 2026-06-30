@@ -12,16 +12,18 @@ export interface DatevBuchung {
   /** Umsatz immer positiv, Richtung über sollHaben. */
   umsatzCents: Cents;
   sollHaben: SollHaben;
-  /** Konto (z. B. Debitorenkonto des Kunden). */
+  /** Konto (z. B. Debitorenkonto des Kunden / Aufwandskonto bei ER). */
   konto: string;
-  /** Gegenkonto (z. B. Erlöskonto). */
+  /** Gegenkonto (z. B. Erlöskonto / Kreditorenkonto bei ER). */
   gegenkonto: string;
-  /** BU-/Steuerschlüssel (z. B. "" = automatisch, "9" = 19% USt). */
+  /** BU-/Steuerschlüssel (z. B. "" = automatisch, "9" = 19% USt/VSt). */
   buSchluessel: string;
   /** Belegdatum als Date; serialisiert zu TTMM. */
   belegdatum: Date;
   /** Belegfeld 1 = Rechnungsnummer. */
   belegfeld1: string;
+  /** Belegfeld 2 (optional) = Kunden-/Lieferantennummer o. Ä. (Belegfeld-Mapping). */
+  belegfeld2?: string;
   buchungstext: string;
 }
 
@@ -40,6 +42,8 @@ export interface InvoiceForDatev {
   debitorKonto: string;
   /** Netto/Steuer je Satz (aus buildInvoiceTotals.taxByRate). */
   taxByRate: ReadonlyArray<{ rate: number; netCents: Cents }>;
+  /** Belegfeld 2 (z. B. Kundennummer). */
+  belegfeld2?: string;
 }
 
 export interface CreditNoteForDatev {
@@ -51,11 +55,40 @@ export interface CreditNoteForDatev {
   originalInvoiceNumber?: string;
   /** Netto je Satz (aus buildInvoiceTotals.taxByRate der Gutschrift). */
   taxByRate: ReadonlyArray<{ rate: number; netCents: Cents }>;
+  /** Belegfeld 2 (z. B. Kundennummer). */
+  belegfeld2?: string;
+}
+
+/**
+ * Eingangsrechnung/Verbindlichkeit (kreditorische Seite, Kap. 9.2). Buchung
+ * „Aufwand (Soll) an Kreditor" je Steuersatz; die Vorsteuer ermittelt DATEV aus
+ * Kontofunktion (Aufwand) + BU-Schlüssel.
+ */
+export interface IncomingInvoiceForDatev {
+  number: string;
+  issuedAt: Date;
+  /** Kreditorenkonto des Lieferanten (oder Sammelkreditor). */
+  kreditorKonto: string;
+  /** Aufwandskonto (Wareneingang/Fremdleistung). */
+  aufwandskonto: string;
+  /** Netto je Satz (aus den ER-Beträgen). */
+  taxByRate: ReadonlyArray<{ rate: number; netCents: Cents }>;
+  /** Lieferantenname für den Buchungstext. */
+  supplierName?: string;
+  /** Belegfeld 2 (z. B. Lieferantennummer). */
+  belegfeld2?: string;
 }
 
 const BU_BY_RATE: Record<string, string> = {
   "0.19": "9", // 19% USt
   "0.07": "8", // 7% USt
+};
+
+// Vorsteuer-Schlüssel (Eingangsseite): identische Sätze; DATEV bucht Vorsteuer, weil
+// das Aufwandskonto im Soll gegen das Kreditorenkonto läuft.
+const VST_BU_BY_RATE: Record<string, string> = {
+  "0.19": "9",
+  "0.07": "8",
 };
 
 /**
@@ -77,9 +110,29 @@ export function buchungenFromInvoice(
       buSchluessel: BU_BY_RATE[rateKey] ?? "",
       belegdatum: inv.issuedAt,
       belegfeld1: inv.number,
+      ...(inv.belegfeld2 ? { belegfeld2: inv.belegfeld2 } : {}),
       buchungstext: `Rechnung ${inv.number}`,
     };
   });
+}
+
+/**
+ * Erzeugt Buchungssätze für eine Eingangsrechnung (Verbindlichkeit, Kap. 9.2): je
+ * Steuersatz eine Buchung „Aufwand (SOLL) an Kreditor" über den Netto-Betrag mit
+ * Vorsteuer-BU-Schlüssel. Spiegelt die debitorische Ausgangslogik auf die Kreditorseite.
+ */
+export function buchungenFromIncomingInvoice(ii: IncomingInvoiceForDatev): DatevBuchung[] {
+  return ii.taxByRate.map((t) => ({
+    umsatzCents: t.netCents,
+    sollHaben: "S" as const, // Aufwand im Soll
+    konto: ii.aufwandskonto,
+    gegenkonto: ii.kreditorKonto,
+    buSchluessel: VST_BU_BY_RATE[t.rate.toFixed(2)] ?? "",
+    belegdatum: ii.issuedAt,
+    belegfeld1: ii.number,
+    ...(ii.belegfeld2 ? { belegfeld2: ii.belegfeld2 } : {}),
+    buchungstext: ii.supplierName ? `ER ${ii.number} ${ii.supplierName}` : `Eingangsrechnung ${ii.number}`,
+  }));
 }
 
 /**
@@ -103,6 +156,7 @@ export function buchungenFromCreditNote(
       buSchluessel: BU_BY_RATE[rateKey] ?? "",
       belegdatum: cn.issuedAt,
       belegfeld1: cn.number,
+      ...(cn.belegfeld2 ? { belegfeld2: cn.belegfeld2 } : {}),
       buchungstext: cn.originalInvoiceNumber
         ? `Gutschrift ${cn.number} zu ${cn.originalInvoiceNumber}`
         : `Gutschrift ${cn.number}`,
@@ -145,18 +199,22 @@ export function creditNoteTaxByRate(
 export interface DatevStapelInput {
   invoices: ReadonlyArray<InvoiceForDatev>;
   creditNotes: ReadonlyArray<CreditNoteForDatev>;
+  /** Eingangsrechnungen/Verbindlichkeiten (kreditorische Seite). Optional. */
+  incomingInvoices?: ReadonlyArray<IncomingInvoiceForDatev>;
   erloes: ErloeskontoMap;
 }
 
 /**
- * Baut den vollständigen DATEV-Buchungsstapel einer Periode: erst alle Ausgangsrechnungen
- * (Debitor an Erlös, SOLL), dann alle Gutschriften (Erlösminderung, HABEN). Reine Komposition
- * der Einzel-Builder — die CSV-Serialisierung übernimmt `toDatevCsv`.
+ * Baut den vollständigen DATEV-Buchungsstapel einer Periode: Ausgangsrechnungen
+ * (Debitor an Erlös, SOLL), Gutschriften (Erlösminderung, HABEN) und Eingangsrechnungen
+ * (Aufwand an Kreditor, SOLL). Reine Komposition der Einzel-Builder — die Serialisierung
+ * übernimmt `toDatevCsv` bzw. `toDatevXml`.
  */
 export function buildDatevStapel(input: DatevStapelInput): DatevBuchung[] {
   return [
     ...input.invoices.flatMap((i) => buchungenFromInvoice(i, input.erloes)),
     ...input.creditNotes.flatMap((c) => buchungenFromCreditNote(c, input.erloes)),
+    ...(input.incomingInvoices ?? []).flatMap((ii) => buchungenFromIncomingInvoice(ii)),
   ];
 }
 
@@ -178,7 +236,7 @@ function csvField(v: string): string {
 /**
  * Serialisiert Buchungssätze als DATEV-Buchungszeilen (Semikolon-getrennt).
  * Spaltenfolge entspricht dem EXTF-Buchungsstapel-Kern:
- * Umsatz;S/H;Konto;Gegenkonto;BU;Belegdatum;Belegfeld1;Buchungstext
+ * Umsatz;S/H;Konto;Gegenkonto;BU;Belegdatum;Belegfeld1;Belegfeld2;Buchungstext
  */
 export function toDatevCsv(buchungen: ReadonlyArray<DatevBuchung>): string {
   const header = [
@@ -189,6 +247,7 @@ export function toDatevCsv(buchungen: ReadonlyArray<DatevBuchung>): string {
     "BU-Schlüssel",
     "Belegdatum",
     "Belegfeld 1",
+    "Belegfeld 2",
     "Buchungstext",
   ].join(";");
 
@@ -201,9 +260,50 @@ export function toDatevCsv(buchungen: ReadonlyArray<DatevBuchung>): string {
       b.buSchluessel,
       ttmm(b.belegdatum),
       csvField(b.belegfeld1),
+      csvField(b.belegfeld2 ?? ""),
       csvField(b.buchungstext),
     ].join(";")
   );
 
   return [header, ...rows].join("\r\n");
+}
+
+function xmlEscape(v: string): string {
+  return v
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function isoDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Serialisiert denselben Buchungsstapel als wohlgeformtes XML — die XML-Variante für
+ * XML-basierte FiBu-Importe bzw. DATEV-Unternehmen-Online-Vorsysteme (alternativ zur CSV).
+ * Beträge in Euro mit Punkt-Dezimaltrenner (maschinenlesbar), Datum ISO-8601.
+ */
+export function toDatevXml(buchungen: ReadonlyArray<DatevBuchung>): string {
+  const lines = buchungen.map((b) => {
+    const attrs = [
+      `umsatz="${(Math.abs(b.umsatzCents) / 100).toFixed(2)}"`,
+      `sollHaben="${b.sollHaben}"`,
+      `konto="${xmlEscape(b.konto)}"`,
+      `gegenkonto="${xmlEscape(b.gegenkonto)}"`,
+      `buSchluessel="${xmlEscape(b.buSchluessel)}"`,
+      `belegdatum="${isoDate(b.belegdatum)}"`,
+      `belegfeld1="${xmlEscape(b.belegfeld1)}"`,
+      ...(b.belegfeld2 ? [`belegfeld2="${xmlEscape(b.belegfeld2)}"`] : []),
+      `buchungstext="${xmlEscape(b.buchungstext)}"`,
+    ].join(" ");
+    return `  <Buchung ${attrs} />`;
+  });
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    `<Buchungsstapel format="EXTF" anzahl="${buchungen.length}">`,
+    ...lines,
+    "</Buchungsstapel>",
+  ].join("\n");
 }

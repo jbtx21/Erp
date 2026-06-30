@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   buchungenFromCreditNote,
+  buchungenFromIncomingInvoice,
   buchungenFromInvoice,
   buildDatevStapel,
   creditNoteTaxByRate,
   invoiceTaxByRate,
   snapTaxRate,
   toDatevCsv,
+  toDatevXml,
 } from "./datev.js";
 
 describe("DATEV-Export (T-07)", () => {
@@ -51,7 +53,7 @@ describe("DATEV-Export (T-07)", () => {
     );
     const lines = csv.split("\r\n");
     expect(lines[0]).toContain("Umsatz;Soll/Haben-Kennzeichen");
-    expect(lines[1]).toBe('100,00;S;10001;8400;9;0503;"RE-1";"Rechnung RE-1"');
+    expect(lines[1]).toBe('100,00;S;10001;8400;9;0503;"RE-1";"";"Rechnung RE-1"');
   });
 
   it("Gutschrift: je Satz eine HABEN-Buchung (Storno der Forderung, DATEV-001)", () => {
@@ -69,7 +71,58 @@ describe("DATEV-Export (T-07)", () => {
       { number: "GU-1", issuedAt: new Date("2026-03-06T10:00:00Z"), debitorKonto: "10001", taxByRate: [{ rate: 0.19, netCents: 10000 }] },
       erloes
     ));
-    expect(csv.split("\r\n")[1]).toBe('100,00;H;10001;8400;9;0603;"GU-1";"Gutschrift GU-1"');
+    expect(csv.split("\r\n")[1]).toBe('100,00;H;10001;8400;9;0603;"GU-1";"";"Gutschrift GU-1"');
+  });
+});
+
+describe("DATEV-Export — Kreditoren/Verbindlichkeiten + Belegfeld 2 + XML", () => {
+  const erloes = { standard: "8400", reduced: "8300" };
+
+  it("Eingangsrechnung: Aufwand (SOLL) an Kreditor je Steuersatz (Vorsteuer-BU)", () => {
+    const buchungen = buchungenFromIncomingInvoice({
+      number: "ER-2026-77",
+      issuedAt: new Date("2026-03-10T10:00:00Z"),
+      kreditorKonto: "70001",
+      aufwandskonto: "3100", // Fremdleistungen SKR03
+      supplierName: "Stickerei Müller",
+      belegfeld2: "L-0042",
+      taxByRate: [{ rate: 0.19, netCents: 25000 }],
+    });
+    expect(buchungen).toHaveLength(1);
+    expect(buchungen[0]).toMatchObject({
+      umsatzCents: 25000,
+      sollHaben: "S",
+      konto: "3100", // Aufwand im Soll
+      gegenkonto: "70001", // an Kreditor
+      buSchluessel: "9",
+      belegfeld1: "ER-2026-77",
+      belegfeld2: "L-0042",
+    });
+    expect(buchungen[0]!.buchungstext).toBe("ER ER-2026-77 Stickerei Müller");
+  });
+
+  it("buildDatevStapel hängt Eingangsrechnungen hinter AR + Gutschriften an", () => {
+    const stapel = buildDatevStapel({
+      invoices: [{ number: "RE-1", issuedAt: new Date("2026-03-05T10:00:00Z"), debitorKonto: "10001", taxByRate: invoiceTaxByRate(10000, 1900) }],
+      creditNotes: [],
+      incomingInvoices: [{ number: "ER-9", issuedAt: new Date("2026-03-07T10:00:00Z"), kreditorKonto: "70001", aufwandskonto: "3200", taxByRate: [{ rate: 0.19, netCents: 8000 }] }],
+      erloes,
+    });
+    expect(stapel.map((b) => b.belegfeld1)).toEqual(["RE-1", "ER-9"]);
+    expect(stapel[1]).toMatchObject({ sollHaben: "S", konto: "3200", gegenkonto: "70001" });
+  });
+
+  it("CSV trägt Belegfeld 2; XML serialisiert denselben Stapel maschinenlesbar", () => {
+    const buchungen = buchungenFromInvoice(
+      { number: "RE-K", issuedAt: new Date("2026-03-05T10:00:00Z"), debitorKonto: "10001", belegfeld2: "KD-100", taxByRate: [{ rate: 0.19, netCents: 10000 }] },
+      erloes
+    );
+    expect(toDatevCsv(buchungen).split("\r\n")[1]).toBe('100,00;S;10001;8400;9;0503;"RE-K";"KD-100";"Rechnung RE-K"');
+    const xml = toDatevXml(buchungen);
+    expect(xml).toContain('<Buchungsstapel format="EXTF" anzahl="1">');
+    expect(xml).toContain('umsatz="100.00"');
+    expect(xml).toContain('belegfeld2="KD-100"');
+    expect(xml).toContain('belegdatum="2026-03-05"');
   });
 });
 

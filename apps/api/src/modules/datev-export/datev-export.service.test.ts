@@ -27,10 +27,10 @@ describe("DatevExportService.export (T-07, Kap. 9.2)", () => {
     expect(res.creditNoteCount).toBe(1);
     expect(res.buchungCount).toBe(2);
     const lines = res.csv.split("\r\n");
-    // Rechnung: SOLL Debitor an Erlöse-19 (SKR03 8400), Netto 100,00.
-    expect(lines[1]).toBe('100,00;S;10001;8400;9;0503;"RE-2026-0001";"Rechnung RE-2026-0001"');
+    // Rechnung: SOLL Debitor an Erlöse-19 (SKR03 8400), Netto 100,00. (Belegfeld 2 leer.)
+    expect(lines[1]).toBe('100,00;S;10001;8400;9;0503;"RE-2026-0001";"";"Rechnung RE-2026-0001"');
     // Gutschrift: HABEN, positiver Betrag, Bezug zur Originalrechnung.
-    expect(lines[2]).toBe('100,00;H;10001;8400;9;0603;"GU-2026-0001";"Gutschrift GU-2026-0001 zu RE-2026-0001"');
+    expect(lines[2]).toBe('100,00;H;10001;8400;9;0603;"GU-2026-0001";"";"Gutschrift GU-2026-0001 zu RE-2026-0001"');
   });
 
   it("nutzt SKR04-Konten, wenn der Rahmen SKR04 gewählt ist", async () => {
@@ -43,6 +43,51 @@ describe("DatevExportService.export (T-07, Kap. 9.2)", () => {
     const { svc } = setup([{ number: "RE-2", issuedAt: new Date("2026-05-01T10:00:00Z"), netCents: 10000, taxCents: 1900, debitorKonto: null }]);
     const res = await svc.export({ from: FROM, to: TO, kontenrahmen: "SKR03" });
     expect(res.csv.split("\r\n")[1]).toContain('100,00;S;1400;8400;');
+  });
+
+  it("bucht Eingangsrechnungen kreditorisch (Aufwand SOLL an Kreditor)", async () => {
+    const repo = new InMemoryDatevExportRepository([], [], [
+      { id: "ii-1", number: "ER-77", issuedAt: new Date("2026-03-10T10:00:00Z"), netCents: 25000, taxCents: 4750, kreditorKonto: "70001", aufwandskonto: "3100", supplierName: "Stickerei Müller" },
+    ]);
+    const svc = new DatevExportService(repo, new MemoryAuditSink());
+    const res = await svc.export({ from: FROM, to: TO, kontenrahmen: "SKR03" });
+    expect(res.incomingInvoiceCount).toBe(1);
+    expect(res.buchungCount).toBe(1);
+    // Aufwand (3100) im Soll an Kreditor (70001), Netto 250,00, Vorsteuer-BU 9.
+    expect(res.csv.split("\r\n")[1]).toBe('250,00;S;3100;70001;9;1003;"ER-77";"";"ER ER-77 Stickerei Müller"');
+  });
+
+  it("Eingangsrechnung ohne Kontierung fällt auf Sammelkreditor (1600) + Wareneingang (3200) zurück", async () => {
+    const repo = new InMemoryDatevExportRepository([], [], [
+      { id: "ii-2", number: "ER-78", issuedAt: new Date("2026-03-11T10:00:00Z"), netCents: 10000, taxCents: 1900, kreditorKonto: null, aufwandskonto: null },
+    ]);
+    const svc = new DatevExportService(repo, new MemoryAuditSink());
+    const res = await svc.export({ from: FROM, to: TO, kontenrahmen: "SKR03" });
+    expect(res.csv.split("\r\n")[1]).toContain(";S;3200;1600;9;");
+  });
+
+  it("überspringt bereits exportierte Belege im Folgelauf (Guard)", async () => {
+    const repo = new InMemoryDatevExportRepository(
+      [{ number: "RE-G", issuedAt: new Date("2026-03-05T10:00:00Z"), netCents: 10000, taxCents: 1900, debitorKonto: "10001" }]
+    );
+    const svc = new DatevExportService(repo, new MemoryAuditSink());
+    const first = await svc.export({ from: FROM, to: TO, kontenrahmen: "SKR03" });
+    expect(first.invoiceCount).toBe(1);
+    const second = await svc.export({ from: FROM, to: TO, kontenrahmen: "SKR03" });
+    expect(second.invoiceCount).toBe(0);
+    expect(second.skippedAlreadyExported).toBe(1);
+    // Mit includeAlreadyExported erneut einbeziehbar.
+    const forced = await svc.export({ from: FROM, to: TO, kontenrahmen: "SKR03", includeAlreadyExported: true });
+    expect(forced.invoiceCount).toBe(1);
+  });
+
+  it("serialisiert auf Wunsch als XML (format=xml)", async () => {
+    const { svc } = setup([{ number: "RE-X", issuedAt: new Date("2026-03-05T10:00:00Z"), netCents: 10000, taxCents: 1900, debitorKonto: "10001" }]);
+    const res = await svc.export({ from: FROM, to: TO, kontenrahmen: "SKR03", format: "xml" });
+    expect(res.format).toBe("xml");
+    expect(res.filename).toMatch(/\.xml$/);
+    expect(res.csv).toContain('<Buchungsstapel format="EXTF"');
+    expect(res.csv).toContain('belegfeld1="RE-X"');
   });
 
   it("filtert Belege außerhalb der Periode heraus", async () => {

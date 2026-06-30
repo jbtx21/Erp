@@ -650,6 +650,9 @@ model Supplier {
   skontoDays      Int?
   lieferzeitTage  Int? // typische Lieferzeit
   notiz           String?
+  // DATEV-Kontierung (Kap. 9.2): kreditorische Seite. Fallback = Sammelkreditor bzw. Wareneingang.
+  kreditorenkonto String? // Kreditorenkonto des Lieferanten
+  aufwandskonto   String? // Aufwandskonto (Wareneingang/Fremdleistung)
   contacts        SupplierContact[]
   // Inbound-Connector (C3): Katalog/Lager/EK eingehend synchronisieren.
   kind            SupplierKind @default(MANUAL)
@@ -1266,6 +1269,20 @@ model CostCenter {
   invoices       Invoice[]
   purchaseOrders PurchaseOrder[]
   timeEntries    TimeEntry[]
+}
+
+// DATEV-Export-Protokoll (Kap. 9.2) — „bereits exportiert"-Guard: jeder in einen
+// Buchungsstapel übernommene Beleg wird hier append-only vermerkt, damit Folge-Exporte
+// ihn überspringen (Doppelbuchung vermeiden). belegart ∈ RECHNUNG/GUTSCHRIFT/EINGANGSRECHNUNG.
+model DatevExportEntry {
+  id         String   @id @default(cuid())
+  belegart   String
+  belegKey   String // Belegnummer bzw. -ID
+  filename   String
+  exportedAt DateTime @default(now())
+
+  @@unique([belegart, belegKey])
+  @@index([exportedAt])
 }
 
 model OpenItem {
