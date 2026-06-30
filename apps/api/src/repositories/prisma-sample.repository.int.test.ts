@@ -51,11 +51,11 @@ if (!dbConfigured) {
       await cleanup();
       await prisma.priceGroup.create({ data: { id: PG, kind: "STANDARD", name: "Standard" } });
       await prisma.company.create({ data: { id: CO, name: "ACME GmbH", priceGroupId: PG } });
-      await prisma.article.create({ data: { id: ART, sku: "ART-B5", name: "Muster-Poloshirt" } });
+      await prisma.article.create({ data: { description: "Testartikel", ekCents: 0, vkCents: 0, id: ART, sku: "ART-B5", name: "Muster-Poloshirt" } });
       await prisma.variant.create({ data: { id: VAR, articleId: ART, sku: "B5-1" } });
       await prisma.priceGroupPrice.create({ data: { variantId: VAR, priceGroupId: PG, netCents: 1000 } });
       // Variante OHNE Preispflege → Berechnung schlägt fehl (Resilienz-Test).
-      await prisma.article.create({ data: { id: ART_NP, sku: "ART-B5-NP", name: "Muster ohne Preis" } });
+      await prisma.article.create({ data: { description: "Testartikel", ekCents: 0, vkCents: 0, id: ART_NP, sku: "ART-B5-NP", name: "Muster ohne Preis" } });
       await prisma.variant.create({ data: { id: VAR_NP, articleId: ART_NP, sku: "B5-NP-1" } });
     });
 

@@ -1539,21 +1539,29 @@ export const appRouter = router({
       .input(z.object({ articleId: z.string().min(1) }))
       .query(({ input, ctx }) => ctx.products.listVariants(input.articleId)),
     createArticle: roleProcedure("ADMIN", "BUERO")
-      .input(z.object({ sku: z.string().min(1), name: z.string().min(1) }))
+      // Alle 5 Stammfelder Pflicht (überall hart): Nr., Name, Beschreibung, EK, VK.
+      .input(z.object({
+        sku: z.string().min(1),
+        name: z.string().min(1),
+        description: z.string().min(1, "Artikelbeschreibung ist Pflicht."),
+        ekCents: z.number().int().nonnegative(),
+        vkCents: z.number().int().nonnegative(),
+      }))
       .mutation(async ({ input, ctx }) => {
-        try { return await ctx.products.createArticle(input.sku, input.name); } catch (e) { throw toTrpcError(e); }
+        try { return await ctx.products.createArticle(input); } catch (e) { throw toTrpcError(e); }
       }),
     // Schnellanlage aus dem Picker: Artikel + Basis-Variante in einem Schritt, sofort wählbar.
     quickCreate: roleProcedure("ADMIN", "BUERO")
       .input(z.object({
         sku: z.string().min(1),
         name: z.string().min(1),
-        description: z.string().optional(),
+        // Pflicht-Stammdaten (überall hart): Beschreibung + Basis-EK/-VK.
+        description: z.string().min(1, "Artikelbeschreibung ist Pflicht."),
+        ekCents: z.number().int().nonnegative(),
+        vkCents: z.number().int().nonnegative(),
         attributes: z.array(z.object({ name: z.string().min(1), value: z.string().min(1) })).optional(),
-        // Inline-Bepreisung beim Anlegen aus dem Positionseditor (EK braucht einen Lieferant).
-        ekCents: z.number().int().nonnegative().optional(),
+        // Optionale Varianten-Übersteuerung: Lieferanten-EK (SupplierItem) braucht einen Lieferant.
         supplierId: z.string().optional(),
-        vkCents: z.number().int().nonnegative().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         try { return await ctx.products.quickCreateCatalogEntry(input); }
@@ -1627,6 +1635,8 @@ export const appRouter = router({
         id: z.string().min(1),
         patch: z.object({
           name: z.string().optional(), description: z.string().optional(), brand: z.string().optional(),
+          // Pflicht-Basispreise editierbar (Standard-EK/-VK des Artikels).
+          ekCents: z.number().int().nonnegative().optional(), vkCents: z.number().int().nonnegative().optional(),
           materialComposition: z.string().optional(), careInstructions: z.string().optional(),
           hsCode: z.string().optional(), originCountry: z.string().optional(),
           // ERPNext-Item-Angleichung (Textil-Subset).

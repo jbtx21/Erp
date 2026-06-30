@@ -43,7 +43,7 @@ if (!dbConfigured) {
       await prisma.priceGroup.create({ data: { id: PG, kind: "TOP", name: "Top" } });
       await prisma.company.create({ data: { id: CO, name: "ACME GmbH", priceGroupId: PG } });
       await prisma.supplier.create({ data: { id: SUP, name: "ID Identity", kind: "ID_IDENTITY" } });
-      await prisma.article.create({ data: { id: ART, sku: "ART-RO", name: "Transferdruck" } });
+      await prisma.article.create({ data: { description: "Testartikel", ekCents: 0, vkCents: 0, id: ART, sku: "ART-RO", name: "Transferdruck" } });
       await prisma.variant.create({ data: { id: V_LOW, articleId: ART, sku: "RO-LOW" } });
       await prisma.variant.create({ data: { id: V_OK, articleId: ART, sku: "RO-OK" } });
       await prisma.supplierItem.create({ data: { supplierId: SUP, variantId: V_LOW, ekCents: 500, priority: 1 } });

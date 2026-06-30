@@ -49,7 +49,7 @@ if (!dbConfigured) {
       await prisma.priceGroup.create({ data: { id: PG, kind: "PREMIUM", name: "Prodtest" } });
       await prisma.company.create({ data: { id: CO, name: "Prodtest GmbH", priceGroupId: PG } });
       await prisma.supplier.create({ data: { id: SUP, name: "Veredler Prodtest" } });
-      await prisma.article.create({ data: { id: ART, sku: "PRODSET", name: "Vereins-Set", veredlerId: SUP } });
+      await prisma.article.create({ data: { description: "Testartikel", ekCents: 0, vkCents: 0, id: ART, sku: "PRODSET", name: "Vereins-Set", veredlerId: SUP } });
       await prisma.variant.create({ data: { id: COMP, articleId: ART, sku: "PROD-POLO" } });
       await prisma.variant.create({ data: { id: SET, articleId: ART, sku: "PROD-SET", isBundle: true, bundleComponents: { create: [
         { description: "Polo rot M", qty: 1, componentVariantId: COMP, position: 1 },

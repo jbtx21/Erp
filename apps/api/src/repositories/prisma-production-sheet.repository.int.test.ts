@@ -46,7 +46,7 @@ if (!dbConfigured) {
       await prisma.priceGroup.create({ data: { id: PG, kind: "PREMIUM", name: "Premium" } });
       await prisma.company.create({ data: { id: CO, name: "ACME GmbH", priceGroupId: PG } });
       await prisma.logoVersion.create({ data: { id: LOGO, companyId: CO, version: 3, fileRef: "drive://logo", active: true } });
-      await prisma.article.create({ data: { id: ART, sku: "ART-PS", name: "Polo" } });
+      await prisma.article.create({ data: { description: "Testartikel", ekCents: 0, vkCents: 0, id: ART, sku: "ART-PS", name: "Polo" } });
       await prisma.variant.create({ data: { id: VAR, articleId: ART, sku: "PS-1" } });
       await prisma.variantAttribute.create({ data: { id: ATTR_F, variantId: VAR, name: "Farbe", value: "Blau" } });
       await prisma.variantAttribute.create({ data: { id: ATTR_G, variantId: VAR, name: "Größe", value: "XL" } });

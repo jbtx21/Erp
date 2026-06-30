@@ -151,7 +151,7 @@ const COL_LABELS: Record<string, string> = {
   email: "E-Mail", phone: "Telefon", branche: "Branche", vatId: "USt-IdNr.", iban: "IBAN", bic: "BIC",
   active: "Aktiv", mahnsperre: "Mahnsperre", gesperrt: "Gesperrt", priceGroupKind: "Preisgruppe",
   zahlungszielTage: "Zahlungsziel (T)", netCents: "Netto", taxCents: "MwSt.", grossCents: "Brutto",
-  openCents: "Offen", ekCents: "EK", unitNetCents: "Einzel netto", totalNetCents: "Summe",
+  openCents: "Offen", ekCents: "EK", vkCents: "VK", unitNetCents: "Einzel netto", totalNetCents: "Summe",
   qty: "Menge", menge: "Menge", position: "Pos.", description: "Beschreibung", sku: "SKU", differenzCents: "Differenz",
   vorlage: "Vorlage", verwendung: "Verwendung", subject: "Betreff", key: "Schlüssel",
   kunde: "Kunde", issuedAt: "Rechnungsdatum", deltaQty: "Menge ±", belegRef: "Beleg", lager: "Lager",
@@ -1693,6 +1693,8 @@ function ArticleForm({ a, onClose, onSaved }: { a: ArticleData; onClose: () => v
     isSalesItem: a.isSalesItem !== false, isPurchaseItem: a.isPurchaseItem !== false,
     bestandsgefuehrt: a.bestandsgefuehrt === true,
     brand: str(a.brand), description: str(a.description), materialComposition: str(a.materialComposition),
+    ekEur: (a.ekCents == null ? "" : Number(a.ekCents) / 100) as number | "",
+    vkEur: (a.vkCents == null ? "" : Number(a.vkCents) / 100) as number | "",
     careInstructions: str(a.careInstructions), gender: str(a.gender), styleFit: str(a.styleFit),
     hsCode: str(a.hsCode), originCountry: str(a.originCountry),
     minOrderQty: num(a.minOrderQty), maxDiscountPct: num(a.maxDiscountPct), leadTimeDays: num(a.leadTimeDays), gm2: num(a.gm2),
@@ -1707,6 +1709,8 @@ function ArticleForm({ a, onClose, onSaved }: { a: ArticleData; onClose: () => v
         name: d.name.trim(), itemGroup: d.itemGroup.trim(), stockUom: d.stockUom.trim() || "Stk",
         isSalesItem: d.isSalesItem, isPurchaseItem: d.isPurchaseItem, bestandsgefuehrt: d.bestandsgefuehrt,
         brand: d.brand.trim(), description: d.description.trim(), materialComposition: d.materialComposition.trim(),
+        ...(d.ekEur === "" ? {} : { ekCents: Math.round(Number(d.ekEur) * 100) }),
+        ...(d.vkEur === "" ? {} : { vkCents: Math.round(Number(d.vkEur) * 100) }),
         careInstructions: d.careInstructions.trim(), gender: d.gender.trim(), styleFit: d.styleFit.trim(),
         hsCode: d.hsCode.trim(), originCountry: d.originCountry.trim(),
         minOrderQty: d.minOrderQty === "" ? null : Number(d.minOrderQty),
@@ -1747,7 +1751,13 @@ function ArticleForm({ a, onClose, onSaved }: { a: ArticleData; onClose: () => v
             <Checkbox label="Verkauf erlauben" checked={d.isSalesItem} onChange={(e) => set({ isSalesItem: e.currentTarget.checked })} />
             <Checkbox label="Einkauf zulassen" checked={d.isPurchaseItem} onChange={(e) => set({ isPurchaseItem: e.currentTarget.checked })} />
           </SimpleGrid>
-          <Textarea label="Beschreibung" value={d.description} onChange={(e) => set({ description: e.currentTarget.value })} autosize minRows={2} mt="md" maw={760} />
+          <Textarea label="Beschreibung" value={d.description} onChange={(e) => set({ description: e.currentTarget.value })} autosize minRows={2} mt="md" maw={760} withAsterisk />
+          <Title order={6} mt="lg">Standard-Preise</Title>
+          <SimpleGrid cols={2} spacing="md" maw={400} mt="xs">
+            <MoneyInput label="EK (€)" withAsterisk value={d.ekEur} onChange={(v) => set({ ekEur: typeof v === "number" ? v : "" })} min={0} />
+            <MoneyInput label="VK (€)" withAsterisk value={d.vkEur} onChange={(v) => set({ vkEur: typeof v === "number" ? v : "" })} min={0} />
+          </SimpleGrid>
+          <Text size="xs" c="dimmed" mt={4} maw={400}>Verbindlicher Basis-EK/-VK des Artikels. Preisgruppen-/Lieferantenpreise je Variante übersteuern; sonst gelten diese Werte.</Text>
           <Title order={6} mt="lg">Textil</Title>
           <SimpleGrid cols={3} spacing="md" maw={760} mt="xs">
             <TextInput label="Material" value={d.materialComposition} onChange={(e) => set({ materialComposition: e.currentTarget.value })} placeholder="100% Baumwolle" />
@@ -2192,6 +2202,10 @@ export function ProductsPage({ focusId }: { focusId?: string } = {}): JSX.Elemen
   const [articles, setArticles] = useState<ArticleData[]>([]);
   const [sku, setSku] = useState("");
   const [name, setName] = useState("");
+  // Pflicht-Stammfelder bei der Anlage (überall): Beschreibung + Basis-EK/-VK.
+  const [description, setDescription] = useState("");
+  const [ek, setEk] = useState<number | "">("");
+  const [vk, setVk] = useState<number | "">("");
   const [editId, setEditId] = useState<string | null>(null);
   const [sel, setSel] = useState<string | null>(null);
   const [variants, setVariants] = useState<Row[]>([]);
@@ -2227,12 +2241,18 @@ export function ProductsPage({ focusId }: { focusId?: string } = {}): JSX.Elemen
   return (
     <>
       <DocListHeader module="Lager / Artikel" title="Artikel & Varianten" hint="Stammdaten (B16): Artikel direkt in der Tabelle bearbeiten (Schnellbearbeitung), Vollständigkeit je Artikel, Massenbearbeitung über mehrere SKUs, Farbe×Größe-Varianten." />
-      <Group mt="sm" gap="xs" align="end">
-        <TextInput label="Artikel-SKU" value={sku} onChange={(e) => setSku(e.currentTarget.value)} placeholder="POLO-PREMIUM" w={160} />
-        <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Premium-Poloshirt" />
-        <Button disabled={!sku.trim() || !name.trim()} onClick={async () => {
+      <Group mt="sm" gap="xs" align="end" wrap="wrap">
+        <TextInput label="Artikel-Nr." value={sku} onChange={(e) => setSku(e.currentTarget.value)} placeholder="POLO-PREMIUM" w={150} withAsterisk />
+        <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Premium-Poloshirt" w={180} withAsterisk />
+        <TextInput label="Beschreibung" value={description} onChange={(e) => setDescription(e.currentTarget.value)} placeholder="Kurzbeschreibung" w={220} withAsterisk />
+        <MoneyInput label="EK (€)" withAsterisk value={ek} onChange={(v) => setEk(typeof v === "number" ? v : "")} min={0} w={110} />
+        <MoneyInput label="VK (€)" withAsterisk value={vk} onChange={(v) => setVk(typeof v === "number" ? v : "")} min={0} w={110} />
+        <Button disabled={!sku.trim() || !name.trim() || !description.trim() || ek === "" || vk === ""} onClick={async () => {
           setErr(null);
-          try { await trpc.products.createArticle.mutate({ sku: sku.trim(), name: name.trim() }); setSku(""); setName(""); await loadArticles(); }
+          try {
+            await trpc.products.createArticle.mutate({ sku: sku.trim(), name: name.trim(), description: description.trim(), ekCents: Math.round(Number(ek) * 100), vkCents: Math.round(Number(vk) * 100) });
+            setSku(""); setName(""); setDescription(""); setEk(""); setVk(""); await loadArticles();
+          }
           catch (e) { setErr(errMsg(e)); }
         }}>Artikel anlegen</Button>
       </Group>
@@ -2318,6 +2338,8 @@ export function ArticlePicker({ onPick }: { onPick: (e: { label: string; unitNet
   const [creating, setCreating] = useState(false);
   const [sku, setSku] = useState("");
   const [beschreibung, setBeschreibung] = useState("");
+  const [pEk, setPEk] = useState<number | "">("");
+  const [pVk, setPVk] = useState<number | "">("");
   const [farbe, setFarbe] = useState("");
   const [groesse, setGroesse] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -2330,7 +2352,7 @@ export function ArticlePicker({ onPick }: { onPick: (e: { label: string; unitNet
   useEffect(() => { const t = setTimeout(() => { void reload(); }, 200); return () => clearTimeout(t); }, [reload]);
   const byId = new Map(catalog.map((c) => [c.variantId, c]));
   const hasMatch = catalog.length > 0;
-  const reset = (): void => { setCreating(false); setSku(""); setBeschreibung(""); setFarbe(""); setGroesse(""); setErr(null); };
+  const reset = (): void => { setCreating(false); setSku(""); setBeschreibung(""); setPEk(""); setPVk(""); setFarbe(""); setGroesse(""); setErr(null); };
   return (
     <Box>
       <Select size="xs" searchable clearable placeholder="+ Artikel: Nr., Name oder Beschreibung…" w={340} value={value}
@@ -2371,17 +2393,23 @@ export function ArticlePicker({ onPick }: { onPick: (e: { label: string; unitNet
             <TextInput size="xs" label="Farbe" placeholder="optional" w={80} value={farbe} onChange={(e) => setFarbe(e.currentTarget.value)} />
             <TextInput size="xs" label="Größe" placeholder="optional" w={70} value={groesse} onChange={(e) => setGroesse(e.currentTarget.value)} />
           </Group>
-          <TextInput size="xs" label="Beschreibung" placeholder="optional" mt={4} value={beschreibung} onChange={(e) => setBeschreibung(e.currentTarget.value)} />
+          <TextInput size="xs" label="Beschreibung" placeholder="Kurzbeschreibung" mt={4} value={beschreibung} onChange={(e) => setBeschreibung(e.currentTarget.value)} withAsterisk />
+          <Group gap="xs" align="end" wrap="wrap" mt={4}>
+            <MoneyInput size="xs" label="EK (€)" withAsterisk value={pEk} onChange={(v) => setPEk(typeof v === "number" ? v : "")} min={0} w={100} />
+            <MoneyInput size="xs" label="VK (€)" withAsterisk value={pVk} onChange={(v) => setPVk(typeof v === "number" ? v : "")} min={0} w={100} />
+          </Group>
           {err && <Text size="xs" c="red" mt={4}>{err}</Text>}
           <Group gap="xs" mt={6}>
             <Button size="compact-xs" onClick={async () => {
               if (!sku.trim()) { setErr("Artikel-Nr. ist Pflicht."); return; }
+              if (!beschreibung.trim()) { setErr("Beschreibung ist Pflicht."); return; }
+              if (pEk === "" || pVk === "") { setErr("EK und VK sind Pflicht."); return; }
               const attributes = [
                 ...(farbe.trim() ? [{ name: "Farbe", value: farbe.trim() }] : []),
                 ...(groesse.trim() ? [{ name: "Größe", value: groesse.trim() }] : []),
               ];
               try {
-                const entry = await trpc.products.quickCreate.mutate({ sku: sku.trim(), name: search.trim(), ...(beschreibung.trim() ? { description: beschreibung.trim() } : {}), attributes });
+                const entry = await trpc.products.quickCreate.mutate({ sku: sku.trim(), name: search.trim(), description: beschreibung.trim(), ekCents: Math.round(Number(pEk) * 100), vkCents: Math.round(Number(pVk) * 100), attributes });
                 await reload();
                 onPick({ label: entry.label, unitNetCents: entry.unitNetCents, variantId: entry.variantId, sku: sku.trim(), articleName: search.trim() });
                 setValue(null); setSearch(""); reset();
@@ -2750,15 +2778,15 @@ function TextilCatalogDialog({ onClose, onCreated, initial }: { onClose: () => v
         ...(groesse.trim() ? [{ name: "Größe", value: groesse.trim() }] : []),
       ];
       const e = await trpc.products.quickCreate.mutate({
-        sku: sku.trim(), name: name.trim(), ...(description.trim() ? { description: description.trim() } : {}), attributes,
-        ...(typeof ek === "number" ? { ekCents: Math.round(ek * 100) } : {}),
+        sku: sku.trim(), name: name.trim(), description: description.trim(), attributes,
+        ekCents: typeof ek === "number" ? Math.round(ek * 100) : 0,
+        vkCents: typeof vk === "number" ? Math.round(vk * 100) : 0,
         ...(lieferantId ? { supplierId: lieferantId } : {}),
-        ...(typeof vk === "number" ? { vkCents: Math.round(vk * 100) } : {}),
       });
       onCreated({ label: e.label, variantId: e.variantId, unitNetCents: e.unitNetCents, sku: sku.trim(), articleName: name.trim() });
     } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
   };
-  const fehlt = [!name.trim() && "Bezeichnung", !sku.trim() && "Artikel-Nr.", ek === "" && "EK", !lieferantId && "Lieferant"].filter(Boolean);
+  const fehlt = [!name.trim() && "Bezeichnung", !sku.trim() && "Artikel-Nr.", !description.trim() && "Beschreibung", ek === "" && "EK", vk === "" && "VK"].filter(Boolean);
   return (
     <Modal opened onClose={onClose} title="Textilartikel in Katalog speichern" size="md">
       {err && <Alert color="red" mb="sm">{err}</Alert>}
@@ -2766,15 +2794,15 @@ function TextilCatalogDialog({ onClose, onCreated, initial }: { onClose: () => v
         <TextInput label="Bezeichnung" withAsterisk placeholder="z. B. Hakro T-Shirt Baumwolle" value={name} onChange={(e) => setName(e.currentTarget.value)} w={260} />
         <TextInput label="Artikel-Nr. (SKU)" withAsterisk placeholder="z. B. HAKRO-292" value={sku} onChange={(e) => setSku(e.currentTarget.value)} w={150} />
       </Group>
-      <TextInput label="Beschreibung" placeholder="Material, Schnitt …" mt="sm" value={description} onChange={(e) => setDescription(e.currentTarget.value)} />
+      <TextInput label="Beschreibung" withAsterisk placeholder="Material, Schnitt …" mt="sm" value={description} onChange={(e) => setDescription(e.currentTarget.value)} />
       <Group gap="md" align="end" wrap="wrap" mt="sm">
         <TextInput label="Farbe" placeholder="optional" w={120} value={farbe} onChange={(e) => setFarbe(e.currentTarget.value)} />
         <TextInput label="Größe" placeholder="optional" w={100} value={groesse} onChange={(e) => setGroesse(e.currentTarget.value)} />
       </Group>
       <Group gap="md" align="end" wrap="wrap" mt="sm">
-        <SupplierPicker label="Lieferant (für EK)" value={lieferantId} onChange={setLieferantId} w={220} />
+        <SupplierPicker label="Lieferant (optional, für Lieferanten-EK)" value={lieferantId} onChange={setLieferantId} w={220} />
         <MoneyInput label="EK je Stück (€)" withAsterisk value={ek} onChange={(v) => setEk(typeof v === "number" ? v : "")} min={0} w={140} placeholder="Pflicht" />
-        <MoneyInput label="VK je Stück (€)" value={vk} onChange={(v) => setVk(typeof v === "number" ? v : "")} min={0} w={140} placeholder="optional" />
+        <MoneyInput label="VK je Stück (€)" withAsterisk value={vk} onChange={(v) => setVk(typeof v === "number" ? v : "")} min={0} w={140} placeholder="Pflicht" />
       </Group>
       <Group justify="flex-end" mt="lg" align="center">
         {fehlt.length > 0 && <Text size="xs" c="dimmed">Bitte ausfüllen: {fehlt.join(", ")}</Text>}

@@ -37,7 +37,7 @@ if (!dbConfigured) {
       await cleanup();
       await prisma.priceGroup.create({ data: { id: PG, kind: "STANDARD", name: "Standard" } });
       await prisma.company.create({ data: { id: CO, name: "ACME GmbH", priceGroupId: PG } });
-      await prisma.article.create({ data: { id: ART, sku: "ART-B4", name: "Poloshirt" } });
+      await prisma.article.create({ data: { description: "Testartikel", ekCents: 0, vkCents: 0, id: ART, sku: "ART-B4", name: "Poloshirt" } });
       await prisma.variant.create({ data: { id: VAR, articleId: ART, sku: "B4-1" } });
       await prisma.priceGroupPrice.create({ data: { variantId: VAR, priceGroupId: PG, netCents: 1200 } });
       await prisma.priceGroupPriceTier.createMany({

@@ -66,6 +66,7 @@ async function main(): Promise<void> {
     create: {
       id: "art-polo", sku: "POLO-CLASSIC", name: "Poloshirt Classic",
       description: "Klassisches Piqué-Poloshirt aus 100 % Baumwolle — vielseitig veredelbar (Stick/Druck).",
+      ekCents: 450, vkCents: 1290,
       brand: "Texile Premium", materialComposition: "100% Baumwolle", careInstructions: "40 °C, nicht bleichen",
     },
   });

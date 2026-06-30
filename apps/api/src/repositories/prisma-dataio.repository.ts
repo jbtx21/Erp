@@ -2,7 +2,10 @@
 // Artikel = SKU (unique), Kunde/Lieferant = Name (per findFirst, da nicht unique).
 
 import { prisma } from "@texma/db";
-import type { ArticleImport, CompanyImport, SupplierImport } from "@texma/shared";
+import { parseEuroInput, type ArticleImport, type CompanyImport, type SupplierImport } from "@texma/shared";
+
+/** Cent → de-DE-Dezimalstring ohne Symbol für den CSV-Export ("4,50"). */
+const centsToEuroStr = (cents: number): string => (cents / 100).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 import type { DataIoRepository } from "../modules/dataio/dataio.service.js";
 
 export class PrismaDataIoRepository implements DataIoRepository {
@@ -10,19 +13,27 @@ export class PrismaDataIoRepository implements DataIoRepository {
   async listArticles(): Promise<ArticleImport[]> {
     const rows = await prisma.article.findMany({ orderBy: { sku: "asc" } });
     return rows.map((a) => ({
-      sku: a.sku, name: a.name, description: a.description ?? "", brand: a.brand ?? "",
+      sku: a.sku, name: a.name, description: a.description ?? "", ekCents: centsToEuroStr(a.ekCents), vkCents: centsToEuroStr(a.vkCents), brand: a.brand ?? "",
       materialComposition: a.materialComposition ?? "", careInstructions: a.careInstructions ?? "",
       hsCode: a.hsCode ?? "", originCountry: a.originCountry ?? "",
     }));
   }
   async upsertArticle(rec: ArticleImport): Promise<"created" | "updated"> {
     const exists = await prisma.article.findUnique({ where: { sku: rec.sku }, select: { id: true } });
+    // Pflichtfelder hart (überall): Beschreibung + EK/VK müssen geliefert werden (Import sonst Fehler).
+    const description = rec.description?.trim();
+    if (!description) throw new Error(`Artikel ${rec.sku}: Beschreibung ist Pflicht.`);
+    const ekEur = parseEuroInput(rec.ekCents);
+    const vkEur = parseEuroInput(rec.vkCents);
+    if (ekEur == null || vkEur == null) throw new Error(`Artikel ${rec.sku}: EK und VK sind Pflicht (gültiger Betrag).`);
+    const ekCents = Math.round(ekEur * 100);
+    const vkCents = Math.round(vkEur * 100);
     const data = {
-      name: rec.name, description: rec.description || null, brand: rec.brand || null,
+      name: rec.name, description, brand: rec.brand || null,
       materialComposition: rec.materialComposition || null, careInstructions: rec.careInstructions || null,
       hsCode: rec.hsCode || null, originCountry: rec.originCountry || null,
     };
-    await prisma.article.upsert({ where: { sku: rec.sku }, update: data, create: { sku: rec.sku, ...data } });
+    await prisma.article.upsert({ where: { sku: rec.sku }, update: { ...data, ekCents, vkCents }, create: { sku: rec.sku, ...data, ekCents, vkCents } });
     return exists ? "updated" : "created";
   }
 

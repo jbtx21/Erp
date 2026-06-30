@@ -51,7 +51,8 @@ export class PrismaEanImportRepository implements EanImportRepository {
   }
 
   async createArticleWithVariant(input: { sku: string; name: string; gtin: string | null; weightGrams: number | null }): Promise<{ articleId: string; variantId: string }> {
-    const article = await prisma.article.create({ data: { sku: input.sku, name: input.name }, select: { id: true } });
+    // EAN-Feed liefert keine Preise/Beschreibung → Pflichtfelder als Default-Skeleton (zu vervollständigen).
+    const article = await prisma.article.create({ data: { sku: input.sku, name: input.name, description: input.name, ekCents: 0, vkCents: 0 }, select: { id: true } });
     const variant = await prisma.variant.create({
       data: { articleId: article.id, sku: input.sku, gtin: input.gtin, weightGrams: input.weightGrams },
       select: { id: true },

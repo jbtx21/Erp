@@ -46,7 +46,7 @@ if (!dbConfigured) {
 
     beforeAll(async () => {
       await cleanup();
-      await prisma.article.create({ data: { id: ART, sku: "ART-TEST", name: "Test-Shirt" } });
+      await prisma.article.create({ data: { description: "Testartikel", ekCents: 0, vkCents: 0, id: ART, sku: "ART-TEST", name: "Test-Shirt" } });
       await prisma.variant.create({ data: { id: VAR1, articleId: ART, sku: "0020-RED-L" } });
       await prisma.variant.create({ data: { id: VAR2, articleId: ART, sku: "0021-BLK-M" } });
       await prisma.supplier.create({

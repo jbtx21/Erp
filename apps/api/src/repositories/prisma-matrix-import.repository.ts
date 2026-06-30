@@ -31,7 +31,8 @@ export class PrismaMatrixImportRepository implements MatrixImportRepository {
   }
 
   async createArticle(sku: string, name: string): Promise<{ id: string }> {
-    return prisma.article.create({ data: { sku, name }, select: { id: true } });
+    // Matrix-Import legt das Artikel-Skelett an; EK je Variante folgt, Basis-Preise als Default (zu vervollständigen).
+    return prisma.article.create({ data: { sku, name, description: name, ekCents: 0, vkCents: 0 }, select: { id: true } });
   }
 
   generateMatrixVariants(articleId: string, combos: ReadonlyArray<{ farbe: string; groesse: string }>): Promise<{ created: number; skipped: number; createdSkus: string[] }> {

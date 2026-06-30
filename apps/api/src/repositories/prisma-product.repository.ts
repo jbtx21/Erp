@@ -31,10 +31,10 @@ export class PrismaProductRepository implements ProductRepository {
   async listArticles(): Promise<Omit<ArticleRow, "completeness">[]> {
     const rows = await prisma.article.findMany({
       orderBy: { sku: "asc" },
-      select: { id: true, sku: true, name: true, ...PIM_SELECT, _count: { select: { variants: true } } },
+      select: { id: true, sku: true, name: true, ekCents: true, vkCents: true, ...PIM_SELECT, _count: { select: { variants: true } } },
     });
     return rows.map((a) => ({
-      id: a.id, sku: a.sku, name: a.name, variantCount: a._count.variants,
+      id: a.id, sku: a.sku, name: a.name, variantCount: a._count.variants, ekCents: a.ekCents, vkCents: a.vkCents,
       description: s(a.description), brand: s(a.brand), materialComposition: s(a.materialComposition),
       careInstructions: s(a.careInstructions), hsCode: s(a.hsCode), originCountry: s(a.originCountry),
       itemGroup: s(a.itemGroup), stockUom: a.stockUom, isSalesItem: a.isSalesItem, isPurchaseItem: a.isPurchaseItem,
@@ -43,8 +43,11 @@ export class PrismaProductRepository implements ProductRepository {
     }));
   }
 
-  async createArticle(sku: string, name: string, description?: string | null): Promise<{ id: string }> {
-    return prisma.article.create({ data: { sku, name, description: description ?? null }, select: { id: true } });
+  async createArticle(input: { sku: string; name: string; description: string; ekCents: number; vkCents: number }): Promise<{ id: string }> {
+    return prisma.article.create({
+      data: { sku: input.sku, name: input.name, description: input.description, ekCents: input.ekCents, vkCents: input.vkCents },
+      select: { id: true },
+    });
   }
 
   async updateArticle(id: string, patch: ArticlePatch): Promise<boolean> {
@@ -79,7 +82,7 @@ export class PrismaProductRepository implements ProductRepository {
       orderBy: [{ article: { sku: "asc" } }, { sku: "asc" }],
       select: {
         id: true, sku: true, articleId: true, isBundle: true,
-        article: { select: { name: true, description: true } },
+        article: { select: { name: true, description: true, ekCents: true, vkCents: true } },
         attributes: { select: { name: true, value: true } },
         prices: { where: { priceGroup: { kind: "STANDARD" } }, select: { netCents: true }, take: 1 },
       },
@@ -87,7 +90,7 @@ export class PrismaProductRepository implements ProductRepository {
     return rows.map((v) => {
       const attrs = v.attributes.map((a) => a.value).join(" / ");
       const label = `${v.article.name}${attrs ? ` — ${attrs}` : ""} (${v.sku})`;
-      return { variantId: v.id, articleId: v.articleId, articleName: v.article.name, sku: v.sku, description: v.article.description ?? "", label, unitNetCents: v.prices[0]?.netCents ?? 0, isBundle: v.isBundle };
+      return { variantId: v.id, articleId: v.articleId, articleName: v.article.name, sku: v.sku, description: v.article.description ?? "", label, unitNetCents: v.prices[0]?.netCents ?? v.article.vkCents, vkCents: v.article.vkCents, ekCents: v.article.ekCents, isBundle: v.isBundle };
     });
   }
 
@@ -98,7 +101,7 @@ export class PrismaProductRepository implements ProductRepository {
       orderBy: [{ article: { sku: "asc" } }, { sku: "asc" }],
       select: {
         id: true, sku: true, articleId: true, isBundle: true,
-        article: { select: { name: true, description: true, finishingSpecs: { select: { placement: true } } } },
+        article: { select: { name: true, description: true, ekCents: true, vkCents: true, finishingSpecs: { select: { placement: true } } } },
         attributes: { select: { name: true, value: true } },
         prices: { where: { priceGroup: { kind: "STANDARD" } }, select: { netCents: true }, take: 1 },
       },
@@ -107,7 +110,7 @@ export class PrismaProductRepository implements ProductRepository {
       const attrs = v.attributes.map((a) => a.value).join(" / ");
       const label = `${v.article.name}${attrs ? ` — ${attrs}` : ""} (${v.sku})`;
       const placements = [...new Set(v.article.finishingSpecs.map((f) => f.placement).filter((p) => p.trim()))];
-      return { variantId: v.id, articleId: v.articleId, articleName: v.article.name, sku: v.sku, description: v.article.description ?? "", label, unitNetCents: v.prices[0]?.netCents ?? 0, isBundle: v.isBundle, placements };
+      return { variantId: v.id, articleId: v.articleId, articleName: v.article.name, sku: v.sku, description: v.article.description ?? "", label, unitNetCents: v.prices[0]?.netCents ?? v.article.vkCents, vkCents: v.article.vkCents, ekCents: v.article.ekCents, isBundle: v.isBundle, placements };
     });
   }
 
@@ -133,7 +136,7 @@ export class PrismaProductRepository implements ProductRepository {
       take: limit,
       select: {
         id: true, sku: true, articleId: true, isBundle: true,
-        article: { select: { name: true, description: true } },
+        article: { select: { name: true, description: true, ekCents: true, vkCents: true } },
         attributes: { select: { name: true, value: true } },
         prices: { where: { priceGroup: { kind: "STANDARD" } }, select: { netCents: true }, take: 1 },
       },
@@ -141,7 +144,7 @@ export class PrismaProductRepository implements ProductRepository {
     return rows.map((v) => {
       const attrs = v.attributes.map((a) => a.value).join(" / ");
       const label = `${v.article.name}${attrs ? ` — ${attrs}` : ""} (${v.sku})`;
-      return { variantId: v.id, articleId: v.articleId, articleName: v.article.name, sku: v.sku, description: v.article.description ?? "", label, unitNetCents: v.prices[0]?.netCents ?? 0, isBundle: v.isBundle };
+      return { variantId: v.id, articleId: v.articleId, articleName: v.article.name, sku: v.sku, description: v.article.description ?? "", label, unitNetCents: v.prices[0]?.netCents ?? v.article.vkCents, vkCents: v.article.vkCents, ekCents: v.article.ekCents, isBundle: v.isBundle };
     });
   }
 
@@ -249,6 +252,8 @@ export class PrismaProductRepository implements ProductRepository {
       const article = await tx.article.create({
         data: {
           sku: input.sku, name: input.name, type: "FINISHING", veredlerId: input.veredlerId,
+          // Pflicht-Stammdaten: Beschreibung (= Name), Basis-EK (Logo-EK), Basis-VK (erste Staffelstufe).
+          description: input.name, ekCents: input.ekCents ?? 0, vkCents: input.tiers[0]?.vkCents ?? 0,
           // Eine Veredelungs-Spezifikation je Platzierung (z. B. Siebdruck vorne + hinten).
           finishingSpecs: { create: (input.placements.length > 0 ? input.placements : [""]).map((placement) => ({ method: input.method as never, placement })) },
           variants: { create: { sku: input.sku } },
@@ -275,7 +280,7 @@ export class PrismaProductRepository implements ProductRepository {
         });
       }
       const baseVk = input.tiers[0]?.vkCents ?? 0;
-      return { variantId, articleId: article.id, articleName: article.name, sku: input.sku, description: "", label: `${article.name} (${input.sku})`, unitNetCents: baseVk, isBundle: false };
+      return { variantId, articleId: article.id, articleName: article.name, sku: input.sku, description: article.name, label: `${article.name} (${input.sku})`, unitNetCents: baseVk, vkCents: baseVk, ekCents: input.ekCents ?? 0, isBundle: false };
     });
   }
 }

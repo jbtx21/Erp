@@ -10,6 +10,9 @@ export interface ArticleRow {
   name: string;
   variantCount: number;
   description: string;
+  /** Pflicht-Basispreise je Artikel (Cent) — Standard, von Varianten-/Preisgruppenpreisen übersteuerbar. */
+  ekCents: number;
+  vkCents: number;
   brand: string;
   materialComposition: string;
   careInstructions: string;
@@ -34,7 +37,7 @@ export interface ArticleRow {
 
 /** Editierbare Stammfelder (Name + PIM); leere Strings = Feld leeren. */
 export type ArticlePatch = Partial<
-  { name: string } & ArticlePimFields & {
+  { name: string; ekCents: number; vkCents: number } & ArticlePimFields & {
     itemGroup: string;
     stockUom: string;
     isSalesItem: boolean;
@@ -63,6 +66,15 @@ export interface CreateVariantInput {
   attributes: Array<{ name: string; value: string }>;
 }
 
+/** Anlage eines Artikels (Textil/Sonstiges). Alle 5 Stammfelder sind Pflicht (überall hart). */
+export interface CreateArticleInput {
+  sku: string;
+  name: string;
+  description: string;
+  ekCents: number;
+  vkCents: number;
+}
+
 /** Flacher Katalog-Eintrag je Variante — für den Artikel-Picker in Angebot/Auftrag/Leihgut. */
 export interface CatalogEntry {
   variantId: string;
@@ -77,6 +89,10 @@ export interface CatalogEntry {
   label: string;
   /** Standardpreis (Preisgruppe STANDARD) in Cent, 0 wenn nicht hinterlegt. */
   unitNetCents: number;
+  /** Basis-Verkaufspreis des Artikels (Pflicht, Cent) — Fallback, wenn keine Preisgruppe greift. */
+  vkCents: number;
+  /** Basis-Einkaufspreis des Artikels (Pflicht, Cent) — für DB-Anzeige/Kalkulation im Picker. */
+  ekCents: number;
   /** true, wenn die Variante eine Set-/Bundle-Stückliste hat (Kap. 5.1). */
   isBundle: boolean;
 }
@@ -136,7 +152,7 @@ export interface CreateVeredelungInput {
 
 export interface ProductRepository {
   listArticles(): Promise<Omit<ArticleRow, "completeness">[]>;
-  createArticle(sku: string, name: string, description?: string | null): Promise<{ id: string }>;
+  createArticle(input: CreateArticleInput): Promise<{ id: string }>;
   listVariants(articleId: string): Promise<VariantRow[]>;
   /** Flacher Varianten-Katalog (Artikelname + Merkmale + Standardpreis) für Picker. */
   catalog(): Promise<CatalogEntry[]>;
@@ -214,11 +230,17 @@ export class ProductService {
     return { updated };
   }
 
-  async createArticle(sku: string, name: string, description?: string): Promise<{ id: string }> {
-    if (!sku?.trim() || !name?.trim()) throw new ProductError("SKU und Name sind Pflicht.");
-    const desc = description?.trim() || null;
-    const res = await this.repo.createArticle(sku.trim(), name.trim(), desc);
-    await this.audit.append(buildEntry({ entity: "Article", entityId: res.id, action: "CREATE", after: { sku, name, description: desc } }));
+  async createArticle(input: CreateArticleInput): Promise<{ id: string }> {
+    // Pflichtfelder hart erzwingen (überall, alle Typen): Nr., Name, Beschreibung, EK, VK.
+    const sku = input.sku?.trim();
+    const name = input.name?.trim();
+    const description = input.description?.trim();
+    if (!sku || !name) throw new ProductError("Artikelnummer und Artikelname sind Pflicht.");
+    if (!description) throw new ProductError("Artikelbeschreibung ist Pflicht.");
+    if (!Number.isInteger(input.ekCents) || input.ekCents < 0) throw new ProductError("EK (Einkaufspreis) ist Pflicht (≥ 0).");
+    if (!Number.isInteger(input.vkCents) || input.vkCents < 0) throw new ProductError("VK (Verkaufspreis) ist Pflicht (≥ 0).");
+    const res = await this.repo.createArticle({ sku, name, description, ekCents: input.ekCents, vkCents: input.vkCents });
+    await this.audit.append(buildEntry({ entity: "Article", entityId: res.id, action: "CREATE", after: { sku, name, description, ekCents: input.ekCents, vkCents: input.vkCents } }));
     return res;
   }
 
@@ -274,27 +296,27 @@ export class ProductService {
   async quickCreateCatalogEntry(input: {
     sku: string;
     name: string;
-    description?: string;
+    // Pflicht-Stammdaten (überall hart): Beschreibung + Basis-EK/-VK des Artikels.
+    description: string;
+    ekCents: number;
+    vkCents: number;
     attributes?: Array<{ name: string; value: string }>;
-    // Inline-Bepreisung: EK beim (Textil-)Lieferant + VK als STANDARD-Preis. EK braucht einen
-    // Lieferant, sonst kann er nicht am Stamm hängen (SupplierItem).
-    ekCents?: number | null;
+    // Optionale Varianten-Übersteuerung: Lieferanten-EK (SupplierItem) braucht einen Lieferant.
     supplierId?: string | null;
-    vkCents?: number | null;
   }): Promise<CatalogEntry> {
     const attributes = (input.attributes ?? []).filter((a) => a.name.trim() && a.value.trim());
-    const description = input.description?.trim() ?? "";
     const supplierId = input.supplierId?.trim() || null;
-    if (input.ekCents != null && !supplierId) throw new ProductError("Für den EK-Preis ist ein Lieferant nötig.");
     if (supplierId && !(await this.repo.supplierExists(supplierId))) throw new ProductError("Unbekannter Lieferant.");
-    const art = await this.createArticle(input.sku, input.name, description);
+    // createArticle erzwingt alle 5 Pflichtfelder (Nr./Name/Beschreibung/EK/VK).
+    const art = await this.createArticle({ sku: input.sku, name: input.name, description: input.description, ekCents: input.ekCents, vkCents: input.vkCents });
     const baseSku = input.sku.trim();
     const variantSku = attributes.length ? `${baseSku}-${attributes.map((a) => a.value.trim()).join("-")}` : baseSku;
     const v = await this.createVariant({ articleId: art.id, sku: variantSku, attributes });
-    await this.repo.setVariantPricing(v.id, { supplierId, ekCents: input.ekCents ?? null, vkCents: input.vkCents ?? null });
+    // Varianten-Übersteuerung: STANDARD-VK immer setzen; Lieferanten-EK nur mit Lieferant.
+    await this.repo.setVariantPricing(v.id, { supplierId, ekCents: supplierId ? input.ekCents : null, vkCents: input.vkCents });
     const attrText = attributes.map((a) => a.value.trim()).join(" / ");
     const label = `${input.name.trim()}${attrText ? ` — ${attrText}` : ""} (${variantSku})`;
-    return { variantId: v.id, articleId: art.id, articleName: input.name.trim(), sku: variantSku, description, label, unitNetCents: input.vkCents ?? 0, isBundle: false };
+    return { variantId: v.id, articleId: art.id, articleName: input.name.trim(), sku: variantSku, description: input.description.trim(), label, unitNetCents: input.vkCents, vkCents: input.vkCents, ekCents: input.ekCents, isBundle: false };
   }
 
   /** Stückliste (Komponenten) einer Set-Variante (Kap. 5.1). */

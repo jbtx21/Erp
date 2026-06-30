@@ -79,6 +79,9 @@ export interface ArticleImport {
   sku: string;
   name: string;
   description: string;
+  // Pflicht-Stammpreise (Roh-CSV-Zellen in €; werden beim Import zu Cent geparst).
+  ekCents: string;
+  vkCents: string;
   brand: string;
   materialComposition: string;
   careInstructions: string;
@@ -88,7 +91,9 @@ export interface ArticleImport {
 export const ARTICLE_COLUMNS: ReadonlyArray<ColumnDef<ArticleImport>> = [
   { key: "sku", header: "Artikelnummer", required: true },
   { key: "name", header: "Bezeichnung", required: true },
-  { key: "description", header: "Beschreibung" },
+  { key: "description", header: "Beschreibung", required: true },
+  { key: "ekCents", header: "EK (€)", required: true },
+  { key: "vkCents", header: "VK (€)", required: true },
   { key: "brand", header: "Marke" },
   { key: "materialComposition", header: "Material" },
   { key: "careInstructions", header: "Pflegehinweis" },

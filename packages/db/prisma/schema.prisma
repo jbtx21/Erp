@@ -379,9 +379,14 @@ enum ArticleType {
 
 model Article {
   id          String    @id @default(cuid())
-  sku         String    @unique
-  name        String
-  description String?
+  sku         String    @unique // Artikelnummer (Pflicht) — überall sichtbar
+  name        String    // Artikelname (Pflicht)
+  description String    // Artikelbeschreibung (Pflicht-Stammdatum) — war optional, jetzt zwingend
+  // Verbindliche Basis-Preise je Artikel (Pflicht, Cent). „Standard + Übersteuerung": Preisgruppen-/
+  // Lieferanten-/Staffel-Preise auf Variantenebene übersteuern; fehlt eine Übersteuerung, fällt der
+  // Resolver auf diese Basiswerte zurück. Gilt für ALLE Typen (Textil/Veredelung/Sonstiges).
+  ekCents     Int       // Basis-Einkaufspreis (Standard-EK)
+  vkCents     Int       // Basis-Verkaufspreis (Standard-VK)
   type        ArticleType @default(STOCK) // Artikeltyp-Diskriminator (STOCK/FINISHING/SERVICE/BOM) — einzige Quelle für „Veredelung"
   // Bestandsführung als Eigenschaft (Procure-to-Order): default KEIN Bestand (negative/
   // beliebige Mengen okay). Nur ausgewählte Artikel (Transferdrucke) sind bestandsgeführt

@@ -30,7 +30,7 @@ if (!dbConfigured) {
 
     beforeAll(async () => {
       await cleanup();
-      await prisma.article.create({ data: { id: ART, sku: "ART-STK", name: "Poloshirt" } });
+      await prisma.article.create({ data: { description: "Testartikel", ekCents: 0, vkCents: 0, id: ART, sku: "ART-STK", name: "Poloshirt" } });
       await prisma.variant.create({ data: { id: VAR, articleId: ART, sku: "STK-1" } });
     });
 

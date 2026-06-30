@@ -46,7 +46,7 @@ if (!dbConfigured) {
       await prisma.priceGroup.create({ data: { id: PG, kind: "PREMIUM", name: "Premium" } });
       await prisma.company.create({ data: { id: CO, name: "ACME GmbH", priceGroupId: PG } });
       await prisma.supplier.create({ data: { id: SUP, name: "Stofflieferant", kind: "MANUAL" } });
-      await prisma.article.create({ data: { id: ART, sku: "ART-PC", name: "Shirt" } });
+      await prisma.article.create({ data: { description: "Testartikel", ekCents: 0, vkCents: 0, id: ART, sku: "ART-PC", name: "Shirt" } });
       await prisma.variant.create({ data: { id: VAR, articleId: ART, sku: "PC-1" } });
       await prisma.order.create({
         // Plan-DB je Stück 600 (VK 1000 − EK 400) am Beleg gespeichert → Plan-Material ableitbar.

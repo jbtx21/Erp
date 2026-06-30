@@ -50,7 +50,7 @@ if (!dbConfigured) {
       await prisma.company.create({ data: { id: CO, name: "ACME GmbH", priceGroupId: PG } });
       await prisma.supplier.create({ data: { id: S_FHB, name: "FHB", kind: "FHB_NEXMART" } });
       await prisma.supplier.create({ data: { id: S_SS, name: "Stanley/Stella", kind: "STANLEY_STELLA" } });
-      await prisma.article.create({ data: { id: ART, sku: "ART-PROC", name: "Shirt" } });
+      await prisma.article.create({ data: { description: "Testartikel", ekCents: 0, vkCents: 0, id: ART, sku: "ART-PROC", name: "Shirt" } });
       await prisma.variant.create({ data: { id: V_FHB, articleId: ART, sku: "PROC-FHB" } });
       await prisma.variant.create({ data: { id: V_SS, articleId: ART, sku: "PROC-SS" } });
       await prisma.order.create({ data: { id: ORD, number: "AB-PROC-1", companyId: CO } });

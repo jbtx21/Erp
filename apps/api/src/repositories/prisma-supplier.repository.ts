@@ -25,7 +25,7 @@ export class PrismaSupplierRepository
   async findOrCreateArticle(sku: string, name: string): Promise<string> {
     const existing = await prisma.article.findUnique({ where: { sku }, select: { id: true } });
     if (existing) return existing.id;
-    const created = await prisma.article.create({ data: { sku, name }, select: { id: true } });
+    const created = await prisma.article.create({ data: { sku, name, description: name, ekCents: 0, vkCents: 0 }, select: { id: true } });
     return created.id;
   }
 

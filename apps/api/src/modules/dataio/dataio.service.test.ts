@@ -16,11 +16,11 @@ function setup(): { svc: DataIoService; repo: InMemoryDataIoRepository; audit: M
 describe("DataIoService (Stammdaten-Im-/Export)", () => {
   it("importiert Artikel (create) und re-importiert idempotent (update)", async () => {
     const { svc, repo } = setup();
-    const csv = "Artikelnummer;Bezeichnung;Marke\nA-1;Polo;TX\nA-2;Cap;TX";
+    const csv = "Artikelnummer;Bezeichnung;Beschreibung;EK (€);VK (€);Marke\nA-1;Polo;Klassik-Polo;4,50;12,90;TX\nA-2;Cap;Basecap;3,00;7,90;TX";
     const r1 = await svc.importCsv("ARTICLE", csv);
     expect(r1).toMatchObject({ created: 2, updated: 0, skipped: 0 });
     expect(repo.articles).toHaveLength(2);
-    const r2 = await svc.importCsv("ARTICLE", "Artikelnummer;Bezeichnung\nA-1;Polo Neu");
+    const r2 = await svc.importCsv("ARTICLE", "Artikelnummer;Bezeichnung;Beschreibung;EK (€);VK (€)\nA-1;Polo Neu;Klassik-Polo;4,50;12,90");
     expect(r2).toMatchObject({ created: 0, updated: 1 });
     expect(repo.articles.find((a) => a.sku === "A-1")?.name).toBe("Polo Neu");
   });
@@ -42,7 +42,7 @@ describe("DataIoService (Stammdaten-Im-/Export)", () => {
 
   it("meldet fehlerhafte Zeilen und schreibt Audit", async () => {
     const { svc, audit } = setup();
-    const r = await svc.importCsv("ARTICLE", "Artikelnummer;Bezeichnung\n;Ohne SKU\nA-9;OK");
+    const r = await svc.importCsv("ARTICLE", "Artikelnummer;Bezeichnung;Beschreibung;EK (€);VK (€)\n;Ohne SKU;d;1,00;2,00\nA-9;OK;d;1,00;2,00");
     expect(r.created).toBe(1);
     expect(r.errors).toHaveLength(1);
     expect(audit.entries).toHaveLength(1);
