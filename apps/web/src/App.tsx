@@ -1,7 +1,7 @@
 // Navigations-Gerüst: Auth-Gate + AppShell mit gruppierter Sidebar über ALLE Module
 // (alles durchklickbar). Jede Sektion ist eine Seite gegen die echten tRPC-Endpunkte.
 import { useCallback, useEffect, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
-import { ActionIcon, AppShell, Badge, Box, Button, Collapse, Group, HoverCard, Kbd, Loader, Modal, NavLink, Paper, ScrollArea, Stack, Tabs, Text, TextInput, Title, Tooltip, UnstyledButton, VisuallyHidden } from "@mantine/core";
+import { ActionIcon, AppShell, Badge, Box, Button, Collapse, Group, HoverCard, Kbd, Loader, Menu, Modal, NavLink, Paper, ScrollArea, Stack, Tabs, Text, TextInput, Title, Tooltip, UnstyledButton, VisuallyHidden } from "@mantine/core";
 import { Chevron, NavIcon, SidebarToggleIcon, type NavIconName } from "./nav-icons.js";
 import { Login } from "./Login.js";
 import { Dashboard } from "./Dashboard.js";
@@ -328,6 +328,36 @@ function SideNav({ active, collapsed, onNavigate }: { active: string; collapsed:
   );
 }
 
+// Tabellendichte (Xentral-Parität): kompakt/standard/komfortabel, persistent je Nutzer.
+// Setzt data-density am <html>; die eigentliche Zeilenhöhe steuert index.css.
+function DensityMenu(): JSX.Element {
+  const [d, setD] = useState<string>(() => { try { return localStorage.getItem("erp.density") ?? "standard"; } catch { return "standard"; } });
+  useEffect(() => {
+    document.documentElement.dataset.density = d;
+    try { localStorage.setItem("erp.density", d); } catch { /* ignore */ }
+  }, [d]);
+  const opts: Array<[string, string]> = [["kompakt", "Kompakt"], ["standard", "Standard"], ["komfortabel", "Komfortabel"]];
+  return (
+    <Menu shadow="md" width={180} position="bottom-end" withinPortal>
+      <Menu.Target>
+        <Tooltip label="Tabellendichte" openDelay={300}>
+          <ActionIcon variant="subtle" color="navy" size="md" aria-label="Tabellendichte einstellen">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden>
+              <line x1="2.5" y1="4" x2="13.5" y2="4" /><line x1="2.5" y1="8" x2="13.5" y2="8" /><line x1="2.5" y1="12" x2="13.5" y2="12" />
+            </svg>
+          </ActionIcon>
+        </Tooltip>
+      </Menu.Target>
+      <Menu.Dropdown>
+        <Menu.Label>Tabellendichte</Menu.Label>
+        {opts.map(([val, lab]) => (
+          <Menu.Item key={val} onClick={() => setD(val)} fw={d === val ? 700 : 400}>{lab}{d === val ? "  ✓" : ""}</Menu.Item>
+        ))}
+      </Menu.Dropdown>
+    </Menu>
+  );
+}
+
 function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<void> }): JSX.Element {
   const [active, setActiveState] = useState<string>(hashKey);
   const [navCollapsed, setNavCollapsed] = useState<boolean>(() => readFlag("erp.nav.collapsed", false));
@@ -368,6 +398,17 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<voi
     if (typeof document !== "undefined") document.title = `TEXMA ERP · ${activeLabel(active)}`;
   }, [active]);
 
+  // Genau eine <h1> je Route: Die meisten Seiten liefern sie über DocListHeader/DocFormShell
+  // (sichtbarer Titel = h1). Seiten ohne diese Primitive bekommen eine unsichtbare Fallback-h1
+  // mit dem Bereichsnamen — selbstheilend per DOM-Prüfung, ohne Dopplung auf den Header-Seiten.
+  const [needsFallbackH1, setNeedsFallbackH1] = useState(false);
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const id = requestAnimationFrame(() =>
+      setNeedsFallbackH1(!document.querySelector("#main-content h1:not([data-fallback-h1])")));
+    return () => cancelAnimationFrame(id);
+  }, [active]);
+
   return (
     <>
     {/* Skip-Link (Tastatur/Screenreader): springt die Navigation über, direkt zum Inhalt. */}
@@ -388,6 +429,7 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<voi
           </Group>
           <GlobalSearch onSelect={goToHit} />
           <Group gap="sm">
+            <DensityMenu />
             <TaskBadge onOpen={() => setActive("tasks")} />
             <NotificationBell onNavigate={setActive} />
             <Text size="sm" c="dimmed">{user.name} · {user.role}</Text>
@@ -401,10 +443,8 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<voi
       </AppShell.Navbar>
 
       <AppShell.Main id="main-content">
-        {/* Genau eine <h1> je Route (Screenreader-Einstieg / WCAG „page-has-heading-one"):
-            der Bereichsname. Visuell deckt DocListHeader/DocFormShell den Titel ab, daher
-            unsichtbar gehalten, um keine Dopplung zu zeigen. */}
-        <VisuallyHidden component="h1">{activeLabel(active)}</VisuallyHidden>
+        {/* Fallback-h1 nur, wenn die Seite selbst keine sichtbare h1 rendert (s. o.). */}
+        {needsFallbackH1 && <VisuallyHidden component="h1" data-fallback-h1>{activeLabel(active)}</VisuallyHidden>}
         <Page k={active} role={user.role} userName={user.name} onNavigate={setActive} onOpen={openEntity}
           focusId={focus && focus.navKey === active ? focus.id : undefined} />
       </AppShell.Main>

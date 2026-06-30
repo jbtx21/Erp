@@ -132,7 +132,8 @@ export function DocListHeader({
       <Group justify="space-between" align="flex-end" wrap="nowrap">
         <Box>
           {module && <Text size="xs" c="dimmed">{module}</Text>}
-          <Title order={3}>{title}</Title>
+          {/* Seitentitel = einzige <h1> der Route (Screenreader-Einstieg, WCAG page-has-heading-one). */}
+          <Title order={1}>{title}</Title>
           {hint && <Text size="sm" c="dimmed" mt={2}>{hint}</Text>}
         </Box>
         {action && <Group gap="xs">{action}</Group>}
@@ -164,7 +165,8 @@ export function DocFormShell({
         <Box>
           <Text size="xs" c="dimmed">{breadcrumb}</Text>
           <Group gap="sm" align="center">
-            <Title order={3}>{title}</Title>
+            {/* Beleg-Titel = einzige <h1> der Detail-Route (siehe DocListHeader). */}
+            <Title order={1}>{title}</Title>
             {status && <Badge color={statusColor} variant="light">{prettyStatus(status)}</Badge>}
           </Group>
         </Box>

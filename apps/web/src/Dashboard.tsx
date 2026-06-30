@@ -86,7 +86,7 @@ export function Dashboard(): JSX.Element {
   return (
     <>
       <Group justify="space-between" align="start" wrap="nowrap">
-        <Title order={3}>Übersicht — Termin-Ampel</Title>
+        <Title order={1}>Übersicht — Termin-Ampel</Title>
         <Group gap="xs">
           <Button size="xs" variant="default" onClick={() => void exportPdf()}>Arbeitsliste (PDF)</Button>
           <Button size="xs" variant="default" onClick={() => void exportCsv()}>CSV</Button>

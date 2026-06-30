@@ -34,7 +34,7 @@ export function Banking({ role }: { role: string }): JSX.Element {
   if (role === "PRODUKTION") {
     return (
       <Card withBorder mt="md" padding="md">
-        <Title order={3}>Banking (Kap. 9)</Title>
+        <Title order={1}>Banking (Kap. 9)</Title>
         <Text size="sm" c="dimmed" mt="xs">
           Bank-Anbindung und Zahlungsverkehr sind finanz-sensibel und für die Rolle PRODUKTION ausgeblendet.
         </Text>
@@ -43,7 +43,7 @@ export function Banking({ role }: { role: string }): JSX.Element {
   }
   return (
     <>
-      <Title order={3} mt="md">Banking — Bank-Anbindung (Kap. 9)</Title>
+      <Title order={1} mt="md">Banking — Bank-Anbindung (Kap. 9)</Title>
       <Text size="sm" c="dimmed">
         Zwei Wege hinter einer Abstraktion: <b>EBICS</b> (zertifikatsbasiert, CAMT.053, keine
         90-Tage-Re-Auth) und <b>PSD2/XS2A</b> (Transaktions-API, 90-Tage-SCA). Beide speisen den

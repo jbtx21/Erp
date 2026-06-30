@@ -256,7 +256,7 @@ export interface AutoTableEmpty { icon?: ReactNode; title: string; hint?: string
 
 export function AutoTable({
   rows, hide = [], action, onRowClick, highlightId, bulkActions, cellRender,
-  filters, sortable, pageSize, totals, onSelectionChange, initialSort, emptyState, label, labels,
+  filters, sortable, pageSize, totals, onSelectionChange, initialSort, emptyState, label, labels, tools = true,
 }: {
   rows: Row[]; hide?: string[]; action?: (r: Row) => ReactNode; onRowClick?: (r: Row) => void; highlightId?: string;
   bulkActions?: BulkAction[]; cellRender?: (col: string, value: unknown, row: Row) => ReactNode | undefined;
@@ -266,6 +266,7 @@ export function AutoTable({
   emptyState?: AutoTableEmpty;
   label?: string; // zugänglicher Tabellenname (Screenreader); Default „Datentabelle".
   labels?: Record<string, string>; // tabellenspezifische Überschriften-Overrides (Schlüssel = Datenfeld).
+  tools?: boolean; // Werkzeuge-Leiste (Spaltenwahl + CSV/Zwischenablage-Export); Default true.
 }): JSX.Element {
   const hlRef = useRef<HTMLTableRowElement | null>(null);
   // Mehrfachauswahl (nur wenn bulkActions ODER onSelectionChange gesetzt): markierte Zeilen-Keys.
@@ -273,6 +274,7 @@ export function AutoTable({
   const [active, setActive] = useState<string[]>([]); // aktive Filter-Toggles
   const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" } | null>(initialSort ?? null);
   const [page, setPage] = useState(1);
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(new Set()); // Spaltenwahl (Werkzeuge)
   const rowKey = (r: Row, i: number): string => String(r.id ?? `idx_${i}`);
   // Treffer aus der globalen Suche in den Sichtbereich rollen (Deep-Link).
   useEffect(() => { if (highlightId && hlRef.current) hlRef.current.scrollIntoView({ block: "center", behavior: "smooth" }); }, [highlightId, rows]);
@@ -307,6 +309,33 @@ export function AutoTable({
   const row0 = rows[0] as Row;
   const hasDisplayId = DISPLAY_ID_KEYS.some((k) => k in (row0 as object) && Boolean((row0 as Row)[k]));
   const cols = Object.keys(row0 as object).filter((k) => !hide.includes(k) && !(k === "id" && hasDisplayId));
+  // Werkzeuge: Spaltenwahl (mind. 1 Spalte sichtbar) + Export der gefilterten/sortierten Sicht.
+  const shownCols = cols.filter((c) => !hiddenCols.has(c));
+  const toggleCol = (c: string): void => setHiddenCols((s) => {
+    const n = new Set(s);
+    if (n.has(c)) n.delete(c);
+    else { if (cols.length - n.size <= 1) return s; n.add(c); }
+    return n;
+  });
+  const cellText = (v: unknown): string => v == null ? "" : typeof v === "object" ? JSON.stringify(v) : String(v);
+  const buildDelimited = (sep: string): string => {
+    const esc = (s: string): string => (new RegExp(`["\\n${sep === "\t" ? "\\t" : sep}]`).test(s) ? `"${s.replace(/"/g, '""')}"` : s);
+    const head = shownCols.map((c) => esc(colLabel(c, labels))).join(sep);
+    const body = sorted.map((r) => shownCols.map((c) => esc(cellText(r[c]))).join(sep)).join("\n");
+    return `${head}\n${body}`;
+  };
+  const exportCsv = (): void => {
+    const blob = new Blob([`﻿${buildDelimited(";")}`], { type: "text/csv;charset=utf-8" }); // BOM + ; für Excel-DE
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `${(label ?? "tabelle").replace(/\s+/g, "-").toLowerCase()}.csv`; a.click();
+    URL.revokeObjectURL(url);
+    notify.success(`CSV exportiert (${sorted.length} Zeilen).`);
+  };
+  const copyClipboard = (): void => {
+    void navigator.clipboard?.writeText(buildDelimited("\t"))
+      .then(() => notify.success("In die Zwischenablage kopiert.")).catch(() => notify.error("Kopieren nicht möglich."));
+  };
 
   const pages = pageSize ? Math.max(1, Math.ceil(sorted.length / pageSize)) : 1;
   const pageRows = pageSize ? keyed.slice((page - 1) * pageSize, page * pageSize) : keyed;
@@ -316,6 +345,29 @@ export function AutoTable({
   const stickyActionTh: CSSProperties = { ...stickyActionTd, zIndex: 2 };
   return (
     <>
+      {tools && (
+        <Group justify="flex-end" gap="xs" mb={4}>
+          <Menu shadow="md" width={230} position="bottom-end" closeOnItemClick={false} withinPortal>
+            <Menu.Target><Button size="compact-xs" variant="subtle" color="gray">Spalten ▾</Button></Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Label>Spalten ein-/ausblenden</Menu.Label>
+              {cols.map((c) => (
+                <Menu.Item key={c} onClick={() => toggleCol(c)}
+                  leftSection={<Checkbox size="xs" checked={!hiddenCols.has(c)} readOnly tabIndex={-1} aria-hidden />}>
+                  {colLabel(c, labels)}
+                </Menu.Item>
+              ))}
+            </Menu.Dropdown>
+          </Menu>
+          <Menu shadow="md" width={200} position="bottom-end" withinPortal>
+            <Menu.Target><Button size="compact-xs" variant="subtle" color="gray">Export ▾</Button></Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Item onClick={exportCsv}>CSV exportieren</Menu.Item>
+              <Menu.Item onClick={copyClipboard}>In Zwischenablage</Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
+        </Group>
+      )}
       {filters && filters.length > 0 && (
         <Chip.Group multiple value={active} onChange={setActive}>
           <Group gap={6} mt="sm" mb={4}>
@@ -339,7 +391,7 @@ export function AutoTable({
           <Table.Thead>
             <Table.Tr>
               {selectable && <Table.Th style={{ width: 32 }}><Checkbox aria-label="Alle auswählen" checked={allSelected} indeterminate={sel.size > 0 && !allSelected} onChange={toggleAll} /></Table.Th>}
-              {cols.map((c) => (
+              {shownCols.map((c) => (
                 <Table.Th key={c} onClick={sortable ? () => toggleSort(c) : undefined} style={sortable ? { cursor: "pointer", userSelect: "none" } : undefined}>
                   {colLabel(c, labels)}{sortable && sort?.key === c ? (sort.dir === "asc" ? " ▲" : " ▼") : ""}
                 </Table.Th>
@@ -354,7 +406,7 @@ export function AutoTable({
                 <Table.Tr key={k || i} ref={hit ? hlRef : undefined}
                   style={{ ...(onRowClick ? { cursor: "pointer" } : {}), ...(hit ? { background: "var(--mantine-color-yellow-1)" } : {}) }}>
                   {selectable && <Table.Td><Checkbox aria-label="Zeile auswählen" checked={sel.has(k)} onChange={() => toggleOne(k)} /></Table.Td>}
-                  {cols.map((c) => {
+                  {shownCols.map((c) => {
                     const custom = cellRender?.(c, r[c], r);
                     return custom !== undefined
                       ? <Table.Td key={c}>{custom}</Table.Td>
@@ -369,7 +421,7 @@ export function AutoTable({
             <Table.Tfoot>
               <Table.Tr style={{ fontWeight: 600, borderTop: "2px solid var(--mantine-color-gray-4)" }}>
                 {selectable && <Table.Td />}
-                {cols.map((c) => <Table.Td key={c} style={/cents$/i.test(c) ? numTd : undefined}>{totalRow[c] ?? ""}</Table.Td>)}
+                {shownCols.map((c) => <Table.Td key={c} style={/cents$/i.test(c) ? numTd : undefined}>{totalRow[c] ?? ""}</Table.Td>)}
                 {action && <Table.Td style={stickyActionTd} />}
               </Table.Tr>
             </Table.Tfoot>

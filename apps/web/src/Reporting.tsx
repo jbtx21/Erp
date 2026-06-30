@@ -182,7 +182,7 @@ export function Reporting({ role }: { role: string }): JSX.Element {
 
   return (
     <Stack gap="md">
-      <Title order={3}>Auswertungen</Title>
+      <Title order={1}>Auswertungen</Title>
       <Group align="end" gap="sm">
         <Select
           label="Zeitraum" w={120} allowDeselect={false}

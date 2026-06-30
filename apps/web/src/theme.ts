@@ -157,7 +157,7 @@ export const mantineTheme = createTheme({
   cursorType: "pointer", // klickbare Controls fühlen sich klickbar an
   // Kompakte Datenansicht (Kap. 38.1): kleinere Basisschrift als Mantine-Default.
   fontSizes: { xs: "11px", sm: "13px", md: "14px", lg: "16px", xl: "18px" },
-  headings: { fontWeight: "650", sizes: { h2: { fontSize: "20px" }, h3: { fontSize: "16px" }, h4: { fontSize: "14px" } } },
+  headings: { fontWeight: "650", sizes: { h1: { fontSize: "20px" }, h2: { fontSize: "18px" }, h3: { fontSize: "16px" }, h4: { fontSize: "14px" } } },
   components: {
     Table: { defaultProps: { striped: true, highlightOnHover: true, withTableBorder: true, verticalSpacing: "xs", horizontalSpacing: "sm", fz: "sm" } },
     Card: { defaultProps: { withBorder: true, radius: "md", shadow: "none" } },

@@ -79,6 +79,17 @@ table {
   background: rgba(14, 28, 54, 0.05);
 }
 
+/* Tabellendichte (Xentral kennt kompakt/komfortabel): umschaltbar via data-density am <html>.
+   „standard" = Mantine-Default (kein Override). Greift global auf alle Tabellenzellen. */
+[data-density="kompakt"] :where(.mantine-Table-td, .mantine-Table-th) {
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+[data-density="komfortabel"] :where(.mantine-Table-td, .mantine-Table-th) {
+  padding-top: 11px;
+  padding-bottom: 11px;
+}
+
 /* Reduzierte Bewegung respektieren. */
 @media (prefers-reduced-motion: reduce) {
   *,
