@@ -155,7 +155,7 @@ const COL_LABELS: Record<string, string> = {
   active: "Aktiv", mahnsperre: "Mahnsperre", gesperrt: "Gesperrt", priceGroupKind: "Preisgruppe",
   zahlungszielTage: "Zahlungsziel (T)", netCents: "Netto", taxCents: "MwSt.", grossCents: "Brutto",
   openCents: "Offen", ekCents: "EK", unitNetCents: "Einzel netto", totalNetCents: "Summe",
-  qty: "Menge", menge: "Menge", position: "Pos.", description: "Beschreibung", sku: "SKU",
+  qty: "Menge", menge: "Menge", position: "Pos.", description: "Beschreibung", sku: "SKU", differenzCents: "Differenz",
   vorlage: "Vorlage", verwendung: "Verwendung", subject: "Betreff", key: "Schlüssel",
   kunde: "Kunde", issuedAt: "Rechnungsdatum", deltaQty: "Menge ±", belegRef: "Beleg", lager: "Lager",
   supplierSku: "Lief.-SKU", availableQty: "Verfügbar", variantCount: "Varianten",
@@ -367,13 +367,19 @@ export function AutoTable({
   );
 }
 
-/** Standard-Seitenrahmen: Titel, Hinweis, Aktualisieren, Lade-/Fehlerzustand. */
+/** Standard-Seitenrahmen: Titel, Hinweis, Aktualisieren, Lade-/Fehlerzustand.
+ *  Reicht die AutoTable-v2-Fähigkeiten (Filterleiste, Sortierung, Pagination, Σ-Zeile,
+ *  Bulk-Aktionen) optional durch — so werden Listen ohne Eigenbau zu Cockpits. */
 export function ListPage({
   title, hint, load, hide, action, toolbar, module, cellRender,
+  filters, sortable, pageSize, totals, bulkActions,
 }: {
   title: string; hint?: string; load: () => Promise<Row[]>; hide?: string[]; module?: string;
   action?: (r: Row, reload: () => Promise<void>) => ReactNode; toolbar?: (reload: () => Promise<void>) => ReactNode;
   cellRender?: (col: string, value: unknown, row: Row) => ReactNode | undefined;
+  filters?: AutoTableFilter[]; sortable?: boolean; pageSize?: number;
+  totals?: (rows: Row[]) => Record<string, ReactNode>;
+  bulkActions?: (reload: () => Promise<void>) => BulkAction[];
 }): JSX.Element {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -394,7 +400,9 @@ export function ListPage({
       </>} />
       {error && <Alert color="red" mt="sm" title="Fehler">{error}</Alert>}
       {loading ? <Group mt="sm" gap="xs"><Loader size="sm" /><Text size="sm">lädt…</Text></Group>
-        : <AutoTable rows={rows} hide={hide ?? []} cellRender={cellRender} action={action ? (r) => action(r, reload) : undefined} />}
+        : <AutoTable rows={rows} hide={hide ?? []} cellRender={cellRender} action={action ? (r) => action(r, reload) : undefined}
+            filters={filters} sortable={sortable} pageSize={pageSize} totals={totals}
+            bulkActions={bulkActions?.(reload)} />}
     </>
   );
 }
@@ -893,17 +901,34 @@ function IncomingInvoiceDetailModal({ id, onClose, onChanged, onOpen, supplierNa
 export function InvoicesPage({ onOpen }: { onOpen?: (k: string, id: string) => void } = {}): JSX.Element {
   return (
     <ListPage module="Buchhaltung / Rechnungen" title="Rechnungen"
-      hint="Ausgangsrechnungen (Faktura, Kap. 9.1) — Netto/USt/Brutto, offener Betrag, Fälligkeit. Status aus dem offenen OP-Betrag."
-      hide={["id", "orderId", "companyId"]}
+      hint="Ausgangsrechnungen (Faktura, Kap. 9.1) — Netto/USt/Brutto, Zahlstatus (offen/teilbezahlt/bezahlt), Differenz und Fälligkeit. Filter + sortierbare Spalten + Σ-Summenzeile."
+      hide={["id", "orderId", "companyId", "_open"]}
+      sortable pageSize={50}
+      filters={[
+        { key: "offen", label: "nur offene", predicate: (r) => Number(r._open) > 0 },
+        { key: "teil", label: "teilbezahlt", predicate: (r) => Number(r._open) > 0 && Number(r._open) < Number(r.grossCents) },
+        { key: "bezahlt", label: "bezahlt", predicate: (r) => Number(r._open) <= 0 },
+      ]}
+      totals={(rs) => ({
+        kunde: `${rs.length} Rechnungen`,
+        netCents: euro(rs.reduce((s, r) => s + Number(r.netCents || 0), 0)),
+        grossCents: euro(rs.reduce((s, r) => s + Number(r.grossCents || 0), 0)),
+        openCents: euro(rs.reduce((s, r) => s + Math.max(0, Number(r.openCents || 0)), 0)),
+      })}
       load={async () => {
         const [inv, cos] = await Promise.all([trpc.invoices.list.query({ limit: 200 }), trpc.companies.list.query()]);
         const cmap = new Map(cos.map((c) => [String(c.id), c.name]));
-        return inv.map((i) => ({
-          number: i.number, kunde: cmap.get(String(i.companyId)) ?? "—",
-          netCents: i.netCents, taxCents: i.taxCents, grossCents: i.grossCents, openCents: i.openCents,
-          status: (i.openCents ?? 1) <= 0 ? "BEZAHLT" : "OFFEN",
-          issuedAt: i.issuedAt, dueDate: i.dueDate, id: i.id, orderId: i.orderId, companyId: i.companyId,
-        })) as Row[];
+        return inv.map((i) => {
+          const open = i.openCents ?? 0;
+          const status = open <= 0 ? "BEZAHLT" : open < (i.grossCents ?? 0) ? "TEILBEZAHLT" : "OFFEN";
+          return {
+            number: i.number, kunde: cmap.get(String(i.companyId)) ?? "—",
+            netCents: i.netCents, taxCents: i.taxCents, grossCents: i.grossCents, openCents: i.openCents,
+            differenzCents: (i.grossCents ?? 0) - open, // bereits gezahlt
+            status, issuedAt: i.issuedAt, dueDate: i.dueDate,
+            id: i.id, orderId: i.orderId, companyId: i.companyId, _open: open,
+          };
+        }) as Row[];
       }}
       action={(r) => (
         <DocActionMenu actions={[
@@ -7381,6 +7406,8 @@ function PaymentAssignControl({ paymentId, remainderCents, openItems, onDone }: 
 export function ZahlungsabgleichOverview({ onOpen }: { onOpen?: (k: string, id: string) => void } = {}): JSX.Element {
   const [data, setData] = useState<Awaited<ReturnType<typeof trpc.reconciliation.overview.query>> | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [statusF, setStatusF] = useState<string[]>([]); // Filter Abgleich-Status (Klärfälle-Arbeitsliste)
+  const [bucketF, setBucketF] = useState<string[]>([]); // Filter OP-Aging-Band
   const load = useCallback(async () => {
     try { setData(await trpc.reconciliation.overview.query()); setErr(null); }
     catch (e) { setErr(errMsg(e)); }
@@ -7390,6 +7417,8 @@ export function ZahlungsabgleichOverview({ onOpen }: { onOpen?: (k: string, id: 
   if (err) return <Alert color="red" mt="sm">{err}</Alert>;
   if (!data) return <Group mt="sm" gap="xs"><Loader size="sm" /><Text size="sm">lädt…</Text></Group>;
   const { matches, openItems, summary } = data;
+  const fMatches = statusF.length ? matches.filter((m) => statusF.includes(m.status)) : matches;
+  const fOpenItems = bucketF.length ? openItems.filter((oi) => bucketF.includes(oi.bucket)) : openItems;
 
   const kpi = (label: string, value: ReactNode, color?: string): JSX.Element => (
     <Box p="sm" style={{ flex: 1, minWidth: 150, border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
@@ -7411,7 +7440,17 @@ export function ZahlungsabgleichOverview({ onOpen }: { onOpen?: (k: string, id: 
         {kpi("Überfällig", euro(summary.overdueTotalCents), summary.overdueTotalCents > 0 ? "orange" : undefined)}
       </Group>
 
-      <Text fw={600} mt="lg" mb="xs">Zahlungseingänge (alle Quellen)</Text>
+      <Group justify="space-between" align="flex-end" mt="lg" mb="xs">
+        <Text fw={600}>Zahlungseingänge (alle Quellen)</Text>
+        <Chip.Group multiple value={statusF} onChange={setStatusF}>
+          <Group gap={6}>
+            <Chip value="KLAERUNG" size="xs" variant="outline" color="red">Klärfälle ({summary.byStatus.KLAERUNG})</Chip>
+            <Chip value="TEILZUGEORDNET" size="xs" variant="outline" color="amber">Teilzugeordnet</Chip>
+            <Chip value="ZUGEORDNET" size="xs" variant="outline" color="teal">Zugeordnet</Chip>
+            {statusF.length > 0 && <Anchor component="button" type="button" size="xs" c="dimmed" onClick={() => setStatusF([])}>zurücksetzen</Anchor>}
+          </Group>
+        </Chip.Group>
+      </Group>
       <Table striped withTableBorder verticalSpacing="xs" fz="sm">
         <Table.Thead><Table.Tr>
           <Table.Th>Herkunft</Table.Th><Table.Th>Verwendungszweck</Table.Th>
@@ -7419,7 +7458,7 @@ export function ZahlungsabgleichOverview({ onOpen }: { onOpen?: (k: string, id: 
           <Table.Th>Status</Table.Th><Table.Th>Zuordnung</Table.Th><Table.Th ta="right">Aktion</Table.Th>
         </Table.Tr></Table.Thead>
         <Table.Tbody>
-          {matches.map((m) => {
+          {fMatches.map((m) => {
             const remainder = m.amountCents - m.allocatedCents;
             return (
             <Table.Tr key={m.id}>
@@ -7447,18 +7486,36 @@ export function ZahlungsabgleichOverview({ onOpen }: { onOpen?: (k: string, id: 
             </Table.Tr>
             );
           })}
-          {matches.length === 0 && <Table.Tr><Table.Td colSpan={7}><Text size="sm" c="dimmed">Keine Zahlungseingänge.</Text></Table.Td></Table.Tr>}
+          {fMatches.length === 0 && <Table.Tr><Table.Td colSpan={7}><Text size="sm" c="dimmed">Keine Zahlungseingänge.</Text></Table.Td></Table.Tr>}
         </Table.Tbody>
+        {fMatches.length > 0 && (
+          <Table.Tfoot><Table.Tr style={{ fontWeight: 600, borderTop: "2px solid var(--mantine-color-gray-4)" }}>
+            <Table.Td colSpan={2}>Σ {fMatches.length} Eingänge</Table.Td>
+            <Table.Td ta="right" style={numTd}>{euro(fMatches.reduce((s, m) => s + m.amountCents, 0))}</Table.Td>
+            <Table.Td ta="right" style={numTd}>{euro(fMatches.reduce((s, m) => s + m.allocatedCents, 0))}</Table.Td>
+            <Table.Td colSpan={3} />
+          </Table.Tr></Table.Tfoot>
+        )}
       </Table>
 
-      <Text fw={600} mt="lg" mb="xs">Offene Posten (OP-Aging)</Text>
+      <Group justify="space-between" align="flex-end" mt="lg" mb="xs">
+        <Text fw={600}>Offene Posten (OP-Aging)</Text>
+        <Chip.Group multiple value={bucketF} onChange={setBucketF}>
+          <Group gap={6}>
+            {(["FAELLIG_0_30", "FAELLIG_31_60", "FAELLIG_61_90", "FAELLIG_90_PLUS"] as const).map((b) => (
+              <Chip key={b} value={b} size="xs" variant="outline" color="orange">{BUCKET_LABEL[b]}</Chip>
+            ))}
+            {bucketF.length > 0 && <Anchor component="button" type="button" size="xs" c="dimmed" onClick={() => setBucketF([])}>zurücksetzen</Anchor>}
+          </Group>
+        </Chip.Group>
+      </Group>
       <Table striped withTableBorder verticalSpacing="xs" fz="sm">
         <Table.Thead><Table.Tr>
           <Table.Th>Rechnung</Table.Th><Table.Th>Kunde</Table.Th><Table.Th ta="right">Offen</Table.Th>
           <Table.Th ta="right">Fällig in/seit</Table.Th><Table.Th>Aging</Table.Th><Table.Th ta="right">Mahnstufe</Table.Th>
         </Table.Tr></Table.Thead>
         <Table.Tbody>
-          {openItems.map((oi) => (
+          {fOpenItems.map((oi) => (
             <Table.Tr key={oi.id}>
               <Table.Td>{oi.invoiceNumber}</Table.Td>
               <Table.Td>{oi.companyName}</Table.Td>
@@ -7468,8 +7525,15 @@ export function ZahlungsabgleichOverview({ onOpen }: { onOpen?: (k: string, id: 
               <Table.Td ta="right">{oi.dunningLevel > 0 ? <Badge size="sm" color="orange" variant="light">M{oi.dunningLevel}</Badge> : "—"}</Table.Td>
             </Table.Tr>
           ))}
-          {openItems.length === 0 && <Table.Tr><Table.Td colSpan={6}><Text size="sm" c="dimmed">Keine offenen Posten.</Text></Table.Td></Table.Tr>}
+          {fOpenItems.length === 0 && <Table.Tr><Table.Td colSpan={6}><Text size="sm" c="dimmed">Keine offenen Posten.</Text></Table.Td></Table.Tr>}
         </Table.Tbody>
+        {fOpenItems.length > 0 && (
+          <Table.Tfoot><Table.Tr style={{ fontWeight: 600, borderTop: "2px solid var(--mantine-color-gray-4)" }}>
+            <Table.Td colSpan={2}>Σ {fOpenItems.length} Posten</Table.Td>
+            <Table.Td ta="right" style={numTd}>{euro(fOpenItems.reduce((s, oi) => s + oi.openCents, 0))}</Table.Td>
+            <Table.Td colSpan={3} />
+          </Table.Tr></Table.Tfoot>
+        )}
       </Table>
     </>
   );

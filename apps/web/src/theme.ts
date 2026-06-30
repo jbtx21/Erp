@@ -65,6 +65,8 @@ export const statusMantineColor: Record<string, string> = {
   ZURUECK: "teal", BERECHNET: "teal", GEWONNEN: "teal",
   // Zahlungsabgleich-Status (vereinheitlichter Abgleich)
   ZUGEORDNET: "teal", TEILZUGEORDNET: "amber", KLAERUNG: "red",
+  // Rechnungs-Zahlstatus
+  BEZAHLT: "teal", TEILBEZAHLT: "amber",
   // Negativ abgeschlossen (rot)
   ABGELEHNT: "red", VERWORFEN: "red", STORNIERT: "red", VERLOREN: "red",
 };
