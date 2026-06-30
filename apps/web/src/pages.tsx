@@ -2415,7 +2415,7 @@ export type PositionKind = "TEXTIL" | "VEREDELUNG" | "SONSTIGE";
 // Hauptartikel (articleId, Farbe×Größe noch offen) verweisen; isAlternative kennzeichnet
 // ein unverbindliches Alternativangebot (wird beim Wandeln in den Auftrag weggelassen).
 export type LineType = "ARTIKEL" | "GRUPPE" | "ZWISCHENSUMME" | "GRUPPENSUMME";
-export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind; variantId?: string; articleId?: string; articleNumber?: string; articleName?: string; isAlternative?: boolean; ekEuro?: number; isBundle?: boolean; rabattPct?: number; taxRatePct?: number; vkManual?: boolean; bezugPositionen?: number[]; lineType?: LineType; placement?: string; motiv?: string; motivGroesse?: string; farbton?: string; platzierungsdetails?: string; sonstiges?: string; altPreisText?: string; imPdfAusblenden?: boolean; positionType?: string; positionSide?: string; positionId?: string; veredlerId?: string }
+export interface EditorLine { description: string; qty: number; euro: number; kind: PositionKind; variantId?: string; articleId?: string; articleNumber?: string; articleName?: string; isAlternative?: boolean; ekEuro?: number; isBundle?: boolean; rabattPct?: number; taxRatePct?: number; vkManual?: boolean; bezugPositionen?: number[]; lineType?: LineType; placement?: string; motiv?: string; motivGroesse?: string; farbton?: string; platzierungsdetails?: string; sonstiges?: string; altPreisText?: string; imPdfAusblenden?: boolean; positionType?: string; positionSide?: string; positionId?: string; veredlerId?: string; lieferdatum?: string }
 
 // Artikel-Picker: durchsuchbare Auswahl aus dem Artikelstamm (ERPNext „Link field").
 // Bei Auswahl wird eine Position vorbefüllt (Bezeichnung, Standardpreis, Variante).
@@ -3396,6 +3396,9 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
                               <Text size="9px" c="dimmed">{l.veredlerId ? "→ externe Fremdvergabe" : "→ inhouse (keine Fremdvergabe)"}</Text>
                             </Box>
                           )}
+                          {/* Order-to-make (Kap. 35): verfügbar-ab/zugesagt JE POSITION — nicht jede
+                              Variante ist sofort lieferbar; treibt Teilproduktion/Teillieferung. */}
+                          <TextInput size="xs" type="date" label="Lieferdatum (verfügbar ab)" w={170} value={l.lieferdatum ?? ""} onChange={(e) => set(i, { lieferdatum: e.currentTarget.value || undefined })} />
                           {!fromCatalog && (
                             <TextInput size="xs" label="Artikel-Nr. (frei)" w={130} value={l.articleNumber ?? ""} onChange={(e) => set(i, { articleNumber: e.currentTarget.value || undefined })} />
                           )}
@@ -3487,8 +3490,10 @@ export const lineHasContent = (l: EditorLine): boolean =>
 const lineDesc = (l: EditorLine): string => l.description.trim() || l.articleName?.trim() || l.articleNumber?.trim() || "Position";
 
 // Positions-Strukturfelder (Positionsmaske) in das API-Format spreaden — nur wenn gesetzt.
-const lineStructFields = (l: EditorLine): { lineType?: LineType; placement?: string; motiv?: string; motivGroesse?: string; farbton?: string; platzierungsdetails?: string; sonstiges?: string; altPreisText?: string; imPdfAusblenden?: boolean; positionType?: string; positionSide?: string; positionId?: string; veredlerId?: string } => ({
+const lineStructFields = (l: EditorLine): { lineType?: LineType; placement?: string; motiv?: string; motivGroesse?: string; farbton?: string; platzierungsdetails?: string; sonstiges?: string; altPreisText?: string; imPdfAusblenden?: boolean; positionType?: string; positionSide?: string; positionId?: string; veredlerId?: string; lieferdatum?: string } => ({
   ...(l.veredlerId ? { veredlerId: l.veredlerId } : {}),
+  // Order-to-make: verfügbar-ab/zugesagt je Position (date-Input YYYY-MM-DD → ISO für die API).
+  ...(l.lieferdatum ? { lieferdatum: `${l.lieferdatum}T00:00:00.000Z` } : {}),
   ...(l.lineType && l.lineType !== "ARTIKEL" ? { lineType: l.lineType } : {}),
   ...(l.placement?.trim() ? { placement: l.placement.trim() } : {}),
   ...(l.positionType ? { positionType: l.positionType } : {}),
@@ -3503,7 +3508,7 @@ const lineStructFields = (l: EditorLine): { lineType?: LineType; placement?: str
   ...(l.imPdfAusblenden ? { imPdfAusblenden: true } : {}),
 });
 
-export const toApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; variantId?: string; bezugPositionen?: number[]; dbCents?: number; lineType?: LineType; placement?: string; motiv?: string; motivGroesse?: string; farbton?: string; platzierungsdetails?: string; sonstiges?: string; altPreisText?: string; imPdfAusblenden?: boolean; positionType?: string; positionSide?: string; positionId?: string; veredlerId?: string }[] =>
+export const toApiLines = (lines: EditorLine[]): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; variantId?: string; bezugPositionen?: number[]; dbCents?: number; lineType?: LineType; placement?: string; motiv?: string; motivGroesse?: string; farbton?: string; platzierungsdetails?: string; sonstiges?: string; altPreisText?: string; imPdfAusblenden?: boolean; positionType?: string; positionSide?: string; positionId?: string; veredlerId?: string; lieferdatum?: string }[] =>
   lines.filter(lineHasContent).map((l) => ({
     description: lineDesc(l), qty: l.qty, kind: l.kind, ...lineMoney(l), ...(l.variantId ? { variantId: l.variantId } : {}),
     // USt-Satz der Position mitschicken (eingefroren); so bleibt die Steuerbefreiung (0 %)
@@ -3515,7 +3520,7 @@ export const toApiLines = (lines: EditorLine[]): { description: string; qty: num
   }));
 
 // Wie toApiLines, aber inkl. Artikel-/Varianten-Referenz und Alternativ-Kennzeichen (Angebot).
-export const toQuoteApiLines = (lines: EditorLine[], taxRatePct = 19): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; articleId?: string; variantId?: string; isAlternative?: boolean; bezugPositionen?: number[]; dbCents?: number; lineType?: LineType; placement?: string; motiv?: string; motivGroesse?: string; farbton?: string; platzierungsdetails?: string; sonstiges?: string; altPreisText?: string; imPdfAusblenden?: boolean; positionType?: string; positionSide?: string; positionId?: string; veredlerId?: string }[] =>
+export const toQuoteApiLines = (lines: EditorLine[], taxRatePct = 19): { description: string; qty: number; unitNetCents: number; listNetCents?: number; rabattPct?: number; taxRatePct?: number; kind: PositionKind; articleId?: string; variantId?: string; isAlternative?: boolean; bezugPositionen?: number[]; dbCents?: number; lineType?: LineType; placement?: string; motiv?: string; motivGroesse?: string; farbton?: string; platzierungsdetails?: string; sonstiges?: string; altPreisText?: string; imPdfAusblenden?: boolean; positionType?: string; positionSide?: string; positionId?: string; veredlerId?: string; lieferdatum?: string }[] =>
   lines.filter(lineHasContent).map((l) => ({
     description: lineDesc(l), qty: l.qty, kind: l.kind, ...lineMoney(l), taxRatePct,
     ...(l.articleId ? { articleId: l.articleId } : {}), ...(l.variantId ? { variantId: l.variantId } : {}), ...(l.isAlternative ? { isAlternative: true } : {}),
@@ -3525,7 +3530,7 @@ export const toQuoteApiLines = (lines: EditorLine[], taxRatePct = 19): { descrip
 
 // Rekonstruiert die Erfassungs-Positionen aus gespeicherten Angebots-/Auftragszeilen
 // (für die Bearbeitung): VK = Listenpreis, Rabatt, EK = effektiver Netto − DB.
-type StoredLine = { description: string; qty: number; kind: PositionKind; unitNetCents: number; listNetCents: number | null; rabattPct: number | null; taxRatePct?: number | null; dbCents: number | null; articleId?: string | null; variantId?: string | null; isAlternative?: boolean; bezugPositionen?: number[] | null; lineType?: string | null; placement?: string | null; positionType?: string | null; positionSide?: string | null; positionId?: string | null; motiv?: string | null; motivGroesse?: string | null; farbton?: string | null; platzierungsdetails?: string | null; sonstiges?: string | null; altPreisText?: string | null; imPdfAusblenden?: boolean; veredlerId?: string | null };
+type StoredLine = { description: string; qty: number; kind: PositionKind; unitNetCents: number; listNetCents: number | null; rabattPct: number | null; taxRatePct?: number | null; dbCents: number | null; articleId?: string | null; variantId?: string | null; isAlternative?: boolean; bezugPositionen?: number[] | null; lineType?: string | null; placement?: string | null; positionType?: string | null; positionSide?: string | null; positionId?: string | null; motiv?: string | null; motivGroesse?: string | null; farbton?: string | null; platzierungsdetails?: string | null; sonstiges?: string | null; altPreisText?: string | null; imPdfAusblenden?: boolean; veredlerId?: string | null; lieferdatum?: string | null };
 export const fromStoredLines = (ls: StoredLine[]): EditorLine[] =>
   ls.map((l) => ({
     description: l.description, qty: l.qty, kind: l.kind,
@@ -3550,6 +3555,8 @@ export const fromStoredLines = (ls: StoredLine[]): EditorLine[] =>
     ...(l.altPreisText ? { altPreisText: l.altPreisText } : {}),
     ...(l.imPdfAusblenden ? { imPdfAusblenden: true } : {}),
     ...(l.veredlerId ? { veredlerId: l.veredlerId } : {}),
+    // ISO aus dem Beleg → date-Input-Format (YYYY-MM-DD) für die Bearbeitung.
+    ...(l.lieferdatum ? { lieferdatum: new Date(l.lieferdatum).toISOString().slice(0, 10) } : {}),
   }));
 
 // Auflösung einer offenen Position beim Wandeln: eine Variante (String) ODER ein Größenlauf

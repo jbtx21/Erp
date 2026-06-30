@@ -22,6 +22,7 @@ export interface SalesLine {
   altPreisText?: string | null; // Alternativtext statt Euro-Betrag im PDF
   imPdfAusblenden?: boolean; // Position im Beleg-PDF ausblenden
   veredlerId?: string | null; // Veredler je Veredelungs-Position (Fremdvergabe, G1); Vorrang vor Artikel-Veredler
+  lieferdatum?: string | null; // verfügbar-ab/zugesagt je Position (ISO, Order-to-make); null = sofort
   /**
    * Materialisierung: temporär (frei) erfasste Produktposition beim Wandeln in einen
    * festen Artikel überführen (Article+Variant anlegen, STANDARD-Preis = VK). Der Repo
@@ -72,6 +73,7 @@ export interface ConversionPlanLine {
   altPreisText: string | null;
   imPdfAusblenden: boolean;
   veredlerId: string | null; // Veredler je Position (Fremdvergabe aus dem Angebot übernommen, G1)
+  lieferdatum: string | null; // verfügbar-ab/zugesagt je Position (ISO, aus dem Angebot)
   /** true, wenn ein Hauptartikel ohne Variante (Farbe×Größe muss gewählt werden). */
   needsVariant: boolean;
 }
@@ -107,6 +109,7 @@ export interface OrderEditLine {
   altPreisText: string | null;
   imPdfAusblenden: boolean;
   veredlerId: string | null; // Veredler je Position (Round-Trip bei Bearbeitung, G1)
+  lieferdatum: string | null; // verfügbar-ab/zugesagt je Position (ISO); null = sofort
 }
 
 export interface OrderEditData {
@@ -221,7 +224,7 @@ export class SalesOrderService {
         const skuSuffix = entries.length > 1 ? `-${k + 1}` : "";
         built.push({ originPos: l.position, line: {
           description: l.description, qty: e.qty, unitNetCents: l.unitNetCents, listNetCents: l.listNetCents, rabattPct: l.rabattPct, taxRatePct: l.taxRatePct, kind: l.kind, variantId: e.variantId, bezugPositionen: l.bezugPositionen, dbCents: l.dbCents,
-          lineType: l.lineType, placement: l.placement, positionType: l.positionType, positionSide: l.positionSide, positionId: l.positionId, motiv: l.motiv, motivGroesse: l.motivGroesse, farbton: l.farbton, platzierungsdetails: l.platzierungsdetails, sonstiges: l.sonstiges, altPreisText: l.altPreisText, imPdfAusblenden: l.imPdfAusblenden, veredlerId: l.veredlerId,
+          lineType: l.lineType, placement: l.placement, positionType: l.positionType, positionSide: l.positionSide, positionId: l.positionId, motiv: l.motiv, motivGroesse: l.motivGroesse, farbton: l.farbton, platzierungsdetails: l.platzierungsdetails, sonstiges: l.sonstiges, altPreisText: l.altPreisText, imPdfAusblenden: l.imPdfAusblenden, veredlerId: l.veredlerId, lieferdatum: l.lieferdatum,
           ...(materialize ? { materializeArticle: { sku: `${number}-P${l.position}${skuSuffix}`, name: l.description.trim(), description: l.description.trim(), isVeredelung: l.kind === "VEREDELUNG", veredlerId: l.veredlerId } } : {}),
         } });
       });

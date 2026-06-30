@@ -1015,6 +1015,10 @@ model QuoteLine {
   // Veredler je Veredelungs-Position (Fremdvergabe direkt aus dem Vertriebsweg, G1): hat
   // Vorrang vor dem Veredler des Katalogartikels. null = inhouse bzw. aus Artikel ableiten.
   veredlerId  String?
+  // Verfügbar ab / zugesagter Liefertermin JE POSITION (Order-to-make, Kap. 35): TEXMA hat kein
+  // Lager — nicht jede Variante ist sofort lieferbar. Treibt Teilproduktion/Teillieferung. null =
+  // sofort/kein Termin gesetzt; der Kopf-Wunschtermin (Quote.wunschLiefertermin) bleibt davon unberührt.
+  lieferdatum DateTime?
 }
 
 enum OrderStatus {
@@ -1127,6 +1131,9 @@ model OrderLine {
   // Veredler je Veredelungs-Position (Fremdvergabe direkt aus dem Vertriebsweg, G1): hat
   // Vorrang vor dem Veredler des Katalogartikels (loadOrderForProduction). null = inhouse/aus Artikel.
   veredlerId  String?
+  // Verfügbar ab / zugesagter Liefertermin JE POSITION (Order-to-make, Kap. 35): aus dem Angebot
+  // übernommen oder am Auftrag gepflegt. Treibt Teilproduktion/Teillieferung. null = sofort.
+  lieferdatum DateTime?
 }
 
 // Positionsart: Basistextil vs. Veredelung (Druck/Stick) vs. Sonstiges (Versand,
@@ -1303,6 +1310,8 @@ model SampleLoanLine {
   supplierId   String?
   supplier     Supplier?  @relation(fields: [supplierId], references: [id])
   menge        Int
+  // Verfügbar ab / zugesagter Liefertermin je Muster-Position (Order-to-make, Kap. 35). null = sofort.
+  lieferdatum  DateTime?
 
   @@index([sampleLoanId])
 }

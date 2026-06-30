@@ -47,6 +47,13 @@ describe("SalesOrderService (Auftragserstellung)", () => {
     expect(repo.orders[0]?.lines[0]?.taxRatePct).toBe(0);
   });
 
+  it("übernimmt das Lieferdatum je Position ins Auftrag (Order-to-make, Kap. 35)", async () => {
+    const { svc, repo } = setup();
+    repo.addQuote({ id: "q-1", companyId: "co-1", accepted: false, lines: [{ description: "Cap", qty: 3, unitNetCents: 900, lieferdatum: "2026-09-15T00:00:00.000Z" }] });
+    await svc.convertQuote("q-1");
+    expect(repo.orders[0]?.lines[0]?.lieferdatum).toBe("2026-09-15T00:00:00.000Z");
+  });
+
   it("übernimmt den Veredelungsbezug (bezugPosition) des Angebots in den Auftrag", async () => {
     const { svc, repo } = setup();
     // Veredelungsposition verweist auf die Textilposition 1 → Bezug bleibt beim Wandeln erhalten (Kap. 5.4/11).
