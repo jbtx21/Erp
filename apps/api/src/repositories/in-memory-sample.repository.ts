@@ -71,8 +71,11 @@ export class InMemorySampleLoanRepository implements SampleLoanRepository {
     return { id };
   }
 
-  async quoteForLoan(quoteId: string): Promise<{ companyId: string; lines: LoanLine[] } | null> {
-    return this.quotes.get(quoteId) ?? null;
+  async quoteForLoan(quoteId: string): Promise<{ companyId: string; lines: Array<LoanLine & { position: number }> } | null> {
+    const q = this.quotes.get(quoteId);
+    if (!q) return null;
+    // Positionsnummer aus der Reihenfolge ableiten (Test-Helfer pflegt keine explizite Position).
+    return { companyId: q.companyId, lines: q.lines.map((l, i) => ({ ...l, position: i + 1 })) };
   }
 
   async markReturned(loanId: string): Promise<void> {

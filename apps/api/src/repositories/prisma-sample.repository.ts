@@ -60,15 +60,15 @@ export class PrismaSampleLoanRepository implements SampleLoanRepository {
     });
   }
 
-  async quoteForLoan(quoteId: string): Promise<{ companyId: string; lines: LoanLine[] } | null> {
+  async quoteForLoan(quoteId: string): Promise<{ companyId: string; lines: Array<LoanLine & { position: number }> } | null> {
     // Auflösung über interne ID ODER die sichtbare Belegnummer (AN-…) — der Sachbearbeiter
     // kennt nur die Belegnummer, nicht die CUID.
     const q = await prisma.quote.findFirst({
       where: { OR: [{ id: quoteId }, { number: quoteId }] },
-      select: { companyId: true, lines: { orderBy: { position: "asc" }, select: { description: true, qty: true } } },
+      select: { companyId: true, lines: { orderBy: { position: "asc" }, select: { position: true, description: true, qty: true, variantId: true } } },
     });
     if (!q) return null;
-    return { companyId: q.companyId, lines: q.lines.map((l) => ({ description: l.description, menge: l.qty, variantId: null, supplierId: null })) };
+    return { companyId: q.companyId, lines: q.lines.map((l) => ({ position: l.position, description: l.description, menge: l.qty, variantId: l.variantId ?? null, supplierId: null })) };
   }
 
   async issue(input: {

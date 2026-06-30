@@ -45,6 +45,16 @@ describe("Mehrartikel-Leihgut (mehrere Artikel / Lieferanten) + Angebot→Leihgu
     expect(loan.lines).toHaveLength(2);
   });
 
+  it("löst offene Hauptartikel je Position auf die gewählte Variante auf (Muster-Anprobe, Kap. 35)", async () => {
+    const { svc, repo } = setup();
+    // Pos. 1 ist ein Hauptartikel ohne Variante (Farbe/Größe offen) → wird vor der Anprobe abgefragt.
+    repo.setQuoteForLoan("q-1", { companyId: "co-9", lines: [{ description: "Premium Polo", menge: 1, variantId: null }, { description: "Cap navy", menge: 1, variantId: "var-cap-navy" }] });
+    const { id } = await svc.convertQuoteToLoan("q-1", undefined, { 1: "var-polo-rot-L" });
+    const loan = (await repo.list()).find((l) => l.id === id)!;
+    expect(loan.lines[0]?.variantId).toBe("var-polo-rot-L"); // aufgelöst
+    expect(loan.lines[1]?.variantId).toBe("var-cap-navy");    // bereits eindeutig
+  });
+
   it("leere Positionen / unbekanntes Angebot werfen", async () => {
     const { svc } = setup();
     await expect(svc.issueMulti({ companyId: "co-1", lines: [] })).rejects.toThrow();

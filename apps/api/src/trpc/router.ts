@@ -2695,9 +2695,15 @@ export const appRouter = router({
       }),
     // Angebot → Leihgut wandeln (Won-Verzweigung: Muster/Anprobe).
     convertQuote: roleProcedure(...supplierRoles)
-      .input(z.object({ quoteId: z.string().min(1) }))
+      // resolutions: offene Hauptartikel-Positionen (Position → Variante) für die Muster-Anprobe.
+      .input(z.object({ quoteId: z.string().min(1), resolutions: z.record(z.string()).optional() }))
       .mutation(async ({ input, ctx }) => {
-        try { return await ctx.sampleLoans.convertQuoteToLoan(input.quoteId); } catch (e) { throw toTrpcError(e); }
+        try {
+          const resolutions = input.resolutions
+            ? Object.fromEntries(Object.entries(input.resolutions).map(([k, v]) => [Number(k), v]))
+            : undefined;
+          return await ctx.sampleLoans.convertQuoteToLoan(input.quoteId, undefined, resolutions);
+        } catch (e) { throw toTrpcError(e); }
       }),
     returnSample: roleProcedure(...supplierRoles)
       .input(z.object({ loanId: z.string().min(1) }))

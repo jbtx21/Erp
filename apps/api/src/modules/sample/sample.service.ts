@@ -63,7 +63,7 @@ export interface SampleLoanRepository {
   /** Mehrartikel-Leihe (Muster/Anprobe, mehrere Lieferanten) — keine Auto-Berechnung. */
   issueMulti(input: { companyId: string; zweck: string | null; ausgegebenAm: Date; lines: LoanLine[]; quoteId?: string | null }): Promise<{ id: string }>;
   /** Angebotsdaten für „Angebot → Leihgut": Firma + Positionen (Beschreibung/Menge). */
-  quoteForLoan(quoteId: string): Promise<{ companyId: string; lines: LoanLine[] } | null>;
+  quoteForLoan(quoteId: string): Promise<{ companyId: string; lines: Array<LoanLine & { position: number }> } | null>;
   /** Rückgabe: Status ZURUECK, Muster-Zugang (+menge), DueItem erledigt. */
   markReturned(loanId: string): Promise<void>;
   /** Noch verliehene Leihen, deren Frist `now` erreicht/überschritten hat. */
@@ -141,11 +141,26 @@ export class SampleLoanService {
     return loan;
   }
 
-  /** Angebot → Leihgut: übernimmt die Angebotspositionen als Muster/Anprobe-Leihe (verlinkt). */
-  async convertQuoteToLoan(quoteId: string, zweck = "Muster/Anprobe"): Promise<{ id: string }> {
+  /**
+   * Angebot → Leihgut: übernimmt die Angebotspositionen als Muster/Anprobe-Leihe (verlinkt).
+   * Für noch offene Hauptartikel (im Angebot oft nur Hauptartikel, keine Variante) liefert
+   * `resolutions` die konkrete Farbe×Größe je Position (Position → variantId), die der
+   * Sachbearbeiter vor der Muster-Anprobe abfragt (Order-to-make, Kap. 35).
+   */
+  async convertQuoteToLoan(
+    quoteId: string,
+    zweck = "Muster/Anprobe",
+    resolutions: Record<number, string> = {}
+  ): Promise<{ id: string }> {
     const q = await this.repo.quoteForLoan(quoteId);
     if (!q) throw new Error("Angebot nicht gefunden.");
-    return this.issueMulti({ companyId: q.companyId, zweck, lines: q.lines, quoteId });
+    const lines: LoanLine[] = q.lines.map((l) => ({
+      description: l.description,
+      menge: l.menge,
+      supplierId: l.supplierId ?? null,
+      variantId: resolutions[l.position] ?? l.variantId ?? null,
+    }));
+    return this.issueMulti({ companyId: q.companyId, zweck, lines, quoteId });
   }
 
   /** Muster zurückgenommen — keine Berechnung mehr. */

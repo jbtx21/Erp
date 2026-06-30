@@ -3660,6 +3660,63 @@ function ConvertQuoteDialog({ quoteId, onDone, onClose }: { quoteId: string; onD
   );
 }
 
+// Einzel-Variante (Farbe × Größe) eines Hauptartikels wählen — für die Muster-Anprobe.
+function SampleVariantPicker({ articleId, value, onChange }: { articleId: string; value: string | undefined; onChange: (v: string | undefined) => void }): JSX.Element {
+  const [variants, setVariants] = useState<Awaited<ReturnType<typeof trpc.products.listVariants.query>>>([]);
+  useEffect(() => { void trpc.products.listVariants.query({ articleId }).then(setVariants).catch(() => undefined); }, [articleId]);
+  const vLabel = (v: typeof variants[number]): string => [attrOf(v.attributes, /farbe|color/i), attrOf(v.attributes, /gr(ö|oe)ße|size/i)].filter(Boolean).join(" ") || v.sku;
+  return (
+    <Select size="xs" searchable placeholder="Farbe × Größe für die Anprobe…" w={320}
+      value={value ?? null} data={variants.map((v) => ({ value: v.id, label: vLabel(v) + ` (${v.sku})` }))}
+      onChange={(v) => onChange(v ?? undefined)} />
+  );
+}
+
+// Angebot → Musterleihe: fragt für die noch offenen Hauptartikel die konkrete Farbe×Größe ab
+// (Order-to-make, Kap. 35) und erzeugt die Muster-/Anprobe-Leihe mit den gewählten Varianten.
+function SampleFromQuoteDialog({ quoteId, onDone, onClose }: { quoteId: string; onDone: () => void; onClose: () => void }): JSX.Element {
+  type Plan = Awaited<ReturnType<typeof trpc.sales.conversionPlan.query>>;
+  const [plan, setPlan] = useState<Plan | null>(null);
+  const [picks, setPicks] = useState<Record<number, string>>({});
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { void (async () => {
+    try { setPlan(await trpc.sales.conversionPlan.query({ quoteId })); } catch (e) { setErr(errMsg(e)); }
+  })(); }, [quoteId]);
+  const open = plan ? plan.lines.filter((l) => l.needsVariant && l.articleId) : [];
+  const allResolved = open.every((l) => !!picks[l.position]);
+  const create = async (): Promise<void> => {
+    setBusy(true); setErr(null);
+    try {
+      await trpc.sampleLoans.convertQuote.mutate({ quoteId, resolutions: open.length ? Object.fromEntries(open.map((l) => [String(l.position), picks[l.position]!])) : undefined });
+      notify.success("Muster-Leihe aus Angebot erzeugt — im Modul Muster-Leihgut sichtbar.");
+      onDone();
+    } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
+  };
+  return (
+    <Modal opened onClose={onClose} title="Muster-Leihe aus Angebot erzeugen" size="lg">
+      {err && <Alert color="red" mb="sm">{err}</Alert>}
+      {!plan && <Loader size="sm" />}
+      {plan && (
+        <>
+          {open.length === 0 && <Text size="sm" mb="sm">Alle Positionen sind eindeutig — die Muster-Leihe kann direkt erzeugt werden.</Text>}
+          {open.length > 0 && <Text size="sm" mb="sm">Für folgende Hauptartikel die Farbe×Größe der Muster wählen (Anprobe):</Text>}
+          {open.map((l) => l.articleId ? (
+            <Box key={l.position} mb={10}>
+              <Text size="sm" fw={500} mb={2}>Pos. {l.position}: {l.articleName ?? l.description}</Text>
+              <SampleVariantPicker articleId={l.articleId} value={picks[l.position]} onChange={(v) => setPicks((p) => ({ ...p, [l.position]: v ?? "" }))} />
+            </Box>
+          ) : null)}
+          <Group justify="flex-end" mt="md">
+            <Button variant="default" onClick={onClose}>Abbrechen</Button>
+            <Button loading={busy} disabled={!allResolved} onClick={() => void create()}>Muster-Leihe erzeugen</Button>
+          </Group>
+        </>
+      )}
+    </Modal>
+  );
+}
+
 export function QuotesPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k: string, id: string) => void } = {}): JSX.Element {
   type QuoteListRow = Awaited<ReturnType<typeof trpc.quotes.list.query>>[number];
   const [rows, setRows] = useState<QuoteListRow[]>([]);
@@ -3669,6 +3726,7 @@ export function QuotesPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k:
   const [editId, setEditId] = useState<string | null>(null); // gesetzt = Bearbeitung statt Neuanlage
   const [quoteNumber, setQuoteNumber] = useState(""); // aufgelöste Angebots-Nr. beim Bearbeiten (QA Finding 7)
   const [convertId, setConvertId] = useState<string | null>(null);
+  const [sampleId, setSampleId] = useState<string | null>(null); // Muster-Leihe aus Angebot (Farbe/Größe-Abfrage)
   const [err, setErr] = useState<string | null>(null);
   // Anlage-Formular
   const [companyId, setCompanyId] = useState("");
@@ -3729,7 +3787,7 @@ export function QuotesPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k:
       (status === "VERSENDET" || status === "NACHFASSEN") && { label: "Annehmen & in Auftrag wandeln", group: "Status & Folgeaktion", color: "green", onClick: () => void act(async () => { await trpc.quotes.transition.mutate({ id, to: "ANGENOMMEN" }); setConvertId(id); }) },
       status === "ANGENOMMEN" && !r.converted && { label: "→ Auftrag wandeln", group: "Status & Folgeaktion", color: "green", onClick: () => setConvertId(id) },
       // Muster/Anprobe direkt aus dem Angebot erzeugen (kein Medienbruch ins Muster-Modul, QA #7).
-      status !== "ABGELEHNT" && { label: "Muster generieren (Leihgut)", group: "Status & Folgeaktion", onClick: () => void act(async () => { await trpc.sampleLoans.convertQuote.mutate({ quoteId: id }); notify.success("Muster-Leihe aus Angebot erzeugt — im Modul Muster-Leihgut sichtbar."); }) },
+      status !== "ABGELEHNT" && { label: "Muster generieren (Leihgut)", group: "Status & Folgeaktion", onClick: () => setSampleId(id) },
       editable && { label: "Ablehnen", group: "Status & Folgeaktion", color: "red", onClick: () => {
         void promptDialog({ title: "Angebot ablehnen", label: "Verlustgrund" }).then((grund) => {
           if (grund) void act(() => trpc.quotes.reject.mutate({ id, verlustgrund: grund }));
@@ -3908,6 +3966,7 @@ export function QuotesPage({ focusId, onOpen }: { focusId?: string; onOpen?: (k:
     <>
       {/* AP1: nach der Wandlung direkt in den neuen Auftrag springen (verlustfreie Pipeline). */}
       {convertId && <ConvertQuoteDialog quoteId={convertId} onClose={() => setConvertId(null)} onDone={({ id, number }) => { setConvertId(null); void load(); if (onOpen) onOpen("orders", id); else notify.success(`Auftrag ${number} angelegt.`); }} />}
+      {sampleId && <SampleFromQuoteDialog quoteId={sampleId} onClose={() => setSampleId(null)} onDone={() => { setSampleId(null); void load(); }} />}
       <DocListHeader
         module="⌂ Vertrieb"
         title="Angebote"
