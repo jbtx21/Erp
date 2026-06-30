@@ -185,6 +185,11 @@ const COL_LABELS: Record<string, string> = {
 const colLabel = (key: string, labels?: Record<string, string>): string =>
   labels?.[key] ?? COL_LABELS[key] ?? key.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (c) => c.toUpperCase());
 
+// Standard-Panel-Rahmen (Phase 1, Konsistenz): EINE Quelle statt ~40 Inline-Wiederholungen
+// des border+radius-Musters. Per `...PANEL_STYLE` in jedes betroffene style-Objekt gespreizt,
+// damit Sonderprops (maxWidth, flex, borderTop …) erhalten bleiben.
+const PANEL_STYLE: CSSProperties = { border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 };
+
 // Rohe Prisma-CUIDs (z. B. „cmqwoqa6e0008ue3g92nv6588") nie als Klartext zeigen — unleserlich,
 // nicht referenzierbar. Sprechende Slugs (co-muster, sup-fhb) und Belegnummern (AN-2026-…) sind
 // erlaubt; nur die cuid-Form wird erkannt.
@@ -617,7 +622,7 @@ function SupplierDetailPanel({ supplierId }: { supplierId: string }): JSX.Elemen
   if (!ov) return <Text size="sm" c="dimmed" mt="md">lädt…</Text>;
   const d = (x: string | Date): string => new Date(x).toLocaleDateString("de-DE");
   return (
-    <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+    <Box mt="md" p="md" style={{ ...PANEL_STYLE }}>
       <DocFormShell
         breadcrumb="Einkauf / Lieferanten"
         title={ov.supplier.name}
@@ -1270,7 +1275,7 @@ function ManualShipmentBox({ onOpen }: { onOpen?: (navKey: string, id: string) =
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   return (
-    <Box mt="lg" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, maxWidth: 720 }}>
+    <Box mt="lg" p="md" style={{ ...PANEL_STYLE, maxWidth: 720 }}>
       <Text size="sm" fw={600}>Manuelles Versandetikett</Text>
       <Text size="xs" c="dimmed" mb="xs">Versand für einen Auftrag manuell erfassen — auch wenn er nicht in der Liste steht. Setzt den Auftrag auf VERSENDET und meldet Status/Tracking an Shop bzw. Kunde.</Text>
       <Group gap="xs" align="end" wrap="wrap">
@@ -1535,7 +1540,7 @@ export function SampleLoansPage({ onOpen }: { onOpen?: (navKey: string, id: stri
     <>
       <DocListHeader module="Lager / Muster-Leihgut" title="Muster-Leihgut"
         hint="Ausgabe als Leihgut; Rückgabe unter 21 Tagen → keine Rechnung, sonst Musterrechnung zum Listenpreis (B5). Aus Angebot wandelbar." />
-      <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, maxWidth: 560 }}>
+      <Box mt="md" p="md" style={{ ...PANEL_STYLE, maxWidth: 560 }}>
         <Text size="sm" fw={600}>Aus Angebot wandeln</Text>
         <Text size="xs" c="dimmed" mb="xs">Angebot (Won-Verzweigung Muster/Anprobe) direkt in eine Muster-Leihe überführen.</Text>
         <Group gap="xs" align="end">
@@ -1568,7 +1573,7 @@ export function SampleLoansPage({ onOpen }: { onOpen?: (navKey: string, id: stri
       {status && <Text size="sm" mt="xs" c="dimmed">{status}</Text>}
       {err && <Alert color="red" mt="sm">{err}</Alert>}
 
-      <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+      <Box mt="md" p="md" style={{ ...PANEL_STYLE }}>
         <Text size="sm" fw={600}>Mehrartikel-Leihe (Muster/Anprobe, mehrere Lieferanten)</Text>
         <Group gap="xs" align="end" mt="xs">
           <CompanyPicker value={multiCompany} onChange={setMultiCompany} w={200} />
@@ -2233,7 +2238,7 @@ export function ProductsPage({ focusId }: { focusId?: string } = {}): JSX.Elemen
       </Group>
       {err && <Alert color="red" mt="sm">{err}</Alert>}
 
-      <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+      <Box mt="md" p="md" style={{ ...PANEL_STYLE }}>
         <Text size="sm" fw={600}>Massenbearbeitung</Text>
         <Group gap="xs" align="end" mt="xs">
           <TextInput label="SKUs (kommagetrennt)" value={bulkSkus} onChange={(e) => setBulkSkus(e.currentTarget.value)} placeholder="A-1, A-2" w={220} />
@@ -3896,7 +3901,7 @@ function LinksPanel({ orderId }: { orderId: string }): JSX.Element {
     void trpc.links.forOrder.query({ orderId }).then(setData).catch((e: unknown) => setErr(errMsg(e)));
   }, [orderId]);
   return (
-    <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+    <Box mt="md" p="md" style={{ ...PANEL_STYLE }}>
       <Text size="sm" fw={600}>Verknüpfte Belege</Text>
       {err && <Alert color="red" mt="xs">{err}</Alert>}
       {data && data.links.length === 0 && <Text size="sm" c="dimmed" mt={4}>Noch keine verknüpften Belege.</Text>}
@@ -3980,7 +3985,7 @@ function WorkflowPanel({ orderId }: { orderId: string }): JSX.Element {
   useEffect(() => { void load(); }, [load]);
 
   return (
-    <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+    <Box mt="md" p="md" style={{ ...PANEL_STYLE }}>
       <Text size="sm" fw={600}>Workflow / Statusverwaltung</Text>
       {err && <Alert color="red" mt="xs">{err}</Alert>}
       {!status ? (
@@ -4350,7 +4355,7 @@ function ConnectionsPanel({ orderId, role, onChanged, onOpen }: { orderId: strin
   const phaseColor: Record<string, string> = { Vertrieb: "blue", Fulfillment: "teal", Zahlung: "green", Produktion: "orange", Reklamation: "red" };
 
   return (
-    <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+    <Box mt="md" p="md" style={{ ...PANEL_STYLE }}>
       {laufzettelFor && <LaufzettelModal productionId={laufzettelFor} defaultKind={isExternalProfile(prod?.finishingProfile) ? "EXTERN" : "INTERN"} onClose={() => setLaufzettelFor(null)} />}
       {nachkalkFor && <NachkalkulationModal productionId={nachkalkFor} onClose={() => setNachkalkFor(null)} />}
       {createProdOpen && <ProductionCreateDialog orderId={orderId} onClose={() => setCreateProdOpen(false)} onDone={(m) => { setCreateProdOpen(false); setMsg(m); setErr(null); void load(); onChanged(); }} />}
@@ -4452,7 +4457,7 @@ function ManualShopFetch({ onDone }: { onDone: () => void }): JSX.Element {
   };
 
   return (
-    <Box mt="sm" p="sm" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+    <Box mt="sm" p="sm" style={{ ...PANEL_STYLE }}>
       <Text size="sm" fw={600}>Dringende Shop-Bestellung sofort abrufen</Text>
       <Text size="xs" c="dimmed" mb={6}>Shop wählen, Bestellnummer eingeben → die Bestellung wird einzeln aus dem Shop geholt, importiert und auf „In Bearbeitung" gesetzt (ohne auf den nächsten Sync zu warten).</Text>
       {err && <Alert color="red" mb="xs" withCloseButton onClose={() => setErr(null)}>{err}</Alert>}
@@ -4824,7 +4829,7 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
       {deliverFor && <DeliveryDialog orderId={deliverFor.orderId} orderNumber={deliverFor.orderNumber} onClose={() => setDeliverFor(null)} onDone={(m) => { setDeliverFor(null); setMsg(m); void load(); }} />}
       {canAct && !showCreate && <ManualShopFetch onDone={() => void load()} />}
       {canAct && showCreate && (
-        <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+        <Box mt="md" p="md" style={{ ...PANEL_STYLE }}>
           <DocFormShell
             breadcrumb="Vertrieb / Aufträge"
             title={editOrderId ? "Auftrag bearbeiten" : "Neuer Auftrag"}
@@ -5256,7 +5261,7 @@ function CompanyDetailPanel({ companyId, companies = [], onNavigate, onOpen }: {
     </Box>
   );
   return (
-    <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+    <Box mt="md" p="md" style={{ ...PANEL_STYLE }}>
       <DocFormShell
         breadcrumb="Vertrieb / Kunden"
         title={ov.company.name}
@@ -5355,7 +5360,7 @@ function RecordFilesPanel({ entity, entityId }: { entity: string; entityId: stri
     try { await fn(); await load(); } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
   };
   return (
-    <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+    <Box mt="md" p="md" style={{ ...PANEL_STYLE }}>
       <Text fw={600}>Dateien &amp; Dokumente</Text>
       {err && <Alert color="red" mt="xs">{err}</Alert>}
       <Group gap="xs" mt="xs" align="flex-end" wrap="wrap">
@@ -5418,7 +5423,7 @@ function CompanyContactsPanel({ companyId, companies, onChanged }: { companyId: 
   };
 
   return (
-    <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+    <Box mt="md" p="md" style={{ ...PANEL_STYLE }}>
       <Text fw={600}>Personen &amp; Verknüpfungen</Text>
       {err && <Alert color="red" mt="xs">{err}</Alert>}
 
@@ -5497,7 +5502,7 @@ function CompanyAddressesPanel({ companyId }: { companyId: string }): JSX.Elemen
   };
 
   return (
-    <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+    <Box mt="md" p="md" style={{ ...PANEL_STYLE }}>
       <Text fw={600}>Lieferadressen <Text span size="xs" c="dimmed">· Rechnungsadresse liegt im Tab „Stammdaten"</Text></Text>
       {err && <Alert color="red" mt="xs">{err}</Alert>}
 
@@ -5803,7 +5808,7 @@ export function CrmPipelinePage({ onOpen }: { onNavigate?: (k: string) => void; 
 
       <Group align="stretch" mt="md" gap="xs" wrap="wrap">
         {counts.map(({ stage, n }) => (
-          <Box key={stage} p="sm" style={{ flex: 1, minWidth: 130, border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, borderTop: `3px solid var(--mantine-color-${CRM_STAGE_COLOR[stage]}-6)` }}>
+          <Box key={stage} p="sm" style={{ flex: 1, minWidth: 130, ...PANEL_STYLE, borderTop: `3px solid var(--mantine-color-${CRM_STAGE_COLOR[stage]}-6)` }}>
             <Text size="xs" c="dimmed" tt="uppercase" fw={600}>{prettyStatus(stage)}</Text>
             <Text fz={30} fw={700} lh={1.1}>{n}</Text>
           </Box>
@@ -6315,7 +6320,7 @@ export function DashboardsPage(): JSX.Element {
       {resolved && (
         <Group align="stretch" mt="md" gap="md" wrap="wrap">
           {resolved.widgets.map((w) => (
-            <Box key={w.id} p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, width: w.width === "FULL" ? "100%" : "calc(50% - 8px)" }}>
+            <Box key={w.id} p="md" style={{ ...PANEL_STYLE, width: w.width === "FULL" ? "100%" : "calc(50% - 8px)" }}>
               <Group justify="space-between" align="flex-start" gap={4}>
                 <Text size="sm" fw={600}>{w.title}</Text>
                 <Group gap={2}>
@@ -7124,7 +7129,7 @@ export function EanImportPage(): JSX.Element {
             <Badge variant="outline">Zeilen gesamt: {c.total}</Badge>
           </Group>
 
-          <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, maxWidth: 720 }}>
+          <Box mt="md" p="md" style={{ ...PANEL_STYLE, maxWidth: 720 }}>
             <Text fw={600} mb={6}>Was soll geschrieben werden?</Text>
             <Checkbox label="Stammdaten/PIM aus der Liste aktualisieren" checked={updatePim} onChange={(e) => setUpdatePim(e.currentTarget.checked)} mb={6} />
             <Checkbox label="EAN + Gewicht auf der Variante setzen (ergänzt fehlende EAN)" checked={updateGtinWeight} onChange={(e) => setUpdateGtinWeight(e.currentTarget.checked)} mb={6} />
@@ -7215,7 +7220,7 @@ export function FinanceReportingPage(): JSX.Element {
   };
 
   const card = (label: string, value: string, hint?: string, color?: string): JSX.Element => (
-    <Box style={{ flex: "1 1 200px", minWidth: 180, border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, padding: 16 }}>
+    <Box style={{ flex: "1 1 200px", minWidth: 180, ...PANEL_STYLE, padding: 16 }}>
       <Text size="xs" fw={700} tt="uppercase" c="dimmed">{label}</Text>
       <Text fz={28} fw={700} mt={4} c={color}>{value}</Text>
       {hint && <Text size="xs" c="dimmed" mt={2}>{hint}</Text>}
@@ -7304,7 +7309,7 @@ function WareneingangPo({ po, onBooked, onErr }: {
   };
 
   return (
-    <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+    <Box mt="md" p="md" style={{ ...PANEL_STYLE }}>
       <Group justify="space-between">
         <Text fw={600}>{po.number} · {po.supplierName}{po.productionId ? ` · PA ${po.productionId}` : ""}</Text>
         <Badge variant="light" color={statusColor}>{po.status}</Badge>
@@ -7498,7 +7503,7 @@ export function ZahlungsabgleichOverview({ onOpen }: { onOpen?: (k: string, id: 
   const fOpenItems = bucketF.length ? openItems.filter((oi) => bucketF.includes(oi.bucket)) : openItems;
 
   const kpi = (label: string, value: ReactNode, color?: string): JSX.Element => (
-    <Box p="sm" style={{ flex: 1, minWidth: 150, border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+    <Box p="sm" style={{ flex: 1, minWidth: 150, ...PANEL_STYLE }}>
       <Text size="xs" c="dimmed" tt="uppercase" fw={600}>{label}</Text>
       <Text fz={24} fw={700} lh={1.2} c={color}>{value}</Text>
     </Box>
@@ -7727,7 +7732,7 @@ export function OpportunitiesPage(): JSX.Element {
       {pipeline && (
         <Group mt="md" gap="md" wrap="wrap">
           {pipeline.buckets.map((b) => (
-            <Box key={b.stage} p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, minWidth: 160 }}>
+            <Box key={b.stage} p="md" style={{ ...PANEL_STYLE, minWidth: 160 }}>
               <Text size="xs" c="dimmed" tt="uppercase" fw={700}>{b.label}</Text>
               <Text fz={22} fw={700}>{(b.weightedCents / 100).toLocaleString("de-DE", { style: "currency", currency: "EUR" })}</Text>
               <Text size="xs" c="dimmed">{b.count} offen · brutto {(b.valueCents / 100).toLocaleString("de-DE", { style: "currency", currency: "EUR" })}</Text>
@@ -8233,7 +8238,7 @@ function WarehousesSection(): JSX.Element {
   const load = useCallback(async () => { try { setRows(await trpc.warehouses.list.query()); setErr(null); } catch (e) { setErr(errMsg(e)); } }, []);
   useEffect(() => { void load(); }, [load]);
   return (
-    <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+    <Box mt="md" p="md" style={{ ...PANEL_STYLE }}>
       <Text size="sm" fw={600}>Läger (Stammdaten)</Text>
       <Text size="xs" c="dimmed" mb="xs">Beliebige Läger statt festem Schema. Die vier bisherigen (HAUPT/MUSTER/SHOWROOM/TRANSFERDRUCK) sind als Stammsätze migriert.</Text>
       <Group gap="xs" align="end">
@@ -8297,7 +8302,7 @@ export function LagerPage(): JSX.Element {
 
         <Tabs.Panel value="buchen" pt="md">
       <Group gap="md" align="end" wrap="wrap">
-        <Box p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+        <Box p="md" style={{ ...PANEL_STYLE }}>
           <Text size="sm" fw={600}>Zugang / Abgang (beliebiges Lager)</Text>
           <Group gap="xs" align="end" mt="xs">
             <Box>
@@ -8316,7 +8321,7 @@ export function LagerPage(): JSX.Element {
           </Group>
         </Box>
 
-        <Box p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+        <Box p="md" style={{ ...PANEL_STYLE }}>
           <Text size="sm" fw={600}>Inventur (Showroom)</Text>
           <Group gap="xs" align="end" mt="xs">
             <Box>
@@ -8408,7 +8413,7 @@ function LagerVerfuegbarkeit(): JSX.Element {
       {msg && <Alert color="green" mt="sm">{msg}</Alert>}
 
       <Group gap="md" mt="md" align="end" wrap="wrap">
-        <Box p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+        <Box p="md" style={{ ...PANEL_STYLE }}>
           <Text size="sm" fw={600}>Bestand für Auftrag vormerken</Text>
           <Group gap="xs" align="end" mt="xs">
             <TextInput label="Varianten-ID" value={rv} onChange={(e) => setRv(e.currentTarget.value)} w={160} />
@@ -8421,7 +8426,7 @@ function LagerVerfuegbarkeit(): JSX.Element {
             })}>Vormerken</Button>
           </Group>
         </Box>
-        <Box p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+        <Box p="md" style={{ ...PANEL_STYLE }}>
           <Text size="sm" fw={600}>Meldebestand setzen</Text>
           <Group gap="xs" align="end" mt="xs">
             <TextInput label="Varianten-ID" value={tv} onChange={(e) => setTv(e.currentTarget.value)} w={160} />
@@ -8692,7 +8697,7 @@ export function IntegrationsPage(): JSX.Element {
 
       <Group mt="md" gap="md" align="stretch" wrap="wrap">
         {list.map((c) => (
-          <Box key={c.kind} p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, width: 340 }}>
+          <Box key={c.kind} p="md" style={{ ...PANEL_STYLE, width: 340 }}>
             <Group justify="space-between">
               <Text fw={700}>{c.name}</Text>
               <Badge color={c.configured ? "green" : "gray"} variant="light">{c.configured ? "konfiguriert" : "offen"}</Badge>
@@ -8759,7 +8764,7 @@ export function SecurityPage({ userName, onProfileUpdated }: { userName?: string
     <>
       <DocListHeader module="Einstellungen" title="Mein Konto" />
 
-      <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, maxWidth: 560 }}>
+      <Box mt="md" p="md" style={{ ...PANEL_STYLE, maxWidth: 560 }}>
         <Text fw={600}>Profil</Text>
         <Text size="sm" c="dimmed" mt={2}>Eigenen Anzeigenamen ändern.</Text>
         {profileErr && <Alert color="red" mt="sm">{profileErr}</Alert>}
@@ -8774,7 +8779,7 @@ export function SecurityPage({ userName, onProfileUpdated }: { userName?: string
         </Group>
       </Box>
 
-      <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, maxWidth: 560 }}>
+      <Box mt="md" p="md" style={{ ...PANEL_STYLE, maxWidth: 560 }}>
         <Text fw={600}>Passwort ändern</Text>
         <Text size="sm" c="dimmed" mt={2}>Mindestens 8 Zeichen. Das aktuelle Passwort ist zur Bestätigung erforderlich.</Text>
         {pwErr && <Alert color="red" mt="sm">{pwErr}</Alert>}
@@ -8801,7 +8806,7 @@ export function SecurityPage({ userName, onProfileUpdated }: { userName?: string
           try { setSetup(await trpc.auth.setupTotp.mutate()); } catch (e) { setErr(errMsg(e)); }
         }}>2FA einrichten</Button>
       ) : (
-        <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, maxWidth: 560 }}>
+        <Box mt="md" p="md" style={{ ...PANEL_STYLE, maxWidth: 560 }}>
           <Text size="sm" fw={600}>1. In der Authenticator-App hinzufügen</Text>
           <Text size="sm" mt={4}>Geheimschlüssel (manuell eingeben):</Text>
           <Text ff="monospace" size="sm" style={{ wordBreak: "break-all" }} c="blue">{setup.secret}</Text>
@@ -8909,7 +8914,7 @@ export function ArchivePage({ role }: { role?: string } = {}): JSX.Element {
         </Alert>
       )}
 
-      <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, maxWidth: 640 }}>
+      <Box mt="md" p="md" style={{ ...PANEL_STYLE, maxWidth: 640 }}>
         <Text fw={600}>Beleg archivieren</Text>
         <Group mt="xs" align="end" gap="xs">
           <Select label="Belegart" data={BELEGARTEN as unknown as string[]} value={belegart} onChange={(v) => setBelegart(v ?? "RECHNUNG")} w={200} />
@@ -9084,7 +9089,7 @@ export function AutomationPage(): JSX.Element {
       {err && <Alert color="red" mt="sm">{err}</Alert>}
       {msg && <Alert color="green" mt="sm">{msg}</Alert>}
 
-      <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, maxWidth: 720 }}>
+      <Box mt="md" p="md" style={{ ...PANEL_STYLE, maxWidth: 720 }}>
         <Text fw={600}>Neue Regel</Text>
         <Group mt="xs" gap="xs" align="end">
           <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} w={220} />
@@ -9278,7 +9283,7 @@ export function AssignTaskBox({ entity, entityId, navKey }: { entity: string; en
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   return (
-    <Box mt="md" p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+    <Box mt="md" p="md" style={{ ...PANEL_STYLE }}>
       <Text fw={600}>Aufgabe zuweisen</Text>
       {err && <Alert color="red" mt="xs">{err}</Alert>}
       {msg && <Alert color="green" mt="xs">{msg}</Alert>}
@@ -9424,7 +9429,7 @@ export function HomePage({ userName, onNavigate }: { userName?: string; onNaviga
     <Box role="button" tabIndex={0} aria-label={`${label}: ${value}`}
       onClick={() => onNavigate(navKey)}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onNavigate(navKey); } }}
-      style={{ flex: "1 1 180px", minWidth: 160, cursor: "pointer", border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, padding: 16 }}>
+      style={{ flex: "1 1 180px", minWidth: 160, cursor: "pointer", ...PANEL_STYLE, padding: 16 }}>
       <Text size="xs" fw={700} tt="uppercase" c="dimmed">{label}</Text>
       <Text fz={28} fw={700} c={color} mt={4}>{value}</Text>
     </Box>
@@ -9438,7 +9443,7 @@ export function HomePage({ userName, onNavigate }: { userName?: string; onNaviga
       <Box role="button" tabIndex={0} aria-label={`${label}: ${value}, ${flat ? "unverändert" : `${up ? "plus" : "minus"} ${fmt(Math.abs(delta))} zum Vormonat`}`}
         onClick={() => onNavigate(navKey)}
         onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onNavigate(navKey); } }}
-        style={{ flex: "1 1 180px", minWidth: 160, cursor: "pointer", border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, padding: 16 }}>
+        style={{ flex: "1 1 180px", minWidth: 160, cursor: "pointer", ...PANEL_STYLE, padding: 16 }}>
         <Text size="xs" fw={700} tt="uppercase" c="dimmed">{label}</Text>
         <Text fz={24} fw={700} mt={4}>{value}</Text>
         <Text size="xs" c={col} mt={2}>{arrow} {flat ? "ggü. Vormonat" : `${fmt(Math.abs(delta))} ggü. Vormonat`}</Text>
@@ -9715,7 +9720,7 @@ export function GuVReportPage(): JSX.Element {
   const totalNet = totalIncome - totalExpense;
 
   const opChip = (sym: string): JSX.Element => (
-    <Box style={{ alignSelf: "center", border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8, padding: "6px 12px", fontWeight: 700, color: "var(--mantine-color-dimmed)" }}>{sym}</Box>
+    <Box style={{ alignSelf: "center", ...PANEL_STYLE, padding: "6px 12px", fontWeight: 700, color: "var(--mantine-color-dimmed)" }}>{sym}</Box>
   );
   const kpi = (label: string, cents: number, color?: string): JSX.Element => (
     <Card withBorder padding="md" radius="md" style={{ flex: 1, minWidth: 180, textAlign: "center" }}>
@@ -9910,7 +9915,7 @@ export function GutscheinePage(): JSX.Element {
       {msg && <Alert color="green" mt="sm" withCloseButton onClose={() => setMsg(null)}>{msg}</Alert>}
 
       <Group mt="md" gap="xl" align="flex-end" wrap="wrap">
-        <Box p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+        <Box p="md" style={{ ...PANEL_STYLE }}>
           <Text size="sm" fw={600} mb="xs">Gutschein anlegen</Text>
           <Group gap="xs" align="end" wrap="wrap">
             <TextInput label="Code" value={code} onChange={(e) => setCode(e.currentTarget.value)} placeholder="SOMMER25" w={150} />
@@ -9919,7 +9924,7 @@ export function GutscheinePage(): JSX.Element {
             <Button disabled={!code.trim() || wert <= 0} onClick={() => void create()}>Anlegen</Button>
           </Group>
         </Box>
-        <Box p="md" style={{ border: "1px solid var(--mantine-color-gray-3)", borderRadius: 8 }}>
+        <Box p="md" style={{ ...PANEL_STYLE }}>
           <Text size="sm" fw={600} mb="xs">Einlösen</Text>
           <Group gap="xs" align="end" wrap="wrap">
             <TextInput label="Code" value={redeemCode} onChange={(e) => setRedeemCode(e.currentTarget.value)} w={150} />
