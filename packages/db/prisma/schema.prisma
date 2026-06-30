@@ -91,24 +91,11 @@ model PriceGroup {
   companies Company[]
   prices    PriceGroupPrice[]
   priceTiers PriceGroupPriceTier[]
-  supplierMarkups SupplierMarkup[]
   customerSupplierGroups CustomerSupplierPriceGroup[]
 }
 
-// Aufschlagsmatrix je Lieferant × Kundengruppe (flach): VK = round(EK × factorBp / 10000).
-// „Jeder Lieferant hat eigene Aufschlagsfaktoren je Kundengruppe" (Standard/Top/Premium/Schule/
-// Wiederverkäufer/Agentur). factorBp = Faktor × 10000 (Int, kein Float) — z. B. 1,88 → 18800.
-model SupplierMarkup {
-  id           String     @id @default(cuid())
-  supplierId   String
-  supplier     Supplier   @relation(fields: [supplierId], references: [id], onDelete: Cascade)
-  priceGroupId String
-  priceGroup   PriceGroup @relation(fields: [priceGroupId], references: [id])
-  factorBp     Int // Aufschlagsfaktor in Zehntausendstel (1,88 = 18800)
-
-  @@unique([supplierId, priceGroupId])
-  @@index([supplierId])
-}
+// (Lieferanten-Aufschläge liegen seit Phase 1 in der EINEN Regel-Engine: MarkupRule mit supplierId
+//  × priceGroupId, finishingType=null. Die frühere Tabelle SupplierMarkup wurde in 0119 entfernt.)
 
 // Kundengruppe je (Kunde × Lieferant): ein Kunde kann bei HAKRO „Premium", bei Stanley
 // „Standard" sein. Fehlt der Eintrag → Default-Preisgruppe der Firma → sonst STANDARD.
@@ -712,7 +699,6 @@ model Supplier {
   active          Boolean  @default(true)
   supplierItems   SupplierItem[]
   textilArtikel   Article[] @relation("ArticleSupplier") // Artikel mit diesem (Textil-)Lieferanten
-  markups         SupplierMarkup[] // Aufschlagsmatrix je Kundengruppe
   customerGroups  CustomerSupplierPriceGroup[] // kundenindividuelle Gruppe je Kunde
   veredelungsArtikel Article[] @relation("ArticleVeredler") // als Veredler zugewiesene Logo-/Veredelungsartikel
   subProductions  SubProductionOrder[]
