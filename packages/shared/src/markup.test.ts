@@ -47,6 +47,22 @@ describe("Aufschlagsfaktor-Auflösung (Kap. 4.4): Default + Regeln + Logo-Overri
     expect(r).toMatchObject({ factor: 1.95, source: "logo-override" });
   });
 
+  it("Bedingungen supplierId × priceGroup (Fold-in von SupplierMarkup, Variante A)", () => {
+    // Lieferanten-Aufschlag als Regel: HAKRO × PREMIUM → 1,6; HAKRO × STANDARD → 1,88.
+    const cfg: MarkupConfig = {
+      defaultFactor: 1.88,
+      rules: [
+        { factor: 1.6, supplierId: "sup_hakro", priceGroup: "PREMIUM" },
+        { factor: 1.35, supplierId: "sup_stanley", priceGroup: "WIEDERVERKAEUFER" },
+      ],
+    };
+    expect(resolveMarkupFactor(cfg, { supplierId: "sup_hakro", priceGroup: "PREMIUM" }).factor).toBe(1.6);
+    // Falscher Lieferant → Regel greift nicht → Default.
+    expect(resolveMarkupFactor(cfg, { supplierId: "sup_stanley", priceGroup: "PREMIUM" }).source).toBe("default");
+    // Falsche Gruppe → Regel greift nicht → Default.
+    expect(resolveMarkupFactor(cfg, { supplierId: "sup_hakro", priceGroup: "STANDARD" }).source).toBe("default");
+  });
+
   it("Logo-Override muss > 0 sein", () => {
     expect(() => resolveMarkupFactor(config, {}, 0)).toThrow(/> 0/);
   });

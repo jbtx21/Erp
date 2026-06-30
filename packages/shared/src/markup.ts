@@ -4,7 +4,7 @@
 // Reine Auflösung; Persistenz/Repositories liegen in der API. „Jederzeit neu definierbar":
 // Default + Regeln sind Daten (kein Code-Konstante mehr). Die Regeln sind eine geordnete
 // Prioritätsliste: die ERSTE passende Regel gewinnt (Reihenfolge = Priorität).
-import { STICK_MARKUP_FACTOR } from "./pricing.js";
+import { STICK_MARKUP_FACTOR, type PriceGroupKind } from "./pricing.js";
 
 /** Veredelungsarten (Kap. 5): aktuell modelliert die Stickerei; ausbaubar. */
 export type FinishingType = "STICKEREI" | "DRUCK" | "TRANSFER";
@@ -18,8 +18,10 @@ export interface MarkupRule {
   /** Aufschlagsfaktor VK = EK × factor (z. B. 1.88). */
   factor: number;
   label?: string;
-  // ── Bedingungen (alle optional) ──
-  priceGroupId?: string; // Kundengruppe
+  // ── Bedingungen (alle optional, UND-verknüpft) ──
+  priceGroupId?: string; // Kundengruppe per PriceGroup-Id (Veredelungspfad)
+  priceGroup?: PriceGroupKind; // Kundengruppe per Kind (Artikelpfad: VK = EK × Faktor(Lieferant × Gruppe))
+  supplierId?: string; // Lieferant (Artikelpfad — fold-in von SupplierMarkup: Faktor je Lieferant × Gruppe)
   finishingType?: FinishingType; // Veredelungsart
   minMenge?: number; // ab Menge (inkl.)
   maxMenge?: number; // bis Menge (inkl.)
@@ -36,6 +38,8 @@ export interface MarkupConfig {
 /** Auflösungskontext: bekannte Parameter des konkreten Falls. */
 export interface MarkupContext {
   priceGroupId?: string;
+  priceGroup?: PriceGroupKind;
+  supplierId?: string;
   finishingType?: FinishingType;
   menge?: number;
   ekCents?: number;
@@ -54,6 +58,8 @@ export const DEFAULT_MARKUP_CONFIG: MarkupConfig = { defaultFactor: STICK_MARKUP
 /** Greift die Regel im Kontext? Eine gesetzte Bedingung muss erfüllbar UND erfüllt sein. */
 function ruleMatches(rule: MarkupRule, ctx: MarkupContext): boolean {
   if (rule.priceGroupId !== undefined && rule.priceGroupId !== ctx.priceGroupId) return false;
+  if (rule.priceGroup !== undefined && rule.priceGroup !== ctx.priceGroup) return false;
+  if (rule.supplierId !== undefined && rule.supplierId !== ctx.supplierId) return false;
   if (rule.finishingType !== undefined && rule.finishingType !== ctx.finishingType) return false;
   if (rule.minMenge !== undefined && !(ctx.menge !== undefined && ctx.menge >= rule.minMenge)) return false;
   if (rule.maxMenge !== undefined && !(ctx.menge !== undefined && ctx.menge <= rule.maxMenge)) return false;
