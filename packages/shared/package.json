@@ -19,6 +19,10 @@
       "types": "./dist/markup.d.ts",
       "import": "./dist/markup.js"
     },
+    "./pricing": {
+      "types": "./dist/pricing.d.ts",
+      "import": "./dist/pricing.js"
+    },
     "./money": {
       "types": "./dist/money.d.ts",
       "import": "./dist/money.js"

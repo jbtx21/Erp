@@ -9,6 +9,7 @@ import { validateVatId } from "@texma/shared/vat";
 import { buildTrackingUrl, type Carrier } from "@texma/shared/tracking";
 import { resolveMarkupFactor, DEFAULT_MARKUP_CONFIG, type MarkupConfig } from "@texma/shared/markup";
 import { computePositionTotals } from "@texma/shared/positions-model";
+import { PRICE_GROUPS, PRICE_GROUP_KINDS, priceGroupLabel, type PriceGroupKind } from "@texma/shared/pricing";
 import { konto, kontenliste, KONTENRAHMEN_LABEL, type Kontenrahmen } from "@texma/shared/kontenrahmen";
 import { trpc } from "./trpc.js";
 import { AufschlagsfaktorenSection, LogosStickereiSection, StickereiAusschreibungSection, StickereiStaffelnSection, Postcalc } from "./Differentiators.js";
@@ -627,15 +628,8 @@ function SupplierContactsBox({ supplierId, contacts, onChanged }: { supplierId: 
   );
 }
 
-// Kundengruppen (Preisgruppen, Kap. 8.2) — zentrale Liste für die Aufschlags-/Zuordnungs-UIs.
-const PRICE_GROUPS: { kind: "STANDARD" | "TOP" | "PREMIUM" | "SCHULE" | "WIEDERVERKAEUFER" | "AGENTUR"; label: string }[] = [
-  { kind: "STANDARD", label: "Standard" },
-  { kind: "TOP", label: "Top" },
-  { kind: "PREMIUM", label: "Premium" },
-  { kind: "SCHULE", label: "Schule" },
-  { kind: "WIEDERVERKAEUFER", label: "Wiederverkäufer" },
-  { kind: "AGENTUR", label: "Agentur" },
-];
+// Kundengruppen (Preisgruppen, Kap. 8.2) kommen zentral aus @texma/shared/pricing (PRICE_GROUPS) —
+// keine lokale Kopie mehr (Single Source of Truth, inkl. SCHULE).
 
 // Aufschlagsmatrix je Lieferant × Kundengruppe (Kap. 4.4): VK = EK × Faktor. Flach (keine Staffel).
 // Standard-Faktor = Grund-VK; je Gruppe übersteuerbar. Faktor leer ⇒ Rückfall auf Standard-Faktor.
@@ -5545,7 +5539,7 @@ function CustomerSupplierGroupsPanel({ companyId, defaultGroup }: { companyId: s
     catch (e) { setErr(errMsg(e)); }
   }, [companyId]);
   useEffect(() => { void reload(); }, [reload]);
-  const groupLabel = (k: string): string => PRICE_GROUPS.find((g) => g.kind === k)?.label ?? k;
+  const groupLabel = (k: string): string => priceGroupLabel(k as PriceGroupKind);
   const add = async (): Promise<void> => {
     if (!supplierId) { setErr("Bitte einen Lieferanten wählen."); return; }
     try { await trpc.pricing.setCustomerSupplierGroup.mutate({ companyId, supplierId, kind }); setSupplierId(""); await reload(); notify.success("Preisgruppe je Lieferant gespeichert."); }
@@ -5940,13 +5934,13 @@ export function CompaniesPage({ focusId, onNavigate, onOpen }: { focusId?: strin
           <TextInput label="Name" withAsterisk value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Muster GmbH" data-autofocus />
           <TextInput label="Branche" value={branche} onChange={(e) => setBranche(e.currentTarget.value)} />
           <Select label="Preisgruppe" value={kind} onChange={(v) => v && setKind(v)}
-            data={["STANDARD", "TOP", "PREMIUM", "WIEDERVERKAEUFER", "AGENTUR"]} />
+            data={PRICE_GROUPS.map((g) => ({ value: g.kind, label: g.label }))} />
           <NumberInput label="Zahlungsziel (Tage)" value={ziel} onChange={(v) => setZiel(Number(v) || 0)} min={0} max={180} />
           <Group justify="flex-end" mt="xs">
             <Button variant="default" onClick={() => setCreateOpen(false)}>Abbrechen</Button>
             <Button loading={busy} disabled={!name.trim()} onClick={async () => {
               setBusy(true); setErr(null);
-              try { await trpc.companies.create.mutate({ name: name.trim(), branche: branche || undefined, priceGroupKind: kind as "STANDARD" | "TOP" | "PREMIUM" | "WIEDERVERKAEUFER" | "AGENTUR", zahlungszielTage: ziel }); setName(""); setBranche(""); setCreateOpen(false); await load(); }
+              try { await trpc.companies.create.mutate({ name: name.trim(), branche: branche || undefined, priceGroupKind: kind as PriceGroupKind, zahlungszielTage: ziel }); setName(""); setBranche(""); setCreateOpen(false); await load(); }
               catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
             }}>Firma anlegen</Button>
           </Group>
@@ -7414,7 +7408,7 @@ export function DataIoPage(): JSX.Element {
 // EAN-Listen-Import (B18): Massenimport Artikelstammdaten mit automatischem Abgleich
 // (EAN, sonst SKU). Vorschau zeigt Treffer/Nicht-Treffer; Optionen steuern, was geschrieben
 // wird (Anlegen, PIM, EK/Lieferant, VK je Preisgruppe über Aufschlag).
-const EAN_PRICE_GROUPS = ["STANDARD", "TOP", "PREMIUM", "WIEDERVERKAEUFER", "AGENTUR"] as const;
+const EAN_PRICE_GROUPS = PRICE_GROUP_KINDS; // zentrale Liste (inkl. SCHULE), keine lokale Kopie
 const EAN_MATCH_COLOR: Record<string, string> = { EAN: "green", SKU: "blue", NONE: "gray" };
 export function EanImportPage(): JSX.Element {
   const [csv, setCsv] = useState("");

@@ -38,6 +38,27 @@ export type PriceGroupKind =
   | "WIEDERVERKAEUFER"
   | "AGENTUR";
 
+/**
+ * Single Source of Truth für die Kundengruppen: Reihenfolge + deutsche Anzeigenamen. Frontend
+ * (Selects/Matrizen), tRPC-Enums und Repos referenzieren NUR diese Liste — keine lokalen Kopien.
+ */
+export const PRICE_GROUPS: ReadonlyArray<{ kind: PriceGroupKind; label: string }> = [
+  { kind: "STANDARD", label: "Standard" },
+  { kind: "TOP", label: "Top" },
+  { kind: "PREMIUM", label: "Premium" },
+  { kind: "SCHULE", label: "Schule" },
+  { kind: "WIEDERVERKAEUFER", label: "Wiederverkäufer" },
+  { kind: "AGENTUR", label: "Agentur" },
+];
+
+/** Alle Kundengruppen-Schlüssel in fester Reihenfolge (für z.B. zod-Enums / Iteration). */
+export const PRICE_GROUP_KINDS: ReadonlyArray<PriceGroupKind> = PRICE_GROUPS.map((g) => g.kind);
+
+/** Deutscher Anzeigename einer Kundengruppe (Fallback = Schlüssel). */
+export function priceGroupLabel(kind: PriceGroupKind): string {
+  return PRICE_GROUPS.find((g) => g.kind === kind)?.label ?? kind;
+}
+
 export interface VariantPrice {
   priceGroup: PriceGroupKind;
   netCents: Cents;

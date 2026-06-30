@@ -15,6 +15,7 @@ export default defineConfig({
     alias: {
       "@texma/shared/stickerei": src("stickerei.ts"),
       "@texma/shared/markup": src("markup.ts"),
+      "@texma/shared/pricing": src("pricing.ts"),
       "@texma/shared/money": src("money.ts"),
       "@texma/shared/beleg-templates": src("beleg-templates.ts"),
       "@texma/shared/pain001": src("pain001.ts"),
