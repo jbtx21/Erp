@@ -56,7 +56,7 @@ export class PrismaPricingRepository implements PricingRepository {
       companyDefaultGroup: company.priceGroup.kind as PriceGroupKind,
     });
 
-    const [customerTiers, groupTiers, prices, markupRows, ekAgg] = await Promise.all([
+    const [customerTiers, groupTiers, prices, markupRules, ekAgg] = await Promise.all([
       prisma.customerPriceTier.findMany({
         where: { companyId, variantId },
         select: { minMenge: true, netCents: true },
@@ -69,12 +69,14 @@ export class PrismaPricingRepository implements PricingRepository {
         where: { variantId },
         select: { netCents: true, priceGroup: { select: { kind: true } } },
       }),
+      // Lieferanten-Aufschläge kommen jetzt aus der EINEN Regel-Engine (MarkupRule): Regeln mit
+      // supplierId + priceGroupId, OHNE Veredelungsart (finishingType=null = Artikel-Aufschlag).
       supplierId
-        ? prisma.supplierMarkup.findMany({
-            where: { supplierId },
-            select: { factorBp: true, priceGroup: { select: { kind: true } } },
+        ? prisma.markupRule.findMany({
+            where: { supplierId, finishingType: null, priceGroupId: { not: null } },
+            select: { factor: true, priceGroupId: true },
           })
-        : Promise.resolve([] as { factorBp: number; priceGroup: { kind: string } }[]),
+        : Promise.resolve([] as { factor: number; priceGroupId: string | null }[]),
       prisma.supplierItem.aggregate({ where: { variantId }, _min: { ekCents: true } }),
     ]);
 
@@ -83,12 +85,18 @@ export class PrismaPricingRepository implements PricingRepository {
       netCents: p.netCents,
     }));
 
+    // priceGroupId → Kind auflösen (MarkupRule hat keine PriceGroup-Relation).
+    const ruleGroupIds = [...new Set(markupRules.map((r) => r.priceGroupId).filter((x): x is string => !!x))];
+    const ruleGroups = ruleGroupIds.length
+      ? await prisma.priceGroup.findMany({ where: { id: { in: ruleGroupIds } }, select: { id: true, kind: true } })
+      : [];
+    const kindByPgId = new Map(ruleGroups.map((p) => [p.id, p.kind as PriceGroupKind]));
+
     // Grund-VK aus dem Lieferanten-Aufschlag berechnen (EK × Faktor(Lieferant, group)). Nur wenn
     // EK UND ein passender Faktor (Gruppe oder STANDARD) vorliegen — sonst null (Rückfall Altpfad).
-    const markups: SupplierMarkupEntry[] = markupRows.map((m) => ({
-      priceGroup: m.priceGroup.kind as PriceGroupKind,
-      factorBp: m.factorBp,
-    }));
+    const markups: SupplierMarkupEntry[] = markupRules
+      .map((r) => ({ priceGroup: r.priceGroupId ? kindByPgId.get(r.priceGroupId) : undefined, factorBp: Math.round(r.factor * 10000) }))
+      .filter((m): m is SupplierMarkupEntry => m.priceGroup !== undefined);
     const ekCents = ekAgg._min.ekCents ?? null;
     const hasFactor = markups.some((m) => m.priceGroup === group || m.priceGroup === "STANDARD");
     const computedBaseCents =
@@ -175,31 +183,35 @@ export class PrismaPricingRepository implements PricingRepository {
     return row.id;
   }
 
+  // Lieferanten-Aufschläge sind jetzt Aufschlagsregeln (MarkupRule) der EINEN Engine: eine Regel
+  // je (supplierId × priceGroupId), OHNE Veredelungsart (finishingType=null = Artikel-Aufschlag).
   async listSupplierMarkups(supplierId: string): Promise<SupplierMarkupRow[]> {
-    const rows = await prisma.supplierMarkup.findMany({
-      where: { supplierId },
-      select: { factorBp: true, priceGroup: { select: { kind: true } } },
+    const rows = await prisma.markupRule.findMany({
+      where: { supplierId, finishingType: null, priceGroupId: { not: null } },
+      select: { factor: true, priceGroupId: true },
     });
-    return rows.map((r) => ({
-      priceGroup: r.priceGroup.kind as PriceGroupKind,
-      factorBp: r.factorBp,
-      factor: bpToFactor(r.factorBp),
-    }));
+    const ids = [...new Set(rows.map((r) => r.priceGroupId).filter((x): x is string => !!x))];
+    const pgs = ids.length ? await prisma.priceGroup.findMany({ where: { id: { in: ids } }, select: { id: true, kind: true } }) : [];
+    const kindById = new Map(pgs.map((p) => [p.id, p.kind as PriceGroupKind]));
+    return rows
+      .map((r) => ({ kind: r.priceGroupId ? kindById.get(r.priceGroupId) : undefined, factor: r.factor }))
+      .filter((r): r is { kind: PriceGroupKind; factor: number } => r.kind !== undefined)
+      .map((r) => ({ priceGroup: r.kind, factorBp: Math.round(r.factor * 10000), factor: r.factor }));
   }
 
   async setSupplierMarkup(supplierId: string, kind: PriceGroupKind, factorBp: number): Promise<void> {
     const priceGroupId = await this.ensurePriceGroupId(kind);
-    await prisma.supplierMarkup.upsert({
-      where: { supplierId_priceGroupId: { supplierId, priceGroupId } },
-      update: { factorBp },
-      create: { supplierId, priceGroupId, factorBp },
-    });
+    const factor = bpToFactor(factorBp);
+    // Kein @@unique(supplierId, priceGroupId) auf MarkupRule → findFirst + update/create.
+    const existing = await prisma.markupRule.findFirst({ where: { supplierId, priceGroupId, finishingType: null }, select: { id: true } });
+    if (existing) await prisma.markupRule.update({ where: { id: existing.id }, data: { factor } });
+    else await prisma.markupRule.create({ data: { supplierId, priceGroupId, factor, label: "Lieferanten-Aufschlag" } });
   }
 
   async removeSupplierMarkup(supplierId: string, kind: PriceGroupKind): Promise<void> {
     const pg = await prisma.priceGroup.findUnique({ where: { kind }, select: { id: true } });
     if (!pg) return;
-    await prisma.supplierMarkup.deleteMany({ where: { supplierId, priceGroupId: pg.id } });
+    await prisma.markupRule.deleteMany({ where: { supplierId, priceGroupId: pg.id, finishingType: null } });
   }
 
   async listCustomerSupplierGroups(companyId: string): Promise<CustomerSupplierGroupRow[]> {
