@@ -5577,6 +5577,50 @@ function CustomerSupplierGroupsPanel({ companyId, defaultGroup }: { companyId: s
   );
 }
 
+// Preis-Center (Kap. 4.4/8.2): EINE auffindbare Seite für die Preis-Stammdaten — Lieferanten-
+// Aufschläge, Kunden-Preisgruppen je Lieferant und die Gruppen-Übersicht. Ersetzt die Sucherei
+// in drei versteckten Detail-Tabs (Single Place statt verstreut).
+export function PricingCenterPage(): JSX.Element {
+  const [supplierId, setSupplierId] = useState("");
+  const [companyId, setCompanyId] = useState("");
+  const [companyGroup, setCompanyGroup] = useState<string>("STANDARD");
+  useEffect(() => {
+    if (!companyId) return;
+    void trpc.companies.overview.query({ companyId }).then((ov) => setCompanyGroup(ov?.company.priceGroupKind ?? "STANDARD")).catch(() => setCompanyGroup("STANDARD"));
+  }, [companyId]);
+  return (
+    <>
+      <DocListHeader module="Vertrieb / Preis-Center" title="Preis-Center" hint="VK = EK × Faktor(Lieferant × Kundengruppe). Aufschläge je Lieferant, Preisgruppe je Kunde×Lieferant und die Gruppen-Übersicht an einem Ort (Kap. 4.4/8.2)." />
+      <Tabs defaultValue="lieferant" mt="md" keepMounted={false}>
+        <Tabs.List>
+          <Tabs.Tab value="lieferant">Lieferanten-Aufschläge</Tabs.Tab>
+          <Tabs.Tab value="kunde">Kunden-Preisgruppen</Tabs.Tab>
+          <Tabs.Tab value="gruppen">Preisgruppen</Tabs.Tab>
+        </Tabs.List>
+        <Tabs.Panel value="lieferant" pt="md">
+          <SupplierPicker label="Lieferant" value={supplierId} onChange={setSupplierId} w={280} />
+          {supplierId ? <Box mt="sm"><SupplierMarkupPanel supplierId={supplierId} /></Box>
+            : <Text size="sm" c="dimmed" mt="sm">Lieferant wählen, um die Aufschlagsfaktoren je Kundengruppe zu pflegen.</Text>}
+        </Tabs.Panel>
+        <Tabs.Panel value="kunde" pt="md">
+          <CompanyPicker value={companyId} onChange={setCompanyId} w={280} />
+          {companyId ? <Box mt="sm"><CustomerSupplierGroupsPanel companyId={companyId} defaultGroup={companyGroup} /></Box>
+            : <Text size="sm" c="dimmed" mt="sm">Kunde wählen, um die Preisgruppe je Lieferant zu pflegen (z. B. Premium@HAKRO, Standard@Stanley).</Text>}
+        </Tabs.Panel>
+        <Tabs.Panel value="gruppen" pt="md">
+          <Text size="sm" c="dimmed" mb="xs">Verfügbare Kundengruppen (zentral in @texma/shared gepflegt). Die Standard-Gruppe gilt, solange beim Kunden je Lieferant nichts Abweichendes hinterlegt ist.</Text>
+          <Table withTableBorder withColumnBorders w={360}>
+            <Table.Thead><Table.Tr><Table.Th>Schlüssel</Table.Th><Table.Th>Anzeigename</Table.Th></Table.Tr></Table.Thead>
+            <Table.Tbody>
+              {PRICE_GROUPS.map((g) => <Table.Tr key={g.kind}><Table.Td><Text size="xs" c="dimmed">{g.kind}</Text></Table.Td><Table.Td>{g.label}</Table.Td></Table.Tr>)}
+            </Table.Tbody>
+          </Table>
+        </Tabs.Panel>
+      </Tabs>
+    </>
+  );
+}
+
 function CompanyDetailPanel({ companyId, companies = [], onNavigate, onOpen }: { companyId: string; companies?: Array<{ id: string; name: string }>; onNavigate?: (k: string) => void; onOpen?: (k: string, id: string) => void }): JSX.Element {
   const [ov, setOv] = useState<Awaited<ReturnType<typeof trpc.companies.overview.query>> | null>(null);
   const [err, setErr] = useState<string | null>(null);

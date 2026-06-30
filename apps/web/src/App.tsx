@@ -35,7 +35,7 @@ import { Reporting } from "./Reporting.js";
 import { Banking } from "./Banking.js";
 import {
   CompaniesPage, CallLogsPage, CostCentersPage, DunningPage, InquiriesPage, IncomingInvoicesPage, LeadsPage, CrmPipelinePage, MailAccountsPage, OrdersPage, ProcurementPage, ProductionReportingPage,
-  ProductsPage, MatrixStammPage, PricingPage, EmailTemplatesPage, DashboardsPage, DataIoPage, EanImportPage, FinanceReportingPage, WareneingangPage, ZahlungenPage, ZahlungsabgleichOverview, NewsletterPage, OpportunitiesPage, CalendarPage, MessagesPage, AdminPage, ArchivePage, AuditLogPage, AutomationPage, TasksPage, HomePage, LagerPage, HrPage, IntegrationsPage, SecurityPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
+  ProductsPage, MatrixStammPage, PricingPage, PricingCenterPage, EmailTemplatesPage, DashboardsPage, DataIoPage, EanImportPage, FinanceReportingPage, WareneingangPage, ZahlungenPage, ZahlungsabgleichOverview, NewsletterPage, OpportunitiesPage, CalendarPage, MessagesPage, AdminPage, ArchivePage, AuditLogPage, AutomationPage, TasksPage, HomePage, LagerPage, HrPage, IntegrationsPage, SecurityPage, QuotesPage, ReklamationPage, ReorderPage, SampleLoansPage, ShipmentsPage, SubproductionPage, SuppliersPage,
   LogosPage, AufschlagPage, AusschreibungenPage, NachkalkulationPage, GuVReportPage, GutscheinePage,
   InvoicesPage, StockJournalPage,
 } from "./pages.js";
@@ -53,7 +53,7 @@ const NAV: ReadonlyArray<{ group: string; icon: NavIconName; items: ReadonlyArra
   // Vertriebs-Pipeline (eine Entität, eine Statusmaschine). Die Einzelseiten bleiben per
   // Deep-Link/Hash erreichbar (Page-Switch unten), erscheinen aber NICHT mehr im Menü.
   { group: "CRM", icon: "crm", items: [{ key: "pipeline", label: "Vertriebs-Pipeline" }, { key: "calllogs", label: "Anrufliste" }, { key: "newsletter", label: "Newsletter" }] },
-  { group: "Vertrieb", icon: "vertrieb", items: [{ key: "companies", label: "Kunden" }, { key: "quotes", label: "Angebote" }, { key: "orders", label: "Aufträge" }, { key: "sammelbestellungen", label: "Sammelbestellungen" }, { key: "pricing", label: "Preise/Staffel" }, { key: "reklamation", label: "Reklamation" }] },
+  { group: "Vertrieb", icon: "vertrieb", items: [{ key: "companies", label: "Kunden" }, { key: "quotes", label: "Angebote" }, { key: "orders", label: "Aufträge" }, { key: "sammelbestellungen", label: "Sammelbestellungen" }, { key: "preiscenter", label: "Preis-Center" }, { key: "pricing", label: "Preise/Staffel" }, { key: "reklamation", label: "Reklamation" }] },
   { group: "Einkauf", icon: "beschaffung", items: [
     { key: "suppliers", label: "Lieferanten" }, { key: "procurement", label: "Beschaffung" },
     { key: "reorder", label: "Nachbestellung" }, { key: "incoming", label: "Eingangsrechnungen" },
@@ -479,6 +479,7 @@ function Page({ k, role, userName, onNavigate, onOpen, focusId }: { k: string; r
     case "matrixstamm": return <MatrixStammPage />;
     case "importmapper": return <ImportMapperPage />;
     case "pricing": return <PricingPage />;
+    case "preiscenter": return <PricingCenterPage />;
     case "emailtemplates": return <EmailTemplatesPage />;
     case "dataio": return <DataIoPage />;
     case "eanimport": return <EanImportPage />;
