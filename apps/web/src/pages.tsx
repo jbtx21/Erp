@@ -4733,6 +4733,111 @@ function OrderAbschlaege({ orderId }: { orderId: string }): JSX.Element {
 // war nicht anbindbar) und macht die Verknüpfungen klickbar.
 // Qualitätssicherung als Gate vor dem Versand (Kap. 20): Stückzahl + externe Veredelung
 // kontrollieren, Foto. Erst wenn alle drei erfüllt sind (BESTANDEN), ist der Auftrag versandbereit.
+// Auftrags-Cockpit: alle Folgeaktionen 1-Klick AUS dem Auftrag heraus, ohne Reiter zu wechseln —
+// Warenbestellung, Produktion/Teilproduktion je Veredler, Versand an Veredler, Rücklauf, QS,
+// Lieferschein/Teillieferung, Rechnung. Verdrahtet die bestehenden Endpunkte; jede Aktion lädt neu.
+const FINISH_PROFILES: { value: "INHOUSE_OHNE_TRANSFER" | "INHOUSE_MIT_TRANSFER" | "EXTERN_STICK_SIEBDRUCK" | "EXTERN_UND_INTERN"; label: string }[] = [
+  { value: "INHOUSE_OHNE_TRANSFER", label: "Inhouse (ohne Transfer)" },
+  { value: "INHOUSE_MIT_TRANSFER", label: "Inhouse (mit Transfer)" },
+  { value: "EXTERN_STICK_SIEBDRUCK", label: "Extern (Stick/Siebdruck)" },
+  { value: "EXTERN_UND_INTERN", label: "Extern + intern" },
+];
+function CockpitStep({ n, title, hint, done, children }: { n: number; title: string; hint?: string; done?: boolean; children: ReactNode }): JSX.Element {
+  return (
+    <Box mb="sm" p="sm" style={{ ...PANEL_STYLE }}>
+      <Group justify="space-between" align="center" mb={4}>
+        <Group gap="xs"><Badge size="sm" variant="light" color={done ? "teal" : "blue"}>{n}</Badge><Text fw={600} size="sm">{title}</Text>{done && <Badge size="xs" color="teal" variant="light">erledigt</Badge>}</Group>
+      </Group>
+      {hint && <Text size="xs" c="dimmed" mb={6}>{hint}</Text>}
+      {children}
+    </Box>
+  );
+}
+function OrderCockpit({ orderId, orderNumber }: { orderId: string; orderNumber: string }): JSX.Element {
+  const [prod, setProd] = useState<Awaited<ReturnType<typeof trpc.production.status.query>> | null>(null);
+  const [stages, setStages] = useState<Awaited<ReturnType<typeof trpc.subproduction.list.query>>["stages"]>([]);
+  const [profile, setProfile] = useState<typeof FINISH_PROFILES[number]["value"]>("EXTERN_STICK_SIEBDRUCK");
+  const [dueDate, setDueDate] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [deliver, setDeliver] = useState(false);
+  const load = useCallback(async () => {
+    try {
+      const p = await trpc.production.status.query({ orderId });
+      setProd(p); setErr(null);
+      if (p.productionId) setStages((await trpc.subproduction.list.query({ productionId: p.productionId })).stages);
+      else setStages([]);
+    } catch (e) { setErr(errMsg(e)); }
+  }, [orderId]);
+  useEffect(() => { void load(); }, [load]);
+  const run = async (key: string, fn: () => Promise<void>, okMsg?: string): Promise<void> => {
+    setBusy(key); setErr(null);
+    try { await fn(); if (okMsg) notify.success(okMsg); await load(); }
+    catch (e) { setErr(errMsg(e)); } finally { setBusy(null); }
+  };
+  const hasProd = !!prod?.productionId;
+  return (
+    <Box>
+      {err && <Alert color="red" mb="sm" withCloseButton onClose={() => setErr(null)}>{err}</Alert>}
+      {deliver && <DeliveryDialog orderId={orderId} orderNumber={orderNumber} onClose={() => setDeliver(false)} onDone={(m) => { setDeliver(false); notify.success(m); void load(); }} />}
+
+      <CockpitStep n={1} title="Warenbestellung bei Lieferanten" hint="Erzeugt je Lieferant eine Bestellung aus dem auftragsübergreifenden Bedarf/Mindestbestand (Kap. 6.1).">
+        <Button size="compact-sm" loading={busy === "reorder"} onClick={() => void run("reorder", async () => { await trpc.reorder.createPurchaseOrders.mutate(); }, "Bestellungen erzeugt.")}>Warenbestellung auslösen</Button>
+      </CockpitStep>
+
+      <CockpitStep n={2} title="Produktionsauftrag (inkl. Teilproduktion je Veredler)" done={hasProd}
+        hint="Legt den PA + Fremdvergabe-Stufen je Veredler an. Order-to-make: gestaffelte Lieferdaten je Position treiben Teilproduktion.">
+        {hasProd ? (
+          <Text size="sm">PA <b>{prod?.productionNumber ?? "—"}</b> angelegt{prod?.dueDate ? ` · Termin ${new Date(prod.dueDate).toLocaleDateString("de-DE")}` : ""}.</Text>
+        ) : (
+          <Group gap="xs" align="end">
+            <Select size="xs" label="Veredelungsweg" w={230} value={profile} onChange={(v) => v && setProfile(v as typeof profile)} data={FINISH_PROFILES} />
+            <TextInput size="xs" type="date" label="Termin (optional)" w={150} value={dueDate} onChange={(e) => setDueDate(e.currentTarget.value)} />
+            <Button size="compact-sm" loading={busy === "prod"} onClick={() => void run("prod", async () => { await trpc.production.createFromOrder.mutate({ orderId, profile, dueDate: dueDate ? `${dueDate}T00:00:00.000Z` : null }); }, "Produktionsauftrag erzeugt.")}>Produktionsauftrag erzeugen</Button>
+          </Group>
+        )}
+      </CockpitStep>
+
+      {stages.length > 0 && (
+        <CockpitStep n={3} title="Fremdvergabe: Versand an Veredler · Rücklauf bestätigen" done={stages.every((s) => s.status === "ABGESCHLOSSEN" || s.status === "RUECKLAUF_ERHALTEN")}
+          hint="Je Veredelungsstufe: Beistellung/Versandlabel zum Veredler, dann Rücklauf bestätigen.">
+          <Table withTableBorder withColumnBorders>
+            <Table.Thead><Table.Tr><Table.Th>Stufe</Table.Th><Table.Th>Veredler</Table.Th><Table.Th>Status</Table.Th><Table.Th>Aktion</Table.Th></Table.Tr></Table.Thead>
+            <Table.Tbody>
+              {stages.map((s) => (
+                <Table.Tr key={s.id}>
+                  <Table.Td>{s.sequence}</Table.Td>
+                  <Table.Td>{s.inhouse ? "Inhouse" : "Extern (Veredler)"}</Table.Td>
+                  <Table.Td><Text size="xs">{s.status}</Text></Table.Td>
+                  <Table.Td>
+                    <Group gap={4}>
+                      {!s.inhouse && s.status === "OFFEN" && <Button size="compact-xs" loading={busy === `bv-${s.id}`} onClick={() => void run(`bv-${s.id}`, async () => { await trpc.subproduction.advance.mutate({ subProductionId: s.id, to: "BEISTELLUNG_VERSANDT" }); }, "Versand an Veredler gebucht.")}>Versand an Veredler</Button>}
+                      {!s.inhouse && s.status === "BEISTELLUNG_VERSANDT" && <Button size="compact-xs" color="teal" loading={busy === `rl-${s.id}`} onClick={() => void run(`rl-${s.id}`, async () => { await trpc.subproduction.advance.mutate({ subProductionId: s.id, to: "RUECKLAUF_ERHALTEN" }); }, "Rücklauf bestätigt.")}>Rücklauf bestätigen</Button>}
+                      {(s.status === "RUECKLAUF_ERHALTEN" || s.status === "ABGESCHLOSSEN") && <Text size="xs" c="teal">✓</Text>}
+                    </Group>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </CockpitStep>
+      )}
+
+      <CockpitStep n={4} title="Qualitätssicherung" hint="Stückzahl/Foto-OK je Auftrag buchen.">
+        <OrderQualityTab orderId={orderId} />
+      </CockpitStep>
+
+      <CockpitStep n={5} title="Lieferschein / Teillieferung" hint="Offene Restmengen je Position als (Teil-)Lieferschein buchen.">
+        <Button size="compact-sm" variant="light" onClick={() => setDeliver(true)}>Lieferschein / Teillieferung erstellen</Button>
+      </CockpitStep>
+
+      <CockpitStep n={6} title="Rechnung" hint="Erzeugt die Rechnung aus dem Auftrag (GoBD-Archivierung automatisch).">
+        <Button size="compact-sm" loading={busy === "inv"} onClick={() => void run("inv", async () => { await trpc.invoices.createFromOrder.mutate({ orderId }); }, "Rechnung erzeugt.")}>Rechnung erzeugen</Button>
+      </CockpitStep>
+    </Box>
+  );
+}
+
 function OrderQualityTab({ orderId }: { orderId: string }): JSX.Element {
   const [qc, setQc] = useState<Awaited<ReturnType<typeof trpc.quality.get.query>> | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -5032,12 +5137,18 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
             <Tabs defaultValue="details" mt="md" keepMounted={false}>
               <Tabs.List>
                 <Tabs.Tab value="details">Details</Tabs.Tab>
+                {editOrderId && <Tabs.Tab value="cockpit">Cockpit</Tabs.Tab>}
                 <Tabs.Tab value="stickerei">Stickerei-Referenz</Tabs.Tab>
                 {editOrderId && <Tabs.Tab value="belege">Belege</Tabs.Tab>}
                 {editOrderId && <Tabs.Tab value="qs">Qualitätssicherung</Tabs.Tab>}
                 {editOrderId && <Tabs.Tab value="ampel">Auftragsampel</Tabs.Tab>}
                 {editOrderId && <Tabs.Tab value="abschlag">Abschläge</Tabs.Tab>}
               </Tabs.List>
+              {editOrderId && (
+                <Tabs.Panel value="cockpit" pt="md">
+                  <OrderCockpit orderId={editOrderId} orderNumber={String(rows.find((r) => String(r.id) === editOrderId)?.number ?? editOrderId)} />
+                </Tabs.Panel>
+              )}
               <Tabs.Panel value="details" pt="md">
                 <CompanyPicker value={newCompany} onChange={(v) => { setNewCompany(v); setDirty(true); }} w={240} />
                 <PositionsEditor lines={newLines} onChange={(l) => { setNewLines(l); setDirty(true); }} caps={{ sizeRun: true, logo: true }} companyId={newCompany || undefined} taxRate={globalTaxRate} />
