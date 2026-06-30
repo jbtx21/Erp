@@ -73,6 +73,8 @@ export interface CreateArticleInput {
   description: string;
   ekCents: number;
   vkCents: number;
+  /** Pflicht (Kap. 4.4): jeder Artikel hat genau EINEN (Textil-)Lieferanten. */
+  supplierId: string;
 }
 
 /** Flacher Katalog-Eintrag je Variante — für den Artikel-Picker in Angebot/Auftrag/Leihgut. */
@@ -152,7 +154,7 @@ export interface CreateVeredelungInput {
 
 export interface ProductRepository {
   listArticles(): Promise<Omit<ArticleRow, "completeness">[]>;
-  createArticle(input: CreateArticleInput): Promise<{ id: string }>;
+  createArticle(input: { sku: string; name: string; description: string; ekCents: number; vkCents: number; supplierId: string }): Promise<{ id: string }>;
   listVariants(articleId: string): Promise<VariantRow[]>;
   /** Flacher Varianten-Katalog (Artikelname + Merkmale + Standardpreis) für Picker. */
   catalog(): Promise<CatalogEntry[]>;
@@ -231,16 +233,20 @@ export class ProductService {
   }
 
   async createArticle(input: CreateArticleInput): Promise<{ id: string }> {
-    // Pflichtfelder hart erzwingen (überall, alle Typen): Nr., Name, Beschreibung, EK, VK.
+    // Pflichtfelder hart erzwingen (überall, alle Typen): Nr., Name, Beschreibung, EK, VK, Lieferant.
     const sku = input.sku?.trim();
     const name = input.name?.trim();
     const description = input.description?.trim();
+    const supplierId = input.supplierId?.trim();
     if (!sku || !name) throw new ProductError("Artikelnummer und Artikelname sind Pflicht.");
     if (!description) throw new ProductError("Artikelbeschreibung ist Pflicht.");
     if (!Number.isInteger(input.ekCents) || input.ekCents < 0) throw new ProductError("EK (Einkaufspreis) ist Pflicht (≥ 0).");
     if (!Number.isInteger(input.vkCents) || input.vkCents < 0) throw new ProductError("VK (Verkaufspreis) ist Pflicht (≥ 0).");
-    const res = await this.repo.createArticle({ sku, name, description, ekCents: input.ekCents, vkCents: input.vkCents });
-    await this.audit.append(buildEntry({ entity: "Article", entityId: res.id, action: "CREATE", after: { sku, name, description, ekCents: input.ekCents, vkCents: input.vkCents } }));
+    // Jeder Artikel hat genau EINEN (Textil-)Lieferanten (Kap. 4.4) — Grundlage des VK-Aufschlags.
+    if (!supplierId) throw new ProductError("Lieferant ist Pflicht (jeder Artikel hat genau einen Lieferanten).");
+    if (!(await this.repo.supplierExists(supplierId))) throw new ProductError("Unbekannter Lieferant.");
+    const res = await this.repo.createArticle({ sku, name, description, ekCents: input.ekCents, vkCents: input.vkCents, supplierId });
+    await this.audit.append(buildEntry({ entity: "Article", entityId: res.id, action: "CREATE", after: { sku, name, description, ekCents: input.ekCents, vkCents: input.vkCents, supplierId } }));
     return res;
   }
 
@@ -301,19 +307,18 @@ export class ProductService {
     ekCents: number;
     vkCents: number;
     attributes?: Array<{ name: string; value: string }>;
-    // Optionale Varianten-Übersteuerung: Lieferanten-EK (SupplierItem) braucht einen Lieferant.
-    supplierId?: string | null;
+    // Pflicht (Kap. 4.4): jeder Artikel hat genau EINEN (Textil-)Lieferanten.
+    supplierId: string;
   }): Promise<CatalogEntry> {
     const attributes = (input.attributes ?? []).filter((a) => a.name.trim() && a.value.trim());
-    const supplierId = input.supplierId?.trim() || null;
-    if (supplierId && !(await this.repo.supplierExists(supplierId))) throw new ProductError("Unbekannter Lieferant.");
-    // createArticle erzwingt alle 5 Pflichtfelder (Nr./Name/Beschreibung/EK/VK).
-    const art = await this.createArticle({ sku: input.sku, name: input.name, description: input.description, ekCents: input.ekCents, vkCents: input.vkCents });
+    const supplierId = input.supplierId?.trim() || "";
+    // createArticle erzwingt alle 6 Pflichtfelder (Nr./Name/Beschreibung/EK/VK/Lieferant) inkl. Existenz.
+    const art = await this.createArticle({ sku: input.sku, name: input.name, description: input.description, ekCents: input.ekCents, vkCents: input.vkCents, supplierId });
     const baseSku = input.sku.trim();
     const variantSku = attributes.length ? `${baseSku}-${attributes.map((a) => a.value.trim()).join("-")}` : baseSku;
     const v = await this.createVariant({ articleId: art.id, sku: variantSku, attributes });
-    // Varianten-Übersteuerung: STANDARD-VK immer setzen; Lieferanten-EK nur mit Lieferant.
-    await this.repo.setVariantPricing(v.id, { supplierId, ekCents: supplierId ? input.ekCents : null, vkCents: input.vkCents });
+    // Varianten-Pricing: Lieferanten-EK (SupplierItem) + STANDARD-VK setzen.
+    await this.repo.setVariantPricing(v.id, { supplierId, ekCents: input.ekCents, vkCents: input.vkCents });
     const attrText = attributes.map((a) => a.value.trim()).join(" / ");
     const label = `${input.name.trim()}${attrText ? ` — ${attrText}` : ""} (${variantSku})`;
     return { variantId: v.id, articleId: art.id, articleName: input.name.trim(), sku: variantSku, description: input.description.trim(), label, unitNetCents: input.vkCents, vkCents: input.vkCents, ekCents: input.ekCents, isBundle: false };

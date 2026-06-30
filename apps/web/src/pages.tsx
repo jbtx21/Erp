@@ -627,6 +627,74 @@ function SupplierContactsBox({ supplierId, contacts, onChanged }: { supplierId: 
   );
 }
 
+// Kundengruppen (Preisgruppen, Kap. 8.2) — zentrale Liste für die Aufschlags-/Zuordnungs-UIs.
+const PRICE_GROUPS: { kind: "STANDARD" | "TOP" | "PREMIUM" | "SCHULE" | "WIEDERVERKAEUFER" | "AGENTUR"; label: string }[] = [
+  { kind: "STANDARD", label: "Standard" },
+  { kind: "TOP", label: "Top" },
+  { kind: "PREMIUM", label: "Premium" },
+  { kind: "SCHULE", label: "Schule" },
+  { kind: "WIEDERVERKAEUFER", label: "Wiederverkäufer" },
+  { kind: "AGENTUR", label: "Agentur" },
+];
+
+// Aufschlagsmatrix je Lieferant × Kundengruppe (Kap. 4.4): VK = EK × Faktor. Flach (keine Staffel).
+// Standard-Faktor = Grund-VK; je Gruppe übersteuerbar. Faktor leer ⇒ Rückfall auf Standard-Faktor.
+function SupplierMarkupPanel({ supplierId }: { supplierId: string }): JSX.Element {
+  const [rows, setRows] = useState<Awaited<ReturnType<typeof trpc.pricing.supplierMarkups.query>>>([]);
+  const [draft, setDraft] = useState<Record<string, number | "">>({});
+  const [err, setErr] = useState<string | null>(null);
+  const reload = useCallback(async () => {
+    try { setRows(await trpc.pricing.supplierMarkups.query({ supplierId })); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
+  }, [supplierId]);
+  useEffect(() => { void reload(); }, [reload]);
+  const factorOf = (kind: string): number | null => rows.find((r) => r.priceGroup === kind)?.factor ?? null;
+  const save = async (kind: typeof PRICE_GROUPS[number]["kind"]): Promise<void> => {
+    const v = draft[kind];
+    if (v === "" || v == null || !(v > 0)) { setErr("Faktor muss > 0 sein (z. B. 1,88)."); return; }
+    try { await trpc.pricing.setSupplierMarkup.mutate({ supplierId, kind, factor: v }); setDraft((d) => ({ ...d, [kind]: "" })); await reload(); notify.success(`Aufschlag ${kind} gespeichert.`); }
+    catch (e) { setErr(errMsg(e)); }
+  };
+  const remove = async (kind: typeof PRICE_GROUPS[number]["kind"]): Promise<void> => {
+    try { await trpc.pricing.removeSupplierMarkup.mutate({ supplierId, kind }); await reload(); }
+    catch (e) { setErr(errMsg(e)); }
+  };
+  return (
+    <Box>
+      <Text size="sm" c="dimmed" mb="xs">VK = EK × Faktor je Kundengruppe. Der <b>Standard</b>-Faktor bildet den Grund-VK; einzelne Gruppen lassen sich übersteuern. Beispiel-VK auf EK 10,00 €.</Text>
+      {err && <Alert color="red" mb="sm">{err}</Alert>}
+      <Table withTableBorder withColumnBorders highlightOnHover>
+        <Table.Thead><Table.Tr>
+          <Table.Th>Kundengruppe</Table.Th><Table.Th ta="right">Faktor</Table.Th>
+          <Table.Th ta="right">VK auf 10,00 €</Table.Th><Table.Th>Neuer Faktor</Table.Th><Table.Th>Aktion</Table.Th>
+        </Table.Tr></Table.Thead>
+        <Table.Tbody>
+          {PRICE_GROUPS.map((g) => {
+            const f = factorOf(g.kind);
+            return (
+              <Table.Tr key={g.kind}>
+                <Table.Td>{g.label}</Table.Td>
+                <Table.Td ta="right">{f != null ? f.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 4 }) : <Text c="dimmed" component="span">—</Text>}</Table.Td>
+                <Table.Td ta="right">{f != null ? euro(Math.round(1000 * f)) : <Text c="dimmed" component="span">—</Text>}</Table.Td>
+                <Table.Td>
+                  <NumberInput size="xs" w={110} min={0} step={0.01} decimalScale={4} placeholder={f != null ? String(f) : "z. B. 1,88"}
+                    value={draft[g.kind] ?? ""} onChange={(v) => setDraft((d) => ({ ...d, [g.kind]: typeof v === "number" ? v : "" }))} />
+                </Table.Td>
+                <Table.Td>
+                  <Group gap={4}>
+                    <Button size="compact-xs" onClick={() => void save(g.kind)} disabled={draft[g.kind] === "" || draft[g.kind] == null}>Speichern</Button>
+                    {f != null && <Button size="compact-xs" variant="subtle" color="red" onClick={() => void remove(g.kind)}>✕</Button>}
+                  </Group>
+                </Table.Td>
+              </Table.Tr>
+            );
+          })}
+        </Table.Tbody>
+      </Table>
+    </Box>
+  );
+}
+
 function SupplierDetailPanel({ supplierId }: { supplierId: string }): JSX.Element {
   const [ov, setOv] = useState<SupplierDetail | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -655,6 +723,7 @@ function SupplierDetailPanel({ supplierId }: { supplierId: string }): JSX.Elemen
       <Tabs defaultValue="stammdaten" mt="md" keepMounted={false}>
         <Tabs.List>
           <Tabs.Tab value="stammdaten">Stammdaten</Tabs.Tab>
+          <Tabs.Tab value="aufschlaege">Aufschläge</Tabs.Tab>
           <Tabs.Tab value="kontakte">Kontakte ({ov.contacts.length})</Tabs.Tab>
           <Tabs.Tab value="sortiment">Sortiment ({ov.itemCount})</Tabs.Tab>
           <Tabs.Tab value="dateien">Dateien</Tabs.Tab>
@@ -662,6 +731,9 @@ function SupplierDetailPanel({ supplierId }: { supplierId: string }): JSX.Elemen
         </Tabs.List>
         <Tabs.Panel value="stammdaten" pt="sm">
           <SupplierStammdatenEditor s={ov.supplier} onSaved={reload} />
+        </Tabs.Panel>
+        <Tabs.Panel value="aufschlaege" pt="sm">
+          <SupplierMarkupPanel supplierId={supplierId} />
         </Tabs.Panel>
         <Tabs.Panel value="kontakte" pt="sm">
           <SupplierContactsBox supplierId={supplierId} contacts={ov.contacts} onChanged={reload} />
@@ -2218,10 +2290,11 @@ export function ProductsPage({ focusId }: { focusId?: string } = {}): JSX.Elemen
   const [articles, setArticles] = useState<ArticleData[]>([]);
   const [sku, setSku] = useState("");
   const [name, setName] = useState("");
-  // Pflicht-Stammfelder bei der Anlage (überall): Beschreibung + Basis-EK/-VK.
+  // Pflicht-Stammfelder bei der Anlage (überall): Beschreibung + Basis-EK/-VK + Lieferant.
   const [description, setDescription] = useState("");
   const [ek, setEk] = useState<number | "">("");
   const [vk, setVk] = useState<number | "">("");
+  const [supplierId, setSupplierId] = useState(""); // jeder Artikel hat genau einen Lieferanten (Kap. 4.4)
   const [editId, setEditId] = useState<string | null>(null);
   const [sel, setSel] = useState<string | null>(null);
   const [variants, setVariants] = useState<Row[]>([]);
@@ -2263,11 +2336,12 @@ export function ProductsPage({ focusId }: { focusId?: string } = {}): JSX.Elemen
         <TextInput label="Beschreibung" value={description} onChange={(e) => setDescription(e.currentTarget.value)} placeholder="Kurzbeschreibung" w={220} withAsterisk />
         <MoneyInput label="EK (€)" withAsterisk value={ek} onChange={(v) => setEk(typeof v === "number" ? v : "")} min={0} w={110} />
         <MoneyInput label="VK (€)" withAsterisk value={vk} onChange={(v) => setVk(typeof v === "number" ? v : "")} min={0} w={110} />
-        <Button disabled={!sku.trim() || !name.trim() || !description.trim() || ek === "" || vk === ""} onClick={async () => {
+        <SupplierPicker label="Lieferant *" value={supplierId} onChange={setSupplierId} w={200} />
+        <Button disabled={!sku.trim() || !name.trim() || !description.trim() || ek === "" || vk === "" || !supplierId} onClick={async () => {
           setErr(null);
           try {
-            await trpc.products.createArticle.mutate({ sku: sku.trim(), name: name.trim(), description: description.trim(), ekCents: Math.round(Number(ek) * 100), vkCents: Math.round(Number(vk) * 100) });
-            setSku(""); setName(""); setDescription(""); setEk(""); setVk(""); await loadArticles();
+            await trpc.products.createArticle.mutate({ sku: sku.trim(), name: name.trim(), description: description.trim(), ekCents: Math.round(Number(ek) * 100), vkCents: Math.round(Number(vk) * 100), supplierId });
+            setSku(""); setName(""); setDescription(""); setEk(""); setVk(""); setSupplierId(""); await loadArticles();
           }
           catch (e) { setErr(errMsg(e)); }
         }}>Artikel anlegen</Button>
@@ -2357,6 +2431,7 @@ export function ArticlePicker({ onPick }: { onPick: (e: { label: string; unitNet
   const [beschreibung, setBeschreibung] = useState("");
   const [pEk, setPEk] = useState<number | "">("");
   const [pVk, setPVk] = useState<number | "">("");
+  const [pSupplier, setPSupplier] = useState(""); // Pflicht: jeder Artikel hat genau einen Lieferanten
   const [farbe, setFarbe] = useState("");
   const [groesse, setGroesse] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -2369,7 +2444,7 @@ export function ArticlePicker({ onPick }: { onPick: (e: { label: string; unitNet
   useEffect(() => { const t = setTimeout(() => { void reload(); }, 200); return () => clearTimeout(t); }, [reload]);
   const byId = new Map(catalog.map((c) => [c.variantId, c]));
   const hasMatch = catalog.length > 0;
-  const reset = (): void => { setCreating(false); setSku(""); setBeschreibung(""); setPEk(""); setPVk(""); setFarbe(""); setGroesse(""); setErr(null); };
+  const reset = (): void => { setCreating(false); setSku(""); setBeschreibung(""); setPEk(""); setPVk(""); setPSupplier(""); setFarbe(""); setGroesse(""); setErr(null); };
   return (
     <Box>
       <Select size="xs" searchable clearable placeholder="+ Artikel: Nr., Name oder Beschreibung…" w={340} value={value}
@@ -2415,18 +2490,20 @@ export function ArticlePicker({ onPick }: { onPick: (e: { label: string; unitNet
             <MoneyInput size="xs" label="EK (€)" withAsterisk value={pEk} onChange={(v) => setPEk(typeof v === "number" ? v : "")} min={0} w={100} />
             <MoneyInput size="xs" label="VK (€)" withAsterisk value={pVk} onChange={(v) => setPVk(typeof v === "number" ? v : "")} min={0} w={100} />
           </Group>
+          <Box mt={4}><SupplierPicker value={pSupplier} onChange={setPSupplier} w={210} /></Box>
           {err && <Text size="xs" c="red" mt={4}>{err}</Text>}
           <Group gap="xs" mt={6}>
             <Button size="compact-xs" onClick={async () => {
               if (!sku.trim()) { setErr("Artikel-Nr. ist Pflicht."); return; }
               if (!beschreibung.trim()) { setErr("Beschreibung ist Pflicht."); return; }
               if (pEk === "" || pVk === "") { setErr("EK und VK sind Pflicht."); return; }
+              if (!pSupplier) { setErr("Lieferant ist Pflicht."); return; }
               const attributes = [
                 ...(farbe.trim() ? [{ name: "Farbe", value: farbe.trim() }] : []),
                 ...(groesse.trim() ? [{ name: "Größe", value: groesse.trim() }] : []),
               ];
               try {
-                const entry = await trpc.products.quickCreate.mutate({ sku: sku.trim(), name: search.trim(), description: beschreibung.trim(), ekCents: Math.round(Number(pEk) * 100), vkCents: Math.round(Number(pVk) * 100), attributes });
+                const entry = await trpc.products.quickCreate.mutate({ sku: sku.trim(), name: search.trim(), description: beschreibung.trim(), ekCents: Math.round(Number(pEk) * 100), vkCents: Math.round(Number(pVk) * 100), supplierId: pSupplier, attributes });
                 await reload();
                 onPick({ label: entry.label, unitNetCents: entry.unitNetCents, variantId: entry.variantId, sku: sku.trim(), articleName: search.trim() });
                 setValue(null); setSearch(""); reset();
@@ -2780,9 +2857,8 @@ function TextilCatalogDialog({ onClose, onCreated, initial }: { onClose: () => v
   const [sku, setSku] = useState(initial?.sku ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [farbe, setFarbe] = useState(""); const [groesse, setGroesse] = useState("");
-  // EK ist Pflicht (Lieferanten-EK trägt den Deckungsbeitrag/die Nachbestellung); EK braucht
-  // einen Lieferant, an dem er als SupplierItem hängt. VK = STANDARD-Preis (überschreibt den
-  // erfassten VK der Position nicht, wenn leer).
+  // Lieferant ist Pflicht (Kap. 4.4: jeder Artikel hat genau einen Lieferanten — Grundlage des
+  // VK-Aufschlags); der EK hängt als SupplierItem am Lieferant. VK = STANDARD-Preis.
   const [lieferantId, setLieferantId] = useState("");
   const [ek, setEk] = useState<number | "">(initial?.ekEuro ?? "");
   const [vk, setVk] = useState<number | "">(initial?.vkEuro ?? "");
@@ -2798,12 +2874,12 @@ function TextilCatalogDialog({ onClose, onCreated, initial }: { onClose: () => v
         sku: sku.trim(), name: name.trim(), description: description.trim(), attributes,
         ekCents: typeof ek === "number" ? Math.round(ek * 100) : 0,
         vkCents: typeof vk === "number" ? Math.round(vk * 100) : 0,
-        ...(lieferantId ? { supplierId: lieferantId } : {}),
+        supplierId: lieferantId,
       });
       onCreated({ label: e.label, variantId: e.variantId, unitNetCents: e.unitNetCents, sku: sku.trim(), articleName: name.trim() });
     } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
   };
-  const fehlt = [!name.trim() && "Bezeichnung", !sku.trim() && "Artikel-Nr.", !description.trim() && "Beschreibung", ek === "" && "EK", vk === "" && "VK"].filter(Boolean);
+  const fehlt = [!name.trim() && "Bezeichnung", !sku.trim() && "Artikel-Nr.", !description.trim() && "Beschreibung", ek === "" && "EK", vk === "" && "VK", !lieferantId && "Lieferant"].filter(Boolean);
   return (
     <Modal opened onClose={onClose} title="Textilartikel in Katalog speichern" size="md">
       {err && <Alert color="red" mb="sm">{err}</Alert>}
@@ -2817,7 +2893,7 @@ function TextilCatalogDialog({ onClose, onCreated, initial }: { onClose: () => v
         <TextInput label="Größe" placeholder="optional" w={100} value={groesse} onChange={(e) => setGroesse(e.currentTarget.value)} />
       </Group>
       <Group gap="md" align="end" wrap="wrap" mt="sm">
-        <SupplierPicker label="Lieferant (optional, für Lieferanten-EK)" value={lieferantId} onChange={setLieferantId} w={220} />
+        <SupplierPicker label="Lieferant *" value={lieferantId} onChange={setLieferantId} w={220} />
         <MoneyInput label="EK je Stück (€)" withAsterisk value={ek} onChange={(v) => setEk(typeof v === "number" ? v : "")} min={0} w={140} placeholder="Pflicht" />
         <MoneyInput label="VK je Stück (€)" withAsterisk value={vk} onChange={(v) => setVk(typeof v === "number" ? v : "")} min={0} w={140} placeholder="Pflicht" />
       </Group>
@@ -5280,6 +5356,56 @@ function CompanyStammdaten({ company, onSaved }: { company: CompanyDetail; onSav
 
 // Kunden-Detail + Historie (klickbar im Kundenstamm): Stammdaten, offene Summe und
 // die verknüpften Belege (Aufträge, Angebote, Rechnungen, Muster-Leihgut).
+// Kundengruppe JE LIEFERANT (Kap. 4.4): ein Kunde kann bei HAKRO „Premium", bei Stanley/Stella
+// aber „Standard" sein. Ohne Eintrag gilt die globale Standard-Preisgruppe der Firma.
+function CustomerSupplierGroupsPanel({ companyId, defaultGroup }: { companyId: string; defaultGroup: string }): JSX.Element {
+  const [rows, setRows] = useState<Awaited<ReturnType<typeof trpc.pricing.customerSupplierGroups.query>>>([]);
+  const [supplierId, setSupplierId] = useState("");
+  const [kind, setKind] = useState<typeof PRICE_GROUPS[number]["kind"]>("STANDARD");
+  const [err, setErr] = useState<string | null>(null);
+  const reload = useCallback(async () => {
+    try { setRows(await trpc.pricing.customerSupplierGroups.query({ companyId })); setErr(null); }
+    catch (e) { setErr(errMsg(e)); }
+  }, [companyId]);
+  useEffect(() => { void reload(); }, [reload]);
+  const groupLabel = (k: string): string => PRICE_GROUPS.find((g) => g.kind === k)?.label ?? k;
+  const add = async (): Promise<void> => {
+    if (!supplierId) { setErr("Bitte einen Lieferanten wählen."); return; }
+    try { await trpc.pricing.setCustomerSupplierGroup.mutate({ companyId, supplierId, kind }); setSupplierId(""); await reload(); notify.success("Preisgruppe je Lieferant gespeichert."); }
+    catch (e) { setErr(errMsg(e)); }
+  };
+  const remove = async (sid: string): Promise<void> => {
+    try { await trpc.pricing.removeCustomerSupplierGroup.mutate({ companyId, supplierId: sid }); await reload(); }
+    catch (e) { setErr(errMsg(e)); }
+  };
+  return (
+    <Box>
+      <Text size="sm" c="dimmed" mb="xs">Standard-Preisgruppe dieser Firma: <b>{groupLabel(defaultGroup)}</b>. Abweichungen je Lieferant hier pflegen (z. B. Premium@HAKRO, Standard@Stanley) — sonst gilt überall die Standard-Preisgruppe.</Text>
+      {err && <Alert color="red" mb="sm">{err}</Alert>}
+      <Group gap="xs" align="end" mb="sm" wrap="wrap">
+        <SupplierPicker label="Lieferant" value={supplierId} onChange={setSupplierId} w={220} />
+        <Select label="Preisgruppe" w={180} value={kind} onChange={(v) => v && setKind(v as typeof kind)}
+          data={PRICE_GROUPS.map((g) => ({ value: g.kind, label: g.label }))} />
+        <Button size="compact-sm" onClick={() => void add()} disabled={!supplierId}>+ Zuordnen</Button>
+      </Group>
+      {rows.length === 0 ? <Text size="sm" c="dimmed">Keine lieferantenspezifischen Preisgruppen — überall gilt {groupLabel(defaultGroup)}.</Text> : (
+        <Table withTableBorder withColumnBorders highlightOnHover>
+          <Table.Thead><Table.Tr><Table.Th>Lieferant</Table.Th><Table.Th>Preisgruppe</Table.Th><Table.Th>Aktion</Table.Th></Table.Tr></Table.Thead>
+          <Table.Tbody>
+            {rows.map((r) => (
+              <Table.Tr key={r.supplierId}>
+                <Table.Td>{r.supplierName}</Table.Td>
+                <Table.Td>{groupLabel(r.priceGroup)}</Table.Td>
+                <Table.Td><Button size="compact-xs" variant="subtle" color="red" onClick={() => void remove(r.supplierId)}>Entfernen</Button></Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      )}
+    </Box>
+  );
+}
+
 function CompanyDetailPanel({ companyId, companies = [], onNavigate, onOpen }: { companyId: string; companies?: Array<{ id: string; name: string }>; onNavigate?: (k: string) => void; onOpen?: (k: string, id: string) => void }): JSX.Element {
   const [ov, setOv] = useState<Awaited<ReturnType<typeof trpc.companies.overview.query>> | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -5352,6 +5478,7 @@ function CompanyDetailPanel({ companyId, companies = [], onNavigate, onOpen }: {
       <Tabs defaultValue="stammdaten" mt="md" keepMounted={false}>
         <Tabs.List>
           <Tabs.Tab value="stammdaten">Stammdaten</Tabs.Tab>
+          <Tabs.Tab value="preisgruppen">Preisgruppen</Tabs.Tab>
           <Tabs.Tab value="adressen">Lieferadressen</Tabs.Tab>
           <Tabs.Tab value="kontakte">Kontakte ({ov.contactsCount})</Tabs.Tab>
           <Tabs.Tab value="dateien">Dateien</Tabs.Tab>
@@ -5359,6 +5486,9 @@ function CompanyDetailPanel({ companyId, companies = [], onNavigate, onOpen }: {
         </Tabs.List>
         <Tabs.Panel value="stammdaten" pt="sm">
           <CompanyStammdaten company={ov.company} onSaved={reload} />
+        </Tabs.Panel>
+        <Tabs.Panel value="preisgruppen" pt="sm">
+          <CustomerSupplierGroupsPanel companyId={companyId} defaultGroup={ov.company.priceGroupKind} />
         </Tabs.Panel>
         <Tabs.Panel value="adressen" pt="sm">
           <CompanyAddressesPanel companyId={companyId} />

@@ -4,11 +4,13 @@ import { InMemoryProductRepository } from "../../repositories/in-memory-product.
 
 class MemAudit { entries: unknown[] = []; async append(e: unknown): Promise<void> { this.entries.push(e); } }
 
-// Pflicht-Basisfelder (überall hart): jede Anlage trägt Beschreibung + EK + VK.
-const BASE = { description: "Beschreibung", ekCents: 0, vkCents: 0 } as const;
+// Pflicht-Basisfelder (überall hart): jede Anlage trägt Beschreibung + EK + VK + Lieferant.
+const SUP = "sup_textil";
+const BASE = { description: "Beschreibung", ekCents: 0, vkCents: 0, supplierId: SUP } as const;
 
 async function setup(): Promise<{ svc: ProductService; repo: InMemoryProductRepository }> {
   const repo = new InMemoryProductRepository();
+  repo.addSupplier(SUP); // jeder Artikel hat genau einen Lieferanten (Kap. 4.4)
   const svc = new ProductService(repo, new MemAudit());
   await svc.createArticle({ sku: "A-1", name: "Poloshirt", ...BASE });
   await svc.createArticle({ sku: "A-2", name: "Cap", ...BASE });
@@ -40,17 +42,21 @@ describe("ProductService — PIM-Vollständigkeit + Bearbeitung", () => {
     await expect(svc.updateArticle(id, { name: "  " })).rejects.toBeInstanceOf(ProductError);
   });
 
-  it("erzwingt alle 5 Pflichtfelder bei der Anlage", async () => {
+  it("erzwingt alle 6 Pflichtfelder bei der Anlage (inkl. Lieferant)", async () => {
     const { svc } = await setup();
     await expect(svc.createArticle({ sku: "  ", name: "X", ...BASE })).rejects.toBeInstanceOf(ProductError);
-    await expect(svc.createArticle({ sku: "X-9", name: "X", description: "  ", ekCents: 0, vkCents: 0 })).rejects.toBeInstanceOf(ProductError);
-    await expect(svc.createArticle({ sku: "X-9", name: "X", description: "ok", ekCents: -1, vkCents: 0 })).rejects.toBeInstanceOf(ProductError);
-    await expect(svc.createArticle({ sku: "X-9", name: "X", description: "ok", ekCents: 0, vkCents: -1 })).rejects.toBeInstanceOf(ProductError);
+    await expect(svc.createArticle({ sku: "X-9", name: "X", description: "  ", ekCents: 0, vkCents: 0, supplierId: SUP })).rejects.toBeInstanceOf(ProductError);
+    await expect(svc.createArticle({ sku: "X-9", name: "X", description: "ok", ekCents: -1, vkCents: 0, supplierId: SUP })).rejects.toBeInstanceOf(ProductError);
+    await expect(svc.createArticle({ sku: "X-9", name: "X", description: "ok", ekCents: 0, vkCents: -1, supplierId: SUP })).rejects.toBeInstanceOf(ProductError);
+    // Lieferant fehlt → abgelehnt (jeder Artikel hat genau einen Lieferanten).
+    await expect(svc.createArticle({ sku: "X-9", name: "X", description: "ok", ekCents: 0, vkCents: 0, supplierId: "" })).rejects.toBeInstanceOf(ProductError);
+    // Unbekannter Lieferant → abgelehnt.
+    await expect(svc.createArticle({ sku: "X-9", name: "X", description: "ok", ekCents: 0, vkCents: 0, supplierId: "sup_unbekannt" })).rejects.toBeInstanceOf(ProductError);
   });
 
   it("speichert EK/VK des Artikels und liefert sie in der Liste", async () => {
     const { svc } = await setup();
-    await svc.createArticle({ sku: "P-EKVK", name: "Polo", description: "Polo", ekCents: 450, vkCents: 1290 });
+    await svc.createArticle({ sku: "P-EKVK", name: "Polo", description: "Polo", ekCents: 450, vkCents: 1290, supplierId: SUP });
     const row = (await svc.listArticles()).find((r) => r.sku === "P-EKVK")!;
     expect(row.ekCents).toBe(450);
     expect(row.vkCents).toBe(1290);
@@ -97,18 +103,20 @@ describe("ProductService — PIM-Vollständigkeit + Bearbeitung", () => {
 
   it("Schnellanlage hängt EK (Lieferant) + VK (STANDARD) an die Variante", async () => {
     const { svc, repo } = await setup();
-    repo.addSupplier("sup_textil");
-    const entry = await svc.quickCreateCatalogEntry({ sku: "CAP-1", name: "Cap 6-Panel", description: "Cap", ekCents: 350, supplierId: "sup_textil", vkCents: 790 });
+    const entry = await svc.quickCreateCatalogEntry({ sku: "CAP-1", name: "Cap 6-Panel", description: "Cap", ekCents: 350, supplierId: SUP, vkCents: 790 });
     expect(entry.unitNetCents).toBe(790); // VK fließt zurück (Bindung der Position)
-    expect(repo.variantPricing.get(entry.variantId)).toMatchObject({ supplierId: "sup_textil", ekCents: 350, vkCents: 790 });
+    expect(repo.variantPricing.get(entry.variantId)).toMatchObject({ supplierId: SUP, ekCents: 350, vkCents: 790 });
   });
 
-  it("Schnellanlage: Artikel-EK ohne Lieferant ist erlaubt (Basis-EK), unbekannter Lieferant wird abgelehnt", async () => {
+  it("Schnellanlage erzwingt einen Lieferanten; unbekannter Lieferant wird abgelehnt", async () => {
     const { svc, repo } = await setup();
-    // EK am Artikel ist Standard und braucht keinen Lieferant; der Lieferant ist nur die Varianten-Übersteuerung.
-    const ok = await svc.quickCreateCatalogEntry({ sku: "CAP-2", name: "Cap", description: "Cap", ekCents: 350, vkCents: 700 });
+    // Ohne Lieferant ist die Anlage nicht erlaubt (jeder Artikel hat genau einen Lieferanten, Kap. 4.4).
+    await expect(svc.quickCreateCatalogEntry({ sku: "CAP-2", name: "Cap", description: "Cap", ekCents: 350, vkCents: 700, supplierId: "" })).rejects.toBeInstanceOf(ProductError);
+    // Mit gültigem Lieferant: EK landet als SupplierItem an der Variante.
+    const ok = await svc.quickCreateCatalogEntry({ sku: "CAP-2b", name: "Cap", description: "Cap", ekCents: 350, vkCents: 700, supplierId: SUP });
     expect(ok.ekCents).toBe(350);
-    expect(repo.variantPricing.get(ok.variantId)?.ekCents).toBeNull(); // ohne Lieferant kein SupplierItem-EK
+    expect(repo.variantPricing.get(ok.variantId)).toMatchObject({ supplierId: SUP, ekCents: 350 });
+    // Unbekannter Lieferant wird abgelehnt.
     await expect(svc.quickCreateCatalogEntry({ sku: "CAP-3", name: "Cap", description: "Cap", ekCents: 350, vkCents: 700, supplierId: "sup_unbekannt" })).rejects.toBeInstanceOf(ProductError);
   });
 });

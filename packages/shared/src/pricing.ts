@@ -167,8 +167,15 @@ export interface BasePriceSources {
   customerTiers?: ReadonlyArray<PriceTier>;
   /** Preisgruppen-Staffel. */
   groupTiers?: ReadonlyArray<PriceTier>;
-  /** Einzelpreis je Preisgruppe (Fallback, bestehende Pflege). */
+  /** Einzelpreis je Preisgruppe (manuelle Übersteuerung, bestehende Pflege). */
   groupPrices?: ReadonlyArray<VariantPrice>;
+  /**
+   * Berechneter Grund-VK aus dem Lieferanten-Aufschlag (EK × Faktor(Lieferant × Kundengruppe),
+   * siehe supplier-markup.ts) — der DEFAULT-Preis des neuen Preismodells. Greift, wenn KEIN
+   * manueller Einzelpreis der Kundengruppe gepflegt ist; nur die manuelle Übersteuerung gewinnt
+   * davor. `null`/`undefined` ⇒ kein Lieferanten-Aufschlag verfügbar (Rückfall auf Altpfad).
+   */
+  computedBaseCents?: Cents | null;
 }
 
 /**
@@ -198,10 +205,16 @@ export function resolveBasePrice(
   const prices = sources.groupPrices ?? [];
   const direct = prices.find((p) => p.priceGroup === group);
   if (direct) return direct.netCents;
+
+  // (5) Grund-VK aus dem Lieferanten-Aufschlag (EK × Faktor) — der Default des neuen Preismodells
+  // (Kap. 4.4). Greift VOR dem Alt-Fallback auf den STANDARD-Einzelpreis, sodass der berechnete
+  // VK ohne gepflegte Einzelpreise in den Beleg durchschlägt.
+  if (sources.computedBaseCents != null) return sources.computedBaseCents;
+
   const standard = prices.find((p) => p.priceGroup === "STANDARD");
   if (standard) return standard.netCents;
 
   throw new PriceResolutionError(
-    `Kein VK für Preisgruppe ${group} und kein Standardpreis hinterlegt (Kap. 8.2 / T-08).`
+    `Kein VK für Preisgruppe ${group} und kein Standardpreis/Lieferanten-Aufschlag hinterlegt (Kap. 8.2 / T-08).`
   );
 }

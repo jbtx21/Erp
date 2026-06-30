@@ -5,8 +5,10 @@
 
 import {
   buildStaffelLadder,
+  bpToFactor,
   deckungsbeitrag,
   dbMarge,
+  factorToBp,
   resolveBasePrice,
   selectTier,
   type Cents,
@@ -18,16 +20,25 @@ import {
 import { buildEntry, type AuditSink } from "@texma/audit";
 
 export interface PriceContext {
+  /**
+   * Kundengruppe für DIESEN Beleg/diese Position — bereits je Lieferant aufgelöst
+   * (CustomerSupplierPriceGroup → Firmen-Standardgruppe → STANDARD, siehe loadPriceContext).
+   */
   group: PriceGroupKind;
   customerTiers: PriceTier[];
   groupTiers: PriceTier[];
   groupPrices: VariantPrice[];
+  /**
+   * Grund-VK aus dem Lieferanten-Aufschlag (EK × Faktor(Lieferant, group)) — Default des
+   * neuen Preismodells. null = kein Lieferant/Faktor/EK gepflegt → Rückfall auf den Altpfad.
+   */
+  computedBaseCents?: Cents | null;
 }
 
 /** Aufgelöster Preis inkl. Herkunft der greifenden Stufe (für die UI/Transparenz). */
 export interface ResolvedPrice {
   netCents: Cents;
-  source: "KUNDE" | "GRUPPE_STAFFEL" | "GRUPPE_EINZEL";
+  source: "KUNDE" | "GRUPPE_STAFFEL" | "GRUPPE_EINZEL" | "LIEFERANT_AUFSCHLAG";
   minMenge: number | null; // greifende Staffelstufe (null = Einzelpreis ohne Staffel)
   // Deckungsbeitrag (Kap. 4.4: DB bereits im Angebot sichtbar). EK = bester Lieferanten-
   // Einkaufspreis; null wenn kein Lieferantenpreis hinterlegt → DB/Marge nicht ermittelbar.
@@ -39,6 +50,21 @@ export interface ResolvedPrice {
 export interface TierView {
   customerTiers: PriceTier[];
   groupTiers: PriceTier[];
+}
+
+/** Ein Aufschlag des Lieferanten für eine Kundengruppe (Stammdaten-Matrix). */
+export interface SupplierMarkupRow {
+  priceGroup: PriceGroupKind;
+  factorBp: number;
+  /** factorBp / 10000 — bequem für die UI (z. B. 1,88). */
+  factor: number;
+}
+
+/** Kundengruppe eines Kunden bei genau EINEM Lieferanten. */
+export interface CustomerSupplierGroupRow {
+  supplierId: string;
+  supplierName: string;
+  priceGroup: PriceGroupKind;
 }
 
 export interface PricingRepository {
@@ -56,6 +82,22 @@ export interface PricingRepository {
   listStandardTiers(variantId: string): Promise<PriceTier[]>;
   /** EK-Mengenstaffel je Variante (Stick-EK je Stück gestaffelt); leer = nur flacher EK. */
   ekTiers(variantId: string): Promise<{ minMenge: number; ekCents: number }[]>;
+
+  // ── Lieferanten-Aufschlagsmatrix (Kap. 4.4): Faktoren je Lieferant × Kundengruppe ──
+  /** Aufschlagsfaktoren eines Lieferanten (eine Zeile je gepflegter Kundengruppe). */
+  listSupplierMarkups(supplierId: string): Promise<SupplierMarkupRow[]>;
+  /** Setzt/aktualisiert den Faktor (factorBp) eines Lieferanten für eine Kundengruppe. */
+  setSupplierMarkup(supplierId: string, kind: PriceGroupKind, factorBp: number): Promise<void>;
+  /** Entfernt den Faktor eines Lieferanten für eine Kundengruppe. */
+  removeSupplierMarkup(supplierId: string, kind: PriceGroupKind): Promise<void>;
+
+  // ── Kundengruppe je Lieferant (Premium@HAKRO, Standard@Stanley) ──
+  /** Lieferanten-spezifische Kundengruppen-Zuordnungen einer Firma. */
+  listCustomerSupplierGroups(companyId: string): Promise<CustomerSupplierGroupRow[]>;
+  /** Setzt/aktualisiert die Kundengruppe einer Firma bei genau EINEM Lieferanten. */
+  setCustomerSupplierGroup(companyId: string, supplierId: string, kind: PriceGroupKind): Promise<void>;
+  /** Entfernt die Lieferanten-spezifische Zuordnung (Rückfall auf Firmen-Standardgruppe). */
+  removeCustomerSupplierGroup(companyId: string, supplierId: string): Promise<void>;
 }
 
 /** Anzeige-Staffel je Position: VK+EK+DB je Mengenstufe (C+D) + bester EK. */
@@ -80,8 +122,16 @@ export class PricingService {
     const group = selectTier(ctx.groupTiers, menge);
     if (customer) { netCents = customer.netCents; source = "KUNDE"; minMenge = customer.minMenge; }
     else if (group) { netCents = group.netCents; source = "GRUPPE_STAFFEL"; minMenge = group.minMenge; }
-    // Kein Staffeltreffer → Einzelpreis der Gruppe (wirft sichtbar bei Pflegefehler, T-08).
-    else { netCents = resolveBasePrice(ctx, ctx.group, menge); source = "GRUPPE_EINZEL"; minMenge = null; }
+    else {
+      // Kein Staffeltreffer: (1) manueller Einzelpreis der Gruppe → (2) berechneter Grund-VK aus
+      // Lieferanten-Aufschlag → (3) Alt-Fallback (resolveBasePrice; wirft sichtbar bei Pflegefehler,
+      // T-08). Die Herkunft wird für die UI-Transparenz unterschieden.
+      minMenge = null;
+      const direct = ctx.groupPrices.find((p) => p.priceGroup === ctx.group);
+      if (direct) { netCents = direct.netCents; source = "GRUPPE_EINZEL"; }
+      else if (ctx.computedBaseCents != null) { netCents = ctx.computedBaseCents; source = "LIEFERANT_AUFSCHLAG"; }
+      else { netCents = resolveBasePrice(ctx, ctx.group, menge); source = "GRUPPE_EINZEL"; }
+    }
 
     const ekCents = await this.repo.bestEkCents(variantId);
     const dbCents = ekCents === null ? null : deckungsbeitrag(netCents, ekCents);
@@ -141,6 +191,65 @@ export class PricingService {
         entity: "PriceGroupPriceTier", entityId: `${variantId}:${String(minMenge)}`, action: "UPDATE",
         before: before ? { companyId, variantId, minMenge, netCents: before.netCents } : undefined,
         after: { companyId, variantId, minMenge, deleted: true },
+      })
+    );
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Lieferanten-Aufschlagsmatrix (Kap. 4.4): VK = EK × Faktor(Lieferant × Kundengruppe).
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /** Aufschlagsmatrix eines Lieferanten (Faktoren je Kundengruppe). */
+  async listSupplierMarkups(supplierId: string): Promise<SupplierMarkupRow[]> {
+    return this.repo.listSupplierMarkups(supplierId);
+  }
+
+  /** Setzt den Aufschlagsfaktor eines Lieferanten für eine Kundengruppe (auditiert). */
+  async setSupplierMarkup(supplierId: string, kind: PriceGroupKind, factor: number): Promise<void> {
+    const factorBp = factorToBp(factor); // wirft bei Faktor <= 0
+    await this.repo.setSupplierMarkup(supplierId, kind, factorBp);
+    await this.audit.append(
+      buildEntry({
+        entity: "SupplierMarkup", entityId: `${supplierId}:${kind}`, action: "UPDATE",
+        after: { supplierId, priceGroup: kind, factorBp, factor: bpToFactor(factorBp) },
+      })
+    );
+  }
+
+  /** Entfernt den Aufschlagsfaktor eines Lieferanten für eine Kundengruppe (auditiert). */
+  async removeSupplierMarkup(supplierId: string, kind: PriceGroupKind): Promise<void> {
+    await this.repo.removeSupplierMarkup(supplierId, kind);
+    await this.audit.append(
+      buildEntry({
+        entity: "SupplierMarkup", entityId: `${supplierId}:${kind}`, action: "UPDATE",
+        after: { supplierId, priceGroup: kind, deleted: true },
+      })
+    );
+  }
+
+  /** Lieferanten-spezifische Kundengruppen einer Firma. */
+  async listCustomerSupplierGroups(companyId: string): Promise<CustomerSupplierGroupRow[]> {
+    return this.repo.listCustomerSupplierGroups(companyId);
+  }
+
+  /** Setzt die Kundengruppe einer Firma bei einem Lieferanten (auditiert). */
+  async setCustomerSupplierGroup(companyId: string, supplierId: string, kind: PriceGroupKind): Promise<void> {
+    await this.repo.setCustomerSupplierGroup(companyId, supplierId, kind);
+    await this.audit.append(
+      buildEntry({
+        entity: "CustomerSupplierPriceGroup", entityId: `${companyId}:${supplierId}`, action: "UPDATE",
+        after: { companyId, supplierId, priceGroup: kind },
+      })
+    );
+  }
+
+  /** Entfernt die Lieferanten-Zuordnung (Rückfall auf die Firmen-Standardgruppe, auditiert). */
+  async removeCustomerSupplierGroup(companyId: string, supplierId: string): Promise<void> {
+    await this.repo.removeCustomerSupplierGroup(companyId, supplierId);
+    await this.audit.append(
+      buildEntry({
+        entity: "CustomerSupplierPriceGroup", entityId: `${companyId}:${supplierId}`, action: "UPDATE",
+        after: { companyId, supplierId, deleted: true },
       })
     );
   }

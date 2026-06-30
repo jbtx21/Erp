@@ -78,6 +78,67 @@ describe("PricingService.addGroupTier (B4, Staffelpflege)", () => {
   });
 });
 
+describe("PricingService.resolve — Lieferanten-Aufschlag als Grund-VK (Kap. 4.4)", () => {
+  it("ohne manuellen Preis: berechneter Grund-VK (EK × Faktor) schlägt durch", async () => {
+    const repo = new InMemoryPricingRepository();
+    // computedBaseCents = EK 500 × 1,88 = 940 (vom Repo vorab berechnet).
+    repo.set("co1", "v1", { group: "PREMIUM", customerTiers: [], groupTiers: [], groupPrices: [], computedBaseCents: 940 });
+    const svc = new PricingService(repo, new MemoryAuditSink());
+    expect(await svc.resolve("co1", "v1", 3)).toMatchObject({ netCents: 940, source: "LIEFERANT_AUFSCHLAG", minMenge: null });
+  });
+
+  it("manueller Einzelpreis der Gruppe übersteuert den berechneten Grund-VK", async () => {
+    const repo = new InMemoryPricingRepository();
+    repo.set("co1", "v1", {
+      group: "PREMIUM", customerTiers: [], groupTiers: [],
+      groupPrices: [{ priceGroup: "PREMIUM", netCents: 1111 }], computedBaseCents: 940,
+    });
+    const svc = new PricingService(repo, new MemoryAuditSink());
+    expect(await svc.resolve("co1", "v1", 3)).toMatchObject({ netCents: 1111, source: "GRUPPE_EINZEL" });
+  });
+});
+
+describe("PricingService — Lieferanten-Aufschlagsmatrix + Kundengruppe je Lieferant (CRUD)", () => {
+  it("setSupplierMarkup speichert den Faktor (als Bp) und listet ihn zurück; auditiert", async () => {
+    const repo = new InMemoryPricingRepository();
+    const audit = new MemoryAuditSink();
+    const svc = new PricingService(repo, audit);
+    await svc.setSupplierMarkup("sup_hakro", "PREMIUM", 1.6);
+    const rows = await svc.listSupplierMarkups("sup_hakro");
+    expect(rows).toEqual([{ priceGroup: "PREMIUM", factorBp: 16000, factor: 1.6 }]);
+    expect(audit.entries.at(-1)).toMatchObject({ entity: "SupplierMarkup" });
+  });
+
+  it("weist nicht-positive Faktoren ab", async () => {
+    const svc = new PricingService(new InMemoryPricingRepository(), new MemoryAuditSink());
+    await expect(svc.setSupplierMarkup("sup_hakro", "PREMIUM", 0)).rejects.toThrow();
+  });
+
+  it("setCustomerSupplierGroup ordnet je Lieferant zu (Premium@HAKRO, Standard@Stanley)", async () => {
+    const repo = new InMemoryPricingRepository();
+    repo.setSupplierName("sup_hakro", "HAKRO");
+    repo.setSupplierName("sup_stanley", "Stanley/Stella");
+    const svc = new PricingService(repo, new MemoryAuditSink());
+    await svc.setCustomerSupplierGroup("co1", "sup_hakro", "PREMIUM");
+    await svc.setCustomerSupplierGroup("co1", "sup_stanley", "STANDARD");
+    const rows = await svc.listCustomerSupplierGroups("co1");
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        { supplierId: "sup_hakro", supplierName: "HAKRO", priceGroup: "PREMIUM" },
+        { supplierId: "sup_stanley", supplierName: "Stanley/Stella", priceGroup: "STANDARD" },
+      ])
+    );
+  });
+
+  it("removeCustomerSupplierGroup entfernt die Zuordnung wieder", async () => {
+    const repo = new InMemoryPricingRepository();
+    const svc = new PricingService(repo, new MemoryAuditSink());
+    await svc.setCustomerSupplierGroup("co1", "sup_hakro", "PREMIUM");
+    await svc.removeCustomerSupplierGroup("co1", "sup_hakro");
+    expect(await svc.listCustomerSupplierGroups("co1")).toHaveLength(0);
+  });
+});
+
 describe("PricingService.staffelpreise (C+D — Anzeige-Staffel VK+EK+DB)", () => {
   it("mergt STANDARD-Basis + Gruppe + Kunde und ergänzt EK + DB je Stufe", async () => {
     const { repo, svc } = setup(); // groupTiers 1→1000, 10→900; customer 10→800

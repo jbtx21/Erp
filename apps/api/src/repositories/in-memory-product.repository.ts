@@ -14,11 +14,11 @@ import type {
 } from "../modules/product/product.service.js";
 
 type StoredArticle = {
-  id: string; sku: string; name: string; description: string; ekCents: number; vkCents: number; brand: string; materialComposition: string; careInstructions: string; hsCode: string; originCountry: string;
+  id: string; sku: string; name: string; description: string; ekCents: number; vkCents: number; supplierId: string | null; brand: string; materialComposition: string; careInstructions: string; hsCode: string; originCountry: string;
   itemGroup: string; stockUom: string; isSalesItem: boolean; isPurchaseItem: boolean; minOrderQty: number | null; maxDiscountPct: number | null; leadTimeDays: number | null; gender: string; gm2: number | null; styleFit: string; bestandsgefuehrt: boolean;
 };
 const emptyPim = {
-  description: "", ekCents: 0, vkCents: 0, brand: "", materialComposition: "", careInstructions: "", hsCode: "", originCountry: "",
+  description: "", ekCents: 0, vkCents: 0, supplierId: null as string | null, brand: "", materialComposition: "", careInstructions: "", hsCode: "", originCountry: "",
   itemGroup: "", stockUom: "Stk", isSalesItem: true, isPurchaseItem: true, minOrderQty: null, maxDiscountPct: null, leadTimeDays: null, gender: "", gm2: null, styleFit: "", bestandsgefuehrt: false,
 };
 
@@ -34,9 +34,9 @@ export class InMemoryProductRepository implements ProductRepository {
       .sort((a, b) => a.sku.localeCompare(b.sku));
   }
 
-  async createArticle(input: { sku: string; name: string; description: string; ekCents: number; vkCents: number }): Promise<{ id: string }> {
+  async createArticle(input: { sku: string; name: string; description: string; ekCents: number; vkCents: number; supplierId: string }): Promise<{ id: string }> {
     const id = `art_${++this.seq}`;
-    this.articles.set(id, { id, sku: input.sku, name: input.name, ...emptyPim, description: input.description, ekCents: input.ekCents, vkCents: input.vkCents });
+    this.articles.set(id, { id, sku: input.sku, name: input.name, ...emptyPim, description: input.description, ekCents: input.ekCents, vkCents: input.vkCents, supplierId: input.supplierId });
     return { id };
   }
 

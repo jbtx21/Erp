@@ -17,6 +17,9 @@ const allRoles = ["ADMIN", "BUERO", "BUCHHALTUNG", "PRODUKTION"] as const;
 // Zeitliche Granularität für Auswertungen (Kap. 29).
 const granularityEnum = z.enum(["DAY", "WEEK", "MONTH", "YEAR"]);
 
+// Kundengruppen (Preisgruppen, Kap. 8.2) — zentral, damit alle Endpunkte denselben Satz nutzen.
+const priceGroupKindEnum = z.enum(["STANDARD", "TOP", "PREMIUM", "SCHULE", "WIEDERVERKAEUFER", "AGENTUR"]);
+
 // Optionaler Auswertungszeitraum (von–bis) als ISO-Strings.
 const rangeShape = { from: z.string().datetime().optional(), to: z.string().datetime().optional() };
 function toRange(input: { from?: string; to?: string }): { from?: Date; to?: Date } | undefined {
@@ -1539,13 +1542,14 @@ export const appRouter = router({
       .input(z.object({ articleId: z.string().min(1) }))
       .query(({ input, ctx }) => ctx.products.listVariants(input.articleId)),
     createArticle: roleProcedure("ADMIN", "BUERO")
-      // Alle 5 Stammfelder Pflicht (überall hart): Nr., Name, Beschreibung, EK, VK.
+      // Alle 6 Stammfelder Pflicht (überall hart): Nr., Name, Beschreibung, EK, VK, Lieferant.
       .input(z.object({
         sku: z.string().min(1),
         name: z.string().min(1),
         description: z.string().min(1, "Artikelbeschreibung ist Pflicht."),
         ekCents: z.number().int().nonnegative(),
         vkCents: z.number().int().nonnegative(),
+        supplierId: z.string().min(1, "Lieferant ist Pflicht."),
       }))
       .mutation(async ({ input, ctx }) => {
         try { return await ctx.products.createArticle(input); } catch (e) { throw toTrpcError(e); }
@@ -1560,8 +1564,8 @@ export const appRouter = router({
         ekCents: z.number().int().nonnegative(),
         vkCents: z.number().int().nonnegative(),
         attributes: z.array(z.object({ name: z.string().min(1), value: z.string().min(1) })).optional(),
-        // Optionale Varianten-Übersteuerung: Lieferanten-EK (SupplierItem) braucht einen Lieferant.
-        supplierId: z.string().optional(),
+        // Pflicht (Kap. 4.4): jeder Artikel hat genau EINEN (Textil-)Lieferanten.
+        supplierId: z.string().min(1, "Lieferant ist Pflicht."),
       }))
       .mutation(async ({ input, ctx }) => {
         try { return await ctx.products.quickCreateCatalogEntry(input); }
@@ -1834,6 +1838,40 @@ export const appRouter = router({
       .input(z.object({ companyId: z.string().min(1), variantId: z.string().min(1), minMenge: z.number().int().positive() }))
       .mutation(async ({ input, ctx }) => {
         try { await ctx.pricing.removeGroupTier(input.companyId, input.variantId, input.minMenge); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+
+    // ── Lieferanten-Aufschlagsmatrix (Kap. 4.4): VK = EK × Faktor(Lieferant × Kundengruppe) ──
+    supplierMarkups: roleProcedure(...supplierRoles)
+      .input(z.object({ supplierId: z.string().min(1) }))
+      .query(({ input, ctx }) => ctx.pricing.listSupplierMarkups(input.supplierId)),
+    setSupplierMarkup: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ supplierId: z.string().min(1), kind: priceGroupKindEnum, factor: z.number().positive() }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.pricing.setSupplierMarkup(input.supplierId, input.kind, input.factor); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    removeSupplierMarkup: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ supplierId: z.string().min(1), kind: priceGroupKindEnum }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.pricing.removeSupplierMarkup(input.supplierId, input.kind); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+
+    // ── Kundengruppe je Lieferant (Premium@HAKRO, Standard@Stanley) ──
+    customerSupplierGroups: roleProcedure(...supplierRoles)
+      .input(z.object({ companyId: z.string().min(1) }))
+      .query(({ input, ctx }) => ctx.pricing.listCustomerSupplierGroups(input.companyId)),
+    setCustomerSupplierGroup: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ companyId: z.string().min(1), supplierId: z.string().min(1), kind: priceGroupKindEnum }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.pricing.setCustomerSupplierGroup(input.companyId, input.supplierId, input.kind); return { ok: true as const }; }
+        catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
+      }),
+    removeCustomerSupplierGroup: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({ companyId: z.string().min(1), supplierId: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try { await ctx.pricing.removeCustomerSupplierGroup(input.companyId, input.supplierId); return { ok: true as const }; }
         catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
       }),
   }),
@@ -2586,7 +2624,7 @@ export const appRouter = router({
         name: z.string().min(1),
         branche: z.string().optional(),
         zahlungszielTage: z.number().int().min(0).max(180).optional(),
-        priceGroupKind: z.enum(["STANDARD", "TOP", "PREMIUM", "WIEDERVERKAEUFER", "AGENTUR"]),
+        priceGroupKind: priceGroupKindEnum,
       }))
       .mutation(async ({ input, ctx }) => {
         try { return await ctx.companies.create(input); } catch (e) { throw new TRPCError({ code: "BAD_REQUEST", message: (e as Error).message }); }
@@ -3046,7 +3084,7 @@ export const appRouter = router({
           ek: z.object({ supplierId: z.string().min(1) }).optional(),
           vk: z.object({
             groups: z.array(z.object({
-              kind: z.enum(["STANDARD", "TOP", "PREMIUM", "WIEDERVERKAEUFER", "AGENTUR"]),
+              kind: priceGroupKindEnum,
               factor: z.number().positive(),
             })).min(1),
           }).optional(),

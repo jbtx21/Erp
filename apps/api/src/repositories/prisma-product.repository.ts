@@ -43,9 +43,9 @@ export class PrismaProductRepository implements ProductRepository {
     }));
   }
 
-  async createArticle(input: { sku: string; name: string; description: string; ekCents: number; vkCents: number }): Promise<{ id: string }> {
+  async createArticle(input: { sku: string; name: string; description: string; ekCents: number; vkCents: number; supplierId: string }): Promise<{ id: string }> {
     return prisma.article.create({
-      data: { sku: input.sku, name: input.name, description: input.description, ekCents: input.ekCents, vkCents: input.vkCents },
+      data: { sku: input.sku, name: input.name, description: input.description, ekCents: input.ekCents, vkCents: input.vkCents, supplierId: input.supplierId },
       select: { id: true },
     });
   }
