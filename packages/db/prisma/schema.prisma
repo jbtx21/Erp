@@ -273,6 +273,9 @@ model MarkupRule {
   factor        Float
   label         String?
   priceGroupId  String? // Kundengruppe (Preisgruppe)
+  // Lieferant als Bedingung (Variante A): VK = EK × Faktor(Lieferant × Kundengruppe). Der
+  // Fold-in von SupplierMarkup macht die Regel-Engine zur EINEN Engine für Artikel + Veredelung.
+  supplierId    String? // FK auf Supplier (in der Migration ergänzt); null = lieferantenunabhängig
   finishingType String? // Veredelungsart (STICKEREI/DRUCK/TRANSFER)
   minMenge      Int?
   maxMenge      Int?
@@ -281,6 +284,8 @@ model MarkupRule {
   sortOrder     Int      @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  @@index([supplierId])
 }
 
 // Variable Mengenstaffeln je Logo (Kap. 4.4 / T-15): die Stickerei gibt uns nur ihren VK
