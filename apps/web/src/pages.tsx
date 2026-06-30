@@ -4507,6 +4507,12 @@ function NachkalkulationModal({ productionId, onClose }: { productionId: string;
 // ohne dedizierte Detailseite (Lieferschein/Rechnung/Gutschrift/OP/Zahlung) bleiben Badge.
 const BELEGKETTE_NAV: Record<string, string> = {
   Quote: "quotes",
+  Order: "orders",
+  Invoice: "invoices",
+  Company: "companies",
+  Supplier: "suppliers",
+  PurchaseOrder: "procurement",
+  GoodsReceipt: "wareneingang",
   ProductionOrder: "subproduction", // n.id = PA-Id → öffnet die Fremdvergabe-Sicht der PA
   Complaint: "reklamation",
 };
