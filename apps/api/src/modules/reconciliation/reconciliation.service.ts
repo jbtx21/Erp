@@ -88,7 +88,7 @@ export class ReconciliationService {
       ...oi, overdueDays: overdueDays(oi.dueDate, asOf), bucket: agingBucket(oi.dueDate, asOf),
     }));
 
-    const bySource: Record<PaymentSource, number> = { CAMT: 0, PROVIDER: 0, MANUAL: 0 };
+    const bySource: Record<PaymentSource, number> = { CAMT: 0, PROVIDER: 0, MANUAL: 0, PAYPAL: 0 };
     const byStatus: Record<ReconcileStatus, number> = { ZUGEORDNET: 0, TEILZUGEORDNET: 0, KLAERUNG: 0 };
     for (const m of matches) { bySource[m.source]++; byStatus[m.status]++; }
 

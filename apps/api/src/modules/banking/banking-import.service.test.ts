@@ -56,4 +56,35 @@ describe("BankingImportService.importStatement (T-13)", () => {
     const again = await service.importStatement(stmt(ntry("REF-1", "R-2026-001", "119.00")));
     expect(again).toMatchObject({ imported: 0, skipped: 1 });
   });
+
+  it("schließt einen OP mit Skonto (Zahlung knapp unter Restbetrag)", async () => {
+    const { repo, service } = setup(); // OP 11900
+    const res = await service.importStatement(stmt(ntry("REF-1", "R-2026-001", "115.43"))); // 3 % Skonto
+    expect(res).toMatchObject({ matched: 1, clarified: 0 });
+    expect(repo.openCentsOf("oi_1")).toBe(0); // geflossenes Geld + Skonto schließen den OP
+  });
+});
+
+describe("BankingImportService.importPaypalCsv (PaymentSource PAYPAL)", () => {
+  it("importiert PayPal-Brutto, klärt den OP und führt die Gebühr separat", async () => {
+    const { repo, service } = setup(); // OP 11900
+    const csv = [
+      "Transaktionscode,Brutto,Gebühr,Währung,Status,Name,Rechnungsnummer",
+      '"PP-1","119,00","-3,48","EUR","Abgeschlossen","ACME GmbH","R-2026-001"',
+    ].join("\n");
+    const res = await service.importPaypalCsv(csv);
+    expect(res).toMatchObject({ imported: 1, matched: 1, clarified: 0 });
+    expect(repo.openCentsOf("oi_1")).toBe(0); // Brutto (nicht Netto) klärt den OP
+    const entries = await repo.listStatementEntries(10);
+    expect(entries[0]?.source).toBe("PAYPAL");
+  });
+
+  it("überspringt Rückzahlungen (negatives Brutto) und ist idempotent", async () => {
+    const { service } = setup();
+    const csv = [
+      "Transaktionscode,Brutto,Status,Rechnungsnummer",
+      '"PP-R","-50,00","Abgeschlossen","R-2026-001"',
+    ].join("\n");
+    expect(await service.importPaypalCsv(csv)).toMatchObject({ imported: 0 });
+  });
 });

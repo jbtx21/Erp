@@ -9,22 +9,30 @@ import {
   creditTransactions,
   matchPayments,
   parseCamt053,
+  paypalCreditsFromCsv,
   type IncomingPayment,
   type OpenItemRef,
   type PaymentSource,
+  type PaypalCredit,
 } from "@texma/shared";
 import { buildEntry, type AuditSink } from "@texma/audit";
 
 export interface PersistableAllocation {
   openItemId: string;
   allocatedCents: number;
+  /** Gewährter Skonto, der den OP zusätzlich schließt (0 = kein Skonto). */
+  skontoCents?: number;
 }
 
 export interface PersistablePayment {
   externalRef: string;
   reference: string;
   amountCents: number;
-  /** Herkunft (vereinheitlichter Abgleich): CAMT-Datei oder Provider-Sync. */
+  /** Provider-/PayPal-Gebühr (separater Aufwand, nicht im OP-Abgleich). */
+  feeCents?: number;
+  /** ISO-4217 (PayPal-Fremdwährung); Default EUR. */
+  currency?: string;
+  /** Herkunft (vereinheitlichter Abgleich): CAMT-Datei, Provider-Sync oder PayPal. */
   source: PaymentSource;
   /** Vollständig einem OP zugeordnet (keine Klärung). */
   matched: boolean;
@@ -47,11 +55,17 @@ export interface BankingImportResult {
   skipped: number; // bereits importiert (Idempotenz)
 }
 
-/** Normalisierte Gutschrift (Quelle: CAMT.053-Datei oder Provider-Sync EBICS/PSD2). */
+/** Normalisierte Gutschrift (Quelle: CAMT.053-Datei, Provider-Sync EBICS/PSD2 oder PayPal). */
 export interface NormalizedCreditInput {
   externalRef: string;
   reference: string;
   amountCents: number;
+  /** Auftraggebername — Grundlage der 2. Matching-Stufe (Betrag + Name). */
+  payerName?: string;
+  /** Provider-/PayPal-Gebühr (separater Aufwand). */
+  feeCents?: number;
+  /** ISO-4217 (PayPal-Fremdwährung). */
+  currency?: string;
 }
 
 export class BankingImportService {
@@ -67,6 +81,31 @@ export class BankingImportService {
       credits.map((c) => ({ externalRef: c.externalRef, reference: c.reference, amountCents: c.amountCents })),
       "camt053",
       "CAMT"
+    );
+  }
+
+  /**
+   * Importiert PayPal-Gutschriften (Aktivitäten-CSV-Export) und speist sie in dieselbe
+   * Abgleich-Pipeline ein (PaymentSource PAYPAL). Brutto klärt den OP; die PayPal-Gebühr
+   * wird als separater Aufwand am Payment mitgeführt (Kap. 9.4).
+   */
+  async importPaypalCsv(csv: string): Promise<BankingImportResult> {
+    return this.importPaypal(paypalCreditsFromCsv(csv));
+  }
+
+  /** Importiert bereits normalisierte PayPal-Gutschriften (Brutto + Gebühr + Währung). */
+  async importPaypal(credits: ReadonlyArray<PaypalCredit>): Promise<BankingImportResult> {
+    return this.importCredits(
+      credits.map((c) => ({
+        externalRef: c.externalRef,
+        reference: c.reference,
+        amountCents: c.amountCents,
+        feeCents: c.feeCents,
+        currency: c.currency,
+        ...(c.payerName ? { payerName: c.payerName } : {}),
+      })),
+      "paypal",
+      "PAYPAL"
     );
   }
 
@@ -91,13 +130,14 @@ export class BankingImportService {
       id: c.externalRef,
       reference: c.reference,
       amountCents: c.amountCents,
+      ...(c.payerName ? { payerName: c.payerName } : {}),
     }));
     const result = matchPayments(incoming, openItems);
 
     const allocByPayment = new Map<string, PersistableAllocation[]>();
     for (const a of result.allocations) {
       const list = allocByPayment.get(a.paymentId) ?? [];
-      list.push({ openItemId: a.openItemId, allocatedCents: a.allocatedCents });
+      list.push({ openItemId: a.openItemId, allocatedCents: a.allocatedCents, ...(a.skontoCents ? { skontoCents: a.skontoCents } : {}) });
       allocByPayment.set(a.paymentId, list);
     }
     const clarifiedIds = new Set(result.clarifications.map((c) => c.paymentId));
@@ -105,7 +145,16 @@ export class BankingImportService {
     const persistables: PersistablePayment[] = fresh.map((c) => {
       const allocations = allocByPayment.get(c.externalRef) ?? [];
       const matched = allocations.length > 0 && !clarifiedIds.has(c.externalRef);
-      return { externalRef: c.externalRef, reference: c.reference, amountCents: c.amountCents, source: paymentSource, matched, allocations };
+      return {
+        externalRef: c.externalRef,
+        reference: c.reference,
+        amountCents: c.amountCents,
+        ...(c.feeCents ? { feeCents: c.feeCents } : {}),
+        ...(c.currency ? { currency: c.currency } : {}),
+        source: paymentSource,
+        matched,
+        allocations,
+      };
     });
 
     await this.repo.persist(persistables);

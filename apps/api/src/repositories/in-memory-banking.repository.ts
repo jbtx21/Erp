@@ -55,7 +55,7 @@ export class InMemoryBankingRepository implements BankingRepository, BankingQuer
       });
       for (const a of p.allocations) {
         const oi = this.openItems.find((x) => x.id === a.openItemId);
-        if (oi) oi.openCents -= a.allocatedCents;
+        if (oi) oi.openCents -= a.allocatedCents + (a.skontoCents ?? 0);
       }
     }
   }

@@ -41,6 +41,7 @@ export * from "./einvoice.js";
 export * from "./procurement.js";
 export * from "./subproduction.js";
 export * from "./banking-match.js";
+export * from "./paypal-report.js";
 export * from "./payment-reconciliation.js";
 export * from "./payment-terms.js";
 export * from "./ek-reconciliation.js";

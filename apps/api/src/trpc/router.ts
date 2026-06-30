@@ -679,6 +679,13 @@ export const appRouter = router({
         .query(async ({ input, ctx }) => ctx.banking.listStatementEntries(input?.limit ?? 50)),
     }),
 
+    /** PayPal-Aktivitäten-CSV importieren — Brutto klärt OPs, Gebühr separater Aufwand (PaymentSource PAYPAL). */
+    paypal: router({
+      import: roleProcedure(...supplierRoles)
+        .input(z.object({ csv: z.string().min(1) }))
+        .mutation(async ({ input, ctx }) => ctx.bankingImport.importPaypalCsv(input.csv)),
+    }),
+
     /** Bank-Verbindungen (EBICS/PSD2): Auszüge abrufen (AIS, Kap. 9). */
     connections: router({
       list: roleProcedure(...supplierRoles).query(({ ctx }) => ctx.bankConnections.listConnections()),

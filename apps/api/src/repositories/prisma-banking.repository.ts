@@ -23,9 +23,20 @@ export class PrismaBankingRepository implements BankingRepository, BankingQueryR
   async listOpenItems(): Promise<OpenItemRef[]> {
     const rows = await prisma.openItem.findMany({
       where: { openCents: { gt: 0 } },
-      select: { id: true, openCents: true, invoice: { select: { number: true } } },
+      select: {
+        id: true,
+        openCents: true,
+        dueDate: true,
+        invoice: { select: { number: true, company: { select: { name: true } } } },
+      },
     });
-    return rows.map((r) => ({ id: r.id, invoiceNumber: r.invoice.number, openCents: r.openCents }));
+    return rows.map((r) => ({
+      id: r.id,
+      invoiceNumber: r.invoice.number,
+      openCents: r.openCents,
+      debtorName: r.invoice.company.name,
+      dueDate: r.dueDate,
+    }));
   }
 
   async persist(payments: PersistablePayment[]): Promise<void> {
@@ -36,18 +47,22 @@ export class PrismaBankingRepository implements BankingRepository, BankingQueryR
             externalRef: p.externalRef,
             source: p.source,
             amountCents: p.amountCents,
+            feeCents: p.feeCents ?? 0,
+            currency: p.currency ?? "EUR",
             reference: p.reference,
             matched: p.matched,
           },
           select: { id: true },
         });
         for (const a of p.allocations) {
+          const skonto = a.skontoCents ?? 0;
           await tx.paymentAllocation.create({
-            data: { paymentId: payment.id, openItemId: a.openItemId, amountCents: a.allocatedCents },
+            data: { paymentId: payment.id, openItemId: a.openItemId, amountCents: a.allocatedCents, skontoCents: skonto },
           });
+          // OP wird um geflossenes Geld + gewährten Skonto geschlossen.
           await tx.openItem.update({
             where: { id: a.openItemId },
-            data: { openCents: { decrement: a.allocatedCents } },
+            data: { openCents: { decrement: a.allocatedCents + skonto } },
           });
         }
       }

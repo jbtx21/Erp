@@ -20,7 +20,7 @@ describe("ReconciliationService (vereinheitlichter Abgleich)", () => {
     expect(matches.find((m) => m.id === "p1")?.status).toBe("ZUGEORDNET");
     expect(matches.find((m) => m.id === "p2")?.status).toBe("TEILZUGEORDNET");
     expect(matches.find((m) => m.id === "p3")?.status).toBe("KLAERUNG");
-    expect(summary.bySource).toEqual({ CAMT: 1, PROVIDER: 1, MANUAL: 1 });
+    expect(summary.bySource).toEqual({ CAMT: 1, PROVIDER: 1, MANUAL: 1, PAYPAL: 0 });
     expect(summary.byStatus).toEqual({ ZUGEORDNET: 1, TEILZUGEORDNET: 1, KLAERUNG: 1 });
   });
 

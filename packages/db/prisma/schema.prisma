@@ -1334,19 +1334,23 @@ enum PaymentSource {
   CAMT // CAMT.053-Datei-Upload (T-13)
   PROVIDER // Bank-Provider-Sync (EBICS/PSD2)
   MANUAL // manuell auf einen OP gebucht (Bar/Überweisungszuordnung)
+  PAYPAL // PayPal-Reporting (Brutto klärt OP; Gebühr separater Aufwand)
 }
 
 model Payment {
   id           String   @id @default(cuid())
-  externalRef  String?  @unique // Bank-Transaktionsreferenz (CAMT AcctSvcrRef) — idempotenter Import (T-13)
+  externalRef  String?  @unique // Bank-/PayPal-Transaktionsreferenz — idempotenter Import (T-13)
   source       PaymentSource @default(MANUAL) // Herkunft (vereinheitlichter Abgleich)
-  amountCents  Int
+  amountCents  Int      // Brutto (klärt den OP)
+  feeCents     Int      @default(0) // Provider-/PayPal-Gebühr (separater Aufwand, nicht im OP-Abgleich)
+  currency     String   @default("EUR") // ISO-4217 (PayPal-Fremdwährung)
   bookedAt     DateTime @default(now())
   reference    String? // Verwendungszweck (Banking-Abgleich Kap. 9.4/T-13)
   matched      Boolean  @default(false)
   allocations  PaymentAllocation[]
 
   @@index([source])
+  @@index([matched, source]) // Klärungsliste (matched=false) + Herkunftsfilter (0112)
 }
 
 model PaymentAllocation {
@@ -1355,7 +1359,8 @@ model PaymentAllocation {
   payment    Payment  @relation(fields: [paymentId], references: [id])
   openItemId String
   openItem   OpenItem @relation(fields: [openItemId], references: [id])
-  amountCents Int // Teilzahlung/Überzahlung (Kap. 9.4)
+  amountCents Int // tatsächlich geflossenes Geld (Teil-/Voll-/Überzahlung, Kap. 9.4)
+  skontoCents Int @default(0) // gewährter Skonto, der den OP zusätzlich schließt (Erlösschmälerung)
 
   @@unique([paymentId, openItemId])
 }

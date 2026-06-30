@@ -4,7 +4,7 @@
 // eines Zahlungseingangs (zugeordnet / teilzugeordnet / Klärung) und das OP-Aging.
 
 /** Herkunft eines Zahlungseingangs (spiegelt das Prisma-Enum PaymentSource). */
-export type PaymentSource = "CAMT" | "PROVIDER" | "MANUAL";
+export type PaymentSource = "CAMT" | "PROVIDER" | "MANUAL" | "PAYPAL";
 
 /** Abgleich-Status: voll zugeordnet, teilweise, oder offen (Klärungsliste). */
 export type ReconcileStatus = "ZUGEORDNET" | "TEILZUGEORDNET" | "KLAERUNG";
