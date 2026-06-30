@@ -38,6 +38,11 @@ Internes UI/UX (Tokens, Tabellen, Status/Ampel): [`docs/erp-ui-design.md`](docs/
   `apps/api/src/modules/shop-import/` (Kap. 3.2/8.2 / T-01).
 - **GoBD-Unveränderbarkeit**: finalisierte Belege sind WORM; Korrektur nur via Storno/Gutschrift
   (`packages/audit`, Kap. 10).
+- **Positions-/Kalkulationstiefe je Zeile** (Kap. 4.4): EK-Pflicht bei Inline-Artikelanlage,
+  **EK je Staffelstufe** (`VariantEkTier` — mengenrichtiger EK → Deckungsbeitrag), VK-Mengenstaffel
+  im Angebots-PDF (ab Auftrag feste, aus den Textilpositionen abgeleitete Menge), sowie
+  **Veredler und Platzierung je Position** → gruppierte Fremdvergabe-Unteraufträge + Werkstattblätter
+  (T-15/T-16).
 
 ## Entwicklung
 
@@ -51,6 +56,21 @@ pnpm test                          # inkl. Abnahme-Test T-01
 
 Datenbank: `cp packages/db/.env.example packages/db/.env` und `DATABASE_URL` setzen
 (Postgres, EU-Hosting). Migrationen: `pnpm --filter @texma/db migrate`.
+
+### Vollen Stack lokal durchklicken (Docker)
+
+Echte Postgres + tRPC-API + React-UI mit Demo-Daten — Schritt-für-Schritt-Anleitungen:
+[`docs/lokal-testen.md`](docs/lokal-testen.md) (Windows + Docker Desktop, reine Klick-Anleitung)
+bzw. [`docs/lokal-starten.md`](docs/lokal-starten.md) (Details/CLI). Kurzform:
+
+```bash
+docker compose -f docker-compose.dev.yml up -d   # Postgres 16 (Demo-Zugang aus .env.example)
+cp packages/db/.env.example packages/db/.env      # einmalig (gitignored)
+pnpm install && pnpm build
+pnpm db:setup                                     # prisma generate + migrate:deploy + seed
+pnpm dev:api                                       # API :3000 (fester Demo-ADMIN, kein Login)
+pnpm dev:web                                        # UI  :5173  (zweites Terminal)
+```
 
 ### Differenzierer-Durchstich ohne DB (Demo)
 
@@ -70,9 +90,11 @@ Der Merge-Gate-Plan koppelt die Testfälle T-01…T-14 an die CI (Kap. 15).
 
 ## Status
 
-Phase 0 (Fundament) steht: Monorepo, validiertes Kerndatenmodell, GoBD-Audit, Preislogik,
-WooCommerce-Mapping inkl. T-01-Abnahme. Nächste Schritte (Teil-Make, Leitplanke 1 — Fokus auf
-die Differenzierer): `subproduction`/`stickerei`/`ampel`/`postcalc` als demo-fähiger Durchstich
-an Endpunkte/UI. Standard-Block per Buy/Integrate: Entra ID (OIDC-Verifier vorhanden) statt
-Auth-Eigenbau, Azure Key Vault (`SecretsProvider`-Port), finAPI (`BankingProvider`-Port),
-DATEV + EN-16931 für FiBu/E-Rechnung.
+Fundament + Differenzierer stehen und sind end-to-end durchklickbar: Monorepo, validiertes
+Kerndatenmodell (>110 Migrationen), GoBD-Audit, Preislogik (inkl. Mengenstaffel + EK je
+Staffelstufe), WooCommerce-Mapping (T-01). Die durchgängige Belegkette
+**Anfrage → Angebot → Auftrag → Produktion/Fremdvergabe → Lieferschein → Rechnung** läuft mit
+Beleg-PDFs (pdf-lib), Outbox-Sync, Fast-Lane/Teilrechnungen, DATEV-Buchungsstapel und
+Banking-/Mahnwesen; Playwright-E2E-Walkthroughs decken die Kette ab. Standard-Block per
+Buy/Integrate: Entra ID (OIDC-Verifier vorhanden) statt Auth-Eigenbau, Azure Key Vault
+(`SecretsProvider`-Port), finAPI (`BankingProvider`-Port), DATEV + EN-16931 für FiBu/E-Rechnung.

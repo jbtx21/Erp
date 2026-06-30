@@ -1,4 +1,4 @@
-# Lastenheft ERP-Migration TEXMA Textilveredelung (v3.2)
+# Lastenheft ERP-Migration TEXMA Textilveredelung (v3.5)
 
 Ablösung von CDH Office
 
@@ -6,7 +6,7 @@ Ablösung von CDH Office
 |---|---|
 | **Unternehmen** | TEXMA Textilveredelung GmbH, Herrenberg |
 | **Dokument** | Lastenheft für ERP-Beratung und -Umsetzung (Make-or-Buy) |
-| **Version** | 3.4 — Kap. 38.1 um Darstellungs- und Konsistenzanforderungen ergänzt (kompakte Listenansichten, einheitliche Status-/Ampeldarstellung, konsistente Bedienmuster); zuvor Staffelpreise (Kap. 4.4/31, T-15) (ohne Budget) |
+| **Version** | 3.5 — Kap. 4.4/5 präzisiert: EK je Staffelstufe (Staffel-EK, nicht nur Staffel-VK), EK-Pflicht je Position bei Inline-Artikelanlage, Veredler und Veredelungs-Platzierung je Position (T-16); zuvor 3.4 Kap. 38.1 Darstellungs-/Konsistenzanforderungen, Staffelpreise (Kap. 4.4/31, T-15) (ohne Budget) |
 | **Funktionaler Maßstab** | Xentral (State of the Art / Benchmark) — Zielsystem offen, Make-or-Buy zu prüfen |
 | **Altsystem** | CDH Office (lokal) |
 | **Status** | Zur Angebotsanfrage freigegeben |
@@ -112,9 +112,11 @@ Ablösung von CDH Office
 ## 4.4 Angebotskalkulation
 
 - Jede Veredelungsposition als separate Angebotszeile (nie Pauschalpreis)
-- DB-Kalkulation bereits im Angebot sichtbar
-- Stick-EK: manuell eintragen nach Dienstleister-Rückmeldung → Xentral berechnet VK über hinterlegten Aufschlagsfaktor (1,88)
+- DB-Kalkulation bereits im Angebot sichtbar — setzt voraus, dass **jede Position einen EK trägt**. EK ist daher bei der direkten (Inline-)Artikelanlage aus der Positionsmaske Pflicht; ein EK ohne hinterlegten Lieferanten wird abgelehnt.
+- Stick-EK: manuell eintragen nach Dienstleister-Rückmeldung → System berechnet VK über hinterlegten Aufschlagsfaktor (1,88)
 - Mengenstaffeln (Staffelpreise): mengenabhängige Stückpreise je Position, die mit der Bestellmenge degressiv sinken. Besonders relevant bei der Veredelung, da sich die fixen Einrichtungskosten (Sieb, Stickdatei, DTF-/Transfer-Setup) auf die Stückzahl verteilen. Die Staffel ist je Artikel bzw. je Veredelungsart hinterlegbar und wirkt zusätzlich zur Preisgruppe des Kunden — Annahme: multiplikativ über dem Preisgruppen-Preis, von TEXMA zu bestätigen. Bei Mengenänderung im Angebot oder Auftrag wird der zutreffende Staffelpreis automatisch gezogen.
+- **EK je Staffelstufe:** zu jeder VK-Staffelstufe ist auch ein **eigener EK** hinterlegbar (z. B. Stick-EK 1 Stk = 4,37 €, 10 = 4,02 €, 25 = 3,53 € …). Der zur gewählten Menge passende EK fließt in den Deckungsbeitrag; das Angebots-PDF bildet die Mengenstaffel ab. Ab Auftrag gilt die feste, aus den verknüpften Textilpositionen abgeleitete Menge (kein Staffelband mehr).
+- **Veredler und Platzierung je Position:** jede Position kann einen eigenen externen Veredler (Fremdvergabe) und eine Veredelungs-Platzierung (z. B. Brust, Rücken) tragen; daraus werden die Unteraufträge je Veredler gruppiert und die Werkstattblätter befüllt (vgl. Kap. 5.3).
 - Auftragsänderungen nach Status „In Bearbeitung“: nur über Storno + Neuanlage erlaubt
 
 # 5. Produktionssteuerung
@@ -424,6 +426,7 @@ Die folgenden Testfälle müssen vor Go-Live vollständig bestanden sein. Das Ab
 | T-13 | Banking-Abgleich: Zahlungseingang → offener Posten automatisch ausgeglichen | Rechnung automatisch als bezahlt markiert; nicht zuordenbare Zahlung in Klärungsliste | Hoch |
 | T-14 | Mahnlauf: überfällige Rechnung → automatische Mahnung Stufe 1 | Mahnung korrekt generiert und versendet; Mahnsperre wird respektiert | Hoch |
 | T-15 | Staffelpreis: Bestellmenge überschreitet eine hinterlegte Staffelgrenze | System zieht automatisch den Stückpreis der zutreffenden Mengenstufe; Einrichtungskosten korrekt auf die Menge verteilt; Preisgruppe bleibt kombiniert wirksam | Hoch |
+| T-16 | EK je Staffelstufe + Veredler je Position: Veredelung mit Staffel-EK (1=4,37 €, 10=4,02 €, 25=3,53 € …) und eigenem externen Veredler | Angebots-PDF zeigt die VK-Mengenstaffel; der mengenrichtige EK fließt in den Deckungsbeitrag; ab Auftrag feste (aus den Textilpositionen abgeleitete) Menge; Unterauftrag an den hinterlegten Veredler gruppiert | Hoch |
 
 # 16. Offene Klärungspunkte vor Vertragsabschluss
 
