@@ -36,11 +36,13 @@ bleibt die Logik über Positionen/Repos verstreut (heutiger Zustand).
 ## Phasen (sequenziert, mit Abhängigkeiten)
 
 ### Phase A — Fundament: RLS-Mandantenfähigkeit  *(ADR Hebel 2, quer)*
-**Entscheidung:** **voll umfänglich** (nicht nur dünne Naht). `tenantId` auf allen Kern-Tabellen +
-Postgres-**Row-Level-Security-Policies** + Tenant-Kontext im Request (Session/JWT → `SET app.tenant`).
-**Orthogonal zur Engine** (die ist IO-frei) → parallelisierbar; blockiert Phase B nicht. Aufwand L.
-Reihenfolge: Schema/`tenantId` additiv + Backfill Default-Tenant → Policies aktivieren → Repos/Context
-durchreichen. Handgeschriebene Migration (CLAUDE.md).
+**Entscheidung:** **voll umfänglich** — Design festgeschrieben in **ADR 0004** (Postgres Row-Level-
+Security, `Tenant`-Modell, `tenantId` je Tabelle, Policies `tenantId = current_setting('app.tenant_id')`,
+Tenant-Kontext pro Request via Prisma-Extension `SET LOCAL`). **Phasenweiser, grün-haltender Rollout:**
+Slice 1 Fundament (additiv, nullable, Backfill, Extension — keine erzwingenden Policies) → Slice 2
+Enforcement Wurzeln → Slice 3 Kinder-Tabellen (skriptgeneriert über DMMF) → Slice 4 Härtung
+(eigene App-Rolle ohne BYPASSRLS). Orthogonal zur Domänenlogik (ADR 0003). Aufwand L (mehrere Slices).
+Siehe `docs/adr/0004-rls-mandantenfaehigkeit.md`.
 
 ### Phase B — Veredelung im BESTEHENDEN Modell schärfen  *(revidiert)*
 **Entscheidung (nach Logik-Prüfung):** KEINE separate Kalkulations-Engine. Der Bestand ist bereits
