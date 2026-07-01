@@ -1778,6 +1778,8 @@ function ArticleForm({ a, onClose, onSaved }: { a: ArticleData; onClose: () => v
     brand: str(a.brand), description: str(a.description), materialComposition: str(a.materialComposition),
     ekEur: (a.ekCents == null ? "" : Number(a.ekCents) / 100) as number | "",
     vkEur: (a.vkCents == null ? "" : Number(a.vkCents) / 100) as number | "",
+    einrichtungEkEur: (a.einrichtungEkCents == null ? "" : Number(a.einrichtungEkCents) / 100) as number | "",
+    einrichtungVkEur: (a.einrichtungVkCents == null ? "" : Number(a.einrichtungVkCents) / 100) as number | "",
     careInstructions: str(a.careInstructions), gender: str(a.gender), styleFit: str(a.styleFit),
     hsCode: str(a.hsCode), originCountry: str(a.originCountry),
     minOrderQty: num(a.minOrderQty), maxDiscountPct: num(a.maxDiscountPct), leadTimeDays: num(a.leadTimeDays), gm2: num(a.gm2),
@@ -1800,6 +1802,8 @@ function ArticleForm({ a, onClose, onSaved }: { a: ArticleData; onClose: () => v
         maxDiscountPct: d.maxDiscountPct === "" ? null : Number(d.maxDiscountPct),
         leadTimeDays: d.leadTimeDays === "" ? null : Number(d.leadTimeDays),
         gm2: d.gm2 === "" ? null : Number(d.gm2),
+        einrichtungEkCents: d.einrichtungEkEur === "" ? null : Math.round(Number(d.einrichtungEkEur) * 100),
+        einrichtungVkCents: d.einrichtungVkEur === "" ? null : Math.round(Number(d.einrichtungVkEur) * 100),
       } });
       onSaved();
     } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
@@ -1841,6 +1845,16 @@ function ArticleForm({ a, onClose, onSaved }: { a: ArticleData; onClose: () => v
             <MoneyInput label="VK (€)" withAsterisk value={d.vkEur} onChange={(v) => set({ vkEur: typeof v === "number" ? v : "" })} min={0} />
           </SimpleGrid>
           <Text size="xs" c="dimmed" mt={4} maw={400}>Verbindlicher Basis-EK/-VK des Artikels. Preisgruppen-/Lieferantenpreise je Variante übersteuern; sonst gelten diese Werte.</Text>
+          {Boolean(a.isVeredelung) && (
+            <>
+              <Title order={6} mt="lg">Einrichtungskosten (nur &lt; 10 Teile)</Title>
+              <SimpleGrid cols={2} spacing="md" maw={400} mt="xs">
+                <MoneyInput label="Einrichtung EK (€)" value={d.einrichtungEkEur} onChange={(v) => set({ einrichtungEkEur: typeof v === "number" ? v : "" })} min={0} placeholder="fest, optional" />
+                <MoneyInput label="Einrichtung VK (€)" value={d.einrichtungVkEur} onChange={(v) => set({ einrichtungVkEur: typeof v === "number" ? v : "" })} min={0} placeholder="fest, optional" />
+              </SimpleGrid>
+              <Text size="xs" c="dimmed" mt={4} maw={400}>Feste EK/VK (Film/Sieb/Punch). Fallen einmalig an, wenn die Bestellmenge unter 10 Teilen liegt — im Beleg als eigene Position vorgeschlagen.</Text>
+            </>
+          )}
           <Title order={6} mt="lg">Textil</Title>
           <SimpleGrid cols={3} spacing="md" maw={760} mt="xs">
             <TextInput label="Material" value={d.materialComposition} onChange={(e) => set({ materialComposition: e.currentTarget.value })} placeholder="100% Baumwolle" />

@@ -8,11 +8,16 @@ export interface ArticleRow {
   id: string;
   sku: string;
   name: string;
+  /** Artikeltyp-Diskriminator (STOCK/FINISHING/SERVICE/BOM) — steuert z. B. Einrichtungs-Felder. */
+  type: string;
   variantCount: number;
   description: string;
   /** Pflicht-Basispreise je Artikel (Cent) — Standard, von Varianten-/Preisgruppenpreisen übersteuerbar. */
   ekCents: number;
   vkCents: number;
+  /** Feste Einrichtungskosten der Veredelung (Cent), einmalig unter 10 Teilen — null bei Nicht-Veredelung. */
+  einrichtungEkCents: number | null;
+  einrichtungVkCents: number | null;
   brand: string;
   materialComposition: string;
   careInstructions: string;
@@ -49,6 +54,9 @@ export type ArticlePatch = Partial<
     gm2: number | null;
     styleFit: string;
     bestandsgefuehrt: boolean;
+    // Feste Einrichtungskosten der Veredelung (Cent), einmalig unter 10 Teilen — im Katalog editierbar.
+    einrichtungEkCents: number | null;
+    einrichtungVkCents: number | null;
   }
 >;
 

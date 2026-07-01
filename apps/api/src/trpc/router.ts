@@ -1655,6 +1655,9 @@ export const appRouter = router({
           gender: z.string().optional(), gm2: z.number().int().nonnegative().nullable().optional(), styleFit: z.string().optional(),
           // Bestandsführung als Eigenschaft (Procure-to-Order).
           bestandsgefuehrt: z.boolean().optional(),
+          // Feste Einrichtungskosten der Veredelung (Cent), einmalig unter 10 Teilen — im Katalog editierbar.
+          einrichtungEkCents: z.number().int().nonnegative().nullable().optional(),
+          einrichtungVkCents: z.number().int().nonnegative().nullable().optional(),
         }),
       }))
       .mutation(async ({ input, ctx }) => {

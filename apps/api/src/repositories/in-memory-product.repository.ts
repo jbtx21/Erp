@@ -14,11 +14,11 @@ import type {
 } from "../modules/product/product.service.js";
 
 type StoredArticle = {
-  id: string; sku: string; name: string; description: string; ekCents: number; vkCents: number; supplierId: string | null; brand: string; materialComposition: string; careInstructions: string; hsCode: string; originCountry: string;
+  id: string; sku: string; name: string; type: string; description: string; ekCents: number; vkCents: number; einrichtungEkCents: number | null; einrichtungVkCents: number | null; supplierId: string | null; brand: string; materialComposition: string; careInstructions: string; hsCode: string; originCountry: string;
   itemGroup: string; stockUom: string; isSalesItem: boolean; isPurchaseItem: boolean; minOrderQty: number | null; maxDiscountPct: number | null; leadTimeDays: number | null; gender: string; gm2: number | null; styleFit: string; bestandsgefuehrt: boolean;
 };
 const emptyPim = {
-  description: "", ekCents: 0, vkCents: 0, supplierId: null as string | null, brand: "", materialComposition: "", careInstructions: "", hsCode: "", originCountry: "",
+  type: "STOCK", description: "", ekCents: 0, vkCents: 0, einrichtungEkCents: null as number | null, einrichtungVkCents: null as number | null, supplierId: null as string | null, brand: "", materialComposition: "", careInstructions: "", hsCode: "", originCountry: "",
   itemGroup: "", stockUom: "Stk", isSalesItem: true, isPurchaseItem: true, minOrderQty: null, maxDiscountPct: null, leadTimeDays: null, gender: "", gm2: null, styleFit: "", bestandsgefuehrt: false,
 };
 

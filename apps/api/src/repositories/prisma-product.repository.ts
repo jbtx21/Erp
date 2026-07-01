@@ -31,10 +31,11 @@ export class PrismaProductRepository implements ProductRepository {
   async listArticles(): Promise<Omit<ArticleRow, "completeness">[]> {
     const rows = await prisma.article.findMany({
       orderBy: { sku: "asc" },
-      select: { id: true, sku: true, name: true, ekCents: true, vkCents: true, ...PIM_SELECT, _count: { select: { variants: true } } },
+      select: { id: true, sku: true, name: true, type: true, ekCents: true, vkCents: true, einrichtungEkCents: true, einrichtungVkCents: true, ...PIM_SELECT, _count: { select: { variants: true } } },
     });
     return rows.map((a) => ({
-      id: a.id, sku: a.sku, name: a.name, variantCount: a._count.variants, ekCents: a.ekCents, vkCents: a.vkCents,
+      id: a.id, sku: a.sku, name: a.name, type: a.type, variantCount: a._count.variants, ekCents: a.ekCents, vkCents: a.vkCents,
+      einrichtungEkCents: a.einrichtungEkCents, einrichtungVkCents: a.einrichtungVkCents,
       description: s(a.description), brand: s(a.brand), materialComposition: s(a.materialComposition),
       careInstructions: s(a.careInstructions), hsCode: s(a.hsCode), originCountry: s(a.originCountry),
       itemGroup: s(a.itemGroup), stockUom: a.stockUom, isSalesItem: a.isSalesItem, isPurchaseItem: a.isPurchaseItem,
