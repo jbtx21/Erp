@@ -2764,6 +2764,9 @@ function LogoArticleDialog({ onClose, onCreated, initial, title = "Logo / Verede
   // über die Beschaffung bestellt wird; die Applikation läuft inhouse.
   const [materialLieferantId, setMaterialLieferantId] = useState("");
   const [ek, setEk] = useState<number | "">(initial?.ekEuro ?? "");
+  // Feste Einrichtungskosten (EK+VK), einmalig unter 10 Teilen — nicht gerechnet, manuell erfasst.
+  const [einrichtungEk, setEinrichtungEk] = useState<number | "">("");
+  const [einrichtungVk, setEinrichtungVk] = useState<number | "">("");
   const [tiers, setTiers] = useState<TierRow[]>([{ minMenge: 1, euro: initial?.vkEuro ?? 0, ek: initial?.ekEuro ?? 0 }]);
   const [busy, setBusy] = useState(false); const [err, setErr] = useState<string | null>(null);
   // Aufschlagsfaktor (Kap. 4.4) für die automatische Staffel-VK-Vorbelegung aus dem EK.
@@ -2793,6 +2796,8 @@ function LogoArticleDialog({ onClose, onCreated, initial, title = "Logo / Verede
         ...(inhouse || !veredlerId ? {} : { veredlerId }),
         ...(inhouse && materialLieferantId ? { materialLieferantId } : {}),
         ...(ek !== "" ? { ekCents: Math.round(Number(ek) * 100) } : {}), tiers: cleanTiers,
+        ...(einrichtungEk !== "" ? { einrichtungEkCents: Math.round(Number(einrichtungEk) * 100) } : {}),
+        ...(einrichtungVk !== "" ? { einrichtungVkCents: Math.round(Number(einrichtungVk) * 100) } : {}),
       });
       onCreated({ label: e.label, variantId: e.variantId, unitNetCents: e.unitNetCents });
     } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
@@ -2815,6 +2820,10 @@ function LogoArticleDialog({ onClose, onCreated, initial, title = "Logo / Verede
         {!inhouse && <SupplierPicker label={method === "DRUCK" ? "Siebdruck-Lieferant" : "Veredler"} value={veredlerId} onChange={setVeredlerId} w={240} />}
         {inhouse && <SupplierPicker label="Material-Dienstleister (optional)" value={materialLieferantId} onChange={setMaterialLieferantId} w={240} />}
         <MoneyInput label={inhouse ? (materialLieferantId ? "EK Material je Stück (€)" : "EK/Kosten je Stück (€)") : "EK beim Veredler (€)"} value={ek} onChange={(v) => { const n = typeof v === "number" ? v : ""; setEk(n); if (typeof n === "number") setTiers((ts) => prefillTiers(n, ts)); }} min={0} w={170} placeholder="je Logo abweichend" title="VK je Staffelstufe wird automatisch über den Aufschlagsfaktor vorbelegt (überschreibbar)" />
+      </Group>
+      <Group gap="md" align="end" wrap="wrap" mt="sm">
+        <MoneyInput label="Einrichtung EK (€)" value={einrichtungEk} onChange={(v) => setEinrichtungEk(typeof v === "number" ? v : "")} min={0} w={170} placeholder="fest, optional" title="Fester Einrichtungs-EK (Film/Sieb/Punch) — fällt nur unter 10 Teilen an" />
+        <MoneyInput label="Einrichtung VK (€)" value={einrichtungVk} onChange={(v) => setEinrichtungVk(typeof v === "number" ? v : "")} min={0} w={170} placeholder="fest, optional" title="Fester Einrichtungs-VK (Kundenpreis) — erscheint als eigene Position, nur unter 10 Teilen" />
       </Group>
       <Title order={6} mt="md">Mengenstaffel (EK + VK je Stück)</Title>
       <Text size="xs" c="dimmed" mb={4}>EK je Stufe (Stickerei-VK an uns); VK wird über den Aufschlagsfaktor vorbelegt und ist überschreibbar.</Text>
