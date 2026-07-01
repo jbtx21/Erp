@@ -3,10 +3,11 @@
 // plus die dringendsten Vorgänge zuerst. Reine Leseansicht über ampel.summary/overview.
 // Status nie allein über Farbe (Symbol + Text doppeln, Web Interface Guidelines).
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Alert, Badge, Button, Card, Group, Loader, SimpleGrid, Table, Text, Title } from "@mantine/core";
+import { Alert, Badge, Button, Group, Loader, Paper, SimpleGrid, Table, Text, Title } from "@mantine/core";
 import { trpc } from "./trpc.js";
 import { downloadBase64Pdf, downloadCsv } from "./export.js";
-import { statusColor } from "./theme.js";
+import { statusColor, T } from "./theme.js";
+import { MetricCard, SegmentBar } from "./ui-kit.js";
 
 type AmpelStatus = "GRUEN" | "GELB" | "ROT";
 type ProcessLevel = "ANGEBOT" | "AUFTRAG" | "PRODUKTION" | "VEREDLER";
@@ -28,17 +29,6 @@ const LEVEL_LABEL: Record<ProcessLevel, string> = { ANGEBOT: "Angebote", AUFTRAG
 function AmpelBadge({ s }: { s: AmpelStatus }): JSX.Element {
   const sym = s === "ROT" ? "●" : s === "GELB" ? "▲" : "✓";
   return <Badge color={statusColor(s)} variant="light">{sym} {AMPEL_LABEL[s]}</Badge>;
-}
-
-/** Kennzahl-Karte (große Zahl + Label + optionaler Hinweis). */
-function Kpi({ value, label, color, hint }: { value: number; label: string; color?: string; hint?: string }): JSX.Element {
-  return (
-    <Card padding="sm">
-      <Text size="xs" c="dimmed" tt="uppercase" fw={700} style={{ letterSpacing: 0.4 }}>{label}</Text>
-      <Text fz={30} fw={700} lh={1.1} mt={4} c={color} style={{ fontVariantNumeric: "tabular-nums" }}>{value}</Text>
-      {hint && <Text size="xs" c="dimmed" mt={2}>{hint}</Text>}
-    </Card>
-  );
 }
 
 const fmtRemaining = (r: AmpelRow): string =>
@@ -104,17 +94,32 @@ export function Dashboard(): JSX.Element {
         </Alert>
       )}
 
-      <SimpleGrid cols={{ base: 2, sm: 3, lg: 6 }} mt="md" spacing="sm">
-        <Kpi value={summary.total} label="Vorgänge" />
-        <Kpi value={summary.rot} label="Überfällig" color={summary.rot ? "red.7" : undefined} hint="ROT" />
-        <Kpi value={summary.gelb} label="Knapp" color={summary.gelb ? "amber.7" : undefined} hint="GELB" />
-        <Kpi value={summary.gruen} label="Im Plan" color={summary.gruen ? "teal.7" : undefined} hint="GRÜN" />
-        <Kpi value={summary.overdue} label="Überfällige" hint="echte Fristen" />
-        <Kpi value={summary.kritisch} label="Kritisch" color={summary.kritisch ? "red.7" : undefined} hint="Eskalation 2" />
+      {/* Hero-Verteilung: proportionaler ROT/GELB/GRÜN-Balken über alle Vorgänge. */}
+      <Paper withBorder={false} shadow="sm" radius="lg" p="lg" mt="md">
+        <Group justify="space-between" mb="sm" wrap="nowrap">
+          <Text fw={700} size="sm">Terminlage gesamt</Text>
+          <Text size="xs" c="dimmed">{summary.total} Vorgänge</Text>
+        </Group>
+        <SegmentBar height={14}
+          segments={[
+            { value: summary.rot, color: T.red, label: "Überfällig" },
+            { value: summary.gelb, color: T.amber, label: "Knapp" },
+            { value: summary.gruen, color: T.green, label: "Im Plan" },
+          ]} />
+      </Paper>
+
+      <SimpleGrid cols={{ base: 2, sm: 3, lg: 6 }} mt="md" spacing="md">
+        <MetricCard value={summary.total} label="Vorgänge" accent="navy" icon="Σ" hint="gesamt" minWidth={140} />
+        <MetricCard value={summary.rot} label="Überfällig" accent="danger" icon="⏰" hint="ROT" minWidth={140} />
+        <MetricCard value={summary.gelb} label="Knapp" accent="amber" icon="▲" hint="GELB" minWidth={140} />
+        <MetricCard value={summary.gruen} label="Im Plan" accent="forest" icon="✓" hint="GRÜN" minWidth={140} />
+        <MetricCard value={summary.overdue} label="Überfällige" accent="danger" icon="⚠" hint="echte Fristen" minWidth={140} />
+        <MetricCard value={summary.kritisch} label="Kritisch" accent="danger" icon="🔥" hint="Eskalation 2" minWidth={140} />
       </SimpleGrid>
 
-      <Title order={4} mt="lg">Status je Ebene</Title>
-      <Table mt="xs" withTableBorder verticalSpacing="xs" fz="sm" w="auto">
+      <Paper withBorder={false} shadow="sm" radius="lg" p="lg" mt="lg">
+      <Title order={4}>Status je Ebene</Title>
+      <Table mt="xs" verticalSpacing="xs" fz="sm" w="auto">
         <Table.Thead>
           <Table.Tr>
             <Table.Th>Ebene</Table.Th><Table.Th ta="right">Überfällig</Table.Th>
@@ -135,10 +140,12 @@ export function Dashboard(): JSX.Element {
           })}
         </Table.Tbody>
       </Table>
+      </Paper>
 
-      <Title order={4} mt="lg">Dringlichkeitsliste</Title>
+      <Paper withBorder={false} shadow="sm" radius="lg" p="lg" mt="lg">
+      <Title order={4}>Dringlichkeitsliste</Title>
       {rows.length === 0 ? <Text c="dimmed" mt="sm">Keine terminierten Vorgänge.</Text> : (
-        <Table striped highlightOnHover withTableBorder mt="xs" verticalSpacing="xs" fz="sm">
+        <Table striped highlightOnHover mt="xs" verticalSpacing="xs" fz="sm">
           <Table.Thead>
             <Table.Tr>
               <Table.Th>Ampel</Table.Th><Table.Th>Ebene</Table.Th><Table.Th>Vorgang</Table.Th>
@@ -159,6 +166,7 @@ export function Dashboard(): JSX.Element {
           </Table.Tbody>
         </Table>
       )}
+      </Paper>
     </>
   );
 }

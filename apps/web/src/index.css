@@ -4,9 +4,10 @@
 
 :root {
   color-scheme: light; /* korrekte Kontraste für Scrollbars & Device-UI */
-  --erp-surface: #f2f5fa; /* ruhiger Body-Hintergrund (an Xentral angelehnt) */
-  --erp-border: #e2e5ea;
+  --erp-surface: #f4f5f7; /* ruhiger Premium-Body-Hintergrund (Apple-nah, neutral-kühl) */
+  --erp-border: #e6e8ec; /* dezenter, weicher Rahmen (weniger hart als zuvor) */
   --erp-focus: #34548a; /* Navy-Akzent für den Fokus-Ring */
+  --erp-panel: #ffffff; /* Kartenfläche */
 }
 
 html {
@@ -20,6 +21,22 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+/* Display-Typografie (Apple-nah): große Überschriften mit leicht negativer Laufweite,
+   dadurch wirken Titel „gesetzt" statt technisch. Greift auf die Mantine-Titles. */
+h1,
+h2,
+.mantine-Title-root {
+  letter-spacing: -0.014em;
+}
+
+/* Premium-Feinschliff: interaktive Flächen animieren sanft (Buttons/Karten/NavLinks).
+   Bewegung wird per prefers-reduced-motion unten global entschärft. */
+.mantine-Button-root,
+.mantine-NavLink-root,
+.mantine-ActionIcon-root {
+  transition: background-color 130ms ease, box-shadow 130ms ease, transform 130ms ease, color 130ms ease;
 }
 
 /* Sichtbarer Fokus NUR bei Tastaturnavigation (nicht beim Mausklick).
@@ -77,6 +94,20 @@ table {
 }
 .erp-nav-group:hover {
   background: rgba(14, 28, 54, 0.05);
+}
+
+/* Kennzahl-/Aktionskarten (Vorzeige-Layout): ruhiger Schatten + sanfter Hover-Lift.
+   Nur auf klickbaren Karten (--btn); Bewegung respektiert prefers-reduced-motion (s. u.). */
+.erp-metric {
+  transition: box-shadow 140ms ease, transform 140ms ease, border-color 140ms ease;
+}
+.erp-metric--btn {
+  cursor: pointer;
+}
+.erp-metric--btn:hover {
+  box-shadow: 0 6px 18px rgba(14, 28, 54, 0.1);
+  transform: translateY(-1px);
+  border-color: var(--mantine-color-navy-3);
 }
 
 /* Tabellendichte (Xentral kennt kompakt/komfortabel): umschaltbar via data-density am <html>.

@@ -150,21 +150,38 @@ export const mantineTheme = createTheme({
   fontFamilyMonospace: 'ui-monospace, SFMono-Regular, Menlo, monospace',
   primaryColor: "navy",
   primaryShade: 9,
-  defaultRadius: "sm",
+  // Premium-Layout (Apple-nah): großzügigere Rundungen als Standard.
+  defaultRadius: "md",
+  // Radius-Skala vergrößert (weichere, moderne Kanten) — md wird zur Karten-Basis.
+  radius: { xs: "6px", sm: "8px", md: "10px", lg: "14px", xl: "20px" },
+  // Weiche, abgestufte Schatten (Navy-getönt statt neutral-schwarz) — Tiefe statt harter Rahmen.
+  shadows: {
+    xs: "0 1px 2px rgba(14,28,54,0.06)",
+    sm: "0 2px 8px rgba(14,28,54,0.08)",
+    md: "0 8px 24px rgba(14,28,54,0.10)",
+    lg: "0 16px 40px rgba(14,28,54,0.12)",
+    xl: "0 28px 64px rgba(14,28,54,0.16)",
+  },
   colors: { navy, amber, forest, danger, sky },
   autoContrast: true, // lesbarer Text auf farbigen Flächen (Badges/Buttons)
   focusRing: "auto", // sichtbarer Fokus nur bei Tastatur (:focus-visible)
   cursorType: "pointer", // klickbare Controls fühlen sich klickbar an
   // Kompakte Datenansicht (Kap. 38.1): kleinere Basisschrift als Mantine-Default.
   fontSizes: { xs: "11px", sm: "13px", md: "14px", lg: "16px", xl: "18px" },
-  headings: { fontWeight: "650", sizes: { h1: { fontSize: "20px" }, h2: { fontSize: "18px" }, h3: { fontSize: "16px" }, h4: { fontSize: "14px" } } },
+  // Straffe Überschriften mit leicht negativer Laufweite (Apple-Display-Typo, s. index.css).
+  headings: { fontWeight: "700", sizes: { h1: { fontSize: "22px", lineHeight: "1.25" }, h2: { fontSize: "18px" }, h3: { fontSize: "16px" }, h4: { fontSize: "14px" } } },
   components: {
     Table: { defaultProps: { striped: true, highlightOnHover: true, withTableBorder: true, verticalSpacing: "xs", horizontalSpacing: "sm", fz: "sm" } },
-    Card: { defaultProps: { withBorder: true, radius: "md", shadow: "none" } },
+    // Karten premium: weicher Schatten + große Rundung statt hartem 1px-Rahmen (borderless-Look).
+    Card: { defaultProps: { radius: "lg", shadow: "sm" } },
+    Paper: { defaultProps: { radius: "lg" } },
     Badge: { defaultProps: { variant: "light", radius: "sm", fz: "11px" } },
-    Button: { defaultProps: { radius: "sm" } },
+    Button: { defaultProps: { radius: "md" } },
     Alert: { defaultProps: { radius: "md", variant: "light" } },
-    Tooltip: { defaultProps: { openDelay: 300, withArrow: true } },
+    Modal: { defaultProps: { radius: "lg", shadow: "xl" }, styles: { header: { paddingBottom: 8 } } },
+    Menu: { defaultProps: { shadow: "md", radius: "md" } },
+    Input: { defaultProps: { radius: "md" } },
+    Tooltip: { defaultProps: { openDelay: 300, withArrow: true, radius: "md" } },
     // Deutsche Zahleneingabe: Dezimaltrenner = Komma, Tausender = Punkt (z. B. 1.234,56).
     // Punkt (Ziffernblock/Copy-Paste) wird ZUSÄTZLICH als Dezimaltrenner akzeptiert, damit
     // „9.90" nicht fälschlich als 990 (Tausender) interpretiert wird — sonst 100× falsche Beträge.

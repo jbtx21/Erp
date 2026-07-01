@@ -413,9 +413,10 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<voi
     <>
     {/* Skip-Link (Tastatur/Screenreader): springt die Navigation über, direkt zum Inhalt. */}
     <a href="#main-content" className="skip-link">Zum Inhalt springen</a>
-    <AppShell header={{ height: 52 }} navbar={{ width: navCollapsed ? 64 : 248, breakpoint: "xs" }} padding="md">
-      <AppShell.Header>
-        <Group h="100%" px="md" justify="space-between">
+    <AppShell header={{ height: 56 }} navbar={{ width: navCollapsed ? 64 : 248, breakpoint: "xs" }} padding="lg">
+      {/* Frosted-Glass-Header (Apple-nah): halbtransparent + Backdrop-Blur, dünne Trennlinie. */}
+      <AppShell.Header style={{ background: "rgba(255,255,255,0.72)", backdropFilter: "saturate(180%) blur(14px)", WebkitBackdropFilter: "saturate(180%) blur(14px)", borderBottom: "1px solid var(--erp-border)" }}>
+        <Group h="100%" px="lg" justify="space-between">
           <Group gap="sm">
             <Tooltip label={navCollapsed ? "Menü ausklappen" : "Menü einklappen"} openDelay={300}>
               <ActionIcon variant="subtle" color="navy" size="md" onClick={toggleNav}
@@ -423,8 +424,13 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<voi
                 <SidebarToggleIcon />
               </ActionIcon>
             </Tooltip>
-            <Box w={22} h={22} style={{ borderRadius: 6, background: "var(--erp-focus)" }} aria-hidden />
-            <Title order={4}>TEXMA&nbsp;ERP</Title>
+            {/* App-Icon (Markenblau, gerundet) mit „T" — statt leerer Farbfläche. */}
+            <Box w={26} h={26} aria-hidden style={{
+              borderRadius: 8, display: "grid", placeItems: "center", flexShrink: 0,
+              background: "linear-gradient(145deg,#1A2C4D 0%,#0E1C36 100%)", color: "#fff",
+              fontWeight: 700, fontSize: 15, boxShadow: "0 2px 6px rgba(14,28,54,0.28)",
+            }}>T</Box>
+            <Title order={4} style={{ letterSpacing: "-0.01em" }}>TEXMA&nbsp;ERP</Title>
             <Badge size="sm" color="amber">Demo</Badge>
           </Group>
           <GlobalSearch onSelect={goToHit} />
@@ -438,7 +444,7 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<voi
         </Group>
       </AppShell.Header>
 
-      <AppShell.Navbar p={navCollapsed ? 4 : "xs"} style={{ background: "var(--erp-surface)" }} aria-label="Hauptnavigation">
+      <AppShell.Navbar p={navCollapsed ? 4 : "xs"} style={{ background: "var(--erp-panel)", borderRight: "1px solid var(--erp-border)" }} aria-label="Hauptnavigation">
         <SideNav active={active} collapsed={navCollapsed} onNavigate={setActive} />
       </AppShell.Navbar>
 

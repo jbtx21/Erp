@@ -17,7 +17,7 @@ import { AufschlagsfaktorenSection, LogosStickereiSection, StickereiAusschreibun
 import { euro, datum, numTd, statusMantineColor, prettyStatus } from "./theme.js";
 import { MultiLineChart, BarChart } from "./charts.js";
 import { DocActionMenu, DocFormShell, DocListHeader, StatusDot, StatusBadge, EmptyState, type DocAction } from "./doc-layout.js";
-import { notify, confirmDialog, promptDialog } from "./ui-kit.js";
+import { notify, confirmDialog, promptDialog, MetricCard } from "./ui-kit.js";
 import { OrderAmpelDetail, Auftragsampel } from "./StatusAmpel.js";
 import { useUnsavedGuard } from "./use-unsaved-guard.js";
 import { downloadCsv } from "./export.js";
@@ -5241,6 +5241,14 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
           <Tabs.Tab value="ampel">Ampel</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="liste" pt="md">
+      {loaded && rows.length > 0 && (
+        <Group gap="md" align="stretch" wrap="wrap" mb="md">
+          <MetricCard label="Aufträge" value={rows.length} icon="📦" accent="navy" minWidth={158} />
+          <MetricCard label="Offen" value={rows.filter((r) => !["ABGESCHLOSSEN", "STORNIERT"].includes(String(r.status))).length} icon="⏳" accent="sky" minWidth={158} />
+          <MetricCard label="Versandbereit" value={rows.filter((r) => String(r.status) === "VERSANDBEREIT").length} icon="🚚" accent="forest" minWidth={158} />
+          {canSeeAmpel && <MetricCard label="Ampel-Problem" value={rows.filter((r) => r.ampel === "ROT").length} icon="⚠" accent="danger" hint="rote Auftragsampel" minWidth={158} />}
+        </Group>
+      )}
       {!loaded ? <Group justify="center" py="xl"><Loader size="sm" /></Group> :
       <AutoTable rows={rows} hide={["rawPayload", "companyId", "fastLane", "allowedTransitions", "carrier"]}
         cellRender={(c, v, r) => {
@@ -9872,30 +9880,19 @@ export function HomePage({ userName, onNavigate }: { userName?: string; onNaviga
     })();
   }, []);
 
-  // KPI-Kachel: klickbar UND tastaturbedienbar (role=button, Enter/Space), Signal nicht nur Farbe (P2.7 a11y).
-  const kpi = (label: string, value: number | string, color: string, navKey: string): JSX.Element => (
-    <Box role="button" tabIndex={0} aria-label={`${label}: ${value}`}
-      onClick={() => onNavigate(navKey)}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onNavigate(navKey); } }}
-      style={{ flex: "1 1 180px", minWidth: 160, cursor: "pointer", ...PANEL_STYLE, padding: 16 }}>
-      <Text size="xs" fw={700} tt="uppercase" c="dimmed">{label}</Text>
-      <Text fz={28} fw={700} c={color} mt={4}>{value}</Text>
-    </Box>
+  // KPI-Kachel (Premium-Layout via MetricCard): Akzent-Kachel + große Zahl, klick-/tastaturbar.
+  const KPI_ICON: Record<string, string> = { orders: "📦", quotes: "📝", companies: "🏢", reporting: "📈" };
+  const kpi = (label: string, value: number | string, accent: string, navKey: string): JSX.Element => (
+    <MetricCard label={label} value={value} accent={accent} icon={KPI_ICON[navKey] ?? "•"}
+      minWidth={180} onClick={() => onNavigate(navKey)} />
   );
-  // Monatskennzahl mit Vormonats-Delta (↑/↓ + Betrag), klickbar/tastaturbedienbar.
+  // Monatskennzahl mit Vormonats-Delta (↑/↓ + Betrag) — Trend-Zeile in der MetricCard.
   const trendKpi = (label: string, value: string, delta: number, fmt: (v: number) => string, navKey: string): JSX.Element => {
-    const up = delta > 0, flat = delta === 0;
-    const arrow = flat ? "→" : up ? "↑" : "↓";
-    const col = flat ? "dimmed" : up ? "teal.7" : "red.7";
+    const dir = delta > 0 ? "up" : delta < 0 ? "down" : "flat";
+    const text = dir === "flat" ? "ggü. Vormonat" : `${fmt(Math.abs(delta))} ggü. Vormonat`;
     return (
-      <Box role="button" tabIndex={0} aria-label={`${label}: ${value}, ${flat ? "unverändert" : `${up ? "plus" : "minus"} ${fmt(Math.abs(delta))} zum Vormonat`}`}
-        onClick={() => onNavigate(navKey)}
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onNavigate(navKey); } }}
-        style={{ flex: "1 1 180px", minWidth: 160, cursor: "pointer", ...PANEL_STYLE, padding: 16 }}>
-        <Text size="xs" fw={700} tt="uppercase" c="dimmed">{label}</Text>
-        <Text fz={24} fw={700} mt={4}>{value}</Text>
-        <Text size="xs" c={col} mt={2}>{arrow} {flat ? "ggü. Vormonat" : `${fmt(Math.abs(delta))} ggü. Vormonat`}</Text>
-      </Box>
+      <MetricCard label={label} value={value} accent="navy" icon={KPI_ICON[navKey] ?? "📈"}
+        minWidth={180} trend={{ text, dir }} onClick={() => onNavigate(navKey)} />
     );
   };
   // Quick-View-Panel (Kalender/Aufgaben/Überfällig): kompakte Top-5-Liste + „Alle"-Sprung.

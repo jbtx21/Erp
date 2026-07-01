@@ -7,7 +7,7 @@
 //  - Dialoge: confirmDialog(...) / promptDialog(...) — Promise-basiert statt Browser-Popups.
 //  - <Panel>: Standard-umrandete Box mit Token-Radius statt wiederholtem Inline-Style.
 
-import { Alert, Box, Button, Group, Modal, Stack, Text, TextInput, type BoxProps } from "@mantine/core";
+import { Alert, Box, Button, Group, Modal, Paper, Stack, Text, TextInput, type BoxProps } from "@mantine/core";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
@@ -115,6 +115,98 @@ export function ToastProvider({ children }: { children: ReactNode }): JSX.Elemen
         document.body
       )}
     </ToastCtx.Provider>
+  );
+}
+
+// ── Kennzahl-Karte (Vorzeige-Layout) ─────────────────────────────────────────
+/** Trend-Richtung einer Kennzahl (Vormonats-Delta): hoch=positiv (teal), runter=negativ (rot). */
+export interface MetricTrend { text: string; dir: "up" | "down" | "flat" }
+
+/**
+ * Moderne KPI-Karte: Akzent-Kachel (farbiges Icon-Feld) + Label + große Zahl + optionaler
+ * Trend/Hinweis. Vereinheitlicht die bislang je Seite nachgebauten KPI-Kacheln (Start,
+ * Termin-Ampel, Auftragsliste). `onClick` macht sie klick- UND tastaturbedienbar
+ * (role=button, Enter/Space); der Hover-Lift kommt aus `.erp-metric` (index.css).
+ * `accent` = Mantine-Farbname (navy/sky/forest/amber/danger/teal/blue …).
+ */
+export function MetricCard({
+  label, value, icon, accent = "navy", hint, trend, onClick, ariaLabel, minWidth = 168,
+}: {
+  label: string;
+  value: ReactNode;
+  icon?: ReactNode;
+  accent?: string;
+  hint?: ReactNode;
+  trend?: MetricTrend;
+  onClick?: () => void;
+  ariaLabel?: string;
+  minWidth?: number;
+}): JSX.Element {
+  const clickable = Boolean(onClick);
+  const trendColor = trend ? (trend.dir === "up" ? "teal.7" : trend.dir === "down" ? "red.7" : "dimmed") : undefined;
+  const trendArrow = trend ? (trend.dir === "up" ? "↑" : trend.dir === "down" ? "↓" : "→") : "";
+  const plainVal = typeof value === "string" || typeof value === "number" ? String(value) : "";
+  return (
+    <Paper withBorder radius="md" p="md"
+      className={`erp-metric${clickable ? " erp-metric--btn" : ""}`}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      aria-label={ariaLabel ?? (clickable ? `${label}: ${plainVal}` : undefined)}
+      onClick={onClick}
+      onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.(); } } : undefined}
+      style={{ flex: `1 1 ${minWidth}px`, minWidth }}>
+      <Group gap="sm" wrap="nowrap" align="flex-start">
+        {icon != null && (
+          <Box aria-hidden style={{
+            flexShrink: 0, width: 38, height: 38, borderRadius: 10, display: "grid", placeItems: "center",
+            fontSize: 18, lineHeight: 1,
+            background: `var(--mantine-color-${accent}-1)`, color: `var(--mantine-color-${accent}-7)`,
+          }}>{icon}</Box>
+        )}
+        <Box style={{ minWidth: 0 }}>
+          <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: 0.4 }}>{label}</Text>
+          <Text fz={26} fw={700} lh={1.15} mt={2} style={{ fontVariantNumeric: "tabular-nums" }}>{value}</Text>
+          {trend
+            ? <Text size="xs" c={trendColor} mt={2}>{trendArrow} {trend.text}</Text>
+            : hint != null ? <Text size="xs" c="dimmed" mt={2}>{hint}</Text> : null}
+        </Box>
+      </Group>
+    </Paper>
+  );
+}
+
+// ── Verteilungsbalken (Ampel/Anteile) ────────────────────────────────────────
+/**
+ * Proportionaler Statusbalken (z. B. ROT/GELB/GRÜN) + Legende mit Zählwerten. Nullsumme
+ * rendert einen ruhigen Leerbalken (kein Sprung im Layout). `role="img"` + aria-label
+ * fasst die Verteilung für Screenreader zusammen (Signal nicht allein über Farbe).
+ */
+export function SegmentBar({ segments, height = 10, legend = true }: {
+  segments: ReadonlyArray<{ value: number; color: string; label: string }>;
+  height?: number;
+  legend?: boolean;
+}): JSX.Element {
+  const total = segments.reduce((s, x) => s + x.value, 0);
+  const aria = segments.map((s) => `${s.label}: ${s.value}`).join(", ");
+  return (
+    <Box>
+      <Box role="img" aria-label={aria}
+        style={{ display: "flex", height, borderRadius: 999, overflow: "hidden", background: "var(--mantine-color-gray-2)" }}>
+        {total > 0 && segments.map((s) => (s.value > 0
+          ? <Box key={s.label} style={{ width: `${(s.value / total) * 100}%`, background: s.color }} title={`${s.label}: ${s.value}`} />
+          : null))}
+      </Box>
+      {legend && (
+        <Group gap="md" mt={8} wrap="wrap">
+          {segments.map((s) => (
+            <Group key={s.label} gap={6} wrap="nowrap">
+              <Box aria-hidden style={{ width: 9, height: 9, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
+              <Text size="xs" c="dimmed">{s.label} <Text span fw={700} style={{ fontVariantNumeric: "tabular-nums" }}>{s.value}</Text></Text>
+            </Group>
+          ))}
+        </Group>
+      )}
+    </Box>
   );
 }
 
