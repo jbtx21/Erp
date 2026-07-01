@@ -8,6 +8,7 @@ import { orderStatusMachine, type OrderStatus } from "@texma/shared/order";
 import { validateVatId } from "@texma/shared/vat";
 import { buildTrackingUrl, type Carrier } from "@texma/shared/tracking";
 import { resolveMarkupFactor, DEFAULT_MARKUP_CONFIG, type MarkupConfig } from "@texma/shared/markup";
+import { EINRICHTUNG_SCHWELLE_STUECK } from "@texma/shared/veredelung-einrichtung";
 import { computePositionTotals } from "@texma/shared/positions-model";
 import { PRICE_GROUPS, PRICE_GROUP_KINDS, priceGroupLabel, type PriceGroupKind } from "@texma/shared/pricing";
 import { konto, kontenliste, KONTENRAHMEN_LABEL, type Kontenrahmen } from "@texma/shared/kontenrahmen";
@@ -2751,7 +2752,7 @@ interface TierRow { minMenge: number; euro: number; ek: number }
 // `initial` befüllt den Dialog aus einer frei erfassten Veredelungsposition vor (Inline-
 // Katalogspeicherung mitten im Walkthrough): Bezeichnung, SKU, Platzierung, Veredler, EK
 // werden übernommen, der/die Anwender:in ergänzt nur noch fehlende Stammdaten und speichert.
-function LogoArticleDialog({ onClose, onCreated, initial, title = "Logo / Veredelung anlegen" }: { onClose: () => void; onCreated: (e: { label: string; variantId: string; unitNetCents: number }) => void; initial?: { name?: string; sku?: string; method?: "STICK" | "DRUCK" | "DRUCK_DIGITAL" | "TRANSFER"; placements?: string[]; veredlerId?: string; ekEuro?: number; vkEuro?: number }; title?: string }): JSX.Element {
+function LogoArticleDialog({ onClose, onCreated, initial, title = "Logo / Veredelung anlegen" }: { onClose: () => void; onCreated: (e: { label: string; variantId: string; unitNetCents: number; einrichtungEkCents?: number | null; einrichtungVkCents?: number | null }) => void; initial?: { name?: string; sku?: string; method?: "STICK" | "DRUCK" | "DRUCK_DIGITAL" | "TRANSFER"; placements?: string[]; veredlerId?: string; ekEuro?: number; vkEuro?: number }; title?: string }): JSX.Element {
   const [name, setName] = useState(initial?.name ?? ""); const [sku, setSku] = useState(initial?.sku ?? "");
   const [method, setMethod] = useState<"STICK" | "DRUCK" | "DRUCK_DIGITAL" | "TRANSFER">(initial?.method ?? "STICK");
   // Mehrere Platzierungen je Logo (z. B. Siebdruck vorne + hinten) → je eine Veredelungs-Spezifikation.
@@ -2799,7 +2800,11 @@ function LogoArticleDialog({ onClose, onCreated, initial, title = "Logo / Verede
         ...(einrichtungEk !== "" ? { einrichtungEkCents: Math.round(Number(einrichtungEk) * 100) } : {}),
         ...(einrichtungVk !== "" ? { einrichtungVkCents: Math.round(Number(einrichtungVk) * 100) } : {}),
       });
-      onCreated({ label: e.label, variantId: e.variantId, unitNetCents: e.unitNetCents });
+      onCreated({
+        label: e.label, variantId: e.variantId, unitNetCents: e.unitNetCents,
+        einrichtungEkCents: einrichtungEk !== "" ? Math.round(Number(einrichtungEk) * 100) : null,
+        einrichtungVkCents: einrichtungVk !== "" ? Math.round(Number(einrichtungVk) * 100) : null,
+      });
     } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
   };
 
@@ -3084,6 +3089,8 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
   const [rabattOpen, setRabattOpen] = useState(false);
   const [bulkRabatt, setBulkRabatt] = useState<number | "">("");
   const [refreshing, setRefreshing] = useState(false);
+  // Einrichtungskosten-Vorschlag (feste EK/VK, nur < 10 Teile): 1-Klick fügt eine eigene Position an.
+  const [einrichtungVorschlag, setEinrichtungVorschlag] = useState<{ label: string; ekEuro: number | null; vkEuro: number } | null>(null);
   // Berechnete Zwischen-/Gruppensummen (eine Quelle: computePositionTotals, USt-je-Satz-konsistent).
   const posTotals = useMemo(() => computePositionTotals(
     lines.map((l) => ({ lineType: l.lineType, qty: l.qty, unitNetCents: Math.round(effUnitEuro(l) * 100), isAlternative: l.isAlternative, description: l.description })),
@@ -3146,13 +3153,23 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
     const fresh = valid.map((p, k) => ({ description: p.label, qty: p.qty, euro: prices[k]?.euro ?? baseEuro, ...(prices[k]?.ekEuro !== undefined ? { ekEuro: prices[k]!.ekEuro } : {}), kind: "TEXTIL" as PositionKind, variantId: p.variantId, articleNumber: p.sku, articleName, articleId }));
     if (fresh.length > 0) onChange([...lines, ...fresh]);
   };
-  const appendVeredelung = (e: { label: string; variantId: string; unitNetCents: number }): void => {
+  const appendVeredelung = (e: { label: string; variantId: string; unitNetCents: number; einrichtungEkCents?: number | null; einrichtungVkCents?: number | null }): void => {
     // Bezug auf die erste ECHTE Textilposition (nicht auf eine leere Erfassungszeile) — Fix Geister-Bezug.
     const textilIdx = lines.findIndex((l) => l.kind === "TEXTIL" && lineHasContent(l));
     const textilQty = textilIdx >= 0 ? lines[textilIdx]!.qty : 1;
     onChange([...lines, { description: e.label, qty: textilQty, euro: e.unitNetCents / 100, kind: "VEREDELUNG", variantId: e.variantId, motiv: e.label, ...(textilIdx >= 0 ? { bezugPositionen: [textilIdx + 1] } : {}) }]);
     // Veredelungsdetails (Motiv/Größe/Farbton/Platzierungsdetails/Sonstiges) direkt sichtbar machen.
     setDetailFor(lines.length);
+    // Feste Einrichtung (nur < 10 Teile): 1-Klick-Vorschlag, fügt eine eigene Position an.
+    if (e.einrichtungVkCents != null && textilQty < EINRICHTUNG_SCHWELLE_STUECK) {
+      setEinrichtungVorschlag({ label: e.label, ekEuro: e.einrichtungEkCents != null ? e.einrichtungEkCents / 100 : null, vkEuro: e.einrichtungVkCents / 100 });
+    }
+  };
+  const addEinrichtungPosition = (): void => {
+    const v = einrichtungVorschlag;
+    if (!v) return;
+    addLine({ description: `Einrichtung ${v.label}`, qty: 1, euro: v.vkEuro, ...(v.ekEuro != null ? { ekEuro: v.ekEuro } : {}), kind: "SONSTIGE" });
+    setEinrichtungVorschlag(null);
   };
   const pickVariant = async (i: number, l: EditorLine, variantId: string): Promise<void> => {
     const v = catalog.find((c) => c.variantId === variantId);
@@ -3235,6 +3252,14 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
         </Popover>
         {companyId && <Button size="xs" variant="default" loading={refreshing} onClick={() => { setRefreshing(true); void refreshPrices().finally(() => setRefreshing(false)); }} title="Preise aus dem Artikelstamm neu laden">↻ Positionen aktualisieren</Button>}
       </Group>
+      {einrichtungVorschlag && (
+        <Alert color="blue" mt="xs" withCloseButton onClose={() => setEinrichtungVorschlag(null)} title="Einrichtungskosten (< 10 Teile)">
+          <Group justify="space-between" wrap="nowrap" gap="sm">
+            <Text size="sm">Für „{einrichtungVorschlag.label}" fallen unter 10 Teilen feste Einrichtungskosten an ({einrichtungVorschlag.vkEuro.toFixed(2)} €). Als eigene Position hinzufügen?</Text>
+            <Button size="xs" onClick={addEinrichtungPosition} style={{ flexShrink: 0 }}>＋ Einrichtung als Position</Button>
+          </Group>
+        </Alert>
+      )}
       {logoOpen && <LogoArticleDialog onClose={() => setLogoOpen(false)} onCreated={(e) => { appendVeredelung(e); setLogoOpen(false); }} />}
       {/* Inline-Katalogspeicherung einer frei erfassten VEREDELUNG-Position: voller Logo-Dialog,
           aus der Zeile vorbefüllt; nach Anlage wird DIESELBE Zeile gebunden (kein neuer Eintrag). */}

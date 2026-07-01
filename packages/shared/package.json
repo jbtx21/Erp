@@ -63,6 +63,10 @@
       "types": "./dist/veredelungsauftrag.d.ts",
       "import": "./dist/veredelungsauftrag.js"
     },
+    "./veredelung-einrichtung": {
+      "types": "./dist/veredelung-einrichtung.d.ts",
+      "import": "./dist/veredelung-einrichtung.js"
+    },
     "./garment-assets": {
       "types": "./dist/garment-assets.d.ts",
       "import": "./dist/garment-assets.js"
