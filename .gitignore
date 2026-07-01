@@ -22,3 +22,4 @@ dump.rdb
 
 # GoBD-WORM-Archiv (Laufzeit)
 /var/
+/e2e-artifacts/
