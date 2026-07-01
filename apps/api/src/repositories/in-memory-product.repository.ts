@@ -124,8 +124,21 @@ export class InMemoryProductRepository implements ProductRepository {
   }
 
   async veredelungCatalog(): Promise<import("../modules/product/product.service.js").VeredelungCatalogEntry[]> {
-    // In-Memory-Double modelliert keinen FINISHING-Artikeltyp — Veredelungskatalog bleibt leer.
-    return [];
+    // Parität zur Prisma-Implementierung: FINISHING-Artikel inkl. Platzierungen + Einrichtungskosten.
+    return [...this.articles.values()]
+      .filter((a) => a.type === "FINISHING")
+      .map((a) => {
+        const v = [...this.variants.values()].find((x) => x.articleId === a.id);
+        const meta = this.veredelungArticles.get(a.id);
+        const vk = meta?.tiers[0]?.vkCents ?? 0;
+        return {
+          variantId: v?.id ?? "", articleId: a.id, articleName: a.name, sku: a.sku, description: a.description,
+          label: `${a.name} (${a.sku})`, unitNetCents: vk, vkCents: vk, ekCents: meta?.ekCents ?? 0, isBundle: false,
+          placements: meta?.placements ?? [],
+          einrichtungEkCents: a.einrichtungEkCents, einrichtungVkCents: a.einrichtungVkCents,
+        };
+      })
+      .sort((a, b) => a.sku.localeCompare(b.sku));
   }
 
   async listComponents(variantId: string): Promise<ComponentRow[]> {
@@ -161,7 +174,8 @@ export class InMemoryProductRepository implements ProductRepository {
 
   async createVeredelungArticle(input: { name: string; sku: string; method: "STICK" | "DRUCK" | "DRUCK_DIGITAL" | "TRANSFER"; placements: string[]; veredlerId: string | null; materialSupplierId: string | null; ekCents: number | null; tiers: VeredelungTier[]; einrichtungEkCents: number | null; einrichtungVkCents: number | null }): Promise<CatalogEntry> {
     const articleId = `art_${++this.seq}`;
-    this.articles.set(articleId, { id: articleId, sku: input.sku, name: input.name, ...emptyPim });
+    // Parität zur Prisma-Implementierung: type-Diskriminator FINISHING + Einrichtungskosten persistieren.
+    this.articles.set(articleId, { id: articleId, sku: input.sku, name: input.name, ...emptyPim, type: "FINISHING", einrichtungEkCents: input.einrichtungEkCents, einrichtungVkCents: input.einrichtungVkCents });
     const variantId = `var_${++this.seq}`;
     this.variants.set(variantId, { id: variantId, articleId, sku: input.sku, attributes: [], isBundle: false, bestandsgefuehrtOverride: null });
     this.veredelungArticles.set(articleId, { veredlerId: input.veredlerId, materialSupplierId: input.materialSupplierId, ekCents: input.ekCents, tiers: input.tiers, placements: input.placements });

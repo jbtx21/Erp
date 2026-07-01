@@ -229,4 +229,58 @@ describe("ProductService — Veredelungs-/Logo-Artikel (Kap. 5.4/11)", () => {
     await expect(svc.createVeredelungArticle({ name: "Logo", sku: "L-2", method: "STICK", veredlerId: "sup_unknown" }))
       .rejects.toBeInstanceOf(ProductError);
   });
+
+  // Feste Einrichtungskosten (EK+VK), einmalig unter 10 Teilen — Persistenz + Regel-Durchreichung.
+  it("persistiert feste Einrichtungskosten (EK+VK) und den FINISHING-Typ am Artikel", async () => {
+    const { svc, repo } = await setup();
+    repo.addSupplier("sup_stick");
+    const entry = await svc.createVeredelungArticle({
+      name: "Logo mit Einrichtung", sku: "LOGO-EINR", method: "STICK", veredlerId: "sup_stick",
+      ekCents: 250, tiers: [{ minMenge: 1, vkCents: 600 }],
+      einrichtungEkCents: 3000, einrichtungVkCents: 4500,
+    });
+    const row = (await svc.listArticles()).find((r) => r.id === entry.articleId)!;
+    expect(row.type).toBe("FINISHING");
+    expect(row.einrichtungEkCents).toBe(3000);
+    expect(row.einrichtungVkCents).toBe(4500);
+  });
+
+  it("liefert Einrichtungskosten + Platzierungen im Veredelungskatalog (Beleg-Vorschlag)", async () => {
+    const { svc, repo } = await setup();
+    repo.addSupplier("sup_stick");
+    const entry = await svc.createVeredelungArticle({
+      name: "Logo Katalog", sku: "LOGO-KAT", method: "STICK", veredlerId: "sup_stick",
+      placements: ["Brust links"], tiers: [{ minMenge: 1, vkCents: 600 }],
+      einrichtungEkCents: 2000, einrichtungVkCents: 3500,
+    });
+    const cat = await svc.veredelungCatalog();
+    const hit = cat.find((c) => c.articleId === entry.articleId)!;
+    expect(hit.einrichtungEkCents).toBe(2000);
+    expect(hit.einrichtungVkCents).toBe(3500);
+    expect(hit.placements).toEqual(["Brust links"]);
+  });
+
+  it("weist negative Einrichtungskosten ab (EK wie VK)", async () => {
+    const { svc, repo } = await setup();
+    repo.addSupplier("sup_stick");
+    await expect(svc.createVeredelungArticle({
+      name: "L", sku: "L-NEG-EK", method: "STICK", veredlerId: "sup_stick", einrichtungEkCents: -1,
+    })).rejects.toBeInstanceOf(ProductError);
+    await expect(svc.createVeredelungArticle({
+      name: "L", sku: "L-NEG-VK", method: "STICK", veredlerId: "sup_stick", einrichtungVkCents: -1,
+    })).rejects.toBeInstanceOf(ProductError);
+  });
+
+  it("erlaubt das Nachpflegen der Einrichtungskosten über updateArticle (Katalog editierbar)", async () => {
+    const { svc, repo } = await setup();
+    repo.addSupplier("sup_stick");
+    const entry = await svc.createVeredelungArticle({
+      name: "Logo Update", sku: "LOGO-UPD", method: "STICK", veredlerId: "sup_stick",
+      einrichtungEkCents: 1000, einrichtungVkCents: 2000,
+    });
+    await svc.updateArticle(entry.articleId, { einrichtungEkCents: 1500, einrichtungVkCents: null });
+    const row = (await svc.listArticles()).find((r) => r.id === entry.articleId)!;
+    expect(row.einrichtungEkCents).toBe(1500);
+    expect(row.einrichtungVkCents).toBeNull();
+  });
 });
