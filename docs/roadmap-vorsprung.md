@@ -36,10 +36,11 @@ bleibt die Logik über Positionen/Repos verstreut (heutiger Zustand).
 ## Phasen (sequenziert, mit Abhängigkeiten)
 
 ### Phase A — Fundament: RLS-Mandantenfähigkeit  *(ADR Hebel 2, quer)*
-**Status:** „im Detail noch anschauen" (offen). **Blockiert nichts hart**, aber je später, desto
-teurer nachzurüsten (Tenant-Spalte + Policies je Kern-Tabelle, handgeschriebene Migration).
-→ **Entscheidung nötig:** jetzt als dünne `tenantId`-Naht mitziehen oder bewusst später. Empfehlung:
-Naht (Spalte + Default-Tenant) jetzt additiv, Policies später. Aufwand M.
+**Entscheidung:** **voll umfänglich** (nicht nur dünne Naht). `tenantId` auf allen Kern-Tabellen +
+Postgres-**Row-Level-Security-Policies** + Tenant-Kontext im Request (Session/JWT → `SET app.tenant`).
+**Orthogonal zur Engine** (die ist IO-frei) → parallelisierbar; blockiert Phase B nicht. Aufwand L.
+Reihenfolge: Schema/`tenantId` additiv + Backfill Default-Tenant → Policies aktivieren → Repos/Context
+durchreichen. Handgeschriebene Migration (CLAUDE.md).
 
 ### Phase B — Kern: Veredelungs-Kalkulations-Engine  *(ADR Hebel 1)*  **← Start hier**
 Reine, IO-freie Domäne in `packages/` (Muster wie `packages/shared`), testbar ohne DB.
