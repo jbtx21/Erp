@@ -881,8 +881,8 @@ export function SuppliersPage({ focusId }: { focusId?: string } = {}): JSX.Eleme
       <Group mt="xs" gap="xs" align="end">
         <SupplierPicker value={sid} onChange={(id) => { setSid(id); setApplied(id); }} label="Lieferant" w={260} />
       </Group>
-      <ListPage key={applied} module="Einkauf / Lieferanten" title={`Katalog · ${applied}`}
-        load={() => trpc.suppliers.list.query({ supplierId: applied, limit: 100 }) as Promise<Row[]>} />
+      <ListPage key={applied} module="Einkauf / Lieferanten" title={`Katalog · ${applied || "—"}`}
+        load={() => (applied ? (trpc.suppliers.list.query({ supplierId: applied, limit: 100 }) as Promise<Row[]>) : Promise.resolve([] as Row[]))} />
     </>
   );
 }
