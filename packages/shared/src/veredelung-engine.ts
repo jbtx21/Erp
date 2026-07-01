@@ -93,10 +93,14 @@ export function kalkuliereVeredelung(input: VeredelungKalkInput): VeredelungKalk
       `Keine EK-Staffel für Menge ${input.menge} (Veredelung ${input.methode}) — Pflegefehler (T-08).`
     );
   }
+  if (stufe.ekCents < 0) throw new Error("EK je Stück darf nicht negativ sein.");
   const ekStueckCents = stufe.ekCents;
   const vkStueckCents = roundCents(ekStueckCents * input.factor);
 
   // Einrichtung: einmalig, nur unter der Schwelle (TEXMA: < 10 Teile).
+  if (input.einrichtung != null && input.einrichtung.ekCents < 0) {
+    throw new Error("Einrichtungs-EK darf nicht negativ sein.");
+  }
   const schwelle = input.einrichtung?.schwelleStueck ?? EINRICHTUNG_SCHWELLE_STUECK;
   const einrichtungBerechnet = input.einrichtung != null && input.menge < schwelle;
   const einrichtungEkCents = einrichtungBerechnet ? input.einrichtung!.ekCents : 0;

@@ -89,4 +89,13 @@ describe("kalkuliereVeredelung — VK = EK-je-Stück(Menge) × Aufschlag", () =>
     expect(() => kalkuliereVeredelung({ methode: "STICK", ekStaffel: stickEk, menge: 10, factor: 0 })).toThrow();
     expect(() => kalkuliereVeredelung({ methode: "STICK", ekStaffel: stickEk, menge: -1, factor: 1.5 })).toThrow();
   });
+
+  it("wirft bei negativem Stück-EK und negativer Einrichtung (Robustheit)", () => {
+    expect(() =>
+      kalkuliereVeredelung({ methode: "STICK", ekStaffel: [{ minMenge: 1, ekCents: -1 }], menge: 5, factor: 1.5 })
+    ).toThrow(/negativ/);
+    expect(() =>
+      kalkuliereVeredelung({ methode: "SIEBDRUCK", ekStaffel: siebEk, menge: 3, factor: 1.5, einrichtung: { ekCents: -1 } })
+    ).toThrow(/negativ/);
+  });
 });
