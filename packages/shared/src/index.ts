@@ -25,7 +25,6 @@ export * from "./connectors.js";
 export * from "./pricing.js";
 export * from "./markup.js";
 export * from "./supplier-markup.js";
-export * from "./veredelung-engine.js";
 export * from "./pain001.js";
 export * from "./woocommerce.js";
 export * from "./variants.js";

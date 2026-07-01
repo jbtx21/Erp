@@ -15,7 +15,7 @@ Nabe; alle anderen Stränge docken an ihren In-/Outputs an. Nach jeder Scheibe g
  │ Aufschlag     │        │ MarkupRule/      │  Menge └────────┬─────────┘      └──────┬───────┘
  │ (MarkupRule)  │──────► │ selectStaffel    │                 │                       │
  └───────────────┘        └──────────────────┘                 ▼                       ▼
-        ▲  KALKULATIONS-ENGINE (packages/veredelung-engine)   Belegversion. (3.2)   Plantafel (Hebel 4)
+        ▲  PREIS-PFAD IM BESTAND (PriceGroupPriceTier + VariantEkTier)  Belegversion.(3.2) Plantafel(4)
         │                                                     Folgebeleg (3.5)      Outbox→Sync
    RLS-Mandant (Fundament, quer zu allem)
 ```
@@ -42,16 +42,19 @@ Postgres-**Row-Level-Security-Policies** + Tenant-Kontext im Request (Session/JW
 Reihenfolge: Schema/`tenantId` additiv + Backfill Default-Tenant → Policies aktivieren → Repos/Context
 durchreichen. Handgeschriebene Migration (CLAUDE.md).
 
-### Phase B — Kern: Veredelungs-Kalkulations-Engine  *(ADR Hebel 1)*  **← Start hier**
-Reine, IO-freie Domäne in `packages/` (Muster wie `packages/shared`), testbar ohne DB.
-- **B1** `packages/veredelung-engine` anlegen; Eingabe-DTO (Rohtextil-EK, Stick-EK-Staffel je
-  Stickerei, Menge, Aufschlag-Kontext) + Ausgabe (VK/EK/DB je Menge). Reiner Resolver, baut auf
-  `selectStaffel`/`resolveSupplierVk`/`MarkupRule` auf. **Unit-Tests zuerst.**
-- **B2** Regel „Einrichtungskosten < 10 Teile" deklarativ + Ausschuss-Toleranzfaktor (optional).
-- **B3** Bestehende Aufrufer (`pricing.service`, `stickerei.service`, Positions-Durchschlag)
-  auf die Engine umstellen — Strangler: alt grün halten, dann umlegen.
-- **B4** Stammdaten-Pflege-UX „EK der 3 Stickereien" schärfen (im Preis-Center, existiert).
-**Abhängig von:** nichts Neuem. **Liefert an:** Belege, Nachkalkulation, Fremdvergabe. Aufwand M.
+### Phase B — Veredelung im BESTEHENDEN Modell schärfen  *(revidiert)*
+**Entscheidung (nach Logik-Prüfung):** KEINE separate Kalkulations-Engine. Der Bestand ist bereits
+EIN Pfad: Veredelung (Stick UND Druck) wird als Katalog-Artikel gespeichert — VK-Staffel als
+`PriceGroupPriceTier` (STANDARD), EK-Staffel als `VariantEkTier`, EK extern als `SupplierItem`.
+Beleg-Preis über `buildStaffelLadder`/`resolveBasePrice`. Eine separate `EK×Faktor`-Engine wäre
+Fremd-Logik gewesen (VK wird gespeichert, nicht zur Laufzeit gerechnet) → **zurückgenommen**.
+Nur zwei echte Lücken werden im Bestand geschlossen:
+- **B-Fix1** `resolveBasePrice`/`pricing.resolve`: STANDARD-Staffel als Basis für ALLE Kunden
+  (Veredelung kennt keine Kundengruppen). Heute greift die Staffel nur im Ladder, nicht im
+  Einzelpreis-Resolver → Nicht-STANDARD-Kunden bekämen im Hint den falschen Preis.
+- **B-Fix2** Regel „Einrichtungskosten nur < 10 Teile": Feld `einrichtungCents` am Veredelungs-
+  artikel + Beleg-Regel (Menge < 10 → Einrichtung als Zuschlag/Position). Kein neues Rechenwerk.
+**Abhängig von:** nichts Neuem. **Liefert an:** Belege, Nachkalkulation, Fremdvergabe. Aufwand S–M.
 
 ### Phase C — Belege bauen auf der Engine auf  *(offene Tasks 3.2–3.5)*
 - **C1 (3.2) Belegversionierung** — Snapshot je Belegstand (GoBD-nah; Engine-Ergebnis wird pro
