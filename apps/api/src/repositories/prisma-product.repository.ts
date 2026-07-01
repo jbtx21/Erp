@@ -101,7 +101,7 @@ export class PrismaProductRepository implements ProductRepository {
       orderBy: [{ article: { sku: "asc" } }, { sku: "asc" }],
       select: {
         id: true, sku: true, articleId: true, isBundle: true,
-        article: { select: { name: true, description: true, ekCents: true, vkCents: true, finishingSpecs: { select: { placement: true } } } },
+        article: { select: { name: true, description: true, ekCents: true, vkCents: true, einrichtungEkCents: true, einrichtungVkCents: true, finishingSpecs: { select: { placement: true } } } },
         attributes: { select: { name: true, value: true } },
         prices: { where: { priceGroup: { kind: "STANDARD" } }, select: { netCents: true }, take: 1 },
       },
@@ -110,7 +110,7 @@ export class PrismaProductRepository implements ProductRepository {
       const attrs = v.attributes.map((a) => a.value).join(" / ");
       const label = `${v.article.name}${attrs ? ` — ${attrs}` : ""} (${v.sku})`;
       const placements = [...new Set(v.article.finishingSpecs.map((f) => f.placement).filter((p) => p.trim()))];
-      return { variantId: v.id, articleId: v.articleId, articleName: v.article.name, sku: v.sku, description: v.article.description ?? "", label, unitNetCents: v.prices[0]?.netCents ?? v.article.vkCents, vkCents: v.article.vkCents, ekCents: v.article.ekCents, isBundle: v.isBundle, placements };
+      return { variantId: v.id, articleId: v.articleId, articleName: v.article.name, sku: v.sku, description: v.article.description ?? "", label, unitNetCents: v.prices[0]?.netCents ?? v.article.vkCents, vkCents: v.article.vkCents, ekCents: v.article.ekCents, isBundle: v.isBundle, placements, einrichtungEkCents: v.article.einrichtungEkCents, einrichtungVkCents: v.article.einrichtungVkCents };
     });
   }
 

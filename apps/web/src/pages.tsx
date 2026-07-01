@@ -3186,6 +3186,10 @@ export function PositionsEditor({ lines, onChange, caps = {}, companyId, taxRate
     const p = await resolve(variantId, l.qty);
     set(i, { variantId, articleNumber: v.sku, articleName: v.articleName, description: v.articleName, motiv: v.articleName, kind: "VEREDELUNG", euro: p.euro ?? v.unitNetCents / 100, ...(p.ekEuro !== undefined ? { ekEuro: p.ekEuro } : {}), ...(onePlacement ? { placement: onePlacement } : {}) });
     setDetailFor(i); // Veredelungsdetails direkt aufklappen
+    // Feste Einrichtung (nur < 10 Teile): 1-Klick-Vorschlag auch beim Picken aus dem Katalog.
+    if (v.einrichtungVkCents != null && l.qty < EINRICHTUNG_SCHWELLE_STUECK) {
+      setEinrichtungVorschlag({ label: v.articleName, ekEuro: v.einrichtungEkCents != null ? v.einrichtungEkCents / 100 : null, vkEuro: v.einrichtungVkCents / 100 });
+    }
   };
   const textilPositionen = lines.map((t, j) => ({ line: t, pos: j + 1 })).filter(({ line }) => line.kind === "TEXTIL");
   // Veredelungsmenge korreliert mit der Summe der zugewiesenen Textilpositionen (B): die

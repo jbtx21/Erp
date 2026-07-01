@@ -103,6 +103,9 @@ export interface CatalogEntry {
 export interface VeredelungCatalogEntry extends CatalogEntry {
   /** Im Artikelstamm hinterlegte Platzierungen (FinishingSpec) — Vorschläge für die Position. */
   placements: string[];
+  /** Feste Einrichtungskosten (Cent), einmalig unter 10 Teilen — für den Beleg-Vorschlag. */
+  einrichtungEkCents: number | null;
+  einrichtungVkCents: number | null;
 }
 
 /** Eine Stücklisten-Komponente einer Set-/Bundle-Variante (Kap. 5.1). */
