@@ -18,6 +18,7 @@ import { euro, datum, numTd, statusMantineColor, prettyStatus } from "./theme.js
 import { MultiLineChart, BarChart } from "./charts.js";
 import { DocActionMenu, DocFormShell, DocListHeader, StatusDot, StatusBadge, EmptyState, type DocAction } from "./doc-layout.js";
 import { notify, confirmDialog, promptDialog, MetricCard } from "./ui-kit.js";
+import { Icon, type IconName } from "./icons.js";
 import { OrderAmpelDetail, Auftragsampel } from "./StatusAmpel.js";
 import { useUnsavedGuard } from "./use-unsaved-guard.js";
 import { downloadCsv } from "./export.js";
@@ -5243,10 +5244,10 @@ export function OrdersPage({ role, focusId, onOpen }: { role: string; focusId?: 
         <Tabs.Panel value="liste" pt="md">
       {loaded && rows.length > 0 && (
         <Group gap="md" align="stretch" wrap="wrap" mb="md">
-          <MetricCard label="Aufträge" value={rows.length} icon="📦" accent="navy" minWidth={158} />
-          <MetricCard label="Offen" value={rows.filter((r) => !["ABGESCHLOSSEN", "STORNIERT"].includes(String(r.status))).length} icon="⏳" accent="sky" minWidth={158} />
-          <MetricCard label="Versandbereit" value={rows.filter((r) => String(r.status) === "VERSANDBEREIT").length} icon="🚚" accent="forest" minWidth={158} />
-          {canSeeAmpel && <MetricCard label="Ampel-Problem" value={rows.filter((r) => r.ampel === "ROT").length} icon="⚠" accent="danger" hint="rote Auftragsampel" minWidth={158} />}
+          <MetricCard label="Aufträge" value={rows.length} icon={<Icon name="box" />} accent="navy" minWidth={158} />
+          <MetricCard label="Offen" value={rows.filter((r) => !["ABGESCHLOSSEN", "STORNIERT"].includes(String(r.status))).length} icon={<Icon name="clock" />} accent="sky" minWidth={158} />
+          <MetricCard label="Versandbereit" value={rows.filter((r) => String(r.status) === "VERSANDBEREIT").length} icon={<Icon name="truck" />} accent="forest" minWidth={158} />
+          {canSeeAmpel && <MetricCard label="Ampel-Problem" value={rows.filter((r) => r.ampel === "ROT").length} icon={<Icon name="triangle" />} accent="danger" hint="rote Auftragsampel" minWidth={158} />}
         </Group>
       )}
       {!loaded ? <Group justify="center" py="xl"><Loader size="sm" /></Group> :
@@ -9881,9 +9882,9 @@ export function HomePage({ userName, onNavigate }: { userName?: string; onNaviga
   }, []);
 
   // KPI-Kachel (Premium-Layout via MetricCard): Akzent-Kachel + große Zahl, klick-/tastaturbar.
-  const KPI_ICON: Record<string, string> = { orders: "📦", quotes: "📝", companies: "🏢", reporting: "📈" };
+  const KPI_ICON: Record<string, IconName> = { orders: "box", quotes: "document", companies: "building", reporting: "trending-up" };
   const kpi = (label: string, value: number | string, accent: string, navKey: string): JSX.Element => (
-    <MetricCard label={label} value={value} accent={accent} icon={KPI_ICON[navKey] ?? "•"}
+    <MetricCard label={label} value={value} accent={accent} icon={<Icon name={KPI_ICON[navKey] ?? "list"} />}
       minWidth={180} onClick={() => onNavigate(navKey)} />
   );
   // Monatskennzahl mit Vormonats-Delta (↑/↓ + Betrag) — Trend-Zeile in der MetricCard.
@@ -9891,7 +9892,7 @@ export function HomePage({ userName, onNavigate }: { userName?: string; onNaviga
     const dir = delta > 0 ? "up" : delta < 0 ? "down" : "flat";
     const text = dir === "flat" ? "ggü. Vormonat" : `${fmt(Math.abs(delta))} ggü. Vormonat`;
     return (
-      <MetricCard label={label} value={value} accent="navy" icon={KPI_ICON[navKey] ?? "📈"}
+      <MetricCard label={label} value={value} accent="navy" icon={<Icon name={KPI_ICON[navKey] ?? "trending-up"} />}
         minWidth={180} trend={{ text, dir }} onClick={() => onNavigate(navKey)} />
     );
   };

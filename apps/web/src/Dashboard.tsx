@@ -8,6 +8,7 @@ import { trpc } from "./trpc.js";
 import { downloadBase64Pdf, downloadCsv } from "./export.js";
 import { statusColor, T } from "./theme.js";
 import { MetricCard, SegmentBar } from "./ui-kit.js";
+import { Icon } from "./icons.js";
 
 type AmpelStatus = "GRUEN" | "GELB" | "ROT";
 type ProcessLevel = "ANGEBOT" | "AUFTRAG" | "PRODUKTION" | "VEREDLER";
@@ -109,12 +110,12 @@ export function Dashboard(): JSX.Element {
       </Paper>
 
       <SimpleGrid cols={{ base: 2, sm: 3, lg: 6 }} mt="md" spacing="md">
-        <MetricCard value={summary.total} label="Vorgänge" accent="navy" icon="Σ" hint="gesamt" minWidth={140} />
-        <MetricCard value={summary.rot} label="Überfällig" accent="danger" icon="⏰" hint="ROT" minWidth={140} />
-        <MetricCard value={summary.gelb} label="Knapp" accent="amber" icon="▲" hint="GELB" minWidth={140} />
-        <MetricCard value={summary.gruen} label="Im Plan" accent="forest" icon="✓" hint="GRÜN" minWidth={140} />
-        <MetricCard value={summary.overdue} label="Überfällige" accent="danger" icon="⚠" hint="echte Fristen" minWidth={140} />
-        <MetricCard value={summary.kritisch} label="Kritisch" accent="danger" icon="🔥" hint="Eskalation 2" minWidth={140} />
+        <MetricCard value={summary.total} label="Vorgänge" accent="navy" icon={<Icon name="list" />} hint="gesamt" minWidth={140} />
+        <MetricCard value={summary.rot} label="Überfällig" accent="danger" icon={<Icon name="alarm" />} hint="ROT" minWidth={140} />
+        <MetricCard value={summary.gelb} label="Knapp" accent="amber" icon={<Icon name="triangle" />} hint="GELB" minWidth={140} />
+        <MetricCard value={summary.gruen} label="Im Plan" accent="forest" icon={<Icon name="check" />} hint="GRÜN" minWidth={140} />
+        <MetricCard value={summary.overdue} label="Überfällige" accent="danger" icon={<Icon name="calendar-x" />} hint="echte Fristen" minWidth={140} />
+        <MetricCard value={summary.kritisch} label="Kritisch" accent="danger" icon={<Icon name="flame" />} hint="Eskalation 2" minWidth={140} />
       </SimpleGrid>
 
       <Paper withBorder={false} shadow="sm" radius="lg" p="lg" mt="lg">
