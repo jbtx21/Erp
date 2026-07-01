@@ -446,6 +446,11 @@ model Article {
   styleFit       String? // Passform (Slim/Regular/… aus Lieferanten-Feeds)
   collectionId String?
   collection   Collection? @relation(fields: [collectionId], references: [id])
+  // Einrichtungskosten der Veredelung (Film/Sieb/Punch/Datei): FESTE Beträge — EK (unser Einkauf)
+  // und VK (Kundenpreis), NICHT gerechnet. Fallen nur unter der Stückzahl-Schwelle an (< 10 Teile,
+  // einmalig je Position). Nur bei Veredelungsartikeln gepflegt, sonst null.
+  einrichtungEkCents Int?
+  einrichtungVkCents Int?
   variants    Variant[]
   mediaAssets   MediaAsset[]
   finishingSpecs FinishingSpec[]

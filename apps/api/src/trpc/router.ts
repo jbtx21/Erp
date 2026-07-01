@@ -1610,6 +1610,9 @@ export const appRouter = router({
         materialLieferantId: z.string().optional(),
         ekCents: z.number().int().nonnegative().optional(),
         tiers: z.array(z.object({ minMenge: z.number().int().positive(), vkCents: z.number().int().nonnegative(), ekCents: z.number().int().nonnegative().optional() })).optional(),
+        // Feste Einrichtungskosten (EK+VK), einmalig unter 10 Teilen.
+        einrichtungEkCents: z.number().int().nonnegative().nullish(),
+        einrichtungVkCents: z.number().int().nonnegative().nullish(),
       }))
       .mutation(async ({ input, ctx }) => {
         try { return await ctx.products.createVeredelungArticle(input); }
