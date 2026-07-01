@@ -52,7 +52,9 @@ export class InMemoryPricingRepository implements PricingRepository {
   }
 
   async loadPriceContext(companyId: string, variantId: string): Promise<PriceContext> {
-    return this.ensure(companyId, variantId);
+    const ctx = this.ensure(companyId, variantId);
+    // STANDARD-Basisstaffel (Veredelung/Logo) aus der separaten Map einspeisen (wie Prisma-Repo).
+    return { ...ctx, standardTiers: this.standardTiers.get(variantId) ?? ctx.standardTiers ?? [] };
   }
 
   async listTiers(companyId: string, variantId: string): Promise<TierView> {

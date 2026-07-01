@@ -27,6 +27,8 @@ export interface PriceContext {
   group: PriceGroupKind;
   customerTiers: PriceTier[];
   groupTiers: PriceTier[];
+  /** STANDARD-Basisstaffel (Veredelung/Logo) — greift für alle Kunden als Basis. */
+  standardTiers?: PriceTier[];
   groupPrices: VariantPrice[];
   /**
    * Grund-VK aus dem Lieferanten-Aufschlag (EK × Faktor(Lieferant, group)) — Default des
@@ -38,7 +40,7 @@ export interface PriceContext {
 /** Aufgelöster Preis inkl. Herkunft der greifenden Stufe (für die UI/Transparenz). */
 export interface ResolvedPrice {
   netCents: Cents;
-  source: "KUNDE" | "GRUPPE_STAFFEL" | "GRUPPE_EINZEL" | "LIEFERANT_AUFSCHLAG";
+  source: "KUNDE" | "GRUPPE_STAFFEL" | "STANDARD_STAFFEL" | "GRUPPE_EINZEL" | "LIEFERANT_AUFSCHLAG";
   minMenge: number | null; // greifende Staffelstufe (null = Einzelpreis ohne Staffel)
   // Deckungsbeitrag (Kap. 4.4: DB bereits im Angebot sichtbar). EK = bester Lieferanten-
   // Einkaufspreis; null wenn kein Lieferantenpreis hinterlegt → DB/Marge nicht ermittelbar.
@@ -120,8 +122,12 @@ export class PricingService {
     let minMenge: number | null;
     const customer = selectTier(ctx.customerTiers, menge);
     const group = selectTier(ctx.groupTiers, menge);
+    // STANDARD-Basisstaffel (Veredelung/Logo) — greift für alle Kunden, wenn keine kunden-/
+    // gruppenindividuelle Staffel sticht (Veredelung kennt keine Kundengruppen).
+    const standard = selectTier(ctx.standardTiers ?? [], menge);
     if (customer) { netCents = customer.netCents; source = "KUNDE"; minMenge = customer.minMenge; }
     else if (group) { netCents = group.netCents; source = "GRUPPE_STAFFEL"; minMenge = group.minMenge; }
+    else if (standard) { netCents = standard.netCents; source = "STANDARD_STAFFEL"; minMenge = standard.minMenge; }
     else {
       // Kein Staffeltreffer: (1) manueller Einzelpreis der Gruppe → (2) berechneter Grund-VK aus
       // Lieferanten-Aufschlag → (3) Alt-Fallback (resolveBasePrice; wirft sichtbar bei Pflegefehler,

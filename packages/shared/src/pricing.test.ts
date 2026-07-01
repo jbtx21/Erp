@@ -58,6 +58,22 @@ describe("Mengenstaffel selectTier (B4 / T-15)", () => {
   });
 });
 
+describe("resolveBasePrice — STANDARD-Staffel greift für alle Kunden (Veredelung ohne Gruppen)", () => {
+  const standardTiers: PriceTier[] = [
+    { minMenge: 1, netCents: 900 },
+    { minMenge: 25, netCents: 700 },
+  ];
+  it("Nicht-STANDARD-Kunde ohne Gruppen-Staffel bekommt die STANDARD-Staffel", () => {
+    // Kunde ist PREMIUM, aber die Veredelungs-Staffel liegt nur unter STANDARD.
+    expect(resolveBasePrice({ standardTiers }, "PREMIUM", 30)).toBe(700);
+    expect(resolveBasePrice({ standardTiers }, "PREMIUM", 5)).toBe(900);
+  });
+  it("kunden-/gruppenindividuelle Staffel sticht die STANDARD-Basis", () => {
+    expect(resolveBasePrice({ groupTiers: [{ minMenge: 1, netCents: 800 }], standardTiers }, "TOP", 30)).toBe(800);
+    expect(resolveBasePrice({ customerTiers: [{ minMenge: 1, netCents: 600 }], standardTiers }, "TOP", 30)).toBe(600);
+  });
+});
+
 describe("selectStaffel — EINE Stufenfunktion für VK-/EK-/Stick-EK-Staffeln", () => {
   // Generisch über beliebige {minMenge}-Zeilen: dieselbe Semantik, die VK-Staffel (selectTier),
   // EK-Staffel (buildStaffelLadder) und Stick-EK-Staffel (stickereiPriceForMenge) teilen.

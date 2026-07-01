@@ -196,6 +196,12 @@ export interface BasePriceSources {
   customerTiers?: ReadonlyArray<PriceTier>;
   /** Preisgruppen-Staffel. */
   groupTiers?: ReadonlyArray<PriceTier>;
+  /**
+   * Basis-Staffel der Preisgruppe STANDARD (z. B. die Veredelungs-/Logo-Staffel). Greift für
+   * ALLE Kunden als Basis, wenn keine kunden-/gruppenindividuelle Staffel sticht — Veredelung
+   * kennt keine Kundengruppen (nur eine STANDARD-Staffel). Deckungsgleich mit `buildStaffelLadder`.
+   */
+  standardTiers?: ReadonlyArray<PriceTier>;
   /** Einzelpreis je Preisgruppe (manuelle Übersteuerung, bestehende Pflege). */
   groupPrices?: ReadonlyArray<VariantPrice>;
   /**
@@ -225,6 +231,11 @@ export function resolveBasePrice(
 
   const groupTier = selectTier(sources.groupTiers ?? [], menge);
   if (groupTier) return groupTier.netCents;
+
+  // STANDARD-Basisstaffel (z. B. Veredelung) — greift für alle Kunden, wenn keine kunden-/
+  // gruppenindividuelle Staffel sticht. Gleiche Präzedenz wie im Anzeige-Ladder.
+  const standardTier = selectTier(sources.standardTiers ?? [], menge);
+  if (standardTier) return standardTier.netCents;
 
   // (3) Einzelpreis der Kundengruppe → (4) Standardpreis (Listenpreis) als letzter
   // Fallback. So liefert die EINE Pipeline auch unter der kleinsten Staffelschwelle einen

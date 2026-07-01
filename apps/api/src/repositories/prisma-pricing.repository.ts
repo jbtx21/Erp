@@ -56,7 +56,7 @@ export class PrismaPricingRepository implements PricingRepository {
       companyDefaultGroup: company.priceGroup.kind as PriceGroupKind,
     });
 
-    const [customerTiers, groupTiers, prices, markupRules, ekAgg] = await Promise.all([
+    const [customerTiers, groupTiers, standardTiers, prices, markupRules, ekAgg] = await Promise.all([
       prisma.customerPriceTier.findMany({
         where: { companyId, variantId },
         select: { minMenge: true, netCents: true },
@@ -65,6 +65,8 @@ export class PrismaPricingRepository implements PricingRepository {
         where: { variantId, priceGroupId: company.priceGroupId },
         select: { minMenge: true, netCents: true },
       }),
+      // STANDARD-Basisstaffel (Veredelung/Logo) — greift für alle Kunden als Basis (B4).
+      this.listStandardTiers(variantId),
       prisma.priceGroupPrice.findMany({
         where: { variantId },
         select: { netCents: true, priceGroup: { select: { kind: true } } },
@@ -102,7 +104,7 @@ export class PrismaPricingRepository implements PricingRepository {
     const computedBaseCents =
       ekCents != null && hasFactor ? resolveSupplierVk({ ekCents, markups, group }).vkCents : null;
 
-    return { group, customerTiers, groupTiers, groupPrices, computedBaseCents };
+    return { group, customerTiers, groupTiers, standardTiers, groupPrices, computedBaseCents };
   }
 
   async listTiers(companyId: string, variantId: string): Promise<TierView> {
