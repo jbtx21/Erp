@@ -12,6 +12,12 @@ generischer ERP-/Landingpage-Muster.
 - `packages/audit` — GoBD-Audit-Trail.
 - `services/workers` — Connectoren (WooCommerce/Shopify/Supplier) + **Outbox-Relay** (BullMQ/Redis).
 
+**Architektur-Kurs (ADR 0003):** Modularer Monolith mit sauberen Domänen-Nähten (hexagonale
+Repos, `packages/shared` IO-frei, `OutboxEvent`, `StockMove`-Ledger). **Kein** Microservices-Rewrite —
+Extraktion in eigene Services nur bei eigenem Lastpfad/Release-Takt/Isolationszwang (Strangler, die
+Ports sind die Nähte). Vorsprung durch Schärfe im Kern, nicht durch Verteilung. Siehe
+`docs/adr/0003-modularer-monolith-statt-microservices-rewrite.md`.
+
 ## Harte Regeln
 - **Geld immer in Cent (Int), niemals Float.** Anzeige via `euro(cents)`; Eingabe via `eurToCents`. Feldsuffix `…Cents`.
 - **GoBD/Audit:** jede Mutation hängt einen Audit-Eintrag an (`buildEntry` + `AuditSink`). **Append-only-Ledger** für Bestand (`StockMove`) — kein direktes Setzen, Korrekturen sind Bewegungen. Keine stillen Überschreiber.
