@@ -1,13 +1,30 @@
-/* Globale Basis fürs TEXMA-ERP — Feinschliff nach den Web Interface Guidelines:
-   sichtbarer Tastatur-Fokus, sauberes Text-Rendering, ruhiger Hintergrund, kein
-   Doppeltipp-Zoom auf Controls. Farben referenzieren die Tokens aus theme.ts. */
+/* Globale Basis fürs TEXMA-ERP — TEXMA-OS-Design (Handoff Juli 2026, docs/texma-os-design-spec.md):
+   ABC Diatype als Markenschrift, Navy trägt, Signalgrün nur als Punkt. Dazu die Web-Interface-
+   Guidelines-Basics: sichtbarer Tastatur-Fokus, sauberes Text-Rendering, ruhiger Hintergrund,
+   kein Doppeltipp-Zoom auf Controls. Farben referenzieren die Tokens aus theme.ts. */
+
+/* Markenschrift ABC Diatype: nur Regular lizenziert — der Weight-Bereich 100–900 verhindert
+   Faux-Bold (Design-Briefing: Hierarchie über Größe/Farbe/Laufweite, nicht über Fettung).
+   Fallback Inter (echte Gewichte), dann System-Stack. */
+@font-face {
+  font-family: "ABC Diatype";
+  src: url("/fonts/ABCDiatype-Regular.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
   color-scheme: light; /* korrekte Kontraste für Scrollbars & Device-UI */
-  --erp-surface: #f4f5f7; /* ruhiger Premium-Body-Hintergrund (Apple-nah, neutral-kühl) */
-  --erp-border: #e6e8ec; /* dezenter, weicher Rahmen (weniger hart als zuvor) */
-  --erp-focus: #34548a; /* Navy-Akzent für den Fokus-Ring */
+  --erp-surface: #f5f5f7; /* App-Grundfläche (TEXMA OS: #F5F5F7) */
+  --erp-surface-2: #f5f6f8; /* Zebra/Chips/Sidebar-Fläche */
+  --erp-border: #e2e5ea; /* Rahmen & Trennlinien (Border-Token) */
+  --erp-hairline: #f1f3f5; /* Zeilen-Hairline in Tabellen/Listen */
+  --erp-focus: #0e1c36; /* Navy für den Fokus-Ring */
   --erp-panel: #ffffff; /* Kartenfläche */
+  --erp-text-3: #7a828f; /* sekundäre Information */
+  --erp-text-4: #9aa1ad; /* Platzhalter/Deko (nie Information) */
+  --erp-shadow-card: 0 6px 26px rgba(14, 28, 54, 0.05); /* weicher Karten-Schatten (navy-getönt) */
 }
 
 html {
@@ -18,17 +35,37 @@ html {
 body {
   margin: 0;
   background: var(--erp-surface);
+  letter-spacing: 0.005em; /* ABC Diatype läuft im Design minimal weiter (Prototyp-Root) */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
 
-/* Display-Typografie (Apple-nah): große Überschriften mit leicht negativer Laufweite,
-   dadurch wirken Titel „gesetzt" statt technisch. Greift auf die Mantine-Titles. */
+/* Schlanke, abgerundete Scrollbars wie im TEXMA-OS-Prototyp (navy-getönt, track-los). */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(14, 28, 54, 0.16);
+  border-radius: 20px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(14, 28, 54, 0.3);
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Display-Typografie: große Überschriften mit leicht negativer Laufweite (H1 im Design
+   -.01em), dadurch wirken Titel „gesetzt" statt technisch. Greift auf die Mantine-Titles. */
 h1,
 h2,
 .mantine-Title-root {
-  letter-spacing: -0.014em;
+  letter-spacing: -0.01em;
 }
 
 /* Premium-Feinschliff: interaktive Flächen animieren sanft (Buttons/Karten/NavLinks).
