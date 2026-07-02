@@ -1,6 +1,8 @@
 # ADR 0004 — Mandantenfähigkeit über Postgres Row-Level-Security (RLS)
 
-- **Status:** akzeptiert (Design) — Umsetzung phasenweise, Slice 1 als Nächstes
+- **Status:** akzeptiert — Slice 1 (Fundament, Commit 2605b2f) und Slice 2 (Enforcement
+  Wurzeln: Migration 0122, Tenant-RLS-Client-Verdrahtung, DB-Isolationstests) umgesetzt;
+  Slice 3 (Kinder-Tabellen) und Slice 4 (Härtung) offen
 - **Kontext-Leitplanken:** ADR 0003 (modularer Monolith, Strangler), CLAUDE.md (handgeschriebene Migrationen)
 - **Entscheidung TEXMA:** „RLS voll umfänglich" (nicht nur dünne `tenantId`-Naht)
 

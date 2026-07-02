@@ -62,9 +62,11 @@ model User {
   accessLogs   AccessLog[]
   resetTokens  PasswordResetToken[]
   preferences  UserPreference[]
-  // Mandant (ADR 0004, Slice 1) — nullable bis Slice 2 (NOT NULL + RLS-Policy).
-  tenantId     String?
-  tenant       Tenant?   @relation(fields: [tenantId], references: [id])
+  // Mandant (ADR 0004, Slice 2) — Pflichtfeld mit Default: der Default "tenant_texma"
+  // hält alle bestehenden create-Aufrufe grün (kein Call-Site-Refactor); er fällt in
+  // Slice 4, wenn tenantId bei echter Multi-Tenant-Anlage überall explizit gesetzt wird.
+  tenantId     String   @default("tenant_texma")
+  tenant       Tenant    @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
 }
@@ -206,9 +208,11 @@ model Company {
   shopConnectors  ShopConnector[] // T-01: Shops mappen auf die Firma, nicht auf Mitarbeiter
   opportunities   Opportunity[] // Verkaufschancen (CRM)
   callLogs        CallLog[] // Anrufprotokoll (Telefon-Modul)
-  // Mandant (ADR 0004, Slice 1) — nullable bis Slice 2 (NOT NULL + RLS-Policy).
-  tenantId        String?
-  tenant          Tenant?   @relation(fields: [tenantId], references: [id])
+  // Mandant (ADR 0004, Slice 2) — Pflichtfeld mit Default: der Default "tenant_texma"
+  // hält alle bestehenden create-Aufrufe grün (kein Call-Site-Refactor); er fällt in
+  // Slice 4, wenn tenantId bei echter Multi-Tenant-Anlage überall explizit gesetzt wird.
+  tenantId        String   @default("tenant_texma")
+  tenant          Tenant    @relation(fields: [tenantId], references: [id])
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -483,9 +487,11 @@ model Article {
   variants    Variant[]
   mediaAssets   MediaAsset[]
   finishingSpecs FinishingSpec[]
-  // Mandant (ADR 0004, Slice 1) — nullable bis Slice 2 (NOT NULL + RLS-Policy).
-  tenantId    String?
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  // Mandant (ADR 0004, Slice 2) — Pflichtfeld mit Default: der Default "tenant_texma"
+  // hält alle bestehenden create-Aufrufe grün (kein Call-Site-Refactor); er fällt in
+  // Slice 4, wenn tenantId bei echter Multi-Tenant-Anlage überall explizit gesetzt wird.
+  tenantId    String   @default("tenant_texma")
+  tenant      Tenant    @relation(fields: [tenantId], references: [id])
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -745,9 +751,11 @@ model Supplier {
   purchaseOrders  PurchaseOrder[]
   incomingInvoices IncomingInvoice[]
   sampleLoanLines  SampleLoanLine[]
-  // Mandant (ADR 0004, Slice 1) — nullable bis Slice 2 (NOT NULL + RLS-Policy).
-  tenantId        String?
-  tenant          Tenant?  @relation(fields: [tenantId], references: [id])
+  // Mandant (ADR 0004, Slice 2) — Pflichtfeld mit Default: der Default "tenant_texma"
+  // hält alle bestehenden create-Aufrufe grün (kein Call-Site-Refactor); er fällt in
+  // Slice 4, wenn tenantId bei echter Multi-Tenant-Anlage überall explizit gesetzt wird.
+  tenantId        String   @default("tenant_texma")
+  tenant          Tenant   @relation(fields: [tenantId], references: [id])
   createdAt       DateTime @default(now())
 
   @@index([tenantId])
@@ -903,9 +911,11 @@ model Quote {
   order     Order?
   inquiry   Inquiry? // Ursprungs-Anfrage (B20)
   sampleLoans SampleLoan[] // aus dem Angebot gewandelte/zugeordnete Muster-Leihen (B5)
-  // Mandant (ADR 0004, Slice 1) — nullable bis Slice 2 (NOT NULL + RLS-Policy).
-  tenantId  String?
-  tenant    Tenant?     @relation(fields: [tenantId], references: [id])
+  // Mandant (ADR 0004, Slice 2) — Pflichtfeld mit Default: der Default "tenant_texma"
+  // hält alle bestehenden create-Aufrufe grün (kein Call-Site-Refactor); er fällt in
+  // Slice 4, wenn tenantId bei echter Multi-Tenant-Anlage überall explizit gesetzt wird.
+  tenantId  String   @default("tenant_texma")
+  tenant    Tenant      @relation(fields: [tenantId], references: [id])
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
@@ -1125,9 +1135,11 @@ model Order {
   abschlaege  Abschlagsrechnung[] // Abschlags-/Teilrechnungen (Xentral)
   deliveryNotes DeliveryNote[]
   complaints  Complaint[]
-  // Mandant (ADR 0004, Slice 1) — nullable bis Slice 2 (NOT NULL + RLS-Policy).
-  tenantId    String?
-  tenant      Tenant?     @relation(fields: [tenantId], references: [id])
+  // Mandant (ADR 0004, Slice 2) — Pflichtfeld mit Default: der Default "tenant_texma"
+  // hält alle bestehenden create-Aufrufe grün (kein Call-Site-Refactor); er fällt in
+  // Slice 4, wenn tenantId bei echter Multi-Tenant-Anlage überall explizit gesetzt wird.
+  tenantId    String   @default("tenant_texma")
+  tenant      Tenant      @relation(fields: [tenantId], references: [id])
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
@@ -1306,9 +1318,11 @@ model Invoice {
   finalized   Boolean  @default(false)
   costCenterId String?
   costCenter   CostCenter? @relation(fields: [costCenterId], references: [id])
-  // Mandant (ADR 0004, Slice 1) — nullable bis Slice 2 (NOT NULL + RLS-Policy).
-  tenantId    String?
-  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  // Mandant (ADR 0004, Slice 2) — Pflichtfeld mit Default: der Default "tenant_texma"
+  // hält alle bestehenden create-Aufrufe grün (kein Call-Site-Refactor); er fällt in
+  // Slice 4, wenn tenantId bei echter Multi-Tenant-Anlage überall explizit gesetzt wird.
+  tenantId    String   @default("tenant_texma")
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
 
   @@index([companyId])
   @@index([tenantId])

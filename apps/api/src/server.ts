@@ -9,6 +9,7 @@ import {
 import Fastify, { type FastifyInstance } from "fastify";
 import { prisma } from "@texma/db";
 import { FixedWindowRateLimiter, EMAIL_TEMPLATE_DEFAULTS } from "@texma/shared";
+import { installTenantRls } from "./db/tenant-prisma.js";
 import { PrismaAuditSink } from "./audit/prisma-audit-sink.js";
 import { AuthService, type AuthUser } from "./modules/auth/auth.service.js";
 import { JoseOidcVerifier, type IdentityVerifier } from "./modules/auth/oidc.js";
@@ -207,6 +208,9 @@ export interface ServerOptions {
 }
 
 export function buildServer(opts: ServerOptions = {}): FastifyInstance {
+  // Tenant-RLS (ADR 0004, Slice 2): unter DATABASE_URL_RUNTIME jede Prisma-Operation
+  // mit dem Tenant-Kontext ausführen — muss VOR dem ersten DB-Zugriff installiert sein.
+  installTenantRls();
   // bodyLimit großzügig: Logo-/Stickdatei-Uploads (≤ 10 MB) reisen base64-kodiert (~+33 %).
   // Strukturiertes Logging mit Redaction sensibler Header (Cookie/Authorization),
   // damit Session-Token/Secrets nicht im Klartext im Log landen (Kap. 28).
