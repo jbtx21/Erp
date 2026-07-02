@@ -154,7 +154,12 @@ async function syncTaskCalendar(ctx: Context, taskId: string): Promise<void> {
 
 export const appRouter = router({
   auth: router({
-    /** Schritt 1: Passwort. Setzt das Session-Cookie (auch bei offener 2FA). */
+    /** Schritt 1: Passwort. Setzt das Session-Cookie (auch bei offener 2FA).
+     *  RLS (ADR 0004, Slice 4): der Login-Lookup läuft im Default-Tenant der
+     *  withTenant-Middleware (publicProcedure, ctx.user noch null) — für den heutigen
+     *  Single-Tenant korrekt. Multi-Tenant-Login (Tenant je E-Mail auflösen) ist über
+     *  `resolveTenantForLogin` (db/tenant-auth.ts) vorbereitet + getestet, aber bewusst
+     *  noch NICHT hier verdrahtet (würde die DB-freien Router-Unit-Tests brechen). */
     login: publicProcedure
       .input(z.object({ email: z.string().email(), password: z.string().min(1) }))
       .mutation(async ({ input, ctx }) => {

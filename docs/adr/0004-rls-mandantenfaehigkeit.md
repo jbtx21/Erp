@@ -1,11 +1,15 @@
 # ADR 0004 — Mandantenfähigkeit über Postgres Row-Level-Security (RLS)
 
-- **Status:** akzeptiert — Slice 1–3 umgesetzt (Migration 0124): Slice 1 (Fundament,
+- **Status:** akzeptiert — Slice 1–4 umgesetzt (Migration 0125): Slice 1 (Fundament,
   Commit 2605b2f), Slice 2 (Enforcement Wurzeln: Migration 0122, Tenant-RLS-Client-
   Verdrahtung, DB-Isolationstests), Slice 3 (Kinder-Tabellen: 105 tenant-scoped Kinder
   per DMMF-Inventar `packages/db/scripts/rls-inventory.mjs` → Migration 0124, DB-Isolationstest
-  `rls-slice3.db.test.ts`; 112 RLS-Tabellen gesamt). Slice 4 (Härtung: FORCE, Tenant-
-  Auflösung vor Auth, Unique-Constraints je Mandant) offen
+  `rls-slice3.db.test.ts`; 112 RLS-Tabellen gesamt). **Slice 4 (Härtung):** Auth-Bootstrap
+  (SECURITY-DEFINER-Funktionen `auth_resolve_session`/`auth_resolve_login`, Migration 0125)
+  löst den Produktions-Blocker „Tenant-Auflösung vor Auth" — real erzwungen + verdrahtet
+  (Session-Pfad) + verifiziert (`rls-slice4.db.test.ts`, Runtime-Smoke). FORCE, Default-Abbau
+  und Multi-Tenant-Login-Verdrahtung sind **bewusst verschoben** (grün-haltend) — s.
+  „Slice-4-Protokoll" unten.
 - **Kontext-Leitplanken:** ADR 0003 (modularer Monolith, Strangler), CLAUDE.md (handgeschriebene Migrationen)
 - **Entscheidung TEXMA:** „RLS voll umfänglich" (nicht nur dünne `tenantId`-Naht)
 
@@ -68,9 +72,12 @@ sofern nicht mandantenindividuell. Wird je Tabelle beim Rollout entschieden (Def
 - **Slice 3 — Kinder-Tabellen:** `tenantId` + Policy auf alle abhängigen Tabellen (Positionen,
   Bewegungen, Belege-Kinder …). Generierbar per Skript über die Prisma-DMMF (alle Modelle mit
   Mandantenbezug), damit „10→N Tabellen ohne proportionalen Aufwand".
-- **Slice 4 — Härtung:** Tenant-Auflösung über Subdomain/Claim; Tests, dass jede tRPC-Query ohne
-  gesetzten Tenant leer/ablehnt; `FORCE ROW LEVEL SECURITY` auf kritischen Tabellen (erzwingt RLS
-  auch für den Owner, Defense-in-Depth). (Die Rollentrennung selbst ist nach Slice 1 vorgezogen.)
+- **Slice 4 — Härtung (umgesetzt, Migration 0125):** Auth-Bootstrap (SECURITY-DEFINER-Funktionen,
+  löst die Tenant-Auflösung VOR Auth — der eigentliche Produktions-Blocker); Test, dass ohne
+  gesetzten Tenant leer/abgelehnt wird (`rls-slice4.db.test.ts`). Tenant-Auflösung über
+  Subdomain/Claim als Stub. `FORCE ROW LEVEL SECURITY`, Default-Abbau, Multi-Tenant-Login und
+  Unique-Constraints je Mandant sind grün-haltend VERSCHOBEN — s. „Slice-4-Protokoll". (Die
+  Rollentrennung selbst ist nach Slice 1 vorgezogen.)
 
 ## Konsequenzen
 
@@ -104,6 +111,59 @@ sofern nicht mandantenindividuell. Wird je Tabelle beim Rollout entschieden (Def
 Slice 1 ist bewusst **additiv und grün-haltend** (nullable `tenantId` + Backfill, Extension aktiv,
 aber Policies noch nicht erzwingend). Enforcement (Slice 2+) folgt als eigene, verifizierte Scheibe —
 so bleibt „nach jeder Schicht grün" (CLAUDE.md) auch bei einem 112-Tabellen-Rollout gewahrt.
+
+## Slice-4-Protokoll (Härtung) — real erzwungen vs. bewusst verschoben
+
+**Oberste Regel dieser Scheibe: grün-haltend.** Dev/Tests/CI/Seed laufen als DB-Owner und
+bleiben unverändert grün (`pnpm typecheck`/`test`/`build` ohne `RUN_DB_TESTS`). Jede Härtung,
+die das gebrochen hätte, ist dokumentiert-verschoben statt erzwungen.
+
+### Real erzwungen
+
+- **Auth-Bootstrap (Priorität 1, der eigentliche Produktions-Blocker).** Unter `texma_app`
+  (RLS scharf) lief der Session-/Login-Lookup in `createContext`, BEVOR der Tenant bekannt war
+  → ohne `app.tenant_id` liefert jede Policy NULL → 0 Zeilen (fail-closed) → niemand konnte
+  sich einloggen. Gelöst über zwei **SECURITY-DEFINER**-Funktionen (Migration 0125, Owner-eigen,
+  `REVOKE ALL FROM PUBLIC` + `GRANT EXECUTE TO texma_app`, `SET search_path`):
+  - `auth_resolve_session(p_token_hash text) → (user_id, tenant_id)` — nur gültige (nicht
+    abgelaufene) Sessions; Parameter ist der SHA-256-HASH (Hash-Bildung bleibt in der App).
+  - `auth_resolve_login(p_email text) → (user_id, tenant_id)` — E-Mail → Tenant für den Login.
+  Beide geben NUR IDs/Tenant zurück (keine Passwort-Hashes/Secrets). Verdrahtet in
+  `apps/api/src/db/tenant-auth.ts` (`resolveTenantForSession`, `resolveTenantForLogin`,
+  `resolveSessionWithTenant`): erst Tenant tenant-übergreifend auflösen, dann Session/User im
+  gesetzten `runWithTenant(tenantId, …)`-Kontext regulär laden. **Session-Pfad** ist in
+  `server.ts` (createContext + `/logos`-Route) verdrahtet. Unter der Owner-URL liefern dieselben
+  Funktionen dasselbe → KEINE Regression (Owner-/Runtime-Smoke identisch grün).
+- **„Ohne Tenant → abgelehnt/leer" (Priorität 2).** `rls-slice4.db.test.ts` (`RUN_DB_TESTS`)
+  weist unter `texma_app` nach: direkte SELECT/INSERT auf User/Session/Company sind
+  leer/abgelehnt (fail-closed); die Bootstrap-Funktionen lösen den Tenant korrekt auf; mit dem
+  aufgelösten Kontext wird der Zugriff möglich; EXPLAIN zeigt weiterhin den InitPlan (F12).
+
+### Bewusst verschoben (Grund je Punkt)
+
+- **FORCE ROW LEVEL SECURITY (Priorität 3) — verschoben.** `FORCE` hebt den Owner-Bypass auf.
+  Empirisch verifiziert: unter `FORCE` sieht der Owner OHNE Tenant-Kontext 0 Zeilen. Der Seed
+  UND ~40 owner-laufende Integrationstests (`*.int.test.ts`) schreiben/lesen Order/Invoice/
+  Payment o. Ä. ohne gesetzten Tenant-Kontext → `FORCE` auf diesen Tabellen färbt sie rot.
+  Grün-verträglich wäre nur, den kompletten owner-laufenden Test-/Seed-Pfad in Tenant-Kontext
+  zu hüllen (invasiv, eigener Schnitt). **Zusätzlich** darf `FORCE` NIE auf User/Session liegen,
+  sonst laufen die SECURITY-DEFINER-Auth-Funktionen selbst unter RLS ins Leere. → „grün-haltend
+  vor vollständig": FORCE bleibt offen (Defense-in-Depth-Rest).
+- **Default-Abbau `@default("tenant_texma")` (Priorität 4) — verschoben.** Sauberer wäre, die
+  tenant-prisma-Extension setzt `tenantId` bei CREATE serverseitig aus `currentTenantId()`. Aber
+  Seed und owner-laufende Tests schreiben OHNE Tenant-Kontext und verlassen sich auf den
+  DB-Default; ein Fallenlassen würde sie rot färben. Default BLEIBT die Single-Tenant-Krücke.
+- **Multi-Tenant-Login-Verdrahtung — verschoben (TODO).** Der Single-Tenant-Login läuft heute
+  korrekt über den Default-Tenant der `withTenant`-Middleware (publicProcedure). `auth_resolve_login`
+  + `resolveTenantForLogin` sind fertig + getestet, aber NICHT in die Login-Procedure verdrahtet:
+  das würde die DB-freien Router-Unit-Tests brechen. 1-Tenant-Annahme: `User.email` ist heute
+  global eindeutig; echte Multi-Tenancy braucht E-Mail-Eindeutigkeit je Tenant + Auflösung über
+  Subdomain/Claim.
+- **Tenant-Auflösung Subdomain/Claim — Stub.** `resolveTenantFromRequest(req)` (tenant-auth.ts)
+  liefert heute den Default-Tenant (Kommentar/TODO). Keine echte Subdomain-Infra — Design/Stub
+  genügt (ADR-Vorgabe).
+- **Unique-Constraints je Mandant — offen** (aus dem ursprünglichen Slice-4-Umriss; kein
+  aktueller Bedarf im Single-Tenant, mit Default-Abbau zusammen anzugehen).
 
 ## Referenzen
 

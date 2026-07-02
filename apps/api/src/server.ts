@@ -10,6 +10,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { prisma } from "@texma/db";
 import { FixedWindowRateLimiter, EMAIL_TEMPLATE_DEFAULTS } from "@texma/shared";
 import { installTenantRls } from "./db/tenant-prisma.js";
+import { resolveSessionWithTenant } from "./db/tenant-auth.js";
 import { PrismaAuditSink } from "./audit/prisma-audit-sink.js";
 import { AuthService, type AuthUser } from "./modules/auth/auth.service.js";
 import { JoseOidcVerifier, type IdentityVerifier } from "./modules/auth/oidc.js";
@@ -458,7 +459,9 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
   const stickereiSvc = (opts.contextOverrides?.stickerei as StickereiService | undefined) ?? stickerei;
   server.get<{ Params: { id: string } }>("/logos/:id/file", async (req, reply) => {
     const token = req.cookies[COOKIE_NAME] ?? null;
-    let user = token ? await auth.resolveSession(token) : null;
+    // RLS-Bootstrap (ADR 0004, Slice 4): Tenant aus dem Token auflösen, dann Session im
+    // gesetzten Tenant-Kontext laden — sonst 0 Zeilen unter der Laufzeit-Rolle texma_app.
+    let user = token ? await resolveSessionWithTenant(auth, token) : null;
     if (!user && opts.demoUser) user = opts.demoUser;
     if (!user) return reply.code(401).send({ error: "unauthenticated" });
     const file = await stickereiSvc.getLogoFile(req.params.id);
@@ -498,7 +501,10 @@ export function buildServer(opts: ServerOptions = {}): FastifyInstance {
           }
         }
         if (!user && sessionToken) {
-          user = await auth.resolveSession(sessionToken);
+          // RLS-Bootstrap (ADR 0004, Slice 4): erst den Tenant aus dem Token bestimmen
+          // (SECURITY-DEFINER, RLS-umgehend), dann Session/User im Tenant-Kontext laden —
+          // ohne das läuft resolveSession unter texma_app fail-closed (0 Zeilen) ins Leere.
+          user = await resolveSessionWithTenant(auth, sessionToken);
         }
         // Demo/Durchstich: ohne echte Identität einen festen Nutzer setzen (nur wenn gesetzt).
         if (!user && opts.demoUser) user = opts.demoUser;
