@@ -65,6 +65,7 @@ export * from "./einvoice-inbound.js";
 export * from "./crypto.js";
 export * from "./secrets.js";
 export * from "./rbac.js";
+export * from "./field-permissions.js";
 export * from "./retry.js";
 export * from "./supplier-catalog.js";
 export * from "./camt053.js";

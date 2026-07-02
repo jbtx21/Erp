@@ -2,6 +2,8 @@
 // Beträge bleiben verborgen — durchgesetzt als serverseitige Feld-Redaktion vor der
 // Auslieferung („Datenebene"). Kundenstammdaten/-vermerke sind für alle Rollen sichtbar.
 
+import { redactForRole } from "./field-permissions.js";
+
 export type Role = "ADMIN" | "BUERO" | "PRODUKTION" | "BUCHHALTUNG";
 
 /** Preise/Margen/Beträge sichtbar? Für PRODUKTION nein. */
@@ -37,10 +39,12 @@ export interface RedactableOrder {
   companyName?: string | null;
 }
 
-/** Redigiert die Preisfelder eines Auftrags-Eintrags für die Rolle (Kundenfelder bleiben). */
+/**
+ * Redigiert die Preis-/Kundenfelder eines Auftrags-Eintrags für die Rolle. Dünner Wrapper
+ * über das deklarative Feld-Register (redactForRole, Kap. 12) — identisches Verhalten wie
+ * bisher: totalNetCents wird für PRODUKTION genullt, Kundenfelder bleiben (Policy). Alle
+ * bestehenden Aufrufer (router.ts:329 Liste, rest-v1.ts Liste+Detail) bleiben unverändert.
+ */
 export function redactOrderForRole<T extends RedactableOrder>(item: T, role: Role): T {
-  const fields: (keyof RedactableOrder)[] = [];
-  if (!canViewFinancials(role)) fields.push("totalNetCents");
-  if (!canViewCustomerData(role)) { fields.push("employeeNote"); if ("companyName" in item) fields.push("companyName"); }
-  return fields.length ? redactFields(item, fields as (keyof T)[]) : item;
+  return redactForRole("order", item, role);
 }
