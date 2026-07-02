@@ -133,6 +133,23 @@ table {
   background: rgba(14, 28, 54, 0.05);
 }
 
+/* Navigations-Eintrag (TEXMA OS): 13px, r8, ruhiger Hover; aktiver Zustand bekommt
+   im Markup den 3px-Gruppenfarb-Balken + Fläche rgba(14,28,54,.055). */
+.erp-nav-item {
+  transition: background 120ms ease;
+}
+.erp-nav-item:hover {
+  background: rgba(14, 28, 54, 0.045);
+}
+
+/* Rail-Kachel (eingeklappte Sidebar): sanfter Lift beim Hover wie im Prototyp. */
+.erp-rail-tile {
+  transition: transform 120ms ease;
+}
+.erp-rail-tile:hover {
+  transform: translateY(-1px);
+}
+
 /* Kennzahl-/Aktionskarten (Vorzeige-Layout): ruhiger Schatten + sanfter Hover-Lift.
    Nur auf klickbaren Karten (--btn); Bewegung respektiert prefers-reduced-motion (s. u.). */
 .erp-metric {

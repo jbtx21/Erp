@@ -2064,6 +2064,9 @@ model PurchaseOrder {
   costCenterId String?
   costCenter   CostCenter? @relation(fields: [costCenterId], references: [id])
   createdAt   DateTime @default(now())
+  // Unterlieferung (Kap. 6.3): Zeitpunkt, zu dem die Bestellung trotz Fehlmengen
+  // abgeschlossen wurde (alle Restpositionen closedShort). null = regulär/offen.
+  closedShortAt DateTime?
 
   // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
   // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
@@ -2083,6 +2086,9 @@ model PurchaseOrderLine {
   variant         Variant @relation(fields: [variantId], references: [id])
   qty             Int
   ekCents         Int
+  // Unterlieferung (Kap. 6.3): Position trotz Fehlmenge geschlossen — zählt nicht mehr
+  // als offen (Status-Fortschreibung im Wareneingang + Bedarfsrechnung/openPurchaseOrderQty).
+  closedShort     Boolean @default(false)
   sources         PurchaseOrderLineSource[]
 
   // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-

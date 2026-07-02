@@ -1,7 +1,7 @@
 // Navigations-Gerüst: Auth-Gate + AppShell mit gruppierter Sidebar über ALLE Module
 // (alles durchklickbar). Jede Sektion ist eine Seite gegen die echten tRPC-Endpunkte.
 import { useCallback, useEffect, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
-import { ActionIcon, AppShell, Badge, Box, Button, Collapse, Group, HoverCard, Kbd, Loader, Menu, Modal, NavLink, Paper, ScrollArea, Stack, Tabs, Text, TextInput, Title, Tooltip, UnstyledButton, VisuallyHidden } from "@mantine/core";
+import { ActionIcon, AppShell, Badge, Box, Button, Collapse, Group, HoverCard, Kbd, Loader, Menu, Modal, Paper, ScrollArea, Stack, Tabs, Text, TextInput, Tooltip, UnstyledButton, VisuallyHidden } from "@mantine/core";
 import { Chevron, NavIcon, SidebarToggleIcon, type NavIconName } from "./nav-icons.js";
 import { Login } from "./Login.js";
 import { Dashboard } from "./Dashboard.js";
@@ -86,6 +86,14 @@ const NAV: ReadonlyArray<{ group: string; icon: NavIconName; items: ReadonlyArra
   { group: "Personalwesen", icon: "hr", items: [{ key: "hr", label: "Personalwesen" }] },
   { group: "Einstellungen", icon: "einstellungen", items: [{ key: "admin", label: "Einstellungen" }, { key: "automation", label: "Automationen" }, { key: "mailaccounts", label: "E-Mail-Konten" }, { key: "emailtemplates", label: "E-Mail-Vorlagen" }, { key: "dataio", label: "Import/Export" }, { key: "archive", label: "GoBD-Archiv" }, { key: "auditlog", label: "Audit-Protokoll" }, { key: "integrations", label: "Schnittstellen" }, { key: "security", label: "Mein Konto (2FA)" }] },
 ];
+// Modulfarben der Sidebar-Kacheln (TEXMA OS, docs/texma-os-design-spec.md) — reine Optik,
+// die NAV-Inhalte (Keys/Labels/Gruppen) bleiben unverändert.
+const GROUP_COLOR: Record<string, string> = {
+  Start: "#0E1C36", CRM: "#C77700", Vertrieb: "#6741D9", Einkauf: "#2563EB", Lager: "#0C8599",
+  Veredelung: "#E8590C", Buchhaltung: "#386A4E", Personalwesen: "#7A5AF8", Einstellungen: "#495057",
+};
+const groupColor = (g: string): string => GROUP_COLOR[g] ?? "#0E1C36";
+
 const ALL_KEYS = NAV.flatMap((g) => g.items.map((i) => i.key));
 const hashKey = (): string => {
   const h = typeof location !== "undefined" ? location.hash.replace("#", "") : "";
@@ -159,14 +167,19 @@ function GlobalSearch({ onSelect }: { onSelect: (hit: SearchHit) => void }): JSX
 
   return (
     <>
-      <Box role="search">
-        <Button variant="default" size="xs" w={340} justify="space-between" onClick={() => setOpen(true)}
-          rightSection={<Kbd size="xs">⌘K</Kbd>} c="dimmed" fw={400} aria-label="Globale Suche öffnen (Strg+K)">
-          Suche: Firma, Auftrag, Artikel, Lead…
+      {/* Suchfeld-Trigger im TEXMA-OS-Look: h36, r9, Fläche #F5F6F8, ⌘K-Pille rechts. */}
+      <Box role="search" style={{ flex: "1 1 240px", maxWidth: 440, minWidth: 170 }}>
+        <Button variant="default" size="xs" fullWidth justify="space-between" onClick={() => setOpen(true)}
+          rightSection={<Kbd size="xs">⌘K</Kbd>} fw={400} aria-label="Globale Suche öffnen (Strg+K)"
+          styles={{
+            root: { height: 36, borderRadius: 9, background: "#F5F6F8", borderColor: "#E2E5EA", color: "#7A828F", fontSize: 13 },
+            label: { fontWeight: 400 },
+          }}>
+          Suchen — Aufträge, Kunden, Belege …
         </Button>
       </Box>
       <Modal opened={open} onClose={() => setOpen(false)} withCloseButton={false} size="lg" yOffset={80} padding={0}
-        overlayProps={{ backgroundOpacity: 0.35, blur: 1 }} transitionProps={{ duration: 120 }}>
+        radius="xl" shadow="xl" overlayProps={{ backgroundOpacity: 0.34, blur: 3 }} transitionProps={{ duration: 120 }}>
         <TextInput size="md" variant="unstyled" px="md" autoFocus placeholder="Suchen… (Firma, Auftrag, Artikel, Lead, Lieferant)"
           value={q} onChange={(e) => setQ(e.currentTarget.value)} onKeyDown={onInputKey}
           styles={{ input: { borderBottom: "1px solid var(--mantine-color-gray-3)", height: 48 } }} />
@@ -248,8 +261,43 @@ function TaskBadge({ onOpen }: { onOpen: () => void }): JSX.Element {
 }
 
 // Linke Modul-Navigation: ganz einklappbar (Icon-Schiene) und je Sektion aufklappbar.
-// Voll: Sektionskopf (Icon + Titel + Chevron) klappt seine Einträge auf/zu.
-// Schiene: nur Sektions-Icons; Hover öffnet die Einträge als Flyout.
+// Optik nach TEXMA OS: farbige 24px-Modul-Kacheln je Gruppe, 13px-Einträge mit
+// 3px-Gruppenfarb-Balken im aktiven Zustand; Rail = 38px-Kacheln mit Hover-Flyout.
+
+/** Farbige Modul-Kachel (Sidebar-Gruppenkopf bzw. Rail). */
+function GroupTile({ group, icon, size = 24 }: { group: string; icon: NavIconName; size?: number }): JSX.Element {
+  return (
+    <Box aria-hidden style={{
+      width: size, height: size, borderRadius: size >= 34 ? 10 : 7, flexShrink: 0,
+      background: groupColor(group), color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
+      boxShadow: "0 1px 2px rgba(14,28,54,.16)",
+    }}>
+      <NavIcon name={icon} size={size >= 34 ? 18 : 14} />
+    </Box>
+  );
+}
+
+/** Einzelner Navigations-Eintrag (TEXMA OS): 13px, Einzug unter der Kachel, aktiver
+ *  Zustand mit 3px-Balken in der Gruppenfarbe + dezenter Navy-Fläche. */
+function NavItem({ label, active, color, indent = true, onClick }: {
+  label: string; active: boolean; color: string; indent?: boolean; onClick: () => void;
+}): JSX.Element {
+  return (
+    <UnstyledButton onClick={onClick} className="erp-nav-item" aria-current={active ? "page" : undefined}
+      style={{
+        position: "relative", display: "flex", alignItems: "center", gap: 8, width: "100%",
+        padding: indent ? "7px 10px 7px 34px" : "7px 10px", borderRadius: 8,
+        fontSize: 13, color: "#0E1C36", textAlign: "left",
+        background: active ? "rgba(14,28,54,.055)" : undefined,
+      }}>
+      {active && indent && (
+        <Box aria-hidden style={{ position: "absolute", left: 13, top: 8, bottom: 8, width: 3, borderRadius: 3, background: color }} />
+      )}
+      <Text component="span" size="sm" style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontSize: 13 }}>{label}</Text>
+    </UnstyledButton>
+  );
+}
+
 function SideNav({ active, collapsed, onNavigate }: { active: string; collapsed: boolean; onNavigate: (k: string) => void }): JSX.Element {
   const [closed, setClosed] = useState<Set<string>>(() => readSet("erp.nav.closedGroups"));
   const activeGroup = groupOfKey(active);
@@ -263,24 +311,29 @@ function SideNav({ active, collapsed, onNavigate }: { active: string; collapsed:
   }, []);
 
   if (collapsed) {
-    // Icon-Schiene: je Sektion ein Icon; Hover blendet die Einträge ein.
+    // Icon-Schiene: farbige Modul-Kachel je Sektion; Hover blendet die Einträge als Flyout ein.
     return (
-      <ScrollArea type="scroll" px={4}>
-        <Stack gap={4} align="center" py={4}>
+      <ScrollArea type="scroll" px={4} style={{ overflow: "visible" }}>
+        <Stack gap={6} align="center" py={8}>
           {NAV.map((g) => (
-            <HoverCard key={g.group} position="right-start" offset={6} openDelay={40} closeDelay={120} shadow="md" withinPortal>
+            <HoverCard key={g.group} position="right-start" offset={8} openDelay={40} closeDelay={120} shadow="lg" radius="md" withinPortal>
               <HoverCard.Target>
-                <ActionIcon variant={activeGroup === g.group ? "light" : "subtle"} color="navy" size="lg" radius="md" aria-label={g.group}>
-                  <NavIcon name={g.icon} />
-                </ActionIcon>
+                <UnstyledButton className="erp-rail-tile" aria-label={g.group}
+                  onClick={() => { if (g.items[0]) onNavigate(g.items[0].key); }}
+                  style={{ position: "relative", display: "flex", padding: 0 }}>
+                  {activeGroup === g.group && (
+                    <Box aria-hidden style={{ position: "absolute", left: -7, top: "50%", width: 3, height: 20, borderRadius: 3, background: "#0E1C36", transform: "translateY(-50%)" }} />
+                  )}
+                  <GroupTile group={g.group} icon={g.icon} size={38} />
+                </UnstyledButton>
               </HoverCard.Target>
-              <HoverCard.Dropdown p={6}>
-                <Text size="xs" fw={700} c="dimmed" tt="uppercase" px="xs" mb={4} style={{ letterSpacing: 0.4 }}>{g.group}</Text>
-                <Box miw={190}>
+              <HoverCard.Dropdown p={7} style={{ border: "1px solid #E2E5EA" }}>
+                <Text size="xs" fw={600} tt="uppercase" px={9} pt={4} pb={6}
+                  style={{ letterSpacing: "0.06em", fontSize: 10, color: "#9AA1AD" }}>{g.group}</Text>
+                <Box miw={198}>
                   {g.items.map((i) => (
-                    <NavLink key={i.key} label={i.label} active={active === i.key} variant="light" color="navy"
-                      aria-current={active === i.key ? "page" : undefined}
-                      onClick={() => onNavigate(i.key)} style={{ borderRadius: 6 }} />
+                    <NavItem key={i.key} label={i.label} active={active === i.key} color={groupColor(g.group)} indent={false}
+                      onClick={() => onNavigate(i.key)} />
                   ))}
                 </Box>
               </HoverCard.Dropdown>
@@ -294,7 +347,7 @@ function SideNav({ active, collapsed, onNavigate }: { active: string; collapsed:
   // Volle Leiste: aufklappbare Sektionen.
   return (
     <ScrollArea type="scroll">
-      <Stack gap={2} py={2}>
+      <Stack gap={0} py={2} px={2}>
         {NAV.map((g) => {
           const open = !closed.has(g.group);
           return (
@@ -304,21 +357,21 @@ function SideNav({ active, collapsed, onNavigate }: { active: string; collapsed:
                   klickbar, klappte aber nur ein). */}
               <UnstyledButton onClick={() => { if (g.items[0]) onNavigate(g.items[0].key); if (closed.has(g.group)) toggleGroup(g.group); }}
                 aria-expanded={open} aria-controls={`grp-${g.group.replace(/\W+/g, "-")}`}
-                style={{ display: "block", width: "100%", borderRadius: 6, padding: "6px 8px", marginTop: 4 }}
+                style={{ display: "block", width: "100%", borderRadius: 8, padding: "9px 8px 5px" }}
                 className="erp-nav-group">
-                <Group gap={8} wrap="nowrap">
-                  <Box c={activeGroup === g.group ? "navy.9" : "dimmed"} style={{ display: "inline-flex" }}><NavIcon name={g.icon} /></Box>
-                  <Text size="xs" fw={700} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.4, flex: 1 }}>{g.group}</Text>
+                <Group gap={10} wrap="nowrap">
+                  <GroupTile group={g.group} icon={g.icon} />
+                  <Text component="span" fw={600} tt="uppercase"
+                    style={{ letterSpacing: "0.06em", fontSize: 10.5, color: "#7A828F", flex: 1, textAlign: "left" }}>{g.group}</Text>
                   <Box c="dimmed" style={{ display: "inline-flex", cursor: "pointer" }} role="button" aria-label={open ? "Gruppe einklappen" : "Gruppe ausklappen"}
-                    onClick={(e) => { e.stopPropagation(); toggleGroup(g.group); }}><Chevron open={open} /></Box>
+                    onClick={(e) => { e.stopPropagation(); toggleGroup(g.group); }}><Chevron open={open} size={13} /></Box>
                 </Group>
               </UnstyledButton>
               <Collapse in={open} id={`grp-${g.group.replace(/\W+/g, "-")}`}>
-                <Box pl={6}>
+                <Box pt={1} pb={3}>
                   {g.items.map((i) => (
-                    <NavLink key={i.key} label={i.label} active={active === i.key} variant="light" color="navy"
-                      aria-current={active === i.key ? "page" : undefined}
-                      onClick={() => onNavigate(i.key)} style={{ borderRadius: 6 }} />
+                    <NavItem key={i.key} label={i.label} active={active === i.key} color={groupColor(g.group)}
+                      onClick={() => onNavigate(i.key)} />
                   ))}
                 </Box>
               </Collapse>
@@ -411,43 +464,87 @@ function Shell({ user, onLogout }: { user: AuthUser; onLogout: () => Promise<voi
     return () => cancelAnimationFrame(id);
   }, [active]);
 
+  // Initialen für die Nutzer-Kachel im Sidebar-Fuß (TEXMA OS: 34px-Navy-Kachel).
+  const initials = user.name.split(/\s+/).map((w) => w[0] ?? "").join("").slice(0, 2).toUpperCase() || "?";
+
   return (
     <>
     {/* Skip-Link (Tastatur/Screenreader): springt die Navigation über, direkt zum Inhalt. */}
     <a href="#main-content" className="skip-link">Zum Inhalt springen</a>
-    <AppShell header={{ height: 56 }} navbar={{ width: navCollapsed ? 64 : 248, breakpoint: "xs" }} padding="lg">
-      {/* Frosted-Glass-Header (Apple-nah): halbtransparent + Backdrop-Blur, dünne Trennlinie. */}
-      <AppShell.Header style={{ background: "rgba(255,255,255,0.72)", backdropFilter: "saturate(180%) blur(14px)", WebkitBackdropFilter: "saturate(180%) blur(14px)", borderBottom: "1px solid var(--erp-border)" }}>
-        <Group h="100%" px="lg" justify="space-between">
-          <Group gap="sm">
-            <Tooltip label={navCollapsed ? "Menü ausklappen" : "Menü einklappen"} openDelay={300}>
-              <ActionIcon variant="subtle" color="navy" size="md" onClick={toggleNav}
-                aria-label={navCollapsed ? "Menü ausklappen" : "Menü einklappen"} aria-pressed={navCollapsed}>
-                <SidebarToggleIcon />
-              </ActionIcon>
-            </Tooltip>
-            {/* App-Icon (Markenblau, gerundet) mit „T" — statt leerer Farbfläche. */}
-            <Box w={26} h={26} aria-hidden style={{
-              borderRadius: 8, display: "grid", placeItems: "center", flexShrink: 0,
-              background: "linear-gradient(145deg,#1A2C4D 0%,#0E1C36 100%)", color: "#fff",
-              fontWeight: 700, fontSize: 15, boxShadow: "0 2px 6px rgba(14,28,54,0.28)",
-            }}>T</Box>
-            <Title order={4} style={{ letterSpacing: "-0.01em" }}>TEXMA&nbsp;ERP</Title>
+    <AppShell header={{ height: 62 }} navbar={{ width: navCollapsed ? 66 : 256, breakpoint: "xs" }} padding="lg">
+      {/* Schlanke Glas-Topbar (TEXMA OS): Breadcrumb · globale Suche ⌘K · Statusdienste. */}
+      <AppShell.Header style={{ background: "rgba(255,255,255,0.66)", backdropFilter: "saturate(180%) blur(26px)", WebkitBackdropFilter: "saturate(180%) blur(26px)", borderBottom: "1px solid rgba(14,28,54,.06)" }}>
+        <Group h="100%" px={28} gap={14} wrap="nowrap">
+          {/* Breadcrumb: TEXMA ERP / aktiver Bereich (der Seitentitel bleibt H1 im Content). */}
+          <Group gap={8} wrap="nowrap" visibleFrom="sm" style={{ whiteSpace: "nowrap" }}>
+            <Text size="sm" fw={500} style={{ fontSize: 12.5, color: "#0E1C36" }}>TEXMA ERP</Text>
+            <Text size="sm" style={{ fontSize: 12.5, color: "#7A828F", opacity: 0.5 }}>/</Text>
+            <Text size="sm" style={{ fontSize: 12.5, color: "#7A828F" }}>{activeLabel(active) || "Übersicht"}</Text>
             <Badge size="sm" color="amber">Demo</Badge>
           </Group>
+          <Box style={{ flex: 1 }} />
           <GlobalSearch onSelect={goToHit} />
-          <Group gap="sm">
+          <Group gap="sm" wrap="nowrap">
             <DensityMenu />
             <TaskBadge onOpen={() => setActive("tasks")} />
             <NotificationBell onNavigate={setActive} />
-            <Text size="sm" c="dimmed">{user.name} · {user.role}</Text>
-            <Button variant="default" size="xs" onClick={() => void onLogout()}>Abmelden</Button>
           </Group>
         </Group>
       </AppShell.Header>
 
-      <AppShell.Navbar p={navCollapsed ? 4 : "xs"} style={{ background: "var(--erp-panel)", borderRight: "1px solid var(--erp-border)" }} aria-label="Hauptnavigation">
-        <SideNav active={active} collapsed={navCollapsed} onNavigate={setActive} />
+      {/* Sidebar als Glasfläche (TEXMA OS): Logo-Kopf, Modul-Navigation, Nutzer-Fuß. */}
+      <AppShell.Navbar p={0}
+        style={{ background: "rgba(252,252,253,0.72)", backdropFilter: "saturate(180%) blur(20px)", WebkitBackdropFilter: "saturate(180%) blur(20px)", borderRight: "1px solid rgba(14,28,54,.07)" }}
+        aria-label="Hauptnavigation">
+        {/* Logo-Kopf: TEXMA-Wortmarke + „ERP"-Miniatur + Einklapp-Schalter. */}
+        <Group gap={10} wrap="nowrap" px={navCollapsed ? 0 : 16} pt={18} pb={15}
+          justify={navCollapsed ? "center" : undefined} style={{ flexShrink: 0 }}>
+          {!navCollapsed && (
+            <>
+              <img src="/texma-logo.png" alt="TEXMA" style={{ height: 23, width: "auto", display: "block", flexShrink: 0 }} />
+              <Text component="span" fw={500}
+                style={{ fontSize: 9.5, color: "#7A828F", letterSpacing: "0.14em", paddingLeft: 9, borderLeft: "1px solid #E2E5EA" }}>ERP</Text>
+            </>
+          )}
+          <Tooltip label={navCollapsed ? "Menü ausklappen" : "Menü einklappen"} openDelay={300}>
+            <ActionIcon variant="default" size={26} radius={8} onClick={toggleNav} ml={navCollapsed ? 0 : "auto"}
+              aria-label={navCollapsed ? "Menü ausklappen" : "Menü einklappen"} aria-pressed={navCollapsed}
+              style={{ borderColor: "#E2E5EA", color: "#5B6473" }}>
+              <SidebarToggleIcon size={15} />
+            </ActionIcon>
+          </Tooltip>
+        </Group>
+        <Box style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }} px={navCollapsed ? 0 : 8}>
+          <SideNav active={active} collapsed={navCollapsed} onNavigate={setActive} />
+        </Box>
+        {/* Nutzer-Fuß: Avatar-Kachel + Name/Rolle + Abmelden. */}
+        <Group gap={10} wrap="nowrap" p={12} justify={navCollapsed ? "center" : undefined}
+          style={{ borderTop: "1px solid #E2E5EA", flexShrink: 0 }}>
+          {/* Eingeklappt bleibt Abmelden über das Avatar-Menü erreichbar. */}
+          <Menu shadow="md" width={180} position="right-end" withinPortal disabled={!navCollapsed}>
+            <Menu.Target>
+              <UnstyledButton aria-label={`${user.name} · ${user.role}`} style={{
+                width: 34, height: 34, borderRadius: 9, background: "#0E1C36", color: "#fff",
+                display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 500, fontSize: 12.5, flexShrink: 0,
+                cursor: navCollapsed ? "pointer" : "default",
+              }}>{initials}</UnstyledButton>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Label>{user.name} · {user.role}</Menu.Label>
+              <Menu.Item onClick={() => void onLogout()}>Abmelden</Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
+          {!navCollapsed && (
+            <>
+              <Box style={{ minWidth: 0, flex: 1, lineHeight: 1.25 }}>
+                <Text truncate style={{ fontSize: 12.5, fontWeight: 500, color: "#0E1C36" }}>{user.name}</Text>
+                <Text style={{ fontSize: 11, color: "#7A828F" }}>Rolle: {user.role}</Text>
+              </Box>
+              <Button variant="default" size="compact-xs" onClick={() => void onLogout()}
+                styles={{ root: { borderColor: "#E2E5EA", color: "#5B6473", fontWeight: 500 } }}>Abmelden</Button>
+            </>
+          )}
+        </Group>
       </AppShell.Navbar>
 
       <AppShell.Main id="main-content">
