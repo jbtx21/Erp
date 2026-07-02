@@ -59,7 +59,9 @@ const NAV: ReadonlyArray<{ group: string; icon: NavIconName; items: ReadonlyArra
     { key: "reorder", label: "Nachbestellung" }, { key: "incoming", label: "Eingangsrechnungen" },
   ] },
   { group: "Lager", icon: "lager", items: [
-    { key: "products", label: "Artikel/Varianten" }, { key: "matrixstamm", label: "Matrix-Stamm" }, { key: "lager", label: "Lager & Inventur" },
+    // Matrix-Stamm ist Tab „Farben & Größen" in Artikel/Varianten (IA-Konsolidierung wie
+    // Banking/CRM); der Direkt-Hash #matrixstamm bleibt über den Page-Switch erreichbar.
+    { key: "products", label: "Artikel/Varianten" }, { key: "lager", label: "Lager & Inventur" },
     { key: "stockmoves", label: "Bestandsbewegungen" },
     { key: "wareneingang", label: "Wareneingang" }, { key: "samples", label: "Muster-Leihgut" }, { key: "shipments", label: "Versand" },
     { key: "importmapper", label: "Import-Mapper" }, { key: "eanimport", label: "EAN-Listen-Import" },

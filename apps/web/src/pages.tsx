@@ -1971,6 +1971,11 @@ function MatrixGridEditor({ articleId, existing, onCreated }: { articleId: strin
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  // Inline-Anlage fehlender Achswerte (IA): Farbe/Größe direkt beim Varianten-Anlegen
+  // ergänzen (matrix.createAxisValue), ohne die Maske zu verlassen; der neue Wert wird
+  // sofort ins Raster übernommen (angehakt).
+  const [neuFarbe, setNeuFarbe] = useState(""); const [neuFarbeHex, setNeuFarbeHex] = useState("");
+  const [neuGroesse, setNeuGroesse] = useState("");
 
   useEffect(() => { void (async () => {
     try {
@@ -1982,6 +1987,18 @@ function MatrixGridEditor({ articleId, existing, onCreated }: { articleId: strin
       setFarben(f as AxisValueRow[]); setGroessen(g as AxisValueRow[]); setRuns(r as SizeRunRow[]);
     } catch (e) { setErr(errMsg(e)); }
   })(); }, []);
+
+  const addAxisValue = async (axis: "FARBE" | "GROESSE", value: string, hex?: string): Promise<void> => {
+    const v = value.trim();
+    if (!v) return;
+    try {
+      await trpc.matrix.createAxisValue.mutate({ axis, value: v, ...(axis === "FARBE" ? { hex: hex?.trim() || null } : {}) });
+      const rows = (await trpc.matrix.axisValues.query({ axis })) as AxisValueRow[];
+      if (axis === "FARBE") { setFarben(rows); setPickFarben(new Set([...pickFarben, v])); setNeuFarbe(""); setNeuFarbeHex(""); }
+      else { setGroessen(rows); setPickGroessen(new Set([...pickGroessen, v])); setNeuGroesse(""); }
+      notify.success(`${axis === "FARBE" ? "Farbe" : "Größe"} „${v}“ angelegt und ausgewählt.`);
+    } catch (e) { notify.error(errMsg(e)); }
+  };
 
   // Aktive Achsen = ausgewählte Optionen; Default: alles abgewählt, Nutzer hakt gezielt an.
   const colF = farben.filter((f) => pickFarben.has(f.value));
@@ -1996,29 +2013,41 @@ function MatrixGridEditor({ articleId, existing, onCreated }: { articleId: strin
     <Card withBorder padding="sm" mb="md">
       <Group justify="space-between" mb={4}>
         <Text fw={600} size="sm">Matrix-Editor · Farbe × Größe</Text>
-        <Text size="xs" c="dimmed">Achswerte pflegst du unter Lager → Matrix-Stamm</Text>
+        <Text size="xs" c="dimmed">Achswerte pflegst du unter Artikel & Varianten → Farben & Größen</Text>
       </Group>
       {err && <Alert color="red" mb="sm">{err}</Alert>}
       {/* Achsen-Auswahl: welche Farben/Größen sollen ins Raster */}
       <Text size="xs" fw={600} mt={4}>Farben</Text>
       <Group gap={6} mt={2}>
-        {farben.length === 0 && <Text size="xs" c="dimmed">Keine Farben im Stamm — bitte unter Matrix-Stamm anlegen.</Text>}
+        {farben.length === 0 && <Text size="xs" c="dimmed">Keine Farben im Stamm — rechts direkt anlegen.</Text>}
         {farben.map((f) => (
           <Button key={f.id} size="compact-xs" variant={pickFarben.has(f.value) ? "filled" : "default"}
             leftSection={f.hex ? <span style={{ width: 10, height: 10, borderRadius: 2, background: f.hex, display: "inline-block", border: "1px solid #ccc" }} /> : undefined}
             onClick={() => setPickFarben(toggle(pickFarben, f.value))}>{f.value}</Button>
         ))}
+        {/* Inline-Anlage: fehlende Farbe ohne Tab-Wechsel ergänzen */}
+        <TextInput size="xs" value={neuFarbe} onChange={(e) => setNeuFarbe(e.currentTarget.value)} placeholder="Neue Farbe" w={110}
+          onKeyDown={(e) => { if (e.key === "Enter") void addAxisValue("FARBE", neuFarbe, neuFarbeHex); }} />
+        <TextInput size="xs" value={neuFarbeHex} onChange={(e) => setNeuFarbeHex(e.currentTarget.value)} placeholder="#Hex (opt.)" w={90}
+          onKeyDown={(e) => { if (e.key === "Enter") void addAxisValue("FARBE", neuFarbe, neuFarbeHex); }} />
+        <Button size="compact-xs" variant="light" disabled={!neuFarbe.trim()} title="Farbe im Stamm anlegen"
+          onClick={() => void addAxisValue("FARBE", neuFarbe, neuFarbeHex)}>+</Button>
       </Group>
       <Group gap={6} mt="xs" align="center">
         <Text size="xs" fw={600}>Größen</Text>
         {runs.map((r) => <Button key={r.id} size="compact-xs" variant="light" onClick={() => applyRun(r.values)}>+ {r.name}</Button>)}
       </Group>
       <Group gap={6} mt={2}>
-        {groessen.length === 0 && <Text size="xs" c="dimmed">Keine Größen im Stamm — bitte unter Matrix-Stamm anlegen.</Text>}
+        {groessen.length === 0 && <Text size="xs" c="dimmed">Keine Größen im Stamm — rechts direkt anlegen.</Text>}
         {groessen.map((g) => (
           <Button key={g.id} size="compact-xs" variant={pickGroessen.has(g.value) ? "filled" : "default"}
             onClick={() => setPickGroessen(toggle(pickGroessen, g.value))}>{g.value}</Button>
         ))}
+        {/* Inline-Anlage: fehlende Größe ohne Tab-Wechsel ergänzen */}
+        <TextInput size="xs" value={neuGroesse} onChange={(e) => setNeuGroesse(e.currentTarget.value)} placeholder="Neue Größe" w={100}
+          onKeyDown={(e) => { if (e.key === "Enter") void addAxisValue("GROESSE", neuGroesse); }} />
+        <Button size="compact-xs" variant="light" disabled={!neuGroesse.trim()} title="Größe im Stamm anlegen"
+          onClick={() => void addAxisValue("GROESSE", neuGroesse)}>+</Button>
       </Group>
       {/* Raster: nur wenn beide Achsen belegt */}
       {colF.length > 0 && rowG.length > 0 && (
@@ -2224,7 +2253,10 @@ function MatrixImportPanel(): JSX.Element {
 
 // Matrix-Stamm (Xentral "Grundtabelle"): globaler Farb-/Größen-Stamm + Größenlauf-Vorlagen.
 // Pflegt die Achswerte, aus denen der Matrix-Editor am Artikel das Farbe×Größe-Raster baut.
-export function MatrixStammPage(): JSX.Element {
+// IA-Konsolidierung: kein eigener Menüpunkt mehr, sondern Tab „Farben & Größen" in
+// Artikel/Varianten (einziger Konsument ist der MatrixGridEditor dort) — daher Sektion
+// ohne eigenen DocListHeader; den Seiten-Header stellt ProductsPage.
+function MatrixStammSection(): JSX.Element {
   const [farben, setFarben] = useState<AxisValueRow[]>([]);
   const [groessen, setGroessen] = useState<AxisValueRow[]>([]);
   const [runs, setRuns] = useState<SizeRunRow[]>([]);
@@ -2254,7 +2286,7 @@ export function MatrixStammPage(): JSX.Element {
 
   return (
     <Box>
-      <DocListHeader module="Lager / Stammdaten" title="Matrix-Stamm" hint="Grundtabelle für Matrixprodukte (Xentral-Vorbild): globaler Farb-/Größen-Stamm und Größenlauf-Vorlagen. Aus diesen Achswerten baut der Matrix-Editor am Artikel das Farbe×Größe-Raster." />
+      <Text size="sm" c="dimmed" mb="md">Globales Farb-/Größen-Vokabular + Größenläufe — Grundlage des Varianten-Rasters.</Text>
       {err && <Alert color="red" mb="md">{err}</Alert>}
       <SimpleGrid cols={{ base: 1, md: 2 }}>
         <Card withBorder padding="md">
@@ -2337,7 +2369,13 @@ export function MatrixStammPage(): JSX.Element {
   );
 }
 
-export function ProductsPage({ focusId }: { focusId?: string } = {}): JSX.Element {
+// Dünner Wrapper für den Deep-Link #matrixstamm (Redirect-Muster wie Banking/CRM):
+// Matrix-Stamm ist Tab „Farben & Größen" in Artikel/Varianten; alte Links landen dort.
+export function MatrixStammPage(): JSX.Element {
+  return <ProductsPage initialTab="matrix" />;
+}
+
+export function ProductsPage({ focusId, initialTab }: { focusId?: string; initialTab?: "artikel" | "matrix" } = {}): JSX.Element {
   const [articles, setArticles] = useState<ArticleData[]>([]);
   const [sku, setSku] = useState("");
   const [name, setName] = useState("");
@@ -2381,6 +2419,13 @@ export function ProductsPage({ focusId }: { focusId?: string } = {}): JSX.Elemen
   return (
     <>
       <DocListHeader module="Lager / Artikel" title="Artikel & Varianten" hint="Stammdaten (B16): Artikel direkt in der Tabelle bearbeiten (Schnellbearbeitung), Vollständigkeit je Artikel, Massenbearbeitung über mehrere SKUs, Farbe×Größe-Varianten." />
+      {/* IA: Matrix-Stamm (Farb-/Größen-Vokabular) ist Tab statt eigener Seite (Muster OrdersPage). */}
+      <Tabs defaultValue={initialTab ?? "artikel"} mt="md" keepMounted={false}>
+        <Tabs.List>
+          <Tabs.Tab value="artikel">Artikel & Varianten</Tabs.Tab>
+          <Tabs.Tab value="matrix">Farben & Größen</Tabs.Tab>
+        </Tabs.List>
+        <Tabs.Panel value="artikel" pt="xs">
       <Group mt="sm" gap="xs" align="end" wrap="wrap">
         <TextInput label="Artikel-Nr." value={sku} onChange={(e) => setSku(e.currentTarget.value)} placeholder="POLO-PREMIUM" w={150} withAsterisk />
         <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} placeholder="Premium-Poloshirt" w={180} withAsterisk />
@@ -2455,6 +2500,11 @@ export function ProductsPage({ focusId }: { focusId?: string } = {}): JSX.Elemen
           <AutoTable rows={variants} />
         </>
       )}
+        </Tabs.Panel>
+        <Tabs.Panel value="matrix" pt="xs">
+          <MatrixStammSection />
+        </Tabs.Panel>
+      </Tabs>
     </>
   );
 }
