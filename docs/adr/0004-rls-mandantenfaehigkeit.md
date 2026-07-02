@@ -24,8 +24,14 @@ Session-Variable gesetzt, nicht als Query-Filter — so ist die Isolation DB-sei
 2. **`tenantId String`** auf allen mandantenbezogenen Tabellen (Ausnahmen: globale Stammdaten
    ohne Mandantenbezug — s. u.). FK auf `Tenant`, Index `@@index([tenantId])`.
 3. **RLS aktivieren** je Tabelle: `ALTER TABLE … ENABLE ROW LEVEL SECURITY;` +
-   `CREATE POLICY tenant_isolation ON … USING (tenantId = current_setting('app.tenant_id', true)) WITH CHECK (…)`.
+   `CREATE POLICY tenant_isolation ON … USING ("tenantId" = (SELECT current_setting('app.tenant_id', true))) WITH CHECK (…)`.
    Der App-DB-Rolle wird RLS **nicht** per `BYPASSRLS` erlassen (Superuser/Migrations-Rolle schon).
+   **Pflicht-Detail Performance (Research F12):** der `current_setting`-Aufruf MUSS als
+   Skalar-Subquery `(SELECT …)` gewrappt sein — Postgres evaluiert ihn dann einmal pro Query
+   (InitPlan) statt pro Zeile (Funktionsergebnisse werden in Policies NICHT gecacht). Öffentlich
+   reproduzierter Benchmark (PlanetScale, 1 Mio. Zeilen / 10 Tenants): ~105 ms ungefiltert vs.
+   ~1,96 s mit ungewrapptem Policy-Funktionsaufruf (~18×). Gilt für JEDE Policy, auch die
+   skriptgenerierten in Slice 3 — der Generator erzeugt das Wrapping mit.
 4. **Tenant-Kontext pro Request:** Prisma-**Client-Extension**/Middleware, die jede Operation in
    `prisma.$transaction` mit vorangestelltem `SET LOCAL app.tenant_id = '<tenantId>'` ausführt
    (`SET LOCAL` = transaktionslokal, kein Leak über Connection-Pool). Der `tenantId` kommt aus dem
@@ -44,16 +50,22 @@ sofern nicht mandantenindividuell. Wird je Tabelle beim Rollout entschieden (Def
 - **Slice 1 — Fundament (zuerst):** `Tenant`-Modell + Migration; `tenantId` **additiv/nullable** auf
   den Wurzel-Entitäten (`Company`, `Supplier`, `Article`, `Order`, `Quote`, `Invoice`, …) + Backfill
   auf Default-Tenant; Prisma-Tenant-Context-Extension (Setzen von `app.tenant_id`); Auth-Kontext um
-  `tenantId` erweitern; Seed setzt Default-Tenant. **Noch keine erzwingenden Policies** → Bestand
-  bleibt grün (Unit-Tests nutzen In-Memory-Repos, sind RLS-neutral).
+  `tenantId` erweitern; Seed setzt Default-Tenant. **Bereits in Slice 1: getrennte DB-Rollen**
+  (Migrations-Rolle = Table Owner für `prisma migrate`; Laufzeit-Rolle ohne Ownership/`BYPASSRLS`
+  mit eigener `DATABASE_URL` für den App-Client) — s. Sicherheits-Fallstrick unten; die Trennung
+  ist grün-haltend, weil noch keine Policies erzwingen, und sie MUSS stehen, bevor Slice 2 startet.
+  **Noch keine erzwingenden Policies** → Bestand bleibt grün (Unit-Tests nutzen In-Memory-Repos,
+  sind RLS-neutral).
 - **Slice 2 — Enforcement Wurzeln:** `tenantId` NOT NULL, RLS-Policies auf den Wurzel-Tabellen
-  aktivieren; DB-Integrationstests (`RUN_DB_TESTS`) um Tenant-Kontext erweitern; Negativtest
-  „Mandant A sieht Mandant B nicht".
+  aktivieren (mit `(SELECT …)`-Wrapping, s. o.); DB-Integrationstests (`RUN_DB_TESTS`) um
+  Tenant-Kontext erweitern; Negativtest „Mandant A sieht Mandant B nicht" — ausgeführt unter der
+  **Laufzeit-Rolle** (unter der Owner-Rolle wäre der Test wertlos, s. Fallstrick unten).
 - **Slice 3 — Kinder-Tabellen:** `tenantId` + Policy auf alle abhängigen Tabellen (Positionen,
   Bewegungen, Belege-Kinder …). Generierbar per Skript über die Prisma-DMMF (alle Modelle mit
   Mandantenbezug), damit „10→N Tabellen ohne proportionalen Aufwand".
-- **Slice 4 — Härtung:** eigene DB-App-Rolle ohne `BYPASSRLS`; Migrations-/Seed-Rolle getrennt;
-  Tenant-Auflösung über Subdomain/Claim; Tests, dass jede tRPC-Query ohne gesetzten Tenant leer/ablehnt.
+- **Slice 4 — Härtung:** Tenant-Auflösung über Subdomain/Claim; Tests, dass jede tRPC-Query ohne
+  gesetzten Tenant leer/ablehnt; `FORCE ROW LEVEL SECURITY` auf kritischen Tabellen (erzwingt RLS
+  auch für den Owner, Defense-in-Depth). (Die Rollentrennung selbst ist nach Slice 1 vorgezogen.)
 
 ## Konsequenzen
 
@@ -67,6 +79,15 @@ sofern nicht mandantenindividuell. Wird je Tabelle beim Rollout entschieden (Def
 
 ## Risiken / offene Punkte
 
+- **Stiller Owner-/Superuser-Bypass (Research F13, Pflicht statt Härtung):** Postgres umgeht RLS
+  für die **tabellenbesitzende Rolle** und Superuser **ohne Fehlermeldung**. Im Prisma-Standard-Setup
+  (EINE `DATABASE_URL` für `migrate` und Client) ist die App-Rolle zugleich Table Owner → **null
+  Tenant-Isolation**, obwohl Policies existieren und alles grün aussieht. Deshalb ist die Trennung
+  Migrations-Rolle (Owner) / Laufzeit-Rolle (ohne Ownership, ohne `BYPASSRLS`) von Slice 4 nach
+  **Slice 1 vorgezogen**; der Isolations-Negativtest läuft zwingend unter der Laufzeit-Rolle.
+- **Per-Row-Policy-Evaluation (Research F12):** ungewrappte Funktionsaufrufe in Policies kosten
+  ~18× (Benchmark s. Mechanismus Punkt 3) — Policies immer mit `(SELECT current_setting(…))`
+  schreiben/generieren; bei Slice-2/3-Abnahme per `EXPLAIN` prüfen, dass ein InitPlan erscheint.
 - **Connection-Pooling + `SET LOCAL`:** nur transaktionslokal sicher — die Extension MUSS jede
   Operation in eine Transaktion hüllen (kein bloßes `SET` auf gepoolter Connection).
 - **1.232 Tests:** Unit-Tests (In-Memory) bleiben unberührt; DB-Integrationstests brauchen einen
@@ -78,3 +99,9 @@ sofern nicht mandantenindividuell. Wird je Tabelle beim Rollout entschieden (Def
 Slice 1 ist bewusst **additiv und grün-haltend** (nullable `tenantId` + Backfill, Extension aktiv,
 aber Policies noch nicht erzwingend). Enforcement (Slice 2+) folgt als eigene, verifizierte Scheibe —
 so bleibt „nach jeder Schicht grün" (CLAUDE.md) auch bei einem 112-Tabellen-Rollout gewahrt.
+
+## Referenzen
+
+Die beiden RLS-Fallstricke (InitPlan-Wrapping, Owner-Bypass → Rollentrennung ab Slice 1) sind
+extern verifizierte Findings F12/F13 aus `docs/deep-research-vorsprung-2026.md` (je 3-0-Votum,
+Quellen dort verlinkt: u. a. PlanetScale-Benchmark, Postgres-Doku zu Owner/`BYPASSRLS`).

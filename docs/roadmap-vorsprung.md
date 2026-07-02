@@ -39,10 +39,13 @@ bleibt die Logik über Positionen/Repos verstreut (heutiger Zustand).
 **Entscheidung:** **voll umfänglich** — Design festgeschrieben in **ADR 0004** (Postgres Row-Level-
 Security, `Tenant`-Modell, `tenantId` je Tabelle, Policies `tenantId = current_setting('app.tenant_id')`,
 Tenant-Kontext pro Request via Prisma-Extension `SET LOCAL`). **Phasenweiser, grün-haltender Rollout:**
-Slice 1 Fundament (additiv, nullable, Backfill, Extension — keine erzwingenden Policies) → Slice 2
-Enforcement Wurzeln → Slice 3 Kinder-Tabellen (skriptgeneriert über DMMF) → Slice 4 Härtung
-(eigene App-Rolle ohne BYPASSRLS). Orthogonal zur Domänenlogik (ADR 0003). Aufwand L (mehrere Slices).
-Siehe `docs/adr/0004-rls-mandantenfaehigkeit.md`.
+Slice 1 Fundament (additiv, nullable, Backfill, Extension, **getrennte Migrations-/Laufzeit-Rollen**
+— keine erzwingenden Policies) → Slice 2 Enforcement Wurzeln → Slice 3 Kinder-Tabellen
+(skriptgeneriert über DMMF) → Slice 4 Härtung (FORCE RLS, Subdomain/Claim). Research-verifizierte
+Fallstricke eingearbeitet (F12/F13: Policy-`(SELECT …)`-Wrapping gegen ~18×-Per-Row-Kosten; stiller
+Owner-Bypass → Rollentrennung nach Slice 1 vorgezogen). Orthogonal zur Domänenlogik (ADR 0003).
+Aufwand L (mehrere Slices). Siehe `docs/adr/0004-rls-mandantenfaehigkeit.md` +
+`docs/deep-research-vorsprung-2026.md`.
 
 ### Phase B — Veredelung im BESTEHENDEN Modell schärfen  *(revidiert)*
 **Entscheidung (nach Logik-Prüfung):** KEINE separate Kalkulations-Engine. Der Bestand ist bereits
