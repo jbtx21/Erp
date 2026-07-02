@@ -143,7 +143,8 @@ export function MetricCard({
   minWidth?: number;
 }): JSX.Element {
   const clickable = Boolean(onClick);
-  const trendColor = trend ? (trend.dir === "up" ? "teal.8" : trend.dir === "down" ? "red.7" : "dimmed") : undefined;
+  // Positiver Trend in Forest (TEXMA OS: Erfolg = gedämpftes Grün, nie Signalgrün).
+  const trendColor = trend ? (trend.dir === "up" ? "forest.7" : trend.dir === "down" ? "red.7" : "dimmed") : undefined;
   const trendArrow = trend ? (trend.dir === "up" ? "↑" : trend.dir === "down" ? "↓" : "→") : "";
   const plainVal = typeof value === "string" || typeof value === "number" ? String(value) : "";
   // TEXMA-OS-KPI-Karte: weiße Fläche r18 + weicher Navy-Schatten (kein Rahmen),
