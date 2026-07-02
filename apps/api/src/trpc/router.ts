@@ -805,6 +805,16 @@ export const appRouter = router({
       .mutation(async ({ input, ctx }) => {
         try { return await ctx.goodsReceipts.record(input); } catch (e) { throw toTrpcError(e); }
       }),
+    // Unterlieferung abschließen (Kap. 6.3): offene Positionen (ohne lineIds: alle) als
+    // closedShort markieren; ist nichts mehr offen → Status ERHALTEN + closedShortAt.
+    closeShort: roleProcedure("ADMIN", "BUERO")
+      .input(z.object({
+        purchaseOrderId: z.string().min(1),
+        lineIds: z.array(z.string().min(1)).min(1).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        try { return await ctx.goodsReceipts.closeShort(input); } catch (e) { throw toTrpcError(e); }
+      }),
   }),
 
   // Vereinheitlichter Zahlungsabgleich (IA-Objekt-Merge, Kap. 9.4): EIN Lese-/Datenmodell

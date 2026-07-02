@@ -143,11 +143,13 @@ export function MetricCard({
   minWidth?: number;
 }): JSX.Element {
   const clickable = Boolean(onClick);
-  const trendColor = trend ? (trend.dir === "up" ? "teal.7" : trend.dir === "down" ? "red.7" : "dimmed") : undefined;
+  const trendColor = trend ? (trend.dir === "up" ? "teal.8" : trend.dir === "down" ? "red.7" : "dimmed") : undefined;
   const trendArrow = trend ? (trend.dir === "up" ? "↑" : trend.dir === "down" ? "↓" : "→") : "";
   const plainVal = typeof value === "string" || typeof value === "number" ? String(value) : "";
+  // TEXMA-OS-KPI-Karte: weiße Fläche r18 + weicher Navy-Schatten (kein Rahmen),
+  // Icon-Kachel 38px r10 (Pastellfläche + Ton), Label 10.5px versal, Zahl 31px tabular.
   return (
-    <Paper withBorder radius="md" p="md"
+    <Paper radius={18} shadow="sm" p={22}
       className={`erp-metric${clickable ? " erp-metric--btn" : ""}`}
       role={clickable ? "button" : undefined}
       tabIndex={clickable ? 0 : undefined}
@@ -155,20 +157,20 @@ export function MetricCard({
       onClick={onClick}
       onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.(); } } : undefined}
       style={{ flex: `1 1 ${minWidth}px`, minWidth }}>
-      <Group gap="sm" wrap="nowrap" align="flex-start">
+      <Group gap={15} wrap="nowrap" align="flex-start">
         {icon != null && (
           <Box aria-hidden style={{
             flexShrink: 0, width: 38, height: 38, borderRadius: 10, display: "grid", placeItems: "center",
             fontSize: 18, lineHeight: 1,
-            background: `var(--mantine-color-${accent}-1)`, color: `var(--mantine-color-${accent}-7)`,
+            background: `var(--mantine-color-${accent}-light)`, color: `var(--mantine-color-${accent}-light-color)`,
           }}>{icon}</Box>
         )}
         <Box style={{ minWidth: 0 }}>
-          <Text size="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: 0.4 }}>{label}</Text>
-          <Text fz={26} fw={700} lh={1.15} mt={2} style={{ fontVariantNumeric: "tabular-nums" }}>{value}</Text>
+          <Text component="div" fw={600} tt="uppercase" style={{ fontSize: 10.5, letterSpacing: "0.04em", color: "#7A828F", whiteSpace: "nowrap" }}>{label}</Text>
+          <Text fz={31} fw={600} lh={1.08} mt={5} style={{ fontVariantNumeric: "tabular-nums", letterSpacing: "-0.002em" }}>{value}</Text>
           {trend
-            ? <Text size="xs" c={trendColor} mt={2}>{trendArrow} {trend.text}</Text>
-            : hint != null ? <Text size="xs" c="dimmed" mt={2}>{hint}</Text> : null}
+            ? <Text mt={2} c={trendColor} style={{ fontSize: 11 }}>{trendArrow} {trend.text}</Text>
+            : hint != null ? <Text mt={2} style={{ fontSize: 11, color: "#9AA1AD" }}>{hint}</Text> : null}
         </Box>
       </Group>
     </Paper>
@@ -188,20 +190,22 @@ export function SegmentBar({ segments, height = 10, legend = true }: {
 }): JSX.Element {
   const total = segments.reduce((s, x) => s + x.value, 0);
   const aria = segments.map((s) => `${s.label}: ${s.value}`).join(", ");
+  // TEXMA-OS-Segmentbalken: Track #EEF0F3, Vollradius; Legende 12px in Text-2 mit
+  // navy-fetten tabellarischen Zahlen (Hero „Terminlage gesamt").
   return (
     <Box>
       <Box role="img" aria-label={aria}
-        style={{ display: "flex", height, borderRadius: 999, overflow: "hidden", background: "var(--mantine-color-gray-2)" }}>
+        style={{ display: "flex", height, borderRadius: 999, overflow: "hidden", background: "#EEF0F3" }}>
         {total > 0 && segments.map((s) => (s.value > 0
           ? <Box key={s.label} style={{ width: `${(s.value / total) * 100}%`, background: s.color }} title={`${s.label}: ${s.value}`} />
           : null))}
       </Box>
       {legend && (
-        <Group gap="md" mt={8} wrap="wrap">
+        <Group gap={20} mt={12} wrap="wrap">
           {segments.map((s) => (
-            <Group key={s.label} gap={6} wrap="nowrap">
+            <Group key={s.label} gap={7} wrap="nowrap">
               <Box aria-hidden style={{ width: 9, height: 9, borderRadius: "50%", background: s.color, flexShrink: 0 }} />
-              <Text size="xs" c="dimmed">{s.label} <Text span fw={700} style={{ fontVariantNumeric: "tabular-nums" }}>{s.value}</Text></Text>
+              <Text style={{ fontSize: 12, color: "#5B6473" }}>{s.label} <Text span fw={600} style={{ fontVariantNumeric: "tabular-nums", color: "#0E1C36" }}>{s.value}</Text></Text>
             </Group>
           ))}
         </Group>
@@ -214,11 +218,12 @@ export function SegmentBar({ segments, height = 10, legend = true }: {
 /** Standard-umrandeter Container mit Token-Radius — ersetzt das wiederholte Inline-Panel-Muster
  *  `style={{ border: "1px solid …", borderRadius: 8 }}`. `surface` = dezenter Hintergrund. */
 export function Panel({ children, surface, style, ...rest }: BoxProps & { children: ReactNode; surface?: boolean }): JSX.Element {
+  // TEXMA-OS-Panelfläche: Border-Token + Kartenradius 16, weiß (bzw. dezente Surface).
   return (
     <Box {...rest} style={{
-      border: "1px solid var(--mantine-color-gray-3)",
-      borderRadius: "var(--mantine-radius-md)",
-      ...(surface ? { background: "var(--mantine-color-gray-0)" } : {}),
+      border: "1px solid var(--erp-border)",
+      borderRadius: 16,
+      background: surface ? "var(--erp-surface-2)" : "#fff",
       ...(style as object),
     }}>
       {children}

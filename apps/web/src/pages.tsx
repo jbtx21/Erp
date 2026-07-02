@@ -408,8 +408,9 @@ export function AutoTable({
           {sel.size > 0 && <Button size="compact-xs" variant="subtle" color="gray" onClick={() => setSel(new Set())}>Auswahl aufheben</Button>}
         </Group>
       )}
-      <Table.ScrollContainer minWidth={action ? 820 : 600} mt={selectable || filters ? 0 : "sm"}>
-        <Table striped highlightOnHover withTableBorder verticalSpacing="xs" fz="sm" aria-label={label ?? "Datentabelle"}>
+      {/* TEXMA-OS-Datentabelle: weiße Karte (r16, Border) statt Zebra + Tabellenrahmen. */}
+      <Table.ScrollContainer minWidth={action ? 820 : 600} mt={selectable || filters ? 0 : "sm"} className="erp-tablecard">
+        <Table highlightOnHover verticalSpacing="xs" fz="sm" aria-label={label ?? "Datentabelle"}>
           <Table.Thead>
             <Table.Tr>
               {selectable && <Table.Th style={{ width: 32 }}><Checkbox aria-label="Alle auswählen" checked={allSelected} indeterminate={sel.size > 0 && !allSelected} onChange={toggleAll} /></Table.Th>}

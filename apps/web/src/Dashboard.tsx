@@ -77,13 +77,14 @@ export function Dashboard(): JSX.Element {
   return (
     <>
       <Group justify="space-between" align="start" wrap="nowrap">
-        <Title order={1}>Übersicht — Termin-Ampel</Title>
+        {/* Dashboard-H1 im TEXMA-OS-Maß (32px, ruhig gesetzt). */}
+        <Title order={1} style={{ fontSize: 32, fontWeight: 500, letterSpacing: "-0.008em" }}>Übersicht — Termin-Ampel</Title>
         <Group gap="xs">
           <Button size="xs" variant="default" onClick={() => void exportPdf()}>Arbeitsliste (PDF)</Button>
           <Button size="xs" variant="default" onClick={() => void exportCsv()}>CSV</Button>
         </Group>
       </Group>
-      <Text size="sm" c="dimmed" mt={4}>Ebenenübergreifende Terminlage (Kap. 35.4): dringendste Vorgänge zuerst. Ersetzt die Excel-Terminliste. Für den Offline-Notbetrieb (K-17) als PDF/CSV exportierbar.</Text>
+      <Text mt={4} maw={640} style={{ fontSize: 13, color: "#5B6473" }}>Ebenenübergreifende Terminlage (Kap. 35.4): dringendste Vorgänge zuerst. Ersetzt die Excel-Terminliste. Für den Offline-Notbetrieb (K-17) als PDF/CSV exportierbar.</Text>
 
       {urgent && (
         <Alert mt="md" variant="light" color={statusColor(urgent.ampel)} title="Dringendster Vorgang">
@@ -96,9 +97,9 @@ export function Dashboard(): JSX.Element {
       )}
 
       {/* Hero-Verteilung: proportionaler ROT/GELB/GRÜN-Balken über alle Vorgänge. */}
-      <Paper withBorder={false} shadow="sm" radius="lg" p="lg" mt="md">
+      <Paper withBorder={false} shadow="sm" radius={22} p={22} mt="md">
         <Group justify="space-between" mb="sm" wrap="nowrap">
-          <Text fw={700} size="sm">Terminlage gesamt</Text>
+          <Text fw={600} style={{ fontSize: 13.5 }}>Terminlage gesamt</Text>
           <Text size="xs" c="dimmed">{summary.total} Vorgänge</Text>
         </Group>
         <SegmentBar height={14}
@@ -118,7 +119,7 @@ export function Dashboard(): JSX.Element {
         <MetricCard value={summary.kritisch} label="Kritisch" accent="danger" icon={<Icon name="flame" />} hint="Eskalation 2" minWidth={140} />
       </SimpleGrid>
 
-      <Paper withBorder={false} shadow="sm" radius="lg" p="lg" mt="lg">
+      <Paper withBorder={false} shadow="sm" radius={22} p={22} mt="lg">
       <Title order={4}>Status je Ebene</Title>
       <Table mt="xs" verticalSpacing="xs" fz="sm" w="auto">
         <Table.Thead>
@@ -135,7 +136,7 @@ export function Dashboard(): JSX.Element {
             return (
               <Table.Tr key={lvl}>
                 <Table.Td>{LEVEL_LABEL[lvl]}</Table.Td>
-                {td(b.rot, "red.7")}{td(b.gelb, "amber.7")}{td(b.gruen, "teal.7")}
+                {td(b.rot, "red.7")}{td(b.gelb, "amber.7")}{td(b.gruen, "forest.7")}
               </Table.Tr>
             );
           })}
@@ -143,10 +144,10 @@ export function Dashboard(): JSX.Element {
       </Table>
       </Paper>
 
-      <Paper withBorder={false} shadow="sm" radius="lg" p="lg" mt="lg">
+      <Paper withBorder={false} shadow="sm" radius={22} p={22} mt="lg">
       <Title order={4}>Dringlichkeitsliste</Title>
       {rows.length === 0 ? <Text c="dimmed" mt="sm">Keine terminierten Vorgänge.</Text> : (
-        <Table striped highlightOnHover mt="xs" verticalSpacing="xs" fz="sm">
+        <Table highlightOnHover mt="xs" verticalSpacing="xs" fz="sm">
           <Table.Thead>
             <Table.Tr>
               <Table.Th>Ampel</Table.Th><Table.Th>Ebene</Table.Th><Table.Th>Vorgang</Table.Th>

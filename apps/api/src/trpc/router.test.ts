@@ -1263,6 +1263,12 @@ describe("tRPC goodsReceipts — Wareneingang gegen Bestellung (T-05)", () => {
     await expect(caller.goodsReceipts.record({ purchaseOrderId: "po1", lines: [{ variantId: "v1", receivedQty: 5 }] }))
       .rejects.toMatchObject({ code: "FORBIDDEN" });
   });
+
+  it("PRODUKTION darf keine Unterlieferung abschließen (FORBIDDEN)", async () => {
+    const { caller } = setup(PRODUKTION);
+    await expect(caller.goodsReceipts.closeShort({ purchaseOrderId: "po1" }))
+      .rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
 });
 
 describe("tRPC payments — manuelle Zahlungserfassung (Kap. 9.4)", () => {

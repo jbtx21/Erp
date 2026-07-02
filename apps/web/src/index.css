@@ -119,6 +119,41 @@ table {
   font-variant-numeric: tabular-nums;
 }
 
+/* ── Datentabellen im TEXMA-OS-Look ──────────────────────────────────────────
+   Kein Zebra: weiße Zeilen, Hairline-Trenner #F1F3F5, Hover-Fläche #F5F6F8.
+   Kopfzeile 10.5px versal (ls .05em) in Text-3 (Design nutzt #9AA1AD; hier #7A828F,
+   damit der Kopf WCAG-AA lesbar bleibt) mit Border-Trennlinie. Greift global,
+   damit auch explizit `striped` gesetzte Tabellen dem Design folgen. */
+.mantine-Table-table {
+  --table-striped-color: transparent;
+  --table-hover-color: #f5f6f8;
+  --table-border-color: var(--erp-border);
+  background: #fff;
+}
+.mantine-Table-thead .mantine-Table-th {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--erp-text-3);
+}
+.mantine-Table-tbody .mantine-Table-td {
+  border-top-color: var(--erp-hairline);
+}
+
+/* Tabellen-Karte: der ScrollContainer der AutoTable wird zur weißen Karte
+   (r16 + Border, TEXMA-OS-Datentabelle); die Tabelle selbst verliert dort
+   ihren eigenen Rahmen (sonst Doppelrahmen). */
+.erp-tablecard {
+  background: #fff;
+  border: 1px solid var(--erp-border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.erp-tablecard .mantine-Table-table {
+  border: 0;
+}
+
 /* Badge-Mindestschrift 11px (Skill T-1 / Lesbarkeit): Mantine-„xs"-Badges rendern sonst
    ~10px. Greift per Source-Order nach den Mantine-Styles, ohne !important. */
 .mantine-Badge-root {

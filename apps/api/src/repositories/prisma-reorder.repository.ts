@@ -47,12 +47,15 @@ export class PrismaReorderRepository implements ReorderRepository {
    * Status-Enum kennt keinen Storno-Wert. Wareneingänge (GoodsReceiptLine) hängen an
    * PO + Variante (kein poLineId), daher wird je Bestellung ordered − received je Variante
    * verrechnet (auf 0 geklemmt), sodass Teilmengen korrekt abgezogen werden.
+   *
+   * Unterlieferung (Kap. 6.3): closedShort-Positionen sind abgeschlossen — ihre Fehlmenge
+   * kommt nicht mehr, darf den Bedarf also nicht weiter senken → aus ordered ausgenommen.
    */
   async openPurchaseOrderQty(): Promise<DemandOpenOrder[]> {
     const openPos = await prisma.purchaseOrder.findMany({
       where: { status: { in: ["BESTELLT", "TEILWEISE_ERHALTEN"] } },
       select: {
-        lines: { select: { variantId: true, qty: true } },
+        lines: { where: { closedShort: false }, select: { variantId: true, qty: true } },
         goodsReceipts: { select: { lines: { select: { variantId: true, receivedQty: true } } } },
       },
     });

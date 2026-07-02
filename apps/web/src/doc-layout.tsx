@@ -104,7 +104,7 @@ export function EmptyState({
 }): JSX.Element {
   return (
     <Box ta="center" py="xl" px="md" mt="sm"
-      style={{ border: "1px dashed var(--mantine-color-gray-3)", borderRadius: 8, background: "var(--mantine-color-gray-0)" }}>
+      style={{ border: "2px dashed #D6DAE1", borderRadius: 14, background: "#FAFBFC" }}>
       <Text fz={32} aria-hidden>{icon}</Text>
       <Text fw={600} mt={4}>{title}</Text>
       {hint && <Text size="sm" c="dimmed" mt={4} maw={440} mx="auto">{hint}</Text>}
@@ -131,10 +131,11 @@ export function DocListHeader({
     <>
       <Group justify="space-between" align="flex-end" wrap="nowrap">
         <Box>
-          {module && <Text size="xs" c="dimmed">{module}</Text>}
+          {module && <Text size="xs" style={{ color: "#7A828F" }}>{module}</Text>}
           {/* Seitentitel = einzige <h1> der Route (Screenreader-Einstieg, WCAG page-has-heading-one). */}
           <Title order={1}>{title}</Title>
-          {hint && <Text size="sm" c="dimmed" mt={2}>{hint}</Text>}
+          {/* Untertitel im TEXMA-OS-Maß: 13.5px, Text-3. */}
+          {hint && <Text mt={5} style={{ fontSize: 13.5, color: "#7A828F" }}>{hint}</Text>}
         </Box>
         {action && <Group gap="xs">{action}</Group>}
       </Group>

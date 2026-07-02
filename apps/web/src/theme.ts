@@ -193,7 +193,7 @@ export const mantineTheme = createTheme({
   components: {
     // TEXMA OS: Tabellen ohne Zebra — weiße Zeilen mit Hairline-Trennern + Hover #F5F6F8
     // (Feinstyling der Kopfzeile in index.css).
-    Table: { defaultProps: { striped: false, highlightOnHover: true, withTableBorder: true, verticalSpacing: "xs", horizontalSpacing: "sm", fz: "sm" } },
+    Table: { defaultProps: { striped: false, highlightOnHover: true, withTableBorder: false, verticalSpacing: "xs", horizontalSpacing: "sm", fz: "sm" } },
     // Karten premium: weicher Schatten + große Rundung statt hartem 1px-Rahmen (borderless-Look).
     Card: { defaultProps: { radius: "lg", shadow: "sm" } },
     Paper: { defaultProps: { radius: "lg" } },

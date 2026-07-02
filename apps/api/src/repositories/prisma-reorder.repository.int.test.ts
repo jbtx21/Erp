@@ -70,5 +70,21 @@ if (!dbConfigured) {
       const line = await prisma.purchaseOrderLine.findFirst({ where: { purchaseOrderId: created[0]!.purchaseOrderId } });
       expect(line).toMatchObject({ variantId: V_LOW, qty: 8, ekCents: 500 });
     });
+
+    // Unterlieferung (Kap. 6.3): eine closedShort-Position darf den Bedarf nicht mehr
+    // senken — sonst drückt die abgeschlossene Fehlmenge die Nachbestellung dauerhaft.
+    it("closedShort-Positionen zählen nicht mehr als offene Bestellmenge", async () => {
+      const repo = new PrismaReorderRepository();
+      // Die im vorigen Test angelegte Bestellung (BESTELLT, qty 8) ist offen.
+      const before = await repo.openPurchaseOrderQty();
+      expect(before.find((o) => o.variantId === V_LOW)?.qty).toBe(8);
+
+      await prisma.purchaseOrderLine.updateMany({
+        where: { variantId: V_LOW, purchaseOrder: { supplierId: SUP } },
+        data: { closedShort: true },
+      });
+      const after = await repo.openPurchaseOrderQty();
+      expect(after.find((o) => o.variantId === V_LOW)).toBeUndefined();
+    });
   });
 }
