@@ -21,6 +21,8 @@ export interface ReorderProposal {
   /** Nachzubestellende Menge, um den Mindestbestand wieder zu erreichen. */
   orderQty: number;
   ekCents: Cents;
+  /** Bedarfsquellen (Auftrag/Leihe) — nur beim MTO-Pfad aus Auftragsbedarf gefüllt. */
+  sources?: Array<{ source: "ORDER" | "LOAN"; ref: string; qty: number }>;
 }
 
 export interface SupplierReorder {
@@ -104,6 +106,33 @@ export function aggregateDemand(
     out.push({ variantId, supplierId: sup?.supplierId ?? null, requiredQty: Math.max(0, agg.required), stockQty, orderQty, ekCents: sup?.ekCents ?? 0, sources: agg.sources });
   }
   return out.sort((a, b) => b.orderQty - a.orderQty);
+}
+
+export interface GroupedDemand {
+  /** Je Hauptlieferant gebündelter Bedarf — 1 Klick = 1 Bestellung je Lieferant. */
+  bestellbar: SupplierReorder[];
+  /** Bedarf ohne Hauptlieferant: nicht automatisch bestellbar, braucht Klärung. */
+  ohneLieferant: DemandProposal[];
+}
+
+/**
+ * Partitioniert den Auftragsbedarf (MTO, Kap. 6.1) in bestellbare Vorschläge je
+ * Hauptlieferant und in Positionen ohne Lieferant. Nur Zeilen mit orderQty > 0;
+ * die Bedarfsquellen (Auftrag/Leihe) werden je Position mitgeführt, damit die
+ * Bestellposition auf ihre Aufträge rückverweisbar bleibt.
+ */
+export function groupDemandBySupplier(proposals: ReadonlyArray<DemandProposal>): GroupedDemand {
+  const bestellbar: ReorderProposal[] = [];
+  const ohneLieferant: DemandProposal[] = [];
+  for (const p of proposals) {
+    if (p.orderQty <= 0) continue;
+    if (p.supplierId === null) {
+      ohneLieferant.push(p);
+      continue;
+    }
+    bestellbar.push({ variantId: p.variantId, supplierId: p.supplierId, orderQty: p.orderQty, ekCents: p.ekCents, sources: p.sources });
+  }
+  return { bestellbar: groupReorderBySupplier(bestellbar), ohneLieferant };
 }
 
 /** Bündelt Bestellvorschläge je Lieferant (1 Klick = 1 Bestellung, Kap. 6.1). */

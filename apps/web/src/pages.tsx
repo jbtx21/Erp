@@ -1120,6 +1120,8 @@ export function ReorderPage({ onOpen }: { onOpen?: (k: string, id: string) => vo
   const [proposals, setProposals] = useState<Row[]>([]);
   const [demand, setDemand] = useState<Awaited<ReturnType<typeof trpc.reorder.demandProposals.query>>>([]);
   const [grouped, setGrouped] = useState<Awaited<ReturnType<typeof trpc.reorder.demandGrouped.query>>>([]);
+  // MTO: nach „Bestellungen aus Auftragsbedarf" die nicht bestellbaren Zeilen (Lieferant fehlt).
+  const [skipped, setSkipped] = useState<Awaited<ReturnType<typeof trpc.reorder.createDemandPurchaseOrders.mutate>>["uebersprungen"]>([]);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -1147,8 +1149,14 @@ export function ReorderPage({ onOpen }: { onOpen?: (k: string, id: string) => vo
 
       <Group mt="sm">
         <Button size="xs" onClick={async () => { setMsg(null); try { const r = await trpc.reorder.createPurchaseOrders.mutate(); setMsg(`Bestellungen erzeugt: ${r.length}`); await reload(); } catch (e) { setMsg(errMsg(e)); } }}>Bestellungen aus Mindestbestand erzeugen</Button>
+        <Button size="xs" variant="light" onClick={async () => { setMsg(null); try { const r = await trpc.reorder.createDemandPurchaseOrders.mutate(); setSkipped(r.uebersprungen); if (r.created.length > 0) notify.success(`Bestellungen aus Auftragsbedarf erzeugt: ${r.created.map((c) => `${c.number} (${c.supplierName})`).join(", ")}`); else if (r.uebersprungen.length === 0) notify.info("Kein bestellbarer Auftragsbedarf vorhanden."); await reload(); } catch (e) { setMsg(errMsg(e)); } }}>Bestellungen aus Auftragsbedarf erzeugen</Button>
         {msg && <Text size="xs" c="dimmed">{msg}</Text>}
       </Group>
+      {skipped.length > 0 && (
+        <Alert color="orange" mt="sm">
+          Nicht bestellbar — Lieferant fehlt: {skipped.map((s) => `${variantLabel(s.variantId)}: ${s.orderQty} Stk.`).join(" · ")}
+        </Alert>
+      )}
 
       <Title order={4} mt="lg">Auftragsübergreifender Bedarf</Title>
       {demand.length === 0 ? <Text size="sm" c="dimmed" mt="xs">Kein offener variantenbezogener Bedarf (Auftragspositionen mit Artikelverknüpfung nötig).</Text> : (

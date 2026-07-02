@@ -76,3 +76,39 @@ describe("aggregateDemand (auftragsübergreifend + Leihgut)", () => {
     expect(props).toHaveLength(0);
   });
 });
+
+import { groupDemandBySupplier, type DemandProposal } from "./reorder.js";
+
+describe("groupDemandBySupplier (MTO — 1-Klick-Bestellungen aus Auftragsbedarf, Kap. 6.1)", () => {
+  const prop = (over: Partial<DemandProposal>): DemandProposal => ({
+    variantId: "v", supplierId: "s", requiredQty: 1, stockQty: 0, orderQty: 1, ekCents: 100, sources: [], ...over,
+  });
+
+  it("bündelt bestellbaren Bedarf je Lieferant und summiert den Bestellwert", () => {
+    const { bestellbar, ohneLieferant } = groupDemandBySupplier([
+      prop({ variantId: "v1", supplierId: "s1", orderQty: 7, ekCents: 500, sources: [{ source: "ORDER", ref: "AB-1", qty: 7 }] }),
+      prop({ variantId: "v2", supplierId: "s1", orderQty: 2, ekCents: 400 }),
+      prop({ variantId: "v3", supplierId: "s2", orderQty: 5, ekCents: 300 }),
+    ]);
+    expect(ohneLieferant).toHaveLength(0);
+    expect(bestellbar).toHaveLength(2);
+    const s1 = bestellbar.find((g) => g.supplierId === "s1")!;
+    expect(s1.lines.map((l) => l.variantId)).toEqual(["v1", "v2"]);
+    expect(s1.totalEkCents).toBe(7 * 500 + 2 * 400);
+    // Bedarfsquellen bleiben an der Position (PO ↔ Auftrag-Rückverweis).
+    expect(s1.lines[0]?.sources).toEqual([{ source: "ORDER", ref: "AB-1", qty: 7 }]);
+  });
+
+  it("partitioniert Bedarf ohne Hauptlieferant nach ohneLieferant (Klärung statt Bestellung)", () => {
+    const offen = prop({ variantId: "v-x", supplierId: null, orderQty: 3 });
+    const { bestellbar, ohneLieferant } = groupDemandBySupplier([offen, prop({ variantId: "v1", supplierId: "s1" })]);
+    expect(bestellbar).toHaveLength(1);
+    expect(ohneLieferant).toEqual([offen]);
+  });
+
+  it("ignoriert Zeilen ohne Bestellmenge (orderQty 0)", () => {
+    const { bestellbar, ohneLieferant } = groupDemandBySupplier([prop({ orderQty: 0 }), prop({ orderQty: 0, supplierId: null })]);
+    expect(bestellbar).toHaveLength(0);
+    expect(ohneLieferant).toHaveLength(0);
+  });
+});

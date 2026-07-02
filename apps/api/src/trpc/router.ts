@@ -1270,6 +1270,11 @@ export const appRouter = router({
     createPurchaseOrders: roleProcedure("ADMIN", "BUERO").mutation(async ({ ctx }) =>
       ctx.reorder.createPurchaseOrders()
     ),
+
+    /** 1-Klick-Bestellungen aus Auftragsbedarf (MTO): je Hauptlieferant EINE Bestellung inkl. Quell-Aufträgen. */
+    createDemandPurchaseOrders: roleProcedure("ADMIN", "BUERO").mutation(async ({ ctx }) =>
+      ctx.reorder.createDemandPurchaseOrders()
+    ),
   }),
 
   // Transferdruck-Bezug (Inhouse-Veredelung, Kap. 5.4/11): Lager TRANSFERDRUCK zuerst,

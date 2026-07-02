@@ -7,6 +7,7 @@
 import {
   aggregateDemand,
   computeReorderProposals,
+  groupDemandBySupplier,
   groupReorderBySupplier,
   type DemandItem,
   type DemandProposal,
@@ -19,9 +20,17 @@ import { buildEntry, type AuditSink } from "@texma/audit";
 
 export interface CreatedReorderPo {
   supplierId: string;
+  supplierName: string;
   purchaseOrderId: string;
   number: string;
   lineCount: number;
+}
+
+/** Ergebnis der 1-Klick-Bestellung aus Auftragsbedarf (MTO, Kap. 6.1). */
+export interface DemandPoResult {
+  created: Array<{ poId: string; number: string; supplierId: string; supplierName: string; lines: number }>;
+  /** Bedarf ohne Hauptlieferant — braucht Stammdaten-Klärung statt Bestellung. */
+  uebersprungen: Array<DemandProposal & { grund: string }>;
 }
 
 export interface ReorderRepository {
@@ -136,5 +145,52 @@ export class ReorderService {
       })
     );
     return created;
+  }
+
+  /**
+   * 1-Klick-Bestellungen aus Auftragsbedarf (MTO, Kap. 6.1): der konsolidierte Bedarf
+   * aller offenen Aufträge + Muster-Leihen wird je Hauptlieferant zu EINER Bestellung —
+   * inkl. Bedarfsquellen je Position (PO ↔ Auftrag rückverfolgbar). Bedarf ohne
+   * Hauptlieferant wird nicht bestellt, sondern zur Klärung zurückgemeldet.
+   * Abgrenzung: `createPurchaseOrders()` bedient den Mindestbestand-Pfad (T-12).
+   */
+  async createDemandPurchaseOrders(): Promise<DemandPoResult> {
+    const { bestellbar, ohneLieferant } = groupDemandBySupplier(await this.demandProposals());
+    const uebersprungen = ohneLieferant.map((p) => ({ ...p, grund: "Kein Hauptlieferant" }));
+    if (bestellbar.length === 0) return { created: [], uebersprungen };
+
+    const created = await this.repo.createPurchaseOrders(bestellbar);
+    // GoBD: je angelegter Bestellung ein Audit-Eintrag mit Positionen + Bedarfsquellen.
+    for (const po of created) {
+      const group = bestellbar.find((g) => g.supplierId === po.supplierId);
+      await this.audit.append(
+        buildEntry({
+          entity: "PurchaseOrder",
+          entityId: po.purchaseOrderId,
+          action: "CREATE",
+          after: {
+            number: po.number,
+            supplierId: po.supplierId,
+            quelle: "auftragsbedarf",
+            positionen: (group?.lines ?? []).map((l) => ({
+              variantId: l.variantId,
+              qty: l.orderQty,
+              ekCents: l.ekCents,
+              quellen: (l.sources ?? []).map((s) => `${s.source === "ORDER" ? "Auftrag" : "Leihe"} ${s.ref}: ${s.qty}`),
+            })),
+          },
+        })
+      );
+    }
+    return {
+      created: created.map((po) => ({
+        poId: po.purchaseOrderId,
+        number: po.number,
+        supplierId: po.supplierId,
+        supplierName: po.supplierName,
+        lines: po.lineCount,
+      })),
+      uebersprungen,
+    };
   }
 }

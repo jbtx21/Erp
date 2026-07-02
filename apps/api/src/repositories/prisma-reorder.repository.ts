@@ -82,6 +82,12 @@ export class PrismaReorderRepository implements ReorderRepository {
     // Belegnummern vorab lückenlos reservieren (BE-JAHR-NNNN) — sequenziell, kollisionsfrei.
     const numbers: string[] = [];
     for (const _g of groups) numbers.push(await this.numbering.next("PURCHASE_ORDER"));
+    // Auftragsnummern der Bedarfsquellen (MTO) → Order-Ids für den PO ↔ Auftrag-Rückverweis.
+    const orderRefs = [...new Set(groups.flatMap((g) => g.lines.flatMap((l) => (l.sources ?? []).filter((s) => s.source === "ORDER").map((s) => s.ref))))];
+    const refOrders = orderRefs.length > 0
+      ? await prisma.order.findMany({ where: { number: { in: orderRefs } }, select: { id: true, number: true } })
+      : [];
+    const orderIdByNumber = new Map(refOrders.map((o) => [o.number, o.id]));
     return prisma.$transaction(async (tx) => {
       const out: CreatedReorderPo[] = [];
       for (let i = 0; i < groups.length; i++) {
@@ -93,9 +99,20 @@ export class PrismaReorderRepository implements ReorderRepository {
             status: "BESTELLT",
             lines: { create: g.lines.map((l) => ({ variantId: l.variantId, qty: l.orderQty, ekCents: l.ekCents })) },
           },
-          select: { id: true, number: true },
+          select: { id: true, number: true, supplier: { select: { name: true } }, lines: { select: { id: true, variantId: true } } },
         });
-        out.push({ supplierId: g.supplierId, purchaseOrderId: po.id, number: po.number, lineCount: g.lines.length });
+        // Bedarfsquellen je Position persistieren (nur MTO-Pfad; T-12 hat keine Quellen).
+        const lineIdByVariant = new Map(po.lines.map((l) => [l.variantId, l.id]));
+        const sourceRows = g.lines.flatMap((l) =>
+          (l.sources ?? []).map((s) => ({
+            purchaseOrderLineId: lineIdByVariant.get(l.variantId)!,
+            orderId: s.source === "ORDER" ? orderIdByNumber.get(s.ref) ?? null : null,
+            ref: s.ref,
+            qty: s.qty,
+          }))
+        );
+        if (sourceRows.length > 0) await tx.purchaseOrderLineSource.createMany({ data: sourceRows });
+        out.push({ supplierId: g.supplierId, supplierName: po.supplier.name, purchaseOrderId: po.id, number: po.number, lineCount: g.lines.length });
       }
       return out;
     });

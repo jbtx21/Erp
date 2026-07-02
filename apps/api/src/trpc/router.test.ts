@@ -984,6 +984,26 @@ describe("tRPC reorder — Mindestbestand-Nachbestellung (T-12)", () => {
     const { caller } = setup(PRODUKTION);
     await expect(caller.reorder.proposals()).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
+
+  // MTO: 1-Klick-Bestellungen aus Auftragsbedarf (Abgrenzung zu T-12/Mindestbestand).
+  it("erzeugt Bestellungen aus Auftragsbedarf und meldet Bedarf ohne Lieferant zurück", async () => {
+    const { caller, reorderRepo } = setup(BUERO);
+    reorderRepo.demand = [
+      { variantId: "v1", qty: 12, source: "ORDER", ref: "AB-1" },
+      { variantId: "v9", qty: 3, source: "ORDER", ref: "AB-2" }, // ohne Hauptlieferant
+    ];
+    reorderRepo.suppliers = [{ variantId: "v1", supplierId: "sup_id", ekCents: 500 }];
+    const res = await caller.reorder.createDemandPurchaseOrders();
+    expect(res.created).toHaveLength(1);
+    expect(res.created[0]).toMatchObject({ supplierId: "sup_id", lines: 1 });
+    expect(res.uebersprungen).toHaveLength(1);
+    expect(res.uebersprungen[0]).toMatchObject({ variantId: "v9", grund: "Kein Hauptlieferant" });
+  });
+
+  it("PRODUKTION darf keine Bestellungen aus Auftragsbedarf erzeugen (FORBIDDEN)", async () => {
+    const { caller } = setup(PRODUKTION);
+    await expect(caller.reorder.createDemandPurchaseOrders()).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
 });
 
 describe("tRPC productionSheet — Produktionszettel-PDF (T-11)", () => {

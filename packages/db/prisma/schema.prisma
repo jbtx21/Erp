@@ -1135,6 +1135,8 @@ model Order {
   abschlaege  Abschlagsrechnung[] // Abschlags-/Teilrechnungen (Xentral)
   deliveryNotes DeliveryNote[]
   complaints  Complaint[]
+  // Bestellpositionen, die dieser Auftrag ausgelöst hat (MTO-Rückverweis, Kap. 6.1)
+  purchaseOrderLineSources PurchaseOrderLineSource[]
   // Mandant (ADR 0004, Slice 2) — Pflichtfeld mit Default: der Default "tenant_texma"
   // hält alle bestehenden create-Aufrufe grün (kein Call-Site-Refactor); er fällt in
   // Slice 4, wenn tenantId bei echter Multi-Tenant-Anlage überall explizit gesetzt wird.
@@ -1626,8 +1628,27 @@ model PurchaseOrderLine {
   variant         Variant @relation(fields: [variantId], references: [id])
   qty             Int
   ekCents         Int
+  sources         PurchaseOrderLineSource[]
 
   @@index([purchaseOrderId])
+}
+
+// Bedarfsquelle einer Bestellposition (MTO, Kap. 6.1): welche Kundenaufträge/Leihen
+// die Menge ausgelöst haben — PO ↔ Auftrag rückverfolgbar (Abgrenzung zu T-12:
+// Mindestbestand-Bestellungen haben keine Quellen). Additiv, nur beim
+// Auftragsbedarf-Pfad gefüllt.
+model PurchaseOrderLineSource {
+  id                  String  @id @default(cuid())
+  purchaseOrderLineId String
+  purchaseOrderLine   PurchaseOrderLine @relation(fields: [purchaseOrderLineId], references: [id])
+  // Kundenauftrag; null bei Muster-Leihen oder nicht auflösbarer Referenz.
+  orderId             String?
+  order               Order?  @relation(fields: [orderId], references: [id])
+  ref                 String // Belegreferenz (Auftragsnummer bzw. Leih-Id)
+  qty                 Int
+
+  @@index([purchaseOrderLineId])
+  @@index([orderId])
 }
 
 model GoodsReceipt {
