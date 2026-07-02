@@ -15,10 +15,14 @@ async function main(): Promise<void> {
   }
   const passwordHash = await new Argon2Hasher().hash(password);
 
+  // Default-Tenant (ADR 0004, Slice 1): sicherstellen + den Admin daran hängen.
+  await prisma.tenant.upsert({
+    where: { id: "tenant_texma" }, update: {}, create: { id: "tenant_texma", name: "TEXMA" },
+  });
   const user = await prisma.user.upsert({
     where: { email },
     update: {},
-    create: { email, name: "Administrator", role: "ADMIN", passwordHash },
+    create: { email, name: "Administrator", role: "ADMIN", passwordHash, tenantId: "tenant_texma" },
   });
   console.log(`ADMIN bereit: ${user.email} (${user.id})`);
   await prisma.$disconnect();

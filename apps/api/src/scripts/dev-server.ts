@@ -14,7 +14,7 @@ import { buildServer } from "../server.js";
 const server = buildServer({
   identityVerifier: null,
   // ADMIN: alle Bereiche sichtbar (keine Rollen-Redaktion beim Durchklicken).
-  demoUser: { id: "demo-admin", email: "admin@texma-gmbh.de", name: "Demo Admin", role: "ADMIN", totpEnabled: true },
+  demoUser: { id: "demo-admin", email: "admin@texma-gmbh.de", name: "Demo Admin", role: "ADMIN", totpEnabled: true, tenantId: "tenant_texma" },
 });
 
 const port = Number(process.env.PORT ?? 3000);

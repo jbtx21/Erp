@@ -65,6 +65,7 @@ export class PrismaUserRepository implements UserRepository {
       active: u.active,
       failedLoginCount: u.failedLoginCount,
       lockedUntil: u.lockedUntil,
+      tenantId: u.tenantId,
     };
   }
 }

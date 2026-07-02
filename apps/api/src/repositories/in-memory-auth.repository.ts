@@ -43,7 +43,7 @@ export class InMemoryUserRepository implements UserRepository {
   }
   async create(input: { email: string; name: string; role: Role; passwordHash: string }): Promise<{ id: string }> {
     const id = `user_${String(++this.seq)}`;
-    this.users.push({ id, email: input.email, name: input.name, role: input.role, passwordHash: input.passwordHash, totpSecret: null, totpEnabled: false, active: true, failedLoginCount: 0, lockedUntil: null });
+    this.users.push({ id, email: input.email, name: input.name, role: input.role, passwordHash: input.passwordHash, totpSecret: null, totpEnabled: false, active: true, failedLoginCount: 0, lockedUntil: null, tenantId: null });
     return { id };
   }
   async list(): Promise<UserListRow[]> {

@@ -156,7 +156,7 @@ const bankConnections = new BankConnectionService(bankRepoMem, finApi, bankingIm
 
 const server = buildServer({
   identityVerifier: null,
-  demoUser: { id: "demo-user", email: "demo@texma.de", name: "Demo Büro", role: "BUERO", totpEnabled: true },
+  demoUser: { id: "demo-user", email: "demo@texma.de", name: "Demo Büro", role: "BUERO", totpEnabled: true, tenantId: "tenant_texma" },
   contextOverrides: {
     ampel: new AmpelService(new InMemoryAmpelRepository(ampelProcesses)),
     subproduction: new SubProductionService(new InMemorySubProductionRepository(subStages), new MemoryAuditSink()),

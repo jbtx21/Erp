@@ -18,7 +18,7 @@ describe("Fastify + tRPC Server", () => {
     const verifier = {
       verify: async (token: string) =>
         token === "good"
-          ? { id: "u-oidc", email: "o@texma.de", name: "OIDC", role: "BUERO" as const, totpEnabled: true }
+          ? { id: "u-oidc", email: "o@texma.de", name: "OIDC", role: "BUERO" as const, totpEnabled: true, tenantId: "tenant_texma" }
           : Promise.reject(new Error("bad token")),
     };
     const server = buildServer({ identityVerifier: verifier });

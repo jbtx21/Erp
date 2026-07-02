@@ -13,6 +13,26 @@ datasource db {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Mandanten — ADR 0004 (RLS-Mandantenfähigkeit), Slice 1: Fundament
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Mandant = eine Tenant-Zeile. Slice 1 hängt tenantId ADDITIV/nullable an die
+// Wurzel-Entitäten (Backfill auf den Default-Tenant "tenant_texma"); NOT NULL +
+// RLS-Policies folgen in Slice 2, die Kinder-Tabellen in Slice 3 (ADR 0004).
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  users     User[]
+  companies Company[]
+  suppliers Supplier[]
+  articles  Article[]
+  quotes    Quote[]
+  orders    Order[]
+  invoices  Invoice[]
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Identity & Access — Kap. 12 (Rollen), Kap. 14 (2FA), Kap. 28 (Zugriffs-Logging)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -42,6 +62,11 @@ model User {
   accessLogs   AccessLog[]
   resetTokens  PasswordResetToken[]
   preferences  UserPreference[]
+  // Mandant (ADR 0004, Slice 1) — nullable bis Slice 2 (NOT NULL + RLS-Policy).
+  tenantId     String?
+  tenant       Tenant?   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 // Server-seitige Session (Kap. 14). tokenHash = SHA-256 des Cookie-Tokens — der
@@ -181,10 +206,14 @@ model Company {
   shopConnectors  ShopConnector[] // T-01: Shops mappen auf die Firma, nicht auf Mitarbeiter
   opportunities   Opportunity[] // Verkaufschancen (CRM)
   callLogs        CallLog[] // Anrufprotokoll (Telefon-Modul)
+  // Mandant (ADR 0004, Slice 1) — nullable bis Slice 2 (NOT NULL + RLS-Policy).
+  tenantId        String?
+  tenant          Tenant?   @relation(fields: [tenantId], references: [id])
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
   @@index([name])
+  @@index([tenantId])
 }
 
 model Contact {
@@ -454,10 +483,14 @@ model Article {
   variants    Variant[]
   mediaAssets   MediaAsset[]
   finishingSpecs FinishingSpec[]
+  // Mandant (ADR 0004, Slice 1) — nullable bis Slice 2 (NOT NULL + RLS-Policy).
+  tenantId    String?
+  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
   @@index([name])
+  @@index([tenantId])
 }
 
 // Saison/Kollektion (B18, Kap. 3).
@@ -712,7 +745,12 @@ model Supplier {
   purchaseOrders  PurchaseOrder[]
   incomingInvoices IncomingInvoice[]
   sampleLoanLines  SampleLoanLine[]
+  // Mandant (ADR 0004, Slice 1) — nullable bis Slice 2 (NOT NULL + RLS-Policy).
+  tenantId        String?
+  tenant          Tenant?  @relation(fields: [tenantId], references: [id])
   createdAt       DateTime @default(now())
+
+  @@index([tenantId])
 }
 
 // Ansprechpartner je Lieferant (Paket 1) — analog Contact bei der Firma.
@@ -865,8 +903,13 @@ model Quote {
   order     Order?
   inquiry   Inquiry? // Ursprungs-Anfrage (B20)
   sampleLoans SampleLoan[] // aus dem Angebot gewandelte/zugeordnete Muster-Leihen (B5)
+  // Mandant (ADR 0004, Slice 1) — nullable bis Slice 2 (NOT NULL + RLS-Policy).
+  tenantId  String?
+  tenant    Tenant?     @relation(fields: [tenantId], references: [id])
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
+
+  @@index([tenantId])
 }
 
 // Anfrage-Funnel (B20, Kap. 18.1/35.1) — Vorbild Odoo crm.lead. NEU → IN_BEARBEITUNG
@@ -1082,12 +1125,16 @@ model Order {
   abschlaege  Abschlagsrechnung[] // Abschlags-/Teilrechnungen (Xentral)
   deliveryNotes DeliveryNote[]
   complaints  Complaint[]
+  // Mandant (ADR 0004, Slice 1) — nullable bis Slice 2 (NOT NULL + RLS-Policy).
+  tenantId    String?
+  tenant      Tenant?     @relation(fields: [tenantId], references: [id])
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
   @@unique([shopConnectorId, externalNumber])
   @@index([companyId])
   @@index([status])
+  @@index([tenantId])
 }
 
 model OrderLine {
@@ -1259,8 +1306,12 @@ model Invoice {
   finalized   Boolean  @default(false)
   costCenterId String?
   costCenter   CostCenter? @relation(fields: [costCenterId], references: [id])
+  // Mandant (ADR 0004, Slice 1) — nullable bis Slice 2 (NOT NULL + RLS-Policy).
+  tenantId    String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
 
   @@index([companyId])
+  @@index([tenantId])
 }
 
 // Muster-Leihgut (B5, Kap. 37.3). Muster werden verliehen; nach 21 Tagen ohne

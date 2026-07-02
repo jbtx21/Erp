@@ -13,7 +13,14 @@ declare global {
 // DB-unabhängige Module/Tests den Client referenzieren können, ohne ihn zu nutzen.
 function getClient(): PrismaClient {
   if (!globalThis.__texmaPrisma) {
-    globalThis.__texmaPrisma = new PrismaClient();
+    // RLS-Rollentrennung (ADR 0004, Slice 1): ist DATABASE_URL_RUNTIME gesetzt, verbindet
+    // sich der App-Client über die Laufzeit-Rolle texma_app (ohne Ownership/BYPASSRLS,
+    // packages/db/sql/runtime-role.sql); DATABASE_URL bleibt die Migrations-/Owner-Rolle
+    // für `prisma migrate`. Sonst würde der Table Owner RLS still umgehen (F13).
+    const runtimeUrl = process.env.DATABASE_URL_RUNTIME;
+    globalThis.__texmaPrisma = runtimeUrl
+      ? new PrismaClient({ datasourceUrl: runtimeUrl })
+      : new PrismaClient();
   }
   return globalThis.__texmaPrisma;
 }

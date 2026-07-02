@@ -3,6 +3,7 @@
 
 import { type AuditSink, buildEntry } from "@texma/audit";
 import type { Role } from "@texma/shared";
+import { DEFAULT_TENANT_ID } from "../../db/tenant-context.js";
 import type { Hasher } from "./password.js";
 import type { TotpService } from "./totp.js";
 import { hashToken, randomToken } from "./token.js";
@@ -36,6 +37,8 @@ export interface UserRecord {
   active: boolean;
   failedLoginCount: number;
   lockedUntil: Date | null;
+  /** Mandant (ADR 0004, Slice 1) — in der DB nullable bis Slice 2; null ≙ Default-Tenant. */
+  tenantId: string | null;
 }
 
 export interface SessionRecord {
@@ -50,6 +53,8 @@ export interface AuthUser {
   name: string;
   role: Role;
   totpEnabled: boolean;
+  /** Mandant des Nutzers (ADR 0004) — Quelle für den Request-Tenant-Kontext. */
+  tenantId: string;
 }
 
 export interface UserRepository {
@@ -101,7 +106,8 @@ export interface LoginResult {
 }
 
 function toAuthUser(u: UserRecord): AuthUser {
-  return { id: u.id, email: u.email, name: u.name, role: u.role, totpEnabled: u.totpEnabled };
+  // Bestandsnutzer ohne tenantId (Slice-1-Übergang) laufen auf dem Default-Tenant.
+  return { id: u.id, email: u.email, name: u.name, role: u.role, totpEnabled: u.totpEnabled, tenantId: u.tenantId ?? DEFAULT_TENANT_ID };
 }
 
 export interface PasswordResetDeps {

@@ -15,6 +15,7 @@ import {
   type KeyObject,
 } from "jose";
 import type { Role } from "@texma/shared";
+import { DEFAULT_TENANT_ID } from "../../db/tenant-context.js";
 import type { AuthUser } from "./auth.service.js";
 
 const ROLES: readonly Role[] = ["ADMIN", "BUERO", "PRODUKTION", "BUCHHALTUNG"];
@@ -54,7 +55,11 @@ export function claimsToAuthUser(claims: JWTPayload, roleClaim: string): AuthUse
     : email || sub;
   const amr = (claims as Record<string, unknown>).amr;
   const mfa = Array.isArray(amr) && amr.some((m) => m === "mfa" || m === "otp" || m === "totp");
-  return { id: sub, email, name, role: roleRaw as Role, totpEnabled: mfa };
+  // Mandant (ADR 0004, Slice 1): optionaler tenant_id-Claim des IdP; fehlt er, Default-
+  // Tenant (die harte Tenant-Auflösung via Claim/Subdomain kommt mit Slice 4).
+  const tenantRaw = (claims as Record<string, unknown>).tenant_id;
+  const tenantId = typeof tenantRaw === "string" && tenantRaw.length > 0 ? tenantRaw : DEFAULT_TENANT_ID;
+  return { id: sub, email, name, role: roleRaw as Role, totpEnabled: mfa, tenantId };
 }
 
 export interface JoseOidcConfig {

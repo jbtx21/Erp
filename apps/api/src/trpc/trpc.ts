@@ -1,6 +1,7 @@
 // tRPC-Basis (v11): Kontext, Auth-Middleware, Procedure-Builder.
 import { initTRPC, TRPCError } from "@trpc/server";
 import { runWithAuditUser } from "../audit/audit-context.js";
+import { DEFAULT_TENANT_ID, runWithTenant } from "../db/tenant-context.js";
 import type { FixedWindowRateLimiter, Role } from "@texma/shared";
 import type { AuthService, AuthUser } from "../modules/auth/auth.service.js";
 import type { OrderImportService } from "../modules/shop-import/order-import.service.js";
@@ -223,7 +224,11 @@ export const router = t.router;
 // GoBD-Audit „Wer" (Kap. 10): jede Procedure läuft im Acting-User-Kontext, sodass die
 // PrismaAuditSink den handelnden Request-Nutzer in jeden Audit-Eintrag schreibt.
 const withAuditUser = t.middleware(({ ctx, next }) => runWithAuditUser(ctx.user?.id ?? null, () => next()));
-export const publicProcedure = t.procedure.use(withAuditUser);
+// Tenant-Kontext (ADR 0004, Slice 1): jede Procedure läuft im Mandanten des Nutzers
+// (ohne Login: Default-Tenant). In Slice 1 vorbereitend — das erzwingende
+// SET LOCAL app.tenant_id je Prisma-Operation folgt mit den Policies in Slice 2.
+const withTenant = t.middleware(({ ctx, next }) => runWithTenant(ctx.user?.tenantId ?? DEFAULT_TENANT_ID, () => next()));
+export const publicProcedure = t.procedure.use(withAuditUser).use(withTenant);
 export const createCallerFactory = t.createCallerFactory;
 
 /** Erzwingt eine authentifizierte Sitzung; verengt ctx.user auf non-null.

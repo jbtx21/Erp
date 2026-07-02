@@ -11,6 +11,14 @@ const day = 24 * 60 * 60 * 1000;
 const at = (offsetDays: number): Date => new Date(Date.now() + offsetDays * day);
 
 async function main(): Promise<void> {
+  // ── Default-Tenant (ADR 0004, RLS Slice 1) ────────────────────────────────
+  // Backfill-Ziel der Migration 0121; alle Wurzel-Entitäten des Seeds hängen daran.
+  // tenantId ist in Slice 1 noch nullable — der Seed setzt sie trotzdem vorbildlich.
+  const TENANT_ID = "tenant_texma";
+  await prisma.tenant.upsert({
+    where: { id: TENANT_ID }, update: { name: "TEXMA" }, create: { id: TENANT_ID, name: "TEXMA" },
+  });
+
   // ── Demo-Nutzer ───────────────────────────────────────────────────────────
   // Pflicht für den GoBD-Audit-Trail: jede Mutation schreibt AuditLog.userId (FK auf
   // User). Der Dev-Server handelt fest als "demo-admin" — dieser Datensatz MUSS also
@@ -29,8 +37,8 @@ async function main(): Promise<void> {
   for (const u of demoUsers) {
     await prisma.user.upsert({
       where: { id: u.id },
-      update: { email: u.email, name: u.name, role: u.role, active: true },
-      create: { ...u, passwordHash: demoPasswordHash, totpEnabled: false, active: true },
+      update: { email: u.email, name: u.name, role: u.role, active: true, tenantId: TENANT_ID },
+      create: { ...u, passwordHash: demoPasswordHash, totpEnabled: false, active: true, tenantId: TENANT_ID },
     });
   }
 
@@ -44,12 +52,12 @@ async function main(): Promise<void> {
 
   // ── Firmen ────────────────────────────────────────────────────────────────
   const muster = await prisma.company.upsert({
-    where: { id: "co-muster" }, update: {},
-    create: { id: "co-muster", name: "Muster GmbH", priceGroupId: pgStandard.id, zahlungszielTage: 14 },
+    where: { id: "co-muster" }, update: { tenantId: TENANT_ID },
+    create: { id: "co-muster", name: "Muster GmbH", priceGroupId: pgStandard.id, zahlungszielTage: 14, tenantId: TENANT_ID },
   });
   const gross = await prisma.company.upsert({
-    where: { id: "co-gross" }, update: {},
-    create: { id: "co-gross", name: "Großkunde AG", priceGroupId: pgGross.id, zahlungszielTage: 30 },
+    where: { id: "co-gross" }, update: { tenantId: TENANT_ID },
+    create: { id: "co-gross", name: "Großkunde AG", priceGroupId: pgGross.id, zahlungszielTage: 30, tenantId: TENANT_ID },
   });
 
   // ── Shop-Connector (T-01: Shop → Firma) ───────────────────────────────────
@@ -62,22 +70,23 @@ async function main(): Promise<void> {
   // Artikelstammsatz mit den verbindlichen Mindestfeldern: Nr. (sku), Name, Beschreibung
   // (Text) + Stamm-PIM. EK liegt je Variante am SupplierItem, VK je Variante am Preis.
   const article = await prisma.article.upsert({
-    where: { sku: "POLO-CLASSIC" }, update: {},
+    where: { sku: "POLO-CLASSIC" }, update: { tenantId: TENANT_ID },
     create: {
       id: "art-polo", sku: "POLO-CLASSIC", name: "Poloshirt Classic",
       description: "Klassisches Piqué-Poloshirt aus 100 % Baumwolle — vielseitig veredelbar (Stick/Druck).",
       ekCents: 450, vkCents: 1290,
       brand: "Texile Premium", materialComposition: "100% Baumwolle", careInstructions: "40 °C, nicht bleichen",
+      tenantId: TENANT_ID,
     },
   });
   // ── Lieferanten (zuerst, damit die EK-SupplierItems je Variante darauf zeigen) ──
   const sup1 = await prisma.supplier.upsert({
-    where: { id: "sup-fhb" }, update: {},
-    create: { id: "sup-fhb", name: "FHB Textil GmbH", vatId: "DE123456789", iban: "DE02120300000000202051" },
+    where: { id: "sup-fhb" }, update: { tenantId: TENANT_ID },
+    create: { id: "sup-fhb", name: "FHB Textil GmbH", vatId: "DE123456789", iban: "DE02120300000000202051", tenantId: TENANT_ID },
   });
   await prisma.supplier.upsert({
-    where: { id: "sup-stanley" }, update: {},
-    create: { id: "sup-stanley", name: "Stanley/Stella", vatId: "BE0987654321" },
+    where: { id: "sup-stanley" }, update: { tenantId: TENANT_ID },
+    create: { id: "sup-stanley", name: "Stanley/Stella", vatId: "BE0987654321", tenantId: TENANT_ID },
   });
   // Jede Variante bekommt VK (Preis) UND EK (SupplierItem) — keine Variante ohne EK.
   for (const [id, sku, farbe, groesse, cents, ekCents] of [
@@ -117,9 +126,9 @@ async function main(): Promise<void> {
   ];
   for (const [id, number, companyId, status, externalNumber, net, deliveryAddressId] of orders) {
     await prisma.order.upsert({
-      where: { id }, update: { status, deliveryAddressId },
+      where: { id }, update: { status, deliveryAddressId, tenantId: TENANT_ID },
       create: {
-        id, number, companyId, status, externalNumber, deliveryAddressId,
+        id, number, companyId, status, externalNumber, deliveryAddressId, tenantId: TENANT_ID,
         employeeNote: externalNumber ? "Shop-Bestellung" : null,
         lines: { create: [{ position: 1, description: "Poloshirt Navy L, bestickt", qty: 20, unitNetCents: Math.round(net / 20) }] },
       },
@@ -158,9 +167,9 @@ async function main(): Promise<void> {
     ["qt-2", "AN-2026-0002", gross.id, "VERSENDET", 1],  // Nachfass morgen → GELB
   ] as const) {
     await prisma.quote.upsert({
-      where: { id }, update: { wiedervorlageAm: at(wvOffset) },
+      where: { id }, update: { wiedervorlageAm: at(wvOffset), tenantId: TENANT_ID },
       create: {
-        id, number, companyId, status, wiedervorlageAm: at(wvOffset),
+        id, number, companyId, status, wiedervorlageAm: at(wvOffset), tenantId: TENANT_ID,
         lines: { create: [{ position: 1, description: "Poloshirt Navy L, bestickt", qty: 50, unitNetCents: 1290 }] },
       },
     }).catch(() => {});
@@ -181,9 +190,9 @@ async function main(): Promise<void> {
   ] as const) {
     const tax = Math.round(net * 0.19);
     await prisma.invoice.upsert({
-      where: { id }, update: {},
+      where: { id }, update: { tenantId: TENANT_ID },
       create: {
-        id, number, companyId, netCents: net, taxCents: tax, grossCents: net + tax, finalized: true,
+        id, number, companyId, netCents: net, taxCents: tax, grossCents: net + tax, finalized: true, tenantId: TENANT_ID,
         openItem: { create: { openCents: net + tax, dueDate: at(-daysOverdue) } },
       },
     }).catch(() => {});

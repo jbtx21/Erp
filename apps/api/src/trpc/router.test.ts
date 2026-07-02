@@ -153,9 +153,9 @@ import { appRouter } from "./router.js";
 import { createCallerFactory } from "./trpc.js";
 import type { Context } from "./trpc.js";
 
-const BUERO: AuthUser = { id: "u1", email: "b@texma.de", name: "Büro", role: "BUERO", totpEnabled: false };
-const PRODUKTION: AuthUser = { id: "u2", email: "p@texma.de", name: "Prod", role: "PRODUKTION", totpEnabled: false };
-const BUCHHALTUNG: AuthUser = { id: "u3", email: "f@texma.de", name: "Fibu", role: "BUCHHALTUNG", totpEnabled: false };
+const BUERO: AuthUser = { id: "u1", email: "b@texma.de", name: "Büro", role: "BUERO", totpEnabled: false, tenantId: "tenant_texma" };
+const PRODUKTION: AuthUser = { id: "u2", email: "p@texma.de", name: "Prod", role: "PRODUKTION", totpEnabled: false, tenantId: "tenant_texma" };
+const BUCHHALTUNG: AuthUser = { id: "u3", email: "f@texma.de", name: "Fibu", role: "BUCHHALTUNG", totpEnabled: false, tenantId: "tenant_texma" };
 
 function setup(user: AuthUser | null = BUERO) {
   const repo = new InMemoryOrderRepository(new Set(["company_acme"]));
@@ -1184,7 +1184,7 @@ describe("tRPC tasks — Aufgaben/Zuweisung", () => {
 });
 
 describe("tRPC auditLog — GoBD-Protokoll nur für Admin", () => {
-  const ADMIN: AuthUser = { id: "u0", email: "admin@texma.de", name: "Admin", role: "ADMIN", totpEnabled: false };
+  const ADMIN: AuthUser = { id: "u0", email: "admin@texma.de", name: "Admin", role: "ADMIN", totpEnabled: false, tenantId: "tenant_texma" };
 
   it("ADMIN darf das Protokoll lesen", async () => {
     const { caller } = setup(ADMIN);

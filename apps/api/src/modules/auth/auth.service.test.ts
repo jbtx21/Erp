@@ -28,6 +28,7 @@ async function makeUser(over: Partial<UserRecord> = {}): Promise<UserRecord> {
     active: true,
     failedLoginCount: 0,
     lockedUntil: null,
+    tenantId: null,
     ...over,
   };
 }
