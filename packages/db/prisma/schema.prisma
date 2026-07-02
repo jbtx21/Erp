@@ -30,6 +30,113 @@ model Tenant {
   quotes    Quote[]
   orders    Order[]
   invoices  Invoice[]
+  // Slice-3-Rückrelationen (ADR 0004): Prisma verlangt die Gegenseite jeder
+  // tenantId-Relation. Generiert via scripts/rls-inventory.mjs --patch-schema.
+  session Session[]
+  accessLog AccessLog[]
+  customerSupplierPriceGroup CustomerSupplierPriceGroup[]
+  contact Contact[]
+  deliveryAddress DeliveryAddress[]
+  logoVersion LogoVersion[]
+  markupConfig MarkupConfig[]
+  markupRule MarkupRule[]
+  stickereiStaffel StickereiStaffel[]
+  stickereiAusschreibung StickereiAusschreibung[]
+  stickereiAngebot StickereiAngebot[]
+  stickereiAngebotStaffel StickereiAngebotStaffel[]
+  mailAccount MailAccount[]
+  callLog CallLog[]
+  collection Collection[]
+  mediaAsset MediaAsset[]
+  finishingSpec FinishingSpec[]
+  variant Variant[]
+  variantComponent VariantComponent[]
+  variantAttribute VariantAttribute[]
+  axisValue AxisValue[]
+  sizeRun SizeRun[]
+  priceGroupPrice PriceGroupPrice[]
+  priceGroupPriceTier PriceGroupPriceTier[]
+  variantEkTier VariantEkTier[]
+  customerPriceTier CustomerPriceTier[]
+  supplierContact SupplierContact[]
+  supplierItem SupplierItem[]
+  shopConnector ShopConnector[]
+  collectiveOrder CollectiveOrder[]
+  portalUser PortalUser[]
+  portalSession PortalSession[]
+  lead Lead[]
+  inquiry Inquiry[]
+  quoteLine QuoteLine[]
+  orderLine OrderLine[]
+  bomTemplate BomTemplate[]
+  bomTemplateItem BomTemplateItem[]
+  productionOrder ProductionOrder[]
+  bomItem BomItem[]
+  subProductionOrder SubProductionOrder[]
+  timeEntry TimeEntry[]
+  sampleLoan SampleLoan[]
+  sampleLoanLine SampleLoanLine[]
+  costCenter CostCenter[]
+  datevExportEntry DatevExportEntry[]
+  openItem OpenItem[]
+  cashRegister CashRegister[]
+  cashSale CashSale[]
+  dunningNotice DunningNotice[]
+  payment Payment[]
+  paymentAllocation PaymentAllocation[]
+  bankConnection BankConnection[]
+  paymentOrder PaymentOrder[]
+  paymentTransfer PaymentTransfer[]
+  auditLog AuditLog[]
+  numberSequence NumberSequence[]
+  purchaseOrder PurchaseOrder[]
+  purchaseOrderLine PurchaseOrderLine[]
+  purchaseOrderLineSource PurchaseOrderLineSource[]
+  goodsReceipt GoodsReceipt[]
+  goodsReceiptLine GoodsReceiptLine[]
+  warehouse Warehouse[]
+  stockLevel StockLevel[]
+  stockMove StockMove[]
+  stockReservation StockReservation[]
+  stockThreshold StockThreshold[]
+  incomingInvoice IncomingInvoice[]
+  incomingInvoiceLine IncomingInvoiceLine[]
+  deliveryNote DeliveryNote[]
+  deliveryNoteLine DeliveryNoteLine[]
+  creditNote CreditNote[]
+  apiToken ApiToken[]
+  abschlagsrechnung Abschlagsrechnung[]
+  gutschein Gutschein[]
+  complaint Complaint[]
+  dueItem DueItem[]
+  finishingTargetTime FinishingTargetTime[]
+  approvalThreshold ApprovalThreshold[]
+  outboxEvent OutboxEvent[]
+  integrationLog IntegrationLog[]
+  recordComment RecordComment[]
+  recordActivity RecordActivity[]
+  recordAttachment RecordAttachment[]
+  notification Notification[]
+  emailTemplate EmailTemplate[]
+  dashboardChart DashboardChart[]
+  numberCard NumberCard[]
+  dashboard Dashboard[]
+  dashboardItem DashboardItem[]
+  newsletterCampaign NewsletterCampaign[]
+  crmLead CrmLead[]
+  opportunity Opportunity[]
+  calendarEvent CalendarEvent[]
+  internalMessage InternalMessage[]
+  appSetting AppSetting[]
+  employee Employee[]
+  vacationRequest VacationRequest[]
+  integrationSetting IntegrationSetting[]
+  passwordResetToken PasswordResetToken[]
+  task Task[]
+  userPreference UserPreference[]
+  automationRule AutomationRule[]
+  contactLink ContactLink[]
+  archivedDocument ArchivedDocument[]
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -82,7 +189,13 @@ model Session {
   pendingTotp Boolean  @default(false) // Passwort ok, 2FA noch ausstehend
   createdAt   DateTime @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([userId])
+  @@index([tenantId])
 }
 
 // Zugriffs-Logging auf personenbezogene Daten (Kap. 28)
@@ -95,7 +208,13 @@ model AccessLog {
   action    String // VIEW | EXPORT
   createdAt DateTime @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([entity, entityId])
+  @@index([tenantId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -135,8 +254,14 @@ model CustomerSupplierPriceGroup {
   priceGroupId String
   priceGroup   PriceGroup @relation(fields: [priceGroupId], references: [id])
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@unique([companyId, supplierId])
   @@index([supplierId])
+  @@index([tenantId])
 }
 
 // Firma = Kunde. KEIN 1:1-Import Firma↔Kontakt (Kap. 8.3).
@@ -235,7 +360,13 @@ model Contact {
   createdAt DateTime @default(now())
   links     ContactLink[] // zusätzliche Verknüpfungen (Dynamic-Link, CRM)
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([companyId])
+  @@index([tenantId])
 }
 
 model DeliveryAddress {
@@ -250,7 +381,13 @@ model DeliveryAddress {
   isDefault Boolean @default(false) // Standard-Lieferadresse (Beleg-Vorbelegung), Xentral-Benchmark
   orders    Order[]
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([companyId])
+  @@index([tenantId])
 }
 
 // Logo-Versionen versioniert; genau eine aktiv (Kap. 7.2)
@@ -274,8 +411,14 @@ model LogoVersion {
   stickereiStaffeln StickereiStaffel[]
   ausschreibungen   StickereiAusschreibung[]
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@unique([companyId, version])
   @@index([companyId, active])
+  @@index([tenantId])
 }
 
 // Konfigurierbarer Aufschlagsfaktor (Kap. 4.4) — „jederzeit neu definierbar": EIN globaler
@@ -284,6 +427,12 @@ model MarkupConfig {
   id            String   @id @default("GLOBAL")
   defaultFactor Float    @default(1.88)
   updatedAt     DateTime @updatedAt
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 // Eine Aufschlags-Regel: Faktor unter optionalen, UND-verknüpften Bedingungen
@@ -305,7 +454,13 @@ model MarkupRule {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([supplierId])
+  @@index([tenantId])
 }
 
 // Variable Mengenstaffeln je Logo (Kap. 4.4 / T-15): die Stickerei gibt uns nur ihren VK
@@ -321,8 +476,14 @@ model StickereiStaffel {
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@unique([logoVersionId, minMenge])
   @@index([logoVersionId])
+  @@index([tenantId])
 }
 
 // Ausschreibung eines Logos an mehrere Stickerei-Partner (Kap. 5.4): neues Logo / kein
@@ -337,7 +498,13 @@ model StickereiAusschreibung {
   decidedAt     DateTime?
   angebote      StickereiAngebot[]
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([logoVersionId])
+  @@index([tenantId])
 }
 
 // Angebot eines Stickerei-Partners in einer Ausschreibung (Stick-EK je Mengenstaffel).
@@ -351,7 +518,13 @@ model StickereiAngebot {
   createdAt       DateTime @default(now())
   staffeln        StickereiAngebotStaffel[]
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([ausschreibungId])
+  @@index([tenantId])
 }
 
 model StickereiAngebotStaffel {
@@ -361,7 +534,13 @@ model StickereiAngebotStaffel {
   minMenge  Int
   ekCents   Int
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@unique([angebotId, minMenge])
+  @@index([tenantId])
 }
 
 // Anrufprotokoll (Telefon-Modul): nachvollziehbar wer wann mit wem worüber telefoniert
@@ -397,8 +576,14 @@ model MailAccount {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([defaultOutgoing])
   @@index([defaultIncoming])
+  @@index([tenantId])
 }
 
 model CallLog {
@@ -416,9 +601,15 @@ model CallLog {
   status        CallStatus    @default(ERLEDIGT)
   createdAt     DateTime      @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([companyId])
   @@index([status])
   @@index([zeitpunkt])
+  @@index([tenantId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -505,6 +696,12 @@ model Collection {
   name     String
   season   String? // z. B. "FS26"
   articles Article[]
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 // Digital Asset Management (B18) — Bilder, Druckvorlagen, Stickdateien.
@@ -525,8 +722,14 @@ model MediaAsset {
   sortOrder Int            @default(0)
   createdAt DateTime       @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([articleId])
   @@index([variantId])
+  @@index([tenantId])
 }
 
 // Veredelungs-Metadaten je Artikel (B18) — Platzierung/Stichzahl/Farben.
@@ -546,7 +749,13 @@ model FinishingSpec {
   stitchCount Int?
   colorCount  Int?
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([articleId])
+  @@index([tenantId])
 }
 
 model Variant {
@@ -584,7 +793,13 @@ model Variant {
   sampleLoans SampleLoan[] // Muster-Leihgut (B5)
   createdAt  DateTime @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([articleId])
+  @@index([tenantId])
 }
 
 // Stücklisten-Position einer Set-/Bundle-Variante (Kap. 5.1). qty = Menge je Set-Stück.
@@ -600,7 +815,13 @@ model VariantComponent {
   qty                Int      @default(1)
   position           Int      @default(1)
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([parentVariantId])
+  @@index([tenantId])
 }
 
 model VariantAttribute {
@@ -610,8 +831,14 @@ model VariantAttribute {
   name      String // "Farbe" | "Größe"
   value     String
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@unique([variantId, name])
   @@index([name, value])
+  @@index([tenantId])
 }
 
 // Matrixprodukt-Grundtabelle (Xentral-Vorbild, Kap. 2.1/3.2): wiederverwendbare
@@ -633,8 +860,14 @@ model AxisValue {
   active    Boolean     @default(true)
   createdAt DateTime    @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@unique([axis, value])
   @@index([axis, sortOrder])
+  @@index([tenantId])
 }
 
 // Größenlauf-Vorlage: füllt die Größen-Achse der Matrix per Klick (z. B. „Standard" = XS…XXL).
@@ -643,6 +876,12 @@ model SizeRun {
   name      String   @unique
   values    String[]
   createdAt DateTime @default(now())
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 // VK je Preisgruppe (Kap. 4.4/8.2). ERP = Preis-Master (Kap. 3.2 / T-08).
@@ -654,7 +893,13 @@ model PriceGroupPrice {
   priceGroup   PriceGroup @relation(fields: [priceGroupId], references: [id])
   netCents     Int // Geldbeträge in Cent, niemals Float
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@unique([variantId, priceGroupId])
+  @@index([tenantId])
 }
 
 // Basispreis-Mengenstaffel je Preisgruppe (B4, Kap. 4.4). Gilt für alle Kunden der
@@ -668,7 +913,13 @@ model PriceGroupPriceTier {
   minMenge     Int
   netCents     Int
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@unique([variantId, priceGroupId, minMenge])
+  @@index([tenantId])
 }
 
 // EK-Mengenstaffel je Variante (vor allem Veredelung/Stick): die Stickerei gibt uns ihren
@@ -682,8 +933,14 @@ model VariantEkTier {
   minMenge  Int // untere Staffelgrenze in Stück (1, 10, 25, 50, 100, 250 …)
   ekCents   Int // EK je Stück in Cent (VK der Stickerei an uns) ab dieser Menge
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@unique([variantId, minMenge])
   @@index([variantId])
+  @@index([tenantId])
 }
 
 // Kundenindividuelle Basispreis-Staffel (B4). Höchste Präzedenz — sticht vor der
@@ -697,7 +954,13 @@ model CustomerPriceTier {
   minMenge  Int
   netCents  Int
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@unique([companyId, variantId, minMenge])
+  @@index([tenantId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -773,7 +1036,13 @@ model SupplierContact {
   role       String? // Funktion (z. B. Vertrieb, Disposition)
   createdAt  DateTime @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([supplierId])
+  @@index([tenantId])
 }
 
 model SupplierItem {
@@ -788,8 +1057,14 @@ model SupplierItem {
   priority    Int      @default(1) // 1 = Hauptlieferant, 2 = Alt-Lieferant (Kap. 6)
   minStock    Int? // Mindestbestand-Reorder (Kap. 6.3 / T-12)
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@unique([supplierId, variantId])
   @@index([variantId, priority])
+  @@index([tenantId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -847,7 +1122,13 @@ model ShopConnector {
   collectiveOrders CollectiveOrder[]
   createdAt DateTime @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([companyId])
+  @@index([tenantId])
 }
 
 /// Sammelbestellung (Kap. 18.2): bündelt Mitarbeiter-Shopbestellungen einer Periode zu
@@ -868,9 +1149,15 @@ model CollectiveOrder {
   createdAt       DateTime      @default(now())
   orders          Order[]
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@unique([shopConnectorId, periodStart])
   @@index([companyId])
   @@index([status])
+  @@index([tenantId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -955,7 +1242,13 @@ model PortalUser {
   updatedAt        DateTime        @updatedAt
   sessions         PortalSession[]
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([companyId])
+  @@index([tenantId])
 }
 
 model PortalSession {
@@ -966,7 +1259,13 @@ model PortalSession {
   expiresAt    DateTime
   createdAt    DateTime   @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([portalUserId])
+  @@index([tenantId])
 }
 
 // Lead/Interessent (B15, Kap. 18.1) — leichter Prospect vor der Firma. Konvertierung
@@ -995,7 +1294,13 @@ model Lead {
   convertedCompany   Company?      @relation(fields: [convertedCompanyId], references: [id])
   createdAt          DateTime      @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([status])
+  @@index([tenantId])
 }
 
 model Inquiry {
@@ -1013,7 +1318,13 @@ model Inquiry {
   externalRef    String?       @unique // Mail-Message-ID (Idempotenz beim Maileingang)
   createdAt      DateTime      @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([status])
+  @@index([tenantId])
 }
 
 model QuoteLine {
@@ -1068,6 +1379,12 @@ model QuoteLine {
   // Lager — nicht jede Variante ist sofort lieferbar. Treibt Teilproduktion/Teillieferung. null =
   // sofort/kein Termin gesetzt; der Kopf-Wunschtermin (Quote.wunschLiefertermin) bleibt davon unberührt.
   lieferdatum DateTime?
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 enum OrderStatus {
@@ -1191,6 +1508,12 @@ model OrderLine {
   // Verfügbar ab / zugesagter Liefertermin JE POSITION (Order-to-make, Kap. 35): aus dem Angebot
   // übernommen oder am Auftrag gepflegt. Treibt Teilproduktion/Teillieferung. null = sofort.
   lieferdatum DateTime?
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 // Positionsart: Basistextil vs. Veredelung (Druck/Stick) vs. Sonstiges (Versand,
@@ -1217,6 +1540,12 @@ model BomTemplate {
   items     BomTemplateItem[]
   shops     ShopConnector[]
   createdAt DateTime @default(now())
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 model BomTemplateItem {
@@ -1225,6 +1554,12 @@ model BomTemplateItem {
   template      BomTemplate @relation(fields: [templateId], references: [id])
   description   String
   defaultQty    Int         @default(1)
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 model ProductionOrder {
@@ -1240,6 +1575,12 @@ model ProductionOrder {
   timeEntries TimeEntry[]
   purchaseOrders PurchaseOrder[] // Beschaffung je PA (Multi-Lieferant, T-05)
   createdAt   DateTime @default(now())
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 model BomItem {
@@ -1250,6 +1591,12 @@ model BomItem {
   variant       Variant? @relation(fields: [variantId], references: [id])
   description   String
   qty           Int
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 // Mehrstufige Fremdvergabe mit Beistellung + Rücklauf (Kap. 5.3 / T-04, Custom Kap. 31)
@@ -1278,7 +1625,13 @@ model SubProductionOrder {
   beistellInfo       String? // lesbare Beschreibung der Beistellung (z. B. "200× T-Shirt (Pos. 1)")
   beistellPositionen Int[]   @default([]) // referenzierte Textilpositionen
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([productionId])
+  @@index([tenantId])
 }
 
 model TimeEntry {
@@ -1294,6 +1647,12 @@ model TimeEntry {
   // Schlüssel verhindert Doppelbuchung. @unique lässt mehrere NULL zu.
   idempotencyKey String? @unique
   createdAt    DateTime @default(now())
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1358,8 +1717,14 @@ model SampleLoan {
   lines        SampleLoanLine[]
   createdAt    DateTime         @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([companyId])
   @@index([status])
+  @@index([tenantId])
 }
 
 // Position einer Mehrartikel-Leihe: mehrere Artikel von verschiedenen Lieferanten
@@ -1376,7 +1741,13 @@ model SampleLoanLine {
   // Verfügbar ab / zugesagter Liefertermin je Muster-Position (Order-to-make, Kap. 35). null = sofort.
   lieferdatum  DateTime?
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([sampleLoanId])
+  @@index([tenantId])
 }
 
 // Kostenstelle (B7, Kap. 37.1) — generische Tabelle; Nummern von TEXMA/StB
@@ -1388,6 +1759,12 @@ model CostCenter {
   invoices       Invoice[]
   purchaseOrders PurchaseOrder[]
   timeEntries    TimeEntry[]
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 // DATEV-Export-Protokoll (Kap. 9.2) — „bereits exportiert"-Guard: jeder in einen
@@ -1400,8 +1777,14 @@ model DatevExportEntry {
   filename   String
   exportedAt DateTime @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@unique([belegart, belegKey])
   @@index([exportedAt])
+  @@index([tenantId])
 }
 
 model OpenItem {
@@ -1414,7 +1797,13 @@ model OpenItem {
   payments    PaymentAllocation[]
   dunningNotices DunningNotice[] // append-only Mahnhistorie (B10)
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([dueDate])
+  @@index([tenantId])
 }
 
 // Kasse (B6, Kap. 37.4) — Bar/EC mit TSE (KassenSichV/§146a AO). CashSale ist
@@ -1429,6 +1818,12 @@ model CashRegister {
   name      String
   sales     CashSale[]
   createdAt DateTime   @default(now())
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 model CashSale {
@@ -1447,7 +1842,13 @@ model CashSale {
   tseTxId         String
   createdAt       DateTime     @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([kassiertAm])
+  @@index([tenantId])
 }
 
 // Mahnbeleg (B10, Kap. 9.5) — append-only Historie je Mahnstufe (G2: kein Update).
@@ -1460,7 +1861,13 @@ model DunningNotice {
   textVorlage String
   erzeugtAm   DateTime @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([openItemId])
+  @@index([tenantId])
 }
 
 // Herkunft eines Zahlungseingangs (IA-Objekt-Merge Zahlungsabgleich): ein gemeinsames
@@ -1485,8 +1892,14 @@ model Payment {
   matched      Boolean  @default(false)
   allocations  PaymentAllocation[]
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([source])
   @@index([matched, source]) // Klärungsliste (matched=false) + Herkunftsfilter (0112)
+  @@index([tenantId])
 }
 
 model PaymentAllocation {
@@ -1498,7 +1911,13 @@ model PaymentAllocation {
   amountCents Int // tatsächlich geflossenes Geld (Teil-/Voll-/Überzahlung, Kap. 9.4)
   skontoCents Int @default(0) // gewährter Skonto, der den OP zusätzlich schließt (Erlösschmälerung)
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@unique([paymentId, openItemId])
+  @@index([tenantId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1529,6 +1948,12 @@ model BankConnection {
   lastSyncAt        DateTime?
   createdAt         DateTime           @default(now())
   paymentOrders     PaymentOrder[]
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 model PaymentOrder {
@@ -1544,7 +1969,13 @@ model PaymentOrder {
   createdAt              DateTime           @default(now())
   transfers              PaymentTransfer[]
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([connectionId, status])
+  @@index([tenantId])
 }
 
 model PaymentTransfer {
@@ -1556,6 +1987,12 @@ model PaymentTransfer {
   creditorBic  String?
   amountCents  Int
   remittance   String
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1573,8 +2010,14 @@ model AuditLog {
   after     Json?
   createdAt DateTime @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([entity, entityId])
   @@index([createdAt])
+  @@index([tenantId])
 }
 
 // Lückenloser Belegnummernkreis je Belegart und Jahr (GoBD, Kap. 10/19).
@@ -1586,7 +2029,13 @@ model NumberSequence {
   year Int
   next Int    @default(0)
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@id([key, year])
+  @@index([tenantId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1616,8 +2065,14 @@ model PurchaseOrder {
   costCenter   CostCenter? @relation(fields: [costCenterId], references: [id])
   createdAt   DateTime @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([supplierId])
   @@index([productionId])
+  @@index([tenantId])
 }
 
 model PurchaseOrderLine {
@@ -1630,7 +2085,13 @@ model PurchaseOrderLine {
   ekCents         Int
   sources         PurchaseOrderLineSource[]
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([purchaseOrderId])
+  @@index([tenantId])
 }
 
 // Bedarfsquelle einer Bestellposition (MTO, Kap. 6.1): welche Kundenaufträge/Leihen
@@ -1647,8 +2108,14 @@ model PurchaseOrderLineSource {
   ref                 String // Belegreferenz (Auftragsnummer bzw. Leih-Id)
   qty                 Int
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([purchaseOrderLineId])
   @@index([orderId])
+  @@index([tenantId])
 }
 
 model GoodsReceipt {
@@ -1658,7 +2125,13 @@ model GoodsReceipt {
   receivedAt      DateTime @default(now())
   lines           GoodsReceiptLine[]
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([purchaseOrderId])
+  @@index([tenantId])
 }
 
 model GoodsReceiptLine {
@@ -1672,7 +2145,13 @@ model GoodsReceiptLine {
   // (PurchaseOrderLine.ekCents). null = kein EK am Eingang erfasst.
   ekCents        Int?
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([goodsReceiptId])
+  @@index([tenantId])
 }
 
 // Lagerbestand je Variante; Mindestbestand-Reorder Transferdrucke (Kap. 6.3 / T-12)
@@ -1704,7 +2183,13 @@ model Warehouse {
   stockReservations StockReservation[]
   stockThresholds   StockThreshold[]
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([kind])
+  @@index([tenantId])
 }
 
 model StockLevel {
@@ -1716,6 +2201,12 @@ model StockLevel {
   qty       Int     @default(0)
   minStock  Int     @default(0)
   updatedAt DateTime @updatedAt
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 // Bestands-Bewegungs-Ledger (F4, Kap. 37.1) — Vorbild Odoo stock.move/quants.
@@ -1750,9 +2241,15 @@ model StockMove {
   belegRef  String? // Verweis auf auslösenden Beleg (PO/Order/Inventur)
   createdAt DateTime        @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([variantId, lager])
   @@index([variantId, warehouseId])
   @@index([createdAt])
+  @@index([tenantId])
 }
 
 // Vormerkung/Reservierung gegen laufende Aufträge: bindet Bestand an einen Beleg, ohne
@@ -1778,8 +2275,14 @@ model StockReservation {
   createdAt  DateTime               @default(now())
   releasedAt DateTime?
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([variantId, lager, status])
   @@index([orderId])
+  @@index([tenantId])
 }
 
 // Meldebestand je Variante × Lager (v. a. Transferdrucke): unterschreitet der VERFÜGBARE
@@ -1796,7 +2299,13 @@ model StockThreshold {
   alerting  Boolean    @default(false)
   updatedAt DateTime   @updatedAt
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@unique([variantId, lager])
+  @@index([tenantId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1856,8 +2365,14 @@ model IncomingInvoice {
   paymentAmountCents Int? // tatsächlich gezahlter Betrag (ggf. abzüglich Skonto)
   lines       IncomingInvoiceLine[]
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@unique([supplierId, number])
   @@index([status])
+  @@index([tenantId])
 }
 
 // Position einer Eingangsrechnung (für den EK-Abgleich gegen die Artikelstammdaten).
@@ -1874,7 +2389,13 @@ model IncomingInvoiceLine {
   unitEkCents Int // berechneter EK je Stück (netto)
   lineNetCents Int
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([incomingInvoiceId])
+  @@index([tenantId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1889,7 +2410,13 @@ model DeliveryNote {
   lines     DeliveryNoteLine[] // Mehrfach-Teillieferung: Zeilenmengen je Lieferschein
   createdAt DateTime @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([orderId])
+  @@index([tenantId])
 }
 
 // Lieferzeile: gelieferte Menge einer Auftragsposition (ermöglicht Mehrfach-Teillieferung).
@@ -1901,8 +2428,14 @@ model DeliveryNoteLine {
   orderLine      OrderLine    @relation(fields: [orderLineId], references: [id])
   qty            Int
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([deliveryNoteId])
   @@index([orderLineId])
+  @@index([tenantId])
 }
 
 model CreditNote {
@@ -1914,7 +2447,13 @@ model CreditNote {
   reason    String
   createdAt DateTime @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([invoiceId])
+  @@index([tenantId])
 }
 
 // Personal Access Token (Xentral-Vorbild PAT): API-Zugriff für externe Agenten/MCP.
@@ -1928,6 +2467,12 @@ model ApiToken {
   lastUsedAt DateTime?
   revokedAt  DateTime?
   createdAt  DateTime  @default(now())
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 // Abschlagsrechnung (Xentral „Abschlagsrechnung"): Teil-/Anzahlungsrechnung zu einem Auftrag.
@@ -1949,8 +2494,14 @@ model Abschlagsrechnung {
   note       String?
   issuedAt   DateTime @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([orderId])
   @@index([companyId])
+  @@index([tenantId])
 }
 
 // Gutschein/Wertgutschein (Xentral „Gutscheine"): Code mit Restguthaben + Gültigkeit.
@@ -1964,6 +2515,12 @@ model Gutschein {
   note          String?
   active        Boolean   @default(true)
   createdAt     DateTime  @default(now())
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1994,7 +2551,13 @@ model Complaint {
   costBearer  String // LIEFERANT | VEREDLER | TEXMA (abgeleitet aus cause)
   createdAt   DateTime @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([orderId])
+  @@index([tenantId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2010,8 +2573,14 @@ model DueItem {
   done      Boolean  @default(false)
   createdAt DateTime @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([dueDate, done])
   @@index([entity, entityId])
+  @@index([tenantId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2032,6 +2601,12 @@ model FinishingTargetTime {
   targetMinutes Float
   basis         String // STUECK | EINRICHTUNG | PRO_1000_STICHE
   updatedAt     DateTime      @updatedAt
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 // Einzeiler-Settings; Schwellen erst im GL-Workshop gesetzt → nullable (K-10)
@@ -2040,6 +2615,12 @@ model ApprovalThreshold {
   maxDiscountPct     Float? // null = nicht definiert
   maxOrderValueCents Int? // null = nicht definiert
   updatedAt          DateTime @updatedAt
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2077,7 +2658,13 @@ model OutboxEvent {
   createdAt     DateTime     @default(now())
   sentAt        DateTime?
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([status, nextAttemptAt])
+  @@index([tenantId])
 }
 
 // Lückenloses Protokoll jeder externen Integration (Connector-Pull/-Push, Outbox-Dispatch).
@@ -2093,7 +2680,13 @@ model IntegrationLog {
   durationMs      Int?
   createdAt       DateTime             @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([connector, createdAt])
+  @@index([tenantId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2115,7 +2708,13 @@ model RecordComment {
   text      String
   createdAt DateTime @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([entity, entityId])
+  @@index([tenantId])
 }
 
 model RecordActivity {
@@ -2129,7 +2728,13 @@ model RecordActivity {
   createdBy String
   createdAt DateTime     @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([entity, entityId])
+  @@index([tenantId])
 }
 
 model RecordAttachment {
@@ -2142,7 +2747,13 @@ model RecordAttachment {
   uploadedBy String
   createdAt  DateTime @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([entity, entityId])
+  @@index([tenantId])
 }
 
 // In-App-Benachrichtigungen je Empfänger (ERP-Grundfunktion / G-5).
@@ -2155,7 +2766,13 @@ model Notification {
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([recipient, read])
+  @@index([tenantId])
 }
 
 // E-Mail-/Text-Vorlagen mit {{platzhalter}} (ERP-Grundfunktion / G-5).
@@ -2165,6 +2782,12 @@ model EmailTemplate {
   subject   String
   body      String
   updatedAt DateTime @updatedAt
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 // Generisches Dashboard (ERP-Grundfunktion / G-7): Charts + KPI-Kacheln als
@@ -2193,6 +2816,12 @@ model DashboardChart {
   chartType ChartType @default(BAR)
   metricKey String // Schlüssel aus dem Metrik-Katalog
   createdAt DateTime  @default(now())
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 model NumberCard {
@@ -2200,6 +2829,12 @@ model NumberCard {
   name      String
   metricKey String
   createdAt DateTime @default(now())
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 model Dashboard {
@@ -2210,7 +2845,13 @@ model Dashboard {
   items      DashboardItem[]
   createdAt  DateTime        @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([ownerEmail])
+  @@index([tenantId])
 }
 
 model DashboardItem {
@@ -2222,7 +2863,13 @@ model DashboardItem {
   width       WidgetWidth         @default(HALF)
   position    Int                 @default(0)
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([dashboardId])
+  @@index([tenantId])
 }
 
 // Newsletter-Kampagne (Brevo-Anbindung): Betreff/Inhalt + Versandstatus. Empfänger
@@ -2236,6 +2883,12 @@ model NewsletterCampaign {
   providerRef    String? // Brevo-Kampagnen-/Nachrichten-ID
   sentAt         DateTime?
   createdAt      DateTime                 @default(now())
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 enum NewsletterStatus {
@@ -2281,8 +2934,14 @@ model CrmLead {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([stage])
   @@index([companyId])
+  @@index([tenantId])
 }
 
 // probability = Abschlusswahrscheinlichkeit (%), value = erwarteter Auftragswert.
@@ -2301,8 +2960,14 @@ model Opportunity {
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([status])
   @@index([companyId])
+  @@index([tenantId])
 }
 
 enum OpportunityStage {
@@ -2336,9 +3001,15 @@ model CalendarEvent {
   sourceId     String?
   createdAt  DateTime          @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@unique([sourceEntity, sourceId])
   @@index([ownerEmail])
   @@index([start])
+  @@index([tenantId])
 }
 
 enum CalendarEventKind {
@@ -2359,8 +3030,14 @@ model InternalMessage {
   read       Boolean  @default(false)
   createdAt  DateTime @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([toEmail, read])
   @@index([fromEmail])
+  @@index([tenantId])
 }
 
 // Produktionsroute des Auftrags (Workflow/Statusverwaltung, Kerngeschäft Veredelung).
@@ -2387,6 +3064,12 @@ model AppSetting {
   key       String   @id
   value     String
   updatedAt DateTime @updatedAt
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 // Personalwesen (HR, nur Geschäftsleitung): Mitarbeiter-Stammdaten + Urlaubsanträge.
@@ -2400,6 +3083,12 @@ model Employee {
   aktiv           Boolean           @default(true)
   vacations       VacationRequest[]
   createdAt       DateTime          @default(now())
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 model VacationRequest {
@@ -2413,8 +3102,14 @@ model VacationRequest {
   grund      String?
   createdAt  DateTime       @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([employeeId])
   @@index([status])
+  @@index([tenantId])
 }
 
 enum VacationStatus {
@@ -2431,6 +3126,12 @@ model IntegrationSetting {
   enabled    Boolean  @default(false)
   configJson String? // JSON der Konfig-Felder
   updatedAt  DateTime @updatedAt
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
 }
 
 // Passwort-Reset („Passwort vergessen"): Einmal-Token (gehasht), zeitlich begrenzt.
@@ -2443,7 +3144,13 @@ model PasswordResetToken {
   usedAt    DateTime?
   createdAt DateTime  @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([userId])
+  @@index([tenantId])
 }
 
 // Aufgabe/Zuweisung (ERPNext „Assigned To/ToDo"): Beleg/Vorgang einer Person zuweisen,
@@ -2462,8 +3169,14 @@ model Task {
   createdAt     DateTime  @default(now())
   completedAt   DateTime?
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([assigneeEmail, status])
   @@index([entity, entityId])
+  @@index([tenantId])
 }
 
 // Persönliche UI-Einstellungen je Nutzer (Key-Value, Wert = JSON-String). Trägt z. B.
@@ -2475,7 +3188,13 @@ model UserPreference {
   updatedAt DateTime @updatedAt
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@id([userId, key])
+  @@index([tenantId])
 }
 
 // Automations-/Regel-Engine (Event → Bedingung → Aktion): im Admin-Portal konfigurierbar,
@@ -2492,7 +3211,13 @@ model AutomationRule {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@index([triggerEvent, active])
+  @@index([tenantId])
 }
 
 // Contact-Dynamic-Link (CRM-Muster ERPNext): entkoppelt Personen von genau EINER
@@ -2507,8 +3232,14 @@ model ContactLink {
   role      String? // Funktion bei dieser Partei (z. B. "Einkauf", "Buchhaltung")
   createdAt DateTime @default(now())
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@unique([contactId, entity, entityId])
   @@index([entity, entityId])
+  @@index([tenantId])
 }
 
 // GoBD-Belegarchiv (Kap. 10): unveränderbares Register zum WORM-Objektspeicher. Die
@@ -2531,7 +3262,13 @@ model ArchivedDocument {
   archivedAt       DateTime @default(now())
   archivedBy       String?
 
+  // Mandant (ADR 0004, Slice 3) — Pflichtfeld mit Default: hält bestehende create-
+  // Aufrufe grün (kein Call-Site-Refactor); der Default fällt in Slice 4.
+  tenantId String @default("tenant_texma")
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
   @@unique([sourceEntity, sourceId, sha256])
   @@index([belegart])
   @@index([archivedAt])
+  @@index([tenantId])
 }
