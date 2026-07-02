@@ -10,6 +10,7 @@ import {
   groupDemandBySupplier,
   groupReorderBySupplier,
   type DemandItem,
+  type DemandOpenOrder,
   type DemandProposal,
   type DemandStock,
   type DemandSupplier,
@@ -39,6 +40,11 @@ export interface ReorderRepository {
   createPurchaseOrders(groups: SupplierReorder[]): Promise<CreatedReorderPo[]>;
   /** Offener Bedarf aus angelegten Aufträgen + aktiven Muster-Leihen (variantenbezogen). */
   openDemand(): Promise<DemandItem[]>;
+  /**
+   * Bereits bestellte, noch offene Menge je Variante (offene POs) — reduziert den
+   * Netto-Bedarf, damit erneutes Erzeugen nicht doppelt bestellt (MTO-Loch, Kap. 6.1).
+   */
+  openPurchaseOrderQty(): Promise<DemandOpenOrder[]>;
   /** Aktueller Lagerbestand je Variante. */
   stockLevels(): Promise<DemandStock[]>;
   /** Hauptlieferant + EK je Variante. */
@@ -59,8 +65,11 @@ export interface GroupedDemandRow extends VariantMeta {
   variantId: string;
   requiredQty: number;
   stockQty: number;
+  /** Bereits bestellte, noch offene Menge (offene POs) — Anzeige „bereits bestellt". */
+  orderedQty: number;
   orderQty: number;
   supplierId: string | null;
+  ekCents: number;
 }
 
 // Natürliche Größenordnung (Textil): XS < S < M < L < XL … ; numerische Größen numerisch.
@@ -91,10 +100,10 @@ export class ReorderService {
    * je Variante die Bestellmenge beim Hauptlieferanten vor (konsolidierte Sammelbestellung).
    */
   async demandProposals(): Promise<DemandProposal[]> {
-    const [demand, stock, suppliers] = await Promise.all([
-      this.repo.openDemand(), this.repo.stockLevels(), this.repo.variantSuppliers(),
+    const [demand, stock, suppliers, openOrders] = await Promise.all([
+      this.repo.openDemand(), this.repo.stockLevels(), this.repo.variantSuppliers(), this.repo.openPurchaseOrderQty(),
     ]);
-    return aggregateDemand(demand, stock, suppliers);
+    return aggregateDemand(demand, stock, suppliers, openOrders);
   }
 
   /**
@@ -116,8 +125,10 @@ export class ReorderService {
         groesse: m?.groesse ?? null,
         requiredQty: p.requiredQty,
         stockQty: p.stockQty,
+        orderedQty: p.orderedQty,
         orderQty: p.orderQty,
         supplierId: p.supplierId,
+        ekCents: p.ekCents,
       };
     });
     return rows.sort(

@@ -1,6 +1,6 @@
 // In-Memory-Implementierung des Reorder-Repositories — für Tests/Durchstiche.
 
-import type { DemandItem, DemandStock, DemandSupplier, ReorderCandidate, SupplierReorder } from "@texma/shared";
+import type { DemandItem, DemandOpenOrder, DemandStock, DemandSupplier, ReorderCandidate, SupplierReorder } from "@texma/shared";
 import type {
   CreatedReorderPo,
   ReorderRepository,
@@ -15,6 +15,8 @@ export class InMemoryReorderRepository implements ReorderRepository {
   demand: DemandItem[] = [];
   stock: DemandStock[] = [];
   suppliers: DemandSupplier[] = [];
+  /** Bereits bestellte, noch offene Mengen je Variante (Parität zu offenen POs). */
+  openOrders: DemandOpenOrder[] = [];
   meta = new Map<string, VariantMeta>();
   /** Anzeigename je Lieferant (Fallback: supplierId). */
   supplierNames = new Map<string, string>();
@@ -28,6 +30,7 @@ export class InMemoryReorderRepository implements ReorderRepository {
     return this.candidates;
   }
   async openDemand(): Promise<DemandItem[]> { return this.demand; }
+  async openPurchaseOrderQty(): Promise<DemandOpenOrder[]> { return this.openOrders; }
   async stockLevels(): Promise<DemandStock[]> { return this.stock; }
   async variantSuppliers(): Promise<DemandSupplier[]> { return this.suppliers; }
 

@@ -21,7 +21,7 @@ import { notify, confirmDialog, promptDialog, MetricCard } from "./ui-kit.js";
 import { Icon, type IconName } from "./icons.js";
 import { OrderAmpelDetail, Auftragsampel } from "./StatusAmpel.js";
 import { useUnsavedGuard } from "./use-unsaved-guard.js";
-import { downloadCsv } from "./export.js";
+import { downloadCsv, downloadXlsx, type XlsxCell } from "./export.js";
 import { openOutlookDraft } from "./outlook-draft.js";
 import { MoneyInput } from "./money-input.js";
 import { GarmentPositionModal } from "./garment-position-picker.js";
@@ -1141,6 +1141,29 @@ export function ReorderPage({ onOpen }: { onOpen?: (k: string, id: string) => vo
     return (variantId: string): string => m.get(variantId) ?? variantId;
   }, [grouped]);
 
+  // Export der gruppierten Bedarfssicht (CSV + Excel). Geld als EUR-Betrag: im Excel echte
+  // Number-Zelle (Cent/100, rechenbar), im CSV de-DE-formatiert — konsistent derselbe Wert.
+  const demandExport = useMemo(() => {
+    const columns = ["Lieferant", "Marke", "Artikel", "Farbe", "Größe", "Bedarf", "Bestand", "bereits bestellt", "Bestellmenge", "EK (EUR)", "Bestellwert (EUR)"];
+    const rows: XlsxCell[][] = grouped.map((d) => [
+      d.supplierId ? (supplierNames.get(d.supplierId) ?? d.supplierId) : "kein Hauptlieferant",
+      d.brand ?? "",
+      `${d.articleName} (${d.sku})`,
+      d.farbe ?? "",
+      d.groesse ?? "",
+      d.requiredQty,
+      d.stockQty,
+      d.orderedQty,
+      d.orderQty,
+      d.ekCents / 100,
+      (d.orderQty * d.ekCents) / 100,
+    ]);
+    return { columns, rows };
+  }, [grouped, supplierNames]);
+  // CSV-Serialisierung: Zahlen de-DE (Dezimalkomma, Tausenderpunkt) — Strings gehen roh in
+  // downloadCsv, das die Formula-Neutralisierung (Kap. 28) selbst übernimmt.
+  const csvRows = (): string[][] => demandExport.rows.map((r) => r.map((c) => (typeof c === "number" ? c.toLocaleString("de-DE") : c)));
+
   return (
     <>
       <DocListHeader module="Einkauf" title="Warenbestellvorschläge" />
@@ -1162,7 +1185,7 @@ export function ReorderPage({ onOpen }: { onOpen?: (k: string, id: string) => vo
       {demand.length === 0 ? <Text size="sm" c="dimmed" mt="xs">Kein offener variantenbezogener Bedarf (Auftragspositionen mit Artikelverknüpfung nötig).</Text> : (
         <Table mt="xs" withTableBorder withColumnBorders>
           <Table.Thead><Table.Tr>
-            <Table.Th>Variante</Table.Th><Table.Th ta="right">Bedarf</Table.Th><Table.Th ta="right">Bestand</Table.Th><Table.Th ta="right">Bestellen</Table.Th><Table.Th>Lieferant</Table.Th><Table.Th>Quellen</Table.Th>
+            <Table.Th>Variante</Table.Th><Table.Th ta="right">Bedarf</Table.Th><Table.Th ta="right">Bestand</Table.Th><Table.Th ta="right">bereits bestellt</Table.Th><Table.Th ta="right">Bestellen</Table.Th><Table.Th>Lieferant</Table.Th><Table.Th>Quellen</Table.Th>
           </Table.Tr></Table.Thead>
           <Table.Tbody>
             {demand.map((d) => (
@@ -1170,6 +1193,7 @@ export function ReorderPage({ onOpen }: { onOpen?: (k: string, id: string) => vo
                 <Table.Td>{variantLabel(d.variantId)}</Table.Td>
                 <Table.Td ta="right">{d.requiredQty}</Table.Td>
                 <Table.Td ta="right">{d.stockQty}</Table.Td>
+                <Table.Td ta="right">{d.orderedQty > 0 ? d.orderedQty : "—"}</Table.Td>
                 <Table.Td ta="right"><b>{d.orderQty}</b></Table.Td>
                 <Table.Td><SupplierRef id={d.supplierId} names={supplierNames} onOpen={onOpen} /></Table.Td>
                 <Table.Td><Text size="xs" c="dimmed">{d.sources.map((s) => `${s.source === "ORDER" ? "Auftrag" : "Leihe"} ${s.ref}: ${s.qty}`).join(" · ")}</Text></Table.Td>
@@ -1179,13 +1203,21 @@ export function ReorderPage({ onOpen }: { onOpen?: (k: string, id: string) => vo
         </Table>
       )}
 
-      <Title order={4} mt="xl">Bestellvorschlag nach Marke / Artikel / Farbe / Größe</Title>
-      <Text size="sm" c="dimmed" mt={4}>Konsolidierter Bedarf aller offenen Aufträge, gruppiert nach Marke und sortiert nach Artikel, Farbe und Größe (XS…XXL bzw. numerisch).</Text>
+      <Group justify="space-between" align="flex-end" mt="xl">
+        <div>
+          <Title order={4}>Bestellvorschlag nach Marke / Artikel / Farbe / Größe</Title>
+          <Text size="sm" c="dimmed" mt={4}>Konsolidierter Bedarf aller offenen Aufträge, gruppiert nach Marke und sortiert nach Artikel, Farbe und Größe (XS…XXL bzw. numerisch).</Text>
+        </div>
+        <Group gap="xs">
+          <Button size="xs" variant="default" disabled={grouped.length === 0} onClick={() => downloadCsv("bedarf.csv", demandExport.columns, csvRows())}>Export CSV</Button>
+          <Button size="xs" variant="default" disabled={grouped.length === 0} onClick={() => downloadXlsx("bedarf.xlsx", "Bedarf", demandExport.columns, demandExport.rows)}>Export Excel</Button>
+        </Group>
+      </Group>
       {grouped.length === 0 ? <Text size="sm" c="dimmed" mt="xs">Kein offener variantenbezogener Bedarf.</Text> : (
         <Table mt="xs" withTableBorder withColumnBorders striped>
           <Table.Thead><Table.Tr>
             <Table.Th>Artikel</Table.Th><Table.Th>Farbe</Table.Th><Table.Th>Größe</Table.Th>
-            <Table.Th ta="right">Bedarf</Table.Th><Table.Th ta="right">Bestand</Table.Th><Table.Th ta="right">Bestellen</Table.Th><Table.Th>Lieferant</Table.Th>
+            <Table.Th ta="right">Bedarf</Table.Th><Table.Th ta="right">Bestand</Table.Th><Table.Th ta="right">bereits bestellt</Table.Th><Table.Th ta="right">Bestellen</Table.Th><Table.Th>Lieferant</Table.Th>
           </Table.Tr></Table.Thead>
           <Table.Tbody>
             {grouped.map((d, i) => {
@@ -1194,7 +1226,7 @@ export function ReorderPage({ onOpen }: { onOpen?: (k: string, id: string) => vo
                 <Fragment key={d.variantId}>
                   {newBrand && (
                     <Table.Tr style={{ background: "var(--mantine-color-gray-1)" }}>
-                      <Table.Td colSpan={7}><Text size="sm" fw={700}>{d.brand ?? "Ohne Marke"}</Text></Table.Td>
+                      <Table.Td colSpan={8}><Text size="sm" fw={700}>{d.brand ?? "Ohne Marke"}</Text></Table.Td>
                     </Table.Tr>
                   )}
                   <Table.Tr>
@@ -1203,6 +1235,7 @@ export function ReorderPage({ onOpen }: { onOpen?: (k: string, id: string) => vo
                     <Table.Td>{d.groesse ?? "—"}</Table.Td>
                     <Table.Td ta="right">{d.requiredQty}</Table.Td>
                     <Table.Td ta="right">{d.stockQty}</Table.Td>
+                    <Table.Td ta="right">{d.orderedQty > 0 ? d.orderedQty : "—"}</Table.Td>
                     <Table.Td ta="right"><b>{d.orderQty}</b></Table.Td>
                     <Table.Td><SupplierRef id={d.supplierId} names={supplierNames} onOpen={onOpen} /></Table.Td>
                   </Table.Tr>

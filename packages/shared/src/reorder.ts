@@ -59,13 +59,17 @@ export interface DemandItem {
 }
 export interface DemandStock { variantId: string; qty: number }
 export interface DemandSupplier { variantId: string; supplierId: string; ekCents: Cents }
+/** Bereits bestellte, noch nicht (voll) eingegangene Menge je Variante (offene POs). */
+export interface DemandOpenOrder { variantId: string; qty: number }
 
 export interface DemandProposal {
   variantId: string;
   supplierId: string | null;
   requiredQty: number;
   stockQty: number;
-  /** Zu bestellende Menge = max(0, Bedarf − Bestand). */
+  /** Bereits bestellte, noch offene Menge (offene POs) — reduziert den Netto-Bedarf. */
+  orderedQty: number;
+  /** Zu bestellende Menge = max(0, Bedarf − Bestand − offene Bestellungen). */
   orderQty: number;
   ekCents: Cents;
   sources: Array<{ source: "ORDER" | "LOAN"; ref: string; qty: number }>;
@@ -80,14 +84,21 @@ export interface DemandProposal {
  * Anprobe beschafft, kommen vom Kunden zurück und gehen in die Gesamtbestellung ein —
  * es müssen also nur die fehlenden Stück nachbeschafft werden (200 Auftrag − 5 Muster
  * → 195). `requiredQty` ist daher der Netto-Auftragsbedarf nach Abzug der Muster.
+ *
+ * Bereits bestellte, noch offene Mengen (`openOrders`, offene POs) senken den zu
+ * bestellenden Rest — sonst würde erneutes Erzeugen doppelt bestellen (MTO-Loch,
+ * Kap. 6.1): orderQty = max(0, Bedarf − Bestand − offene Bestellungen). Additiver
+ * Parameter mit Default `[]` (bestehende Aufrufer/Tests bleiben grün).
  */
 export function aggregateDemand(
   demand: ReadonlyArray<DemandItem>,
   stock: ReadonlyArray<DemandStock>,
-  suppliers: ReadonlyArray<DemandSupplier>
+  suppliers: ReadonlyArray<DemandSupplier>,
+  openOrders: ReadonlyArray<DemandOpenOrder> = []
 ): DemandProposal[] {
   const stockBy = new Map(stock.map((s) => [s.variantId, s.qty]));
   const supBy = new Map(suppliers.map((s) => [s.variantId, s]));
+  const openBy = new Map(openOrders.map((o) => [o.variantId, o.qty]));
   const byVariant = new Map<string, { required: number; sources: DemandProposal["sources"] }>();
   for (const d of demand) {
     if (d.qty <= 0) continue;
@@ -100,10 +111,11 @@ export function aggregateDemand(
   const out: DemandProposal[] = [];
   for (const [variantId, agg] of byVariant) {
     const stockQty = stockBy.get(variantId) ?? 0;
-    const orderQty = Math.max(0, agg.required - stockQty);
+    const orderedQty = Math.max(0, openBy.get(variantId) ?? 0);
+    const orderQty = Math.max(0, agg.required - stockQty - orderedQty);
     if (orderQty <= 0) continue;
     const sup = supBy.get(variantId);
-    out.push({ variantId, supplierId: sup?.supplierId ?? null, requiredQty: Math.max(0, agg.required), stockQty, orderQty, ekCents: sup?.ekCents ?? 0, sources: agg.sources });
+    out.push({ variantId, supplierId: sup?.supplierId ?? null, requiredQty: Math.max(0, agg.required), stockQty, orderedQty, orderQty, ekCents: sup?.ekCents ?? 0, sources: agg.sources });
   }
   return out.sort((a, b) => b.orderQty - a.orderQty);
 }

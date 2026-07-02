@@ -75,13 +75,44 @@ describe("aggregateDemand (auftragsübergreifend + Leihgut)", () => {
     const props = aggregateDemand([{ variantId: "v1", qty: 5, source: "ORDER", ref: "AB-1" }], [{ variantId: "v1", qty: 10 }], []);
     expect(props).toHaveLength(0);
   });
+
+  it("zieht bereits bestellte, noch offene Mengen (offene POs) vom Bedarf ab (MTO-Loch)", () => {
+    const props = aggregateDemand(
+      [{ variantId: "v1", qty: 20, source: "ORDER", ref: "AB-1" }],
+      [{ variantId: "v1", qty: 3 }], // 3 auf Lager
+      [{ variantId: "v1", supplierId: "sup-a", ekCents: 500 }],
+      [{ variantId: "v1", qty: 5 }], // 5 bereits offen bestellt
+    );
+    // 20 Bedarf − 3 Bestand − 5 offen bestellt → 12 nachbestellen.
+    expect(props[0]).toMatchObject({ requiredQty: 20, stockQty: 3, orderedQty: 5, orderQty: 12 });
+  });
+
+  it("fällt bei voller Deckung durch offene Bestellungen aus (orderQty 0 → nicht bestellbar)", () => {
+    const props = aggregateDemand(
+      [{ variantId: "v1", qty: 10, source: "ORDER", ref: "AB-1" }],
+      [{ variantId: "v1", qty: 2 }],
+      [{ variantId: "v1", supplierId: "sup-a", ekCents: 500 }],
+      [{ variantId: "v1", qty: 8 }], // 2 Bestand + 8 offen = 10 → gedeckt
+    );
+    expect(props).toHaveLength(0);
+  });
+
+  it("berücksichtigt Teil-Deckung durch offene Bestellungen", () => {
+    const props = aggregateDemand(
+      [{ variantId: "v1", qty: 10, source: "ORDER", ref: "AB-1" }],
+      [],
+      [{ variantId: "v1", supplierId: "sup-a", ekCents: 500 }],
+      [{ variantId: "v1", qty: 4 }],
+    );
+    expect(props[0]).toMatchObject({ orderedQty: 4, orderQty: 6 });
+  });
 });
 
 import { groupDemandBySupplier, type DemandProposal } from "./reorder.js";
 
 describe("groupDemandBySupplier (MTO — 1-Klick-Bestellungen aus Auftragsbedarf, Kap. 6.1)", () => {
   const prop = (over: Partial<DemandProposal>): DemandProposal => ({
-    variantId: "v", supplierId: "s", requiredQty: 1, stockQty: 0, orderQty: 1, ekCents: 100, sources: [], ...over,
+    variantId: "v", supplierId: "s", requiredQty: 1, stockQty: 0, orderedQty: 0, orderQty: 1, ekCents: 100, sources: [], ...over,
   });
 
   it("bündelt bestellbaren Bedarf je Lieferant und summiert den Bestellwert", () => {

@@ -4,7 +4,7 @@
 // gebündelten Vorschlag wird je Lieferant eine Bestellung (status BESTELLT) erzeugt.
 
 import { prisma } from "@texma/db";
-import type { DemandItem, DemandStock, DemandSupplier, ReorderCandidate, SupplierReorder } from "@texma/shared";
+import type { DemandItem, DemandOpenOrder, DemandStock, DemandSupplier, ReorderCandidate, SupplierReorder } from "@texma/shared";
 import type {
   CreatedReorderPo,
   ReorderRepository,
@@ -35,6 +35,41 @@ export class PrismaReorderRepository implements ReorderRepository {
   async stockLevels(): Promise<DemandStock[]> {
     const rows = await prisma.stockLevel.findMany({ select: { variantId: true, qty: true } });
     return rows.map((r) => ({ variantId: r.variantId, qty: r.qty }));
+  }
+
+  /**
+   * Bereits bestellte, noch OFFENE Menge je Variante (MTO-Loch, Kap. 6.1): summiert die
+   * Bestellpositionen je Variante über offene Bestellungen und zieht die schon
+   * eingegangene Menge ab, damit nur der noch nicht gelieferte Rest den Bedarf senkt.
+   *
+   * Offen = Status BESTELLT (voll offen) + TEILWEISE_ERHALTEN (Restmenge offen). ENTWURF
+   * ist noch nicht bestellt, ERHALTEN vollständig eingegangen → beide zählen nicht. Das
+   * Status-Enum kennt keinen Storno-Wert. Wareneingänge (GoodsReceiptLine) hängen an
+   * PO + Variante (kein poLineId), daher wird je Bestellung ordered − received je Variante
+   * verrechnet (auf 0 geklemmt), sodass Teilmengen korrekt abgezogen werden.
+   */
+  async openPurchaseOrderQty(): Promise<DemandOpenOrder[]> {
+    const openPos = await prisma.purchaseOrder.findMany({
+      where: { status: { in: ["BESTELLT", "TEILWEISE_ERHALTEN"] } },
+      select: {
+        lines: { select: { variantId: true, qty: true } },
+        goodsReceipts: { select: { lines: { select: { variantId: true, receivedQty: true } } } },
+      },
+    });
+    const byVariant = new Map<string, number>();
+    for (const po of openPos) {
+      const orderedByVariant = new Map<string, number>();
+      for (const l of po.lines) orderedByVariant.set(l.variantId, (orderedByVariant.get(l.variantId) ?? 0) + l.qty);
+      const receivedByVariant = new Map<string, number>();
+      for (const gr of po.goodsReceipts) {
+        for (const gl of gr.lines) receivedByVariant.set(gl.variantId, (receivedByVariant.get(gl.variantId) ?? 0) + gl.receivedQty);
+      }
+      for (const [variantId, ordered] of orderedByVariant) {
+        const open = Math.max(0, ordered - (receivedByVariant.get(variantId) ?? 0));
+        if (open > 0) byVariant.set(variantId, (byVariant.get(variantId) ?? 0) + open);
+      }
+    }
+    return [...byVariant.entries()].map(([variantId, qty]) => ({ variantId, qty }));
   }
 
   async variantSuppliers(): Promise<DemandSupplier[]> {
